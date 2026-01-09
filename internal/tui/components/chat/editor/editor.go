@@ -445,8 +445,6 @@ var readyPlaceholders = [...]string{
 var workingPlaceholders = [...]string{
 	"Working!",
 	"Working...",
-	"Brrrrr...",
-	"Prrrrrrrr...",
 	"Processing...",
 	"Thinking...",
 }
