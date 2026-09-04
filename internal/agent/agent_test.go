@@ -2,8 +2,10 @@ package agent
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -988,6 +990,130 @@ func TestWorkaroundProviderMediaLimitations_VisionModel(t *testing.T) {
 	file, ok := fantasy.AsMessagePart[fantasy.FilePart](result[1].Content[1])
 	require.True(t, ok)
 	require.Equal(t, "image/png", file.MediaType)
+}
+
+func TestIsUnsupportedImageContentError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "copilot content type rejection",
+			err: &fantasy.ProviderError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "messages.content.type is invalid, allowed values: ['text']",
+			},
+			want: true,
+		},
+		{
+			name: "image not supported",
+			err: &fantasy.ProviderError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "This model does not support image inputs",
+			},
+			want: true,
+		},
+		{
+			name: "invalid type expected text",
+			err: &fantasy.ProviderError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "Invalid type for 'messages[0].content[1]': expected one of 'text'",
+			},
+			want: true,
+		},
+		{
+			name: "unrelated bad request",
+			err: &fantasy.ProviderError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "max_tokens is too large",
+			},
+			want: false,
+		},
+		{
+			name: "allowed values without content is not an image rejection",
+			err: &fantasy.ProviderError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "invalid response_format, allowed values: ['text', 'json']",
+			},
+			want: false,
+		},
+		{
+			name: "server error",
+			err: &fantasy.ProviderError{
+				StatusCode: http.StatusInternalServerError,
+				Message:    "messages.content.type is invalid, allowed values: ['text']",
+			},
+			want: false,
+		},
+		{
+			name: "plain error",
+			err:  errors.New("boom"),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.want, isUnsupportedImageContentError(tt.err))
+		})
+	}
+}
+
+func TestModelSupportsImages_RuntimeOverride(t *testing.T) {
+	t.Parallel()
+
+	env := testEnv(t)
+	sa := testSessionAgent(env, nil, nil, "test prompt")
+	agent := sa.(*sessionAgent)
+
+	model := Model{
+		ModelCfg: config.SelectedModel{Provider: "copilot", Model: "some-model"},
+		CatwalkCfg: catwalk.Model{
+			SupportsImages: true,
+		},
+	}
+	require.True(t, agent.modelSupportsImages(model))
+
+	agent.imageSupportOverrides.Set(imageSupportKey(model), true)
+	require.False(t, agent.modelSupportsImages(model))
+
+	// Other models are unaffected.
+	other := model
+	other.ModelCfg.Model = "another-model"
+	require.True(t, agent.modelSupportsImages(other))
+}
+
+func TestMessagesContainFileParts(t *testing.T) {
+	t.Parallel()
+
+	withImage := []fantasy.Message{
+		fantasy.NewUserMessage("hi"),
+		{
+			Role: fantasy.MessageRoleUser,
+			Content: []fantasy.MessagePart{
+				fantasy.TextPart{Text: "look"},
+				fantasy.FilePart{MediaType: "image/png", Data: []byte("x")},
+			},
+		},
+	}
+	require.True(t, messagesContainFileParts(withImage))
+
+	toolOnly := []fantasy.Message{
+		{
+			Role: fantasy.MessageRoleTool,
+			Content: []fantasy.MessagePart{
+				fantasy.FilePart{MediaType: "image/png"},
+			},
+		},
+	}
+	require.False(t, messagesContainFileParts(toolOnly))
+
+	textOnly := []fantasy.Message{fantasy.NewUserMessage("hi")}
+	require.False(t, messagesContainFileParts(textOnly))
 }
 
 func TestWorkaroundProviderMediaLimitations_AnthropicProvider(t *testing.T) {

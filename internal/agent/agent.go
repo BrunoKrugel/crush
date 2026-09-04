@@ -183,6 +183,11 @@ type sessionAgent struct {
 
 	messageQueue   *csync.Map[string, []SessionAgentCall]
 	activeRequests *csync.Map[string, *activeCancel]
+	// imageSupportOverrides records models that advertised image support
+	// (catwalk metadata) but rejected image content with a provider
+	// error. Keyed by "provider/model", value true disables image
+	// content for that model for the rest of the process lifetime.
+	imageSupportOverrides *csync.Map[string, bool]
 
 	// dispatchMu holds a per-session mutex that serializes the
 	// accepted -> (cancel-on-entry | queued | active) transition in
@@ -241,23 +246,24 @@ func NewSessionAgent(
 	opts SessionAgentOptions,
 ) SessionAgent {
 	return &sessionAgent{
-		largeModel:           csync.NewValue(opts.LargeModel),
-		smallModel:           csync.NewValue(opts.SmallModel),
-		systemPromptPrefix:   csync.NewValue(opts.SystemPromptPrefix),
-		systemPrompt:         csync.NewValue(opts.SystemPrompt),
-		isSubAgent:           opts.IsSubAgent,
-		sessions:             opts.Sessions,
-		messages:             opts.Messages,
-		disableAutoSummarize: opts.DisableAutoSummarize,
-		tools:                csync.NewSliceFrom(opts.Tools),
-		isYolo:               opts.IsYolo,
-		notify:               opts.Notify,
-		runComplete:          opts.RunComplete,
-		messageQueue:         csync.NewMap[string, []SessionAgentCall](),
-		activeRequests:       csync.NewMap[string, *activeCancel](),
-		dispatchMu:           csync.NewMap[string, *sync.Mutex](),
-		acceptedRuns:         csync.NewMap[string, int](),
-		cancelMark:           csync.NewMap[string, uint64](),
+		largeModel:            csync.NewValue(opts.LargeModel),
+		smallModel:            csync.NewValue(opts.SmallModel),
+		systemPromptPrefix:    csync.NewValue(opts.SystemPromptPrefix),
+		systemPrompt:          csync.NewValue(opts.SystemPrompt),
+		isSubAgent:            opts.IsSubAgent,
+		sessions:              opts.Sessions,
+		messages:              opts.Messages,
+		disableAutoSummarize:  opts.DisableAutoSummarize,
+		tools:                 csync.NewSliceFrom(opts.Tools),
+		isYolo:                opts.IsYolo,
+		notify:                opts.Notify,
+		runComplete:           opts.RunComplete,
+		messageQueue:          csync.NewMap[string, []SessionAgentCall](),
+		activeRequests:        csync.NewMap[string, *activeCancel](),
+		imageSupportOverrides: csync.NewMap[string, bool](),
+		dispatchMu:            csync.NewMap[string, *sync.Mutex](),
+		acceptedRuns:          csync.NewMap[string, int](),
+		cancelMark:            csync.NewMap[string, uint64](),
 	}
 }
 
@@ -780,7 +786,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 		a.publishRunComplete(ctx, call, complete)
 	}()
 
-	history, files := a.preparePrompt(msgs, largeModel.CatwalkCfg.SupportsImages, call.Attachments...)
+	history, files := a.preparePrompt(msgs, a.modelSupportsImages(largeModel), call.Attachments...)
 
 	startTime := time.Now()
 	a.eventPromptSent(call.SessionID)
@@ -793,7 +799,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 	if call.MaxOutputTokens > 0 {
 		maxOutputTokens = &call.MaxOutputTokens
 	}
-	result, err = agent.Stream(genCtx, fantasy.AgentStreamCall{
+	streamCall := fantasy.AgentStreamCall{
 		Prompt:           message.PromptWithTextAttachments(call.Prompt, call.Attachments),
 		Files:            files,
 		Messages:         history,
@@ -872,7 +878,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 				return callContext, prepared, err
 			}
 			callContext = context.WithValue(callContext, tools.MessageIDContextKey, assistantMsg.ID)
-			callContext = context.WithValue(callContext, tools.SupportsImagesContextKey, largeModel.CatwalkCfg.SupportsImages)
+			callContext = context.WithValue(callContext, tools.SupportsImagesContextKey, a.modelSupportsImages(largeModel))
 			callContext = context.WithValue(callContext, tools.ModelNameContextKey, largeModel.CatwalkCfg.Name)
 			currentAssistant = &assistantMsg
 			return callContext, prepared, err
@@ -1060,7 +1066,45 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 				return hasRepeatedToolCalls(steps, loopDetectionWindowSize, loopDetectionMaxRepeats)
 			},
 		},
-	})
+	}
+
+	sentImages := len(streamCall.Files) > 0 || messagesContainFileParts(streamCall.Messages)
+
+	result, err = agent.Stream(genCtx, streamCall)
+
+	// Some providers advertise image support in their model metadata
+	// but reject image content with a 400 Bad Request (e.g. Copilot:
+	// "messages.content.type is invalid, allowed values: ['text']").
+	// Since the image stays embedded in the persisted session history,
+	// every subsequent turn would fail with the same error, bricking
+	// the session. Always record that the model does not actually
+	// support images so the next turn is clean, and retry this turn
+	// in place when nothing was streamed yet.
+	if err != nil && isUnsupportedImageContentError(err) {
+		a.imageSupportOverrides.Set(imageSupportKey(largeModel), true)
+		slog.Warn("Provider rejected image content despite advertising support, disabling images for this model",
+			"provider", largeModel.ModelCfg.Provider,
+			"model", largeModel.ModelCfg.Model)
+		if sentImages && (currentAssistant == nil || assistantMessageEmpty(currentAssistant)) {
+			if currentAssistant != nil {
+				if deleteErr := a.messages.Delete(ctx, currentAssistant.ID); deleteErr != nil {
+					slog.Error("Failed to remove empty assistant message before image retry", "error", deleteErr)
+				}
+				currentAssistant = nil
+			}
+			// Rebuild history from the DB rather than filtering the sent
+			// request: PrepareStep may have appended queued follow-up user
+			// messages that only exist in the database. preparePrompt with
+			// supportsImages=false strips every image part.
+			if freshMsgs, listErr := a.messages.List(ctx, call.SessionID); listErr == nil {
+				streamCall.Messages, _ = a.preparePrompt(freshMsgs, false)
+				streamCall.Files = nil
+				result, err = agent.Stream(genCtx, streamCall)
+			} else {
+				slog.Error("Failed to list messages before image retry", "error", listErr)
+			}
+		}
+	}
 
 	a.eventPromptResponded(call.SessionID, time.Since(startTime).Truncate(time.Second))
 
@@ -1353,7 +1397,7 @@ func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fan
 		return nil
 	}
 
-	aiMsgs, _ := a.preparePrompt(msgs, largeModel.CatwalkCfg.SupportsImages)
+	aiMsgs, _ := a.preparePrompt(msgs, a.modelSupportsImages(largeModel))
 
 	genCtx, cancel := context.WithCancel(ctx)
 	ac := &activeCancel{cancel: cancel}
@@ -1607,6 +1651,68 @@ If not, please feel free to ignore. Again do not mention this message to the use
 	}
 
 	return history, files
+}
+
+// modelSupportsImages reports whether the given model accepts image
+// content, honoring runtime overrides recorded when a provider that
+// advertised image support rejected image content with a Bad Request.
+func (a *sessionAgent) modelSupportsImages(model Model) bool {
+	if _, disabled := a.imageSupportOverrides.Get(imageSupportKey(model)); disabled {
+		return false
+	}
+	return model.CatwalkCfg.SupportsImages
+}
+
+// imageSupportKey identifies a model for runtime image-support overrides.
+func imageSupportKey(m Model) string {
+	return m.ModelCfg.Provider + "/" + m.ModelCfg.Model
+}
+
+// isUnsupportedImageContentError reports whether the provider error is a
+// Bad Request caused by image content the model cannot accept, despite
+// its metadata claiming image support.
+func isUnsupportedImageContentError(err error) bool {
+	var providerErr *fantasy.ProviderError
+	if !errors.As(err, &providerErr) || providerErr.StatusCode != http.StatusBadRequest {
+		return false
+	}
+	msg := strings.ToLower(providerErr.Message)
+	switch {
+	case strings.Contains(msg, "content.type is invalid"),
+		strings.Contains(msg, "content") && strings.Contains(msg, "allowed values") && strings.Contains(msg, "text"),
+		strings.Contains(msg, "content") && strings.Contains(msg, "invalid type") && strings.Contains(msg, "text"),
+		strings.Contains(msg, "image") && (strings.Contains(msg, "not supported") ||
+			strings.Contains(msg, "does not support") ||
+			strings.Contains(msg, "unsupported") ||
+			strings.Contains(msg, "not allowed")):
+		return true
+	default:
+		return false
+	}
+}
+
+// assistantMessageEmpty reports whether the assistant message has no
+// content, tool calls, or reasoning, i.e. nothing worth keeping.
+func assistantMessageEmpty(m *message.Message) bool {
+	return len(m.ToolCalls()) == 0 &&
+		m.Content().Text == "" &&
+		m.ReasoningContent().String() == ""
+}
+
+// messagesContainFileParts reports whether any user message carries
+// binary file (image) parts.
+func messagesContainFileParts(messages []fantasy.Message) bool {
+	for _, m := range messages {
+		if m.Role != fantasy.MessageRoleUser {
+			continue
+		}
+		for _, part := range m.Content {
+			if _, ok := fantasy.AsMessagePart[fantasy.FilePart](part); ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // filterFileParts removes fantasy.FilePart entries from a slice of message
@@ -2165,7 +2271,7 @@ func (a *sessionAgent) workaroundProviderMediaLimitations(messages []fantasy.Mes
 		return messages
 	}
 
-	supportsImages := largeModel.CatwalkCfg.SupportsImages
+	supportsImages := a.modelSupportsImages(largeModel)
 
 	convertedMessages := make([]fantasy.Message, 0, len(messages))
 
