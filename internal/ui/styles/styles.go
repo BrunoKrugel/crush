@@ -215,6 +215,8 @@ type Styles struct {
 		InputPrompt    lipgloss.Style
 		List           lipgloss.Style
 		Spinner        lipgloss.Style
+		PromptMessage  lipgloss.Style
+		PromptKey      lipgloss.Style
 		ContentPanel   lipgloss.Style
 		ContentPanelBg color.Color
 		ScrollbarThumb lipgloss.Style
