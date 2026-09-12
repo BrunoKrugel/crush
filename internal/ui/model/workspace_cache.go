@@ -88,19 +88,23 @@ func (c *ttlCache) invalidate() {
 
 // busyStateMsg delivers the result of an off-thread busy/permission probe.
 type busyStateMsg struct {
-	// forSession is the session the probe was scoped to; a result that
-	// raced a session switch is discarded and re-fetched.
-	forSession string
 	// gen is the busy generation captured when the probe was dispatched.
 	// A result whose generation no longer matches m.busyFetchGen started
 	// before a newer state transition (optimistic send, invalidation,
 	// session switch, ...) and is discarded, then re-fetched, so the
 	// authoritative refresh is never lost to an older in-flight request.
-	gen         uint64
-	ready       bool
-	agentBusy   bool
+	gen       uint64
+	ready     bool
+	agentBusy bool
+	yolo      bool
+	// forSession is the session sessionBusy was probed for; a result that
+	// raced a session switch must not retire the new session's spinner.
+	forSession string
+	// sessionBusy reports whether forSession specifically has a run in
+	// flight. Unlike agentBusy it is not true merely because some other
+	// session or a shell command is working, which makes it the
+	// authoritative answer for retiring that session's turn spinner.
 	sessionBusy bool
-	yolo        bool
 	// model is the coordinator's selected model, fetched by the same probe
 	// so the sidebar/landing model info renders from memoized state. Zero
 	// (and ignored) when ready is false.
@@ -119,9 +123,10 @@ type promptQueueMsg struct {
 	prompts []string
 }
 
-// agentRunSubmittedMsg reports that AgentRun accepted a prompt (it either
-// started a run or was enqueued behind one), so busy and queue state should
-// be re-fetched.
+// agentRunSubmittedMsg reports the outcome of handing a prompt to the
+// agent. On success the run either started or was enqueued, so busy and
+// queue state should be re-fetched. On failure the turn never began, so
+// nothing else will ever retire its spinner.
 type agentRunSubmittedMsg struct {
 	sessionID string
 	gen       uint64
@@ -179,7 +184,7 @@ func (m *UI) dispatchBusyRefresh() tea.Cmd {
 	sessionID := m.currentSessionID()
 	gen := m.busyFetchGen
 	return func() tea.Msg {
-		st := busyStateMsg{forSession: sessionID, gen: gen}
+		st := busyStateMsg{gen: gen, forSession: sessionID}
 		if ws.AgentIsReady() {
 			st.ready = true
 			st.agentBusy = ws.AgentIsBusy()
@@ -187,6 +192,9 @@ func (m *UI) dispatchBusyRefresh() tea.Cmd {
 				st.sessionBusy = ws.AgentIsSessionBusy(sessionID)
 			}
 			st.model = ws.AgentModel()
+			if sessionID != "" {
+				st.sessionBusy = ws.AgentIsSessionBusy(sessionID)
+			}
 		}
 		st.yolo = ws.PermissionSkipRequests()
 		return st
@@ -254,6 +262,22 @@ func (m *UI) applyBusyState(msg busyStateMsg) []tea.Cmd {
 	}
 	if m.todoIsSpinning && !busy {
 		m.todoIsSpinning = false
+	}
+	// End a turn once its session has been seen working and then goes idle.
+	// This is the backstop that makes both the spinner and the elapsed clock
+	// safe: a cancel, a re-auth prompt, or a dropped notification all end a
+	// turn without a terminal event, and the TTL guarantees this probe lands.
+	// It matters just as much after an assistant message has taken the
+	// spinner over, since a clock left running means the next turn counts
+	// from this one.
+	m.probedSession = msg.forSession
+	m.probedSessionBusy = msg.sessionBusy
+	if msg.forSession != "" && msg.forSession == m.pending.sessionID {
+		if msg.sessionBusy {
+			m.pending.seenBusy = true
+		} else if m.pending.seenBusy {
+			m.endPendingTurn(msg.forSession)
+		}
 	}
 	if prevBusy != busy {
 		m.renderPills()

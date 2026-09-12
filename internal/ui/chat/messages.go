@@ -11,7 +11,6 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/message"
-	"github.com/charmbracelet/crush/internal/ui/attachments"
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/list"
 	"github.com/charmbracelet/crush/internal/ui/styles"
@@ -596,8 +595,7 @@ func ExtractMessageItems(sty *styles.Styles, msg *message.Message, toolResults m
 		if len(items) > 0 {
 			return items
 		}
-		r := attachments.NewRenderer(sty.Attachments)
-		items = []MessageItem{NewUserMessageItem(sty, msg, r)}
+		items = []MessageItem{NewUserMessageItem(sty, msg, newAttachmentRenderer(sty))}
 		if IsChannelMessage(msg) {
 			items = append(items, NewChannelInfoItem(sty, msg))
 		}
