@@ -491,6 +491,11 @@ func (t *baseToolMessageItem) HasResult() bool {
 
 // computeStatus computes the effective status considering the result.
 func (t *baseToolMessageItem) computeStatus() ToolStatus {
+	// A cancelled turn leaves its tools holding an interruption dressed as
+	// an error. The cancellation is the more useful thing to say.
+	if t.status == ToolStatusCanceled {
+		return ToolStatusCanceled
+	}
 	if t.result != nil {
 		if t.result.IsError {
 			return ToolStatusError
