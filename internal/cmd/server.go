@@ -85,7 +85,9 @@ var serverCmd = &cobra.Command{
 			return nil
 		}
 
-		ctx, cancel := context.WithTimeout(cmd.Context(), 5*time.Second)
+		// The signal already cancelled cmd.Context(); detach so the
+		// shutdown gets its full budget instead of none.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(cmd.Context()), 15*time.Second)
 		defer cancel()
 
 		slog.Info("Shutting down...")
