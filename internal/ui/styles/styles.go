@@ -217,6 +217,7 @@ type Styles struct {
 		Spinner        lipgloss.Style
 		PromptMessage  lipgloss.Style
 		PromptKey      lipgloss.Style
+		SSHMessage     lipgloss.Style
 		ContentPanel   lipgloss.Style
 		ContentPanelBg color.Color
 		ScrollbarThumb lipgloss.Style

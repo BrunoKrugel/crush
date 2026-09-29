@@ -1549,6 +1549,8 @@ func (w *ClientWorkspace) translateEvent(ev any) tea.Msg {
 				Prompt:  e.Payload.Prompt,
 				KeyInfo: e.Payload.KeyInfo,
 				Kind:    sshaskpass.Kind(e.Payload.Kind),
+				Title:   e.Payload.Title,
+				Message: e.Payload.Message,
 			},
 		}
 	case pubsub.Event[proto.SSHNotification]:
