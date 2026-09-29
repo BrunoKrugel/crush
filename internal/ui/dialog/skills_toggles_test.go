@@ -54,7 +54,7 @@ func TestSkillsToggles_ConfigDisabledCanBeEnabled(t *testing.T) {
 	item := m.Items()[0]
 	require.False(t, item.localDisabled(), "enabling a config-disabled skill must flip the override")
 	require.True(t, item.EnabledOverride)
-	require.False(t, m.itemDisabled(item))
+	require.Equal(t, "active", m.itemStatus(item))
 }
 
 func TestSkillsToggles_GlobalScopeUsesConfigFlag(t *testing.T) {
@@ -66,11 +66,11 @@ func TestSkillsToggles_GlobalScopeUsesConfigFlag(t *testing.T) {
 		{Name: "pair", ConfigDisabled: true, EnabledOverride: true},
 	})
 	require.Equal(t, MCPToggleScopeLocal, m.Scope())
-	require.False(t, m.itemDisabled(m.Items()[0]))
+	require.Equal(t, "active", m.itemStatus(m.Items()[0]))
 
 	require.Nil(t, m.HandleMsg(tea.KeyPressMsg{Code: tea.KeyTab}))
 	require.Equal(t, MCPToggleScopeGlobal, m.Scope())
-	require.True(t, m.itemDisabled(m.Items()[0]))
+	require.Equal(t, "disabled", m.itemStatus(m.Items()[0]))
 
 	action := m.HandleMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
 	toggled, ok := action.(ActionToggleSkill)

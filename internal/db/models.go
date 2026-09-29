@@ -116,3 +116,11 @@ type CompactionLedger struct {
 	Retires   string `json:"retires"`
 	CreatedAt int64  `json:"created_at"`
 }
+
+type SkillsDisabledServer struct {
+	Name string `json:"name"`
+}
+
+type SkillsEnabledServer struct {
+	Name string `json:"name"`
+}

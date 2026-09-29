@@ -183,6 +183,9 @@ type Service interface {
 	// or the context is cancelled.
 	Ask(ctx context.Context, req Request) ([]Answer, error)
 
+	// Pending returns the request that is currently awaiting answers, or
+	// false when no question is open.
+	Pending() (Request, bool)
 	// Answer resolves the pending question with the given answers.
 	Answer(answers []Answer) bool
 
@@ -198,6 +201,7 @@ type questionService struct {
 	pending            chan []Answer
 	cancelled          chan struct{}
 	pendingID          string
+	pendingReq         Request
 }
 
 // NewService creates a new question service.
@@ -248,6 +252,7 @@ func (s *questionService) Ask(ctx context.Context, req Request) ([]Answer, error
 	s.pending = make(chan []Answer, 1)
 	s.cancelled = make(chan struct{})
 	s.pendingID = req.ID
+	s.pendingReq = req
 	s.mu.Unlock()
 
 	defer func() {
@@ -255,6 +260,7 @@ func (s *questionService) Ask(ctx context.Context, req Request) ([]Answer, error
 		s.pending = nil
 		s.cancelled = nil
 		s.pendingID = ""
+		s.pendingReq = Request{}
 		s.mu.Unlock()
 	}()
 
@@ -272,6 +278,18 @@ func (s *questionService) Ask(ctx context.Context, req Request) ([]Answer, error
 
 // Answer resolves the pending question. Returns false if no
 // question is pending (already answered or cancelled).
+// Pending returns the request that is currently awaiting answers, or
+// false when no question is open. A pending request outlives the Ask
+// goroutine only while it can still be answered.
+func (s *questionService) Pending() (Request, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pendingID == "" {
+		return Request{}, false
+	}
+	return s.pendingReq, true
+}
+
 func (s *questionService) Answer(answers []Answer) bool {
 	s.mu.Lock()
 	batchID := s.pendingID
