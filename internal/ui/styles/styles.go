@@ -218,6 +218,7 @@ type Styles struct {
 		PromptMessage  lipgloss.Style
 		PromptKey      lipgloss.Style
 		SSHMessage     lipgloss.Style
+		SSHKey         lipgloss.Style
 		ContentPanel   lipgloss.Style
 		ContentPanelBg color.Color
 		ScrollbarThumb lipgloss.Style
