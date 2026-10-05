@@ -293,6 +293,13 @@ type UI struct {
 
 	// isCanceling tracks whether the user has pressed escape once to cancel.
 	isCanceling bool
+	// summarizingNote is the in-flight status of a compaction, surfaced
+	// through the editor placeholder, and summarizingNoteSession is the
+	// session it belongs to. The pair rather than a bare string because a
+	// compaction keeps running when the user switches away, and its status
+	// must not follow them to the next session.
+	summarizingNote        string
+	summarizingNoteSession string
 
 	// bangMode tracks whether the editor is in bang (!) shell mode.
 	bangMode     bool
@@ -1622,6 +1629,8 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Textarea placeholder logic
 		if m.bangMode {
 			m.textarea.Placeholder = "Run a shell command"
+		} else if m.compactionVisible() {
+			m.textarea.Placeholder = m.summarizingNote
 		} else if m.isAgentBusy() {
 			m.textarea.Placeholder = m.workingPlaceholder
 		} else if m.mode == uiInputModePlan {
@@ -1629,7 +1638,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.textarea.Placeholder = m.readyPlaceholder
 		}
-		if !m.bangMode && m.mode != uiInputModePlan && m.yoloModeCached() {
+		if m.summarizingNote == "" && !m.bangMode && m.mode != uiInputModePlan && m.yoloModeCached() {
 			m.textarea.Placeholder = "Go crazy"
 		}
 	}
@@ -2226,18 +2235,35 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		}
 		m.dialog.CloseDialog(dialog.CommandsID)
 	case dialog.ActionSummarize:
+		// The palette entry collects emphasis first. The action handed back by
+		// the arguments dialog carries Args, so it runs straight through.
+		if len(msg.Arguments) > 0 && msg.Args == nil {
+			m.dialog.CloseFrontDialog()
+			m.dialog.OpenDialog(dialog.NewArguments(
+				m.com,
+				"Compact Session",
+				"Optional: tell the checkpoint what to emphasize. Empty is fine, and means a general summary of the whole session.",
+				msg.Arguments,
+				msg,
+			))
+			break
+		}
 		if m.isAgentBusy() {
 			cmds = append(cmds, util.ReportWarn("Agent is busy, please wait before summarizing session..."))
 			break
 		}
 		cmds = append(cmds, func() tea.Msg {
-			err := m.com.Workspace.AgentSummarize(context.Background(), msg.SessionID)
+			err := m.com.Workspace.AgentSummarize(context.Background(), msg.SessionID, msg.Instructions)
 			if err != nil {
 				return util.ReportError(err)()
 			}
 			return nil
 		})
-		m.dialog.CloseDialog(dialog.CommandsID)
+		// Whatever is on top is what the user submitted: from the palette
+		// that is the command list, from the arguments dialog it is that
+		// dialog, and closing the wrong one leaves the box hanging over a
+		// compaction that is already running.
+		m.dialog.CloseFrontDialog()
 	case dialog.ActionToggleHelp:
 		m.status.ToggleHelp()
 		m.dialog.CloseDialog(dialog.CommandsID)
@@ -5838,6 +5864,13 @@ func (m *UI) openPlanHandoff() {
 
 // handleAgentNotification translates domain agent events into desktop
 // notifications using the UI notification backend.
+// compactionVisible reports whether the in-flight compaction note describes
+// the session the user is looking at. A compaction keeps running when they
+// switch away, and its status must not follow them to the next session.
+func (m *UI) compactionVisible() bool {
+	return m.summarizingNote != "" && m.session != nil && m.summarizingNoteSession == m.session.ID
+}
+
 func (m *UI) handleAgentNotification(n notify.Notification) tea.Cmd {
 	var cmds []tea.Cmd
 	switch n.Type {
@@ -5863,6 +5896,27 @@ func (m *UI) handleAgentNotification(n notify.Notification) tea.Cmd {
 		return m.handleAWSSSOAuth(n.AWSSOCommand, n.AWSSOURL)
 	case notify.TypeAWSSSOAuthResult:
 		return m.handleAWSSSOAuthResult(n.Message)
+	case notify.TypeSummarizing:
+		// While a compaction runs the placeholder says what it is doing and
+		// how far along it is, so minutes of streaming are not mistaken for a
+		// hang; when it ends the toast reports the outcome. The chat already
+		// spins, and the session update refreshes the context meter.
+		if m.session == nil || n.SessionID != m.session.ID {
+			return nil
+		}
+		if !n.Done {
+			m.summarizingNote = n.Progress
+			m.summarizingNoteSession = n.SessionID
+			m.invalidateFrames()
+			return nil
+		}
+		m.summarizingNote = ""
+		m.summarizingNoteSession = ""
+		m.invalidateFrames()
+		if n.Progress == "" {
+			return nil
+		}
+		return util.ReportInfo(n.Progress)
 	default:
 		return nil
 	}

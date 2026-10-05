@@ -327,8 +327,8 @@ func (w *ClientWorkspace) AgentSetMain(agentID string) error {
 	return w.client.SetMainAgent(context.Background(), w.workspaceID(), agentID)
 }
 
-func (w *ClientWorkspace) AgentSummarize(ctx context.Context, sessionID string) error {
-	return w.client.AgentSummarizeSession(ctx, w.workspaceID(), sessionID)
+func (w *ClientWorkspace) AgentSummarize(ctx context.Context, sessionID, instructions string) error {
+	return w.client.AgentSummarizeSession(ctx, w.workspaceID(), sessionID, instructions)
 }
 
 func (w *ClientWorkspace) UpdateAgentModel(ctx context.Context) error {
@@ -1243,6 +1243,8 @@ func (w *ClientWorkspace) translateEvent(ev any) tea.Msg {
 			Type:         notify.Type(e.Payload.Type),
 			AWSSOCommand: e.Payload.AWSSOCommand,
 			AWSSOURL:     e.Payload.AWSSOURL,
+			Progress:     e.Payload.Progress,
+			Done:         e.Payload.Done,
 		}
 		if e.Payload.Error != nil {
 			n.Message = e.Payload.Error.Error()

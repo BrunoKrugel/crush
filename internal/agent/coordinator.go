@@ -135,7 +135,7 @@ type Coordinator interface {
 	QueuedPrompts(sessionID string) int
 	QueuedPromptsList(sessionID string) []string
 	ClearQueue(sessionID string)
-	Summarize(context.Context, string) error
+	Summarize(context.Context, string, string) error
 	Model() Model
 	UpdateModels(ctx context.Context) error
 	GenerateTitle(ctx context.Context, sessionID, prompt string)
@@ -830,6 +830,7 @@ func (c *coordinator) buildAgent(ctx context.Context, prompt *prompt.Prompt, age
 		Tools:                nil,
 		Notify:               c.notify,
 		RunComplete:          c.runComplete,
+		CompactionHooks:      c.compactionHooks(isSubAgent),
 	})
 
 	// The readiness goroutines below perform one-time setup — building the
@@ -992,6 +993,22 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 }
 
 // TODO: when we support multiple agents we need to change this so that we pass in the agent specific model config
+// compactionHooks hands the agent a way to fire compaction events. Sub-agents
+// never compact, so they are given nothing; for the main agent each event
+// resolves to its own configured command list, or to nothing at all.
+func (c *coordinator) compactionHooks(isSubAgent bool) func(string) CompactionHookRunner {
+	if isSubAgent {
+		return nil
+	}
+	return func(event string) CompactionHookRunner {
+		configured := c.cfg.Config().Hooks[event]
+		if len(configured) == 0 {
+			return nil
+		}
+		return hooks.NewRunner(configured, c.cfg.WorkingDir(), c.cfg.WorkingDir())
+	}
+}
+
 func (c *coordinator) buildAgentModels(ctx context.Context, isSubAgent bool) (Model, Model, error) {
 	largeModelCfg, ok := c.cfg.Config().Models[config.SelectedModelTypeLarge]
 	if !ok {
@@ -1499,7 +1516,7 @@ func (c *coordinator) QueuedPromptsList(sessionID string) []string {
 	return c.currentAgent().QueuedPromptsList(sessionID)
 }
 
-func (c *coordinator) Summarize(ctx context.Context, sessionID string) error {
+func (c *coordinator) Summarize(ctx context.Context, sessionID, instructions string) error {
 	agent := c.currentAgent()
 	providerCfg, ok := c.cfg.Config().Providers.Get(agent.Model().ModelCfg.Provider)
 	if !ok {
@@ -1512,7 +1529,7 @@ func (c *coordinator) Summarize(ctx context.Context, sessionID string) error {
 
 	// Auth failures during summarize flow through fantasy's OnAuthRefresh,
 	// the same path used by regular turns.
-	return agent.Summarize(ctx, sessionID, getProviderOptions(agent.Model(), providerCfg), c.makeAuthRefreshCallback(providerCfg))
+	return agent.Summarize(ctx, sessionID, instructions, getProviderOptions(agent.Model(), providerCfg), c.makeAuthRefreshCallback(providerCfg))
 }
 
 // GenerateTitle generates a session title using the current agent.
