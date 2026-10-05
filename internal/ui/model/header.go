@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/charmbracelet/crush/internal/usage"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -143,6 +144,7 @@ func (h *header) drawHeader(
 	width int,
 	lspErrorCount int,
 	hyperCredits *int,
+	usageMeters []usage.Meter,
 	gitBranch string,
 ) {
 	t := h.com.Styles
@@ -173,6 +175,7 @@ func (h *header) drawHeader(
 		detailsOpen,
 		availDetailWidth,
 		hyperCredits,
+		usageMeters,
 		gitBranch,
 	)
 
@@ -206,6 +209,7 @@ func renderHeaderDetails(
 	detailsOpen bool,
 	availWidth int,
 	hyperCredits *int,
+	usageMeters []usage.Meter,
 	gitBranch string,
 ) string {
 	t := com.Styles
@@ -241,6 +245,24 @@ func renderHeaderDetails(
 	if com.IsHyper() && hyperCredits != nil {
 		hc := t.Header.HypercreditIcon.Render(styles.HypercreditIcon) + " " + t.Header.Percentage.Render(common.FormatCredits(*hyperCredits))
 		parts = append(parts, hc)
+	}
+
+	// A plan with several limits shows the ones the model in use draws from,
+	// compactly: the short tag the provider gave each meter and the share
+	// left in it.
+	if len(usageMeters) > 0 {
+		segments := make([]string, 0, len(usageMeters))
+		for _, meter := range usageMeters {
+			if meter.IsFraction() {
+				segments = append(segments, fmt.Sprintf("%s %d%%", meter.Tag(), meter.Percent()))
+			} else {
+				// An amount rather than a share, such as a credit balance.
+				segments = append(segments, fmt.Sprintf("%s %g", meter.Tag(), meter.Left))
+			}
+		}
+		quota := t.Header.HypercreditIcon.Render(styles.HypercreditIcon) + " " +
+			t.Header.Percentage.Render(strings.Join(segments, " · "))
+		parts = append(parts, quota)
 	}
 
 	const keystroke = "ctrl+d"

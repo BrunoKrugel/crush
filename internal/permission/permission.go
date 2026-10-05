@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -312,7 +313,7 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 
 	// Check if the tool/action combination is in the allowlist
 	commandKey := opts.ToolName + ":" + opts.Action
-	if slices.Contains(s.allowedTools, commandKey) || slices.Contains(s.allowedTools, opts.ToolName) {
+	if s.isAllowed(commandKey) || s.isAllowed(opts.ToolName) {
 		return true, nil
 	}
 

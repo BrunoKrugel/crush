@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -52,7 +53,8 @@ const (
 	// opAppend appends value to the []any at target[jsonKey].
 	opAppend
 	// opSetChild assigns childMap(target, child)[jsonKey] = value, e.g. a
-	// single --env KEY VALUE entry under an "env" object.
+	// single --env KEY VALUE entry under an "env" object. The child path
+	// may be dotted to reach a nested object.
 	opSetChild
 	// opMergeChild merges a JSON object into childMap(target, child), e.g.
 	// --provider-options '{...}'.
@@ -271,6 +273,18 @@ func nextArg(args []string, i int, flag string) (string, error) {
 	return args[i+1], nil
 }
 
+// oneOf returns a validator accepting only the listed values. The flag name
+// is repeated in the message so the error says which flag was wrong.
+func oneOf(flag string, allowed ...string) func(any) error {
+	return func(v any) error {
+		s, _ := v.(string)
+		if slices.Contains(allowed, s) {
+			return nil
+		}
+		return fmt.Errorf("%s must be one of: %s", flag, strings.Join(allowed, ", "))
+	}
+}
+
 // storeFlag writes a parsed value into target according to spec.op.
 func storeFlag(target map[string]any, spec flagSpec, val any) {
 	switch spec.op {
@@ -281,7 +295,7 @@ func storeFlag(target map[string]any, spec flagSpec, val any) {
 		target[spec.jsonKey] = append(arr, val)
 	case opSetChild:
 		if kv, ok := val.([2]string); ok {
-			childMap(target, spec.child)[kv[0]] = kv[1]
+			childMapPath(target, spec.child)[kv[0]] = kv[1]
 		}
 	case opSetChildValue:
 		childMap(target, spec.child)[spec.jsonKey] = val
@@ -292,7 +306,19 @@ func storeFlag(target map[string]any, spec flagSpec, val any) {
 		}
 	case opMergeChild:
 		if obj, ok := val.(map[string]any); ok {
-			maps.Copy(childMap(target, spec.child), obj)
+			maps.Copy(childMapPath(target, spec.child), obj)
 		}
 	}
+}
+
+// childMapPath returns the nested object at a possibly dotted path under
+// parent, creating intermediate objects as needed. A single segment is the
+// common case; two segments reach a field of a nested object, as
+// --oauth-param does with auth.extra_params.
+func childMapPath(parent map[string]any, path string) map[string]any {
+	current := parent
+	for segment := range strings.SplitSeq(path, ".") {
+		current = childMap(current, segment)
+	}
+	return current
 }

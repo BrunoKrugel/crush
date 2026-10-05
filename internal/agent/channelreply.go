@@ -5,12 +5,12 @@ import (
 	"context"
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/bytedance/sonic"
+	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/message"
@@ -111,7 +111,7 @@ func channelReplyDelivered(reply *config.MCPChannelReply, channel string, comple
 		if name == "" {
 			continue
 		}
-		if _, ok := completedTools[fmt.Sprintf("mcp_%s_%s", channel, name)]; ok {
+		if _, ok := completedTools[tools.MCPToolName(channel, name)]; ok {
 			return true
 		}
 	}
