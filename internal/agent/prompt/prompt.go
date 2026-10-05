@@ -33,6 +33,8 @@ type Prompt struct {
 	// Build time: which skills the repository disabled and which it
 	// re-enabled over the config. Nil means no overrides.
 	skillOverrides func(ctx context.Context) (disabled, enabled []string)
+
+	skills []*skills.Skill // pre-discovered; nil means discover at build time
 }
 
 type PromptDat struct {
@@ -89,6 +91,15 @@ func WithSkillOverrides(disabled, enabled func(ctx context.Context) []string) Op
 			}
 			return d, e
 		}
+	}
+}
+
+// WithSkills supplies pre-discovered skills so that promptData does not
+// re-walk the filesystem on every Build call. When nil (the default),
+// promptData falls back to discovering skills from config paths.
+func WithSkills(skills []*skills.Skill) Option {
+	return func(p *Prompt) {
+		p.skills = skills
 	}
 }
 
@@ -195,35 +206,39 @@ func (p *Prompt) promptData(ctx context.Context, provider, model string, store *
 	contextFiles := loadContextFiles(cfg.Options.ContextPaths, store)
 	globalContextFiles := loadContextFiles(cfg.Options.GlobalContextPaths, store)
 
-	// Discover and load skills metadata.
+	// Use pre-discovered skills if provided; otherwise discover from config.
 	var availSkillXML string
-
-	// Start with builtin skills.
-	allSkills := skills.DiscoverBuiltin()
-	builtinNames := make(map[string]bool, len(allSkills))
-	for _, s := range allSkills {
-		builtinNames[s.Name] = true
-	}
-
-	// Discover user skills from configured paths.
-	if len(cfg.Options.SkillsPaths) > 0 {
-		expandedPaths := make([]string, 0, len(cfg.Options.SkillsPaths))
-		for _, pth := range cfg.Options.SkillsPaths {
-			expandedPaths = append(expandedPaths, expandPath(pth, store))
+	var allSkills []*skills.Skill
+	if p.skills != nil {
+		allSkills = append(allSkills, p.skills...)
+	} else {
+		// Start with builtin skills.
+		allSkills = skills.DiscoverBuiltin()
+		builtinNames := make(map[string]bool, len(allSkills))
+		for _, s := range allSkills {
+			builtinNames[s.Name] = true
 		}
-		for _, userSkill := range skills.Discover(expandedPaths) {
-			if builtinNames[userSkill.Name] {
-				slog.Warn("User skill overrides builtin skill", "name", userSkill.Name)
+
+		// Discover user skills from configured paths.
+		if len(cfg.Options.SkillsPaths) > 0 {
+			expandedPaths := make([]string, 0, len(cfg.Options.SkillsPaths))
+			for _, pth := range cfg.Options.SkillsPaths {
+				expandedPaths = append(expandedPaths, expandPath(pth, store))
 			}
-			allSkills = append(allSkills, userSkill)
+			for _, userSkill := range skills.Discover(expandedPaths) {
+				if builtinNames[userSkill.Name] {
+					slog.Warn("User skill overrides builtin skill", "name", userSkill.Name)
+				}
+				allSkills = append(allSkills, userSkill)
+			}
 		}
+
+		// Deduplicate: user skills override builtins with the same name.
+		allSkills = skills.Deduplicate(allSkills)
+
+		// Filter out disabled skills.
+		allSkills = skills.Filter(allSkills, cfg.Options.DisabledSkills)
 	}
-
-	// Deduplicate: user skills override builtins with the same name.
-	allSkills = skills.Deduplicate(allSkills)
-
-	// Filter out disabled skills.
-	allSkills = skills.Filter(allSkills, cfg.Options.DisabledSkills)
 
 	// Apply repository-scoped toggle overrides on top: repo-disabled
 	// skills hide too, and config-disabled skills with a repository
