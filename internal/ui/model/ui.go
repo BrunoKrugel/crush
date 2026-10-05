@@ -2562,13 +2562,16 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	case dialog.ActionDisableDockerMCP:
 		m.dialog.CloseDialog(dialog.CommandsID)
 		cmds = append(cmds, m.disableDockerMCP)
-	case dialog.ActionToggleMCP:
-		cmds = append(cmds, m.applyMCPToggle(msg))
 	case dialog.ActionToggleSkill:
 		// Sequence apply then refresh: the refresh must read the
 		// overrides after the toggle commits, or the dialog shows stale
 		// state.
 		cmds = append(cmds, tea.Sequence(m.applySkillToggle(msg), m.refreshSkillOverrides()))
+	case dialog.ActionSetMCPServerSetting:
+		cmds = append(cmds, m.applyMCPServerSetting(msg))
+	case dialog.ActionToggleLazyMCP:
+		m.dialog.CloseDialog(dialog.CommandsID)
+		cmds = append(cmds, m.applyLazyMCPGlobal())
 	case dialog.ActionInitializeProject:
 		if m.isAgentBusy() {
 			cmds = append(cmds, util.ReportWarn("Agent is busy, please wait before summarizing session..."))
