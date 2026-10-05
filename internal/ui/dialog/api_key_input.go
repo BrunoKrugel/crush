@@ -252,7 +252,7 @@ func (m *APIKeyInput) inputView() string {
 		ts := t.TextInput
 		ts.Focused.Prompt = ts.Focused.Prompt.Foreground(charmtone.Cherry)
 
-		m.input.Prompt = nerdfont.Glyph(styles.LSPErrorIcon, "E") + " "
+		m.input.Prompt = nerdfont.Glyph(styles.LSPErrorIcon, "E ")
 		m.input.SetStyles(ts)
 		m.input.Focus()
 	}
