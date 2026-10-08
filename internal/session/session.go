@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 
@@ -444,6 +445,20 @@ func (s *service) SetSkillDisabled(ctx context.Context, name string, disabled bo
 // override: config-disabled skills the user enabled for this repository.
 func (s *service) SkillsEnabled(ctx context.Context) ([]string, error) {
 	return s.q.ListSkillsEnabled(ctx)
+}
+
+// HasMCPOverride reports whether the named MCP server has a
+// repository-scoped override, which takes precedence over the config.
+func HasMCPOverride(ctx context.Context, s Service, name string) (bool, error) {
+	disabled, err := s.MCPDisabledServers(ctx)
+	if err != nil {
+		return false, err
+	}
+	enabled, err := s.MCPServersEnabled(ctx)
+	if err != nil {
+		return false, err
+	}
+	return slices.Contains(disabled, name) || slices.Contains(enabled, name), nil
 }
 
 func NewService(q *db.Queries, conn *sql.DB) Service {

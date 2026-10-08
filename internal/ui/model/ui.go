@@ -329,6 +329,11 @@ type UI struct {
 	sendProgressBar    bool
 	progressBarEnabled bool
 
+	// turnOutcome is the result of the last agent turn reported to the
+	// terminal as program status (done or error) until the user has seen
+	// it, or empty.
+	turnOutcome tea.ProgramState
+
 	// caps hold different terminal capabilities that we query for.
 	caps common.Capabilities
 
@@ -907,6 +912,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateNotificationBackend()
 	case tea.FocusMsg:
 		m.notifyWindowFocused = true
+		m.turnOutcome = ""
 	case tea.BlurMsg:
 		m.notifyWindowFocused = false
 	case dialog.CollapseInlineMsg:
@@ -935,6 +941,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 	case agentRunSubmittedMsg:
+		m.turnOutcome = ""
 		// A prompt was just accepted (run started or enqueued): fetch the
 		// authoritative busy/queue state to confirm the optimistic values
 		// sendMessage wrote.
@@ -3962,6 +3969,7 @@ func (m *UI) View() tea.View {
 			v.Content = content
 			v.Cursor = cursor
 			m.applyProgressBar(&v)
+			v.ProgramStatus = m.programStatus()
 			return v
 		}
 	}
@@ -3983,6 +3991,7 @@ func (m *UI) View() tea.View {
 		m.storeFrame(key, content, v.Cursor)
 	}
 	m.applyProgressBar(&v)
+	v.ProgramStatus = m.programStatus()
 
 	return v
 }
@@ -5989,6 +5998,7 @@ func (m *UI) handleAgentNotification(n notify.Notification) tea.Cmd {
 	switch n.Type {
 	case notify.TypeAgentFinished:
 		common.StopTurn()
+		m.turnOutcome = tea.ProgramStateDone
 		cmds = append(cmds, m.sendNotification(notification.Notification{
 			Title:   "Crush is waiting...",
 			Message: fmt.Sprintf("Agent's turn completed in \"%s\"", n.SessionTitle),
@@ -6001,6 +6011,7 @@ func (m *UI) handleAgentNotification(n notify.Notification) tea.Cmd {
 			cmds = append(cmds, m.fetchHyperCredits())
 		}
 	case notify.TypeAgentError:
+		m.turnOutcome = tea.ProgramStateError
 		// Terminal edge like TypeAgentFinished; fall through to the
 		// busy/queue refresh below.
 	case notify.TypeReAuthenticate:

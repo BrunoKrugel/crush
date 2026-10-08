@@ -426,6 +426,11 @@ func (m *MCPToggles) itemStatus(item MCPToggleItem) string {
 		if item.ConfigDisabled {
 			return "disabled"
 		}
+		// The live connection reflects the local override, which takes
+		// precedence; the global setting itself is still enabled.
+		if item.localDisabled() {
+			return "enabled"
+		}
 		return item.Status
 	}
 	if item.localDisabled() {

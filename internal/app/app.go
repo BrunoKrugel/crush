@@ -158,7 +158,12 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 			}
 		}
 	}
-	go mcp.Initialize(ctx, app.Permissions, store, forceStart...)
+	// Servers disabled for this repository via Toggle MCPs are not started.
+	localDisabled, err := app.Sessions.MCPDisabledServers(ctx)
+	if err != nil {
+		slog.Warn("Failed to list disabled MCP overrides; starting them anyway", "error", err)
+	}
+	go mcp.Initialize(ctx, app.Permissions, store, forceStart, localDisabled)
 
 	// A session that loaded MCP tools holds those activations for as long
 	// as it exists. Deleting the session must reclaim them, otherwise a
