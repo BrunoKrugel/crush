@@ -2,7 +2,6 @@ package config
 
 import (
 	"os"
-	"path/filepath"
 )
 
 // AtomicWriteFile writes data to a file atomically by writing to a unique
@@ -46,4 +45,5 @@ func AtomicWriteFile(path string, data []byte, perm os.FileMode) error {
 // handle on the destination, so transient failures are retried.
 func renameFile(tmp, path string) error {
 	return retryTransient(func() error { return os.Rename(tmp, path) })
+}
 }
