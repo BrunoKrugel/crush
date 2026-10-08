@@ -43,6 +43,16 @@
             8000,
             40000
           ]
+        },
+        "observe_memory": {
+          "type": "boolean",
+          "description": "Record session memory at the end of each turn; memory is kept verbatim beside every checkpoint",
+          "default": false
+        },
+        "render_from_ledger": {
+          "type": "boolean",
+          "description": "Build compaction checkpoints entirely from recorded session memory",
+          "default": false
         }
       },
       "additionalProperties": false,
@@ -371,11 +381,6 @@
             120
           ]
         },
-        "lazy": {
-          "type": "boolean",
-          "description": "Keep this server's tools out of context until the agent loads them. Unset follows options.lazy_mcp. Set false to always show them",
-          "default": true
-        },
         "sessionless": {
           "type": "boolean",
           "description": "Mark a sessionless MCP server (no Mcp-Session-Id) so Crush skips the subscriptions/listen stream it would otherwise reject. Leave unset to auto-detect known sessionless servers (e.g. GitHub MCP)",
@@ -671,11 +676,6 @@
           "type": "array",
           "description": "List of skill names to disable and hide from the agent"
         },
-        "lazy_mcp": {
-          "type": "boolean",
-          "description": "Keep MCP tools out of the model context until the agent loads them with mcp_search. Individual servers override it with mcp.\u003cname\u003e.lazy",
-          "default": true
-        },
         "request_timeout": {
           "type": "integer",
           "description": "Timeout in seconds for each LLM API request. Streaming responses are aborted only after this much inactivity, so slow but active streams are never killed. 0 disables it, negative values are invalid.",
@@ -934,23 +934,10 @@
           "description": "Chat scrollbar visibility",
           "default": "default"
         },
-        "scroll_speed": {
-          "type": "number",
-          "description": "Multiplier applied to mouse wheel scroll distance in the TUI (1 disables acceleration, lower values scroll slower, higher values scroll faster)",
-          "default": 1,
-          "examples": [
-            2,
-            3
-          ]
-        },
         "mouse": {
           "type": "boolean",
           "description": "Enable terminal mouse capture for selection, clicks, and scrolling in the TUI. Disable to let the terminal emulator or tmux handle text selection and copy/paste",
           "default": true
-        },
-        "nerd_fonts": {
-          "type": "boolean",
-          "description": "Override Nerd Font glyph detection for the TUI: true forces glyphs on, false forces them off, and unset keeps automatic detection"
         },
         "exit_banner": {
           "type": "string",

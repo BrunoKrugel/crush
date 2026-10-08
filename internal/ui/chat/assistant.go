@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"strings"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -250,15 +249,6 @@ func NewAssistantMessageItem(sty *styles.Styles, message *message.Message) Messa
 		sty:                      sty,
 	}
 
-	// Summary messages are generated outside a regular turn, so the turn
-	// timer is not active while they stream; give them their own elapsed
-	// timer anchored at item creation instead.
-	suffix := func() string { return common.Elapsed() }
-	if message.IsSummaryMessage {
-		startedAt := time.Now()
-		suffix = func() string { return common.FormatDuration(time.Since(startedAt)) }
-	}
-
 	a.anim = anim.New(anim.Settings{
 		ID:          a.ID(),
 		Size:        15,
@@ -266,7 +256,9 @@ func NewAssistantMessageItem(sty *styles.Styles, message *message.Message) Messa
 		GradColorB:  sty.WorkingGradToColor,
 		LabelColor:  sty.WorkingLabelColor,
 		CycleColors: true,
-		Suffix:      suffix,
+		Suffix: func() string {
+			return common.Elapsed()
+		},
 		SuffixColor: sty.WorkingTimerColor,
 	})
 	return a
@@ -548,6 +540,13 @@ func (a *AssistantMessageItem) contentKey() (uint64, uint64) {
 	if a.message.IsSummaryMessage && !a.message.IsFinished() {
 		extra |= 2
 	}
+	if a.message.IsSummaryMessage && a.message.IsErrorLike() {
+		// A compaction that fails flips from card to plain text without the
+		// text itself changing, so without this bit the cached card would
+		// outlive the failure and keep vouching for a summary that never
+		// landed.
+		extra |= 4
+	}
 	return fnv64(a.message.Content().Text), uint64(extra)
 }
 
@@ -616,7 +615,7 @@ func (a *AssistantMessageItem) cachedContent(width int) string {
 	// ThinkingBox treatment.
 	var out string
 	switch {
-	case a.message.IsSummaryMessage:
+	case a.hasCheckpoint():
 		out = a.renderCompactionCard(width)
 	case common.PlanReadyMarkerPresent(text):
 		out = a.renderPlanCard(common.StripPlanMarkers(text), width)
@@ -780,15 +779,18 @@ func (a *AssistantMessageItem) renderThinking(thinking string, width int) string
 	return result
 }
 
-// renderMarkdown renders content as markdown. F8 routes the call
-// through streamingContent, which caches the glamour render of a
-// "stable prefix" so each streaming flush only re-renders the
-// trailing partial. The streaming cache invalidates itself on
-// width change and on any content that is not a prefix-extension
-// of the previously rendered content (e.g. user retried the
-// turn), and falls back to a full render whenever boundary
-// detection has the slightest doubt — see
-// findSafeMarkdownBoundary.
+// hasCheckpoint reports whether this message should present itself as a session
+// checkpoint.
+//
+// A summarization that fails partway leaves a half-written summary in the
+// transcript with no footer and no cut pointing at it. Framing that as a
+// "Session Summary" would claim the conversation above it had been replaced,
+// when nothing of the sort happened, so it renders as ordinary text under its
+// error banner instead, where the failure is at least legible.
+func (a *AssistantMessageItem) hasCheckpoint() bool {
+	return a.message.IsSummaryMessage && !a.message.IsErrorLike()
+}
+
 // renderCompactionCard paints a checkpoint inside a bordered box, the way the
 // plan card paints a plan. Without it a summary is plain assistant text in the
 // middle of a conversation, and the natural reading is that the agent said it
@@ -860,6 +862,16 @@ func (a *AssistantMessageItem) compactionNote(text string, streaming bool) []str
 			"Kept the %d most recent (~%s) verbatim",
 			info.KeptMessages, formatTokenCount(info.KeptTokens)))
 	}
+	if info.Rendered > 0 {
+		lines = append(lines, fmt.Sprintf(
+			"Rendered from %d recorded memories, no model call",
+			info.Rendered))
+	}
+	if info.Observed > 0 {
+		lines = append(lines, fmt.Sprintf(
+			"Keeps %d recorded memories verbatim across compactions",
+			info.Observed))
+	}
 	if info.TranscriptPath != "" {
 		lines = append(lines, "Full transcript: "+info.TranscriptPath)
 	}
@@ -883,6 +895,15 @@ func (a *AssistantMessageItem) renderMarkdownAt(content string, width int) strin
 	return strings.TrimSpace(rendered)
 }
 
+// renderMarkdown renders content as markdown. F8 routes the call
+// through streamingContent, which caches the glamour render of a
+// "stable prefix" so each streaming flush only re-renders the
+// trailing partial. The streaming cache invalidates itself on
+// width change and on any content that is not a prefix-extension
+// of the previously rendered content (e.g. user retried the
+// turn), and falls back to a full render whenever boundary
+// detection has the slightest doubt — see
+// findSafeMarkdownBoundary.
 func (a *AssistantMessageItem) renderMarkdown(content string, width int) string {
 	renderer := common.MarkdownRenderer(a.sty, width)
 	return a.streamingContent.Render(content, width, renderer)

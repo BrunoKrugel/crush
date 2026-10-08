@@ -178,3 +178,95 @@ func TestCompactionCardShowsWhatSurvivesOfAPartialFooter(t *testing.T) {
 	require.Contains(t, out, "Replaced 12 earlier messages (~4K tokens)")
 	require.NotContains(t, out, "Kept the")
 }
+
+// TestFailedSummarizationIsNotCarded covers the partial checkpoint a failed
+// compaction leaves behind. Presenting it as a "Session Summary" would say the
+// conversation above it had been replaced, when nothing was written and the
+// session still holds all of it.
+func TestFailedSummarizationIsNotCarded(t *testing.T) {
+	sty := styles.CharmtonePantera()
+	msg := &message.Message{
+		ID:   "failed-checkpoint",
+		Role: message.Assistant,
+		Parts: []message.ContentPart{
+			message.TextContent{Text: "a half-written summary tha"},
+			message.Finish{Reason: message.FinishReasonError, Message: "provider exploded", Time: 1},
+		},
+		IsSummaryMessage: true,
+	}
+	item := NewAssistantMessageItem(&sty, msg).(*AssistantMessageItem)
+
+	out := ansi.Strip(item.RawRender(76))
+
+	require.NotContains(t, out, "Session Summary")
+	require.NotContains(t, out, "╭", "a failure is not a checkpoint")
+	require.Contains(t, out, "provider exploded", "the failure has to stay visible")
+}
+
+// TestCardDroppedWhenASummaryFailsMidFlight pins the cache key. The summary's
+// text does not change when the failure lands, only its finish part, so without
+// a bit for the error state the cached card would keep vouching for a summary
+// that never completed.
+func TestCardDroppedWhenASummaryFailsMidFlight(t *testing.T) {
+	sty := styles.CharmtonePantera()
+	msg := &message.Message{
+		ID:               "flipping-checkpoint",
+		Role:             message.Assistant,
+		Parts:            []message.ContentPart{message.TextContent{Text: "the summary text"}},
+		IsSummaryMessage: true,
+	}
+	item := NewAssistantMessageItem(&sty, msg).(*AssistantMessageItem)
+
+	require.Contains(t, ansi.Strip(item.RawRender(76)), "Summarizing")
+
+	msg.AddFinish(message.FinishReasonError, "provider exploded", "")
+
+	out := ansi.Strip(item.RawRender(76))
+	require.NotContains(t, out, "Summarizing")
+	require.NotContains(t, out, "╭")
+}
+
+// TestCompactionCardSaysWhenItWasRendered: a checkpoint built from recorded
+// memory is a different claim from one a model wrote, and a reader deciding
+// whether to trust it should be able to tell which they are looking at.
+func TestCompactionCardSaysWhenItWasRendered(t *testing.T) {
+	sty := styles.CharmtonePantera()
+	item := footedItem(t, &sty, `<compaction_info replaced_messages="40" replaced_tokens="90000" kept_messages="6" kept_tokens="8000" rendered="12">`+"\n"+
+		"This checkpoint replaces 40 earlier messages (~90000 tokens).\n"+
+		"</compaction_info>")
+
+	out := ansi.Strip(item.RawRender(76))
+
+	require.Contains(t, out, "Rendered from 12 recorded memories")
+	require.Contains(t, out, "Replaced 40 earlier messages")
+}
+
+// TestCompactionCardStaysQuietAboutRenderingWhenSummarized is the other half:
+// a model-written checkpoint must not claim to have been rendered, and the
+// note is driven by the footer rather than assumed.
+func TestCompactionCardStaysQuietAboutRenderingWhenSummarized(t *testing.T) {
+	sty := styles.CharmtonePantera()
+	item := footedItem(t, &sty, `<compaction_info replaced_messages="40" replaced_tokens="90000" kept_messages="6" kept_tokens="8000">`+"\n"+
+		"This checkpoint replaces 40 earlier messages (~90000 tokens).\n"+
+		"</compaction_info>")
+
+	out := ansi.Strip(item.RawRender(76))
+
+	require.Contains(t, out, "Replaced 40 earlier messages")
+	require.NotContains(t, out, "Rendered from")
+}
+
+// TestCompactionCardSaysWhatMemoryItKeeps: in the default mode the card must
+// say the checkpoint carries recorded memory across compactions, which is the
+// promise the appendix exists to make.
+func TestCompactionCardSaysWhatMemoryItKeeps(t *testing.T) {
+	sty := styles.CharmtonePantera()
+	item := footedItem(t, &sty, `<compaction_info replaced_messages="40" replaced_tokens="90000" kept_messages="6" kept_tokens="8000" observed="9">`+"\n"+
+		"This checkpoint replaces 40 earlier messages (~90000 tokens).\n"+
+		"</compaction_info>")
+
+	out := ansi.Strip(item.RawRender(76))
+
+	require.Contains(t, out, "Keeps 9 recorded memories verbatim across compactions")
+	require.NotContains(t, out, "Rendered from", "a summary carries memory, it was not built from it")
+}

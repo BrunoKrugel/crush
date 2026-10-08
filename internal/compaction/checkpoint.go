@@ -30,6 +30,16 @@ type Info struct {
 	// TranscriptPath, when non-empty, holds the full text of the replaced
 	// region outside the context window.
 	TranscriptPath string
+	// Rendered counts the memory entries this checkpoint was built from, and is
+	// zero for a checkpoint a model wrote. It is recorded because a rendered
+	// checkpoint is only as good as the memory behind it, and a reader who can
+	// see the number can tell a thin checkpoint from a summarized one.
+	Rendered int
+	// Observed counts the memory entries appended to this checkpoint verbatim,
+	// alongside a summary a model wrote. Those entries persist across every
+	// later compaction, which is how a session's rationale outlives generations
+	// of summaries.
+	Observed int
 }
 
 // Render returns the footer, without any surrounding model output.
@@ -45,6 +55,12 @@ func (i Info) Render() string {
 	if i.TranscriptPath != "" {
 		tag += fmt.Sprintf(` transcript_path=%q`, i.TranscriptPath)
 	}
+	if i.Rendered > 0 {
+		tag += fmt.Sprintf(` rendered="%d"`, i.Rendered)
+	}
+	if i.Observed > 0 {
+		tag += fmt.Sprintf(` observed="%d"`, i.Observed)
+	}
 	lines := []string{fmt.Sprintf(
 		"This checkpoint replaces %d earlier messages (~%d tokens).",
 		i.ReplacedMessages, i.ReplacedTokens,
@@ -55,6 +71,20 @@ func (i Info) Render() string {
 			i.KeptMessages, i.KeptTokens,
 		))
 	}
+	if i.Rendered > 0 {
+		lines = append(lines, fmt.Sprintf(
+			"This checkpoint was rendered from %d recorded session memories rather than "+
+				"summarized, so it states decisions and constraints without paraphrase.",
+			i.Rendered,
+		))
+	}
+	if i.Observed > 0 {
+		lines = append(lines, fmt.Sprintf(
+			"%d recorded session memories follow this summary verbatim and are preserved "+
+				"by every later compaction.",
+			i.Observed,
+		))
+	}
 	if i.TranscriptPath != "" {
 		lines = append(lines,
 			fmt.Sprintf("Full text of the replaced region: %s", i.TranscriptPath),
@@ -62,6 +92,30 @@ func (i Info) Render() string {
 		)
 	}
 	return tag + ">\n" + strings.Join(lines, "\n") + "\n" + infoEnd
+}
+
+// Preview is a checkpoint that has been written but not adopted.
+//
+// Previewing exists because a checkpoint is a lossy rewrite of the session, and
+// discovering it dropped something important after the fact is worse than
+// waiting a moment to read it. Staging keeps the row so accepting costs no
+// second model call, and keeps every field the commit would have written, so
+// accepting cannot disagree with the plan that produced the text.
+type Preview struct {
+	// CheckpointID is the staged row. CutID is the first message the retained
+	// tail starts at, empty when the whole transcript was summarized.
+	CheckpointID string
+	CutID        string
+	Text         string
+	// Replaced and Kept count messages on each side of the cut.
+	Replaced int
+	Kept     int
+	// PromptTokens and the fields beside it are exactly what the session
+	// counters become on acceptance, recomputed here rather than at commit so
+	// the two paths can never drift.
+	PromptTokens     int64
+	CompletionTokens int64
+	EstimatedUsage   bool
 }
 
 // Body returns summary with any footer removed, so a later compaction can
@@ -137,6 +191,10 @@ func parseAttrs(tag string) (Info, bool) {
 			info.KeptMessages, found = int(number), true
 		case key == "kept_tokens":
 			info.KeptTokens, found = number, true
+		case key == "rendered":
+			info.Rendered, found = int(number), true
+		case key == "observed":
+			info.Observed, found = int(number), true
 		}
 	}
 	return info, found

@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/crush/internal/commands"
+	"github.com/charmbracelet/crush/internal/compaction"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/list"
@@ -57,7 +58,12 @@ type Commands struct {
 	hasSession bool
 	hasTodos   bool
 	hasQueue   bool
-	selected   CommandType
+	// hasCheckpoint gates the undo entry: a session with no checkpoint has
+	// nothing to bring back.
+	hasCheckpoint bool
+	// pendingPreview is a staged checkpoint awaiting the user's answer.
+	pendingPreview *compaction.Preview
+	selected       CommandType
 
 	spinner spinner.Model
 	loading bool
@@ -463,6 +469,43 @@ func (c *Commands) defaultCommands() []*CommandItem {
 			},
 		).WithAliases("summarize", "compress").WithDescription("Replace older turns with a checkpoint, keeping the most recent ones verbatim"))
 	}
+	// Preview is offered next to the fast path rather than replacing it:
+	// sometimes a checkpoint should just happen.
+	if c.hasSession && c.pendingPreview == nil {
+		commands = append(commands, NewCommandItem(
+			c.com.Styles, "compact-preview", "Compact (Preview First)", "",
+			ActionPreviewSummarize{
+				SessionID: c.sessionID,
+				Arguments: compactArguments(),
+			},
+		).WithDescription("Write a checkpoint and read it before deciding whether to keep it"))
+	}
+	if c.pendingPreview != nil {
+		commands = append(commands, NewCommandItem(
+			c.com.Styles, "keep-checkpoint", "Keep Checkpoint", "",
+			ActionAcceptPreview{
+				SessionID: c.sessionID,
+				Preview:   *c.pendingPreview,
+			},
+		).WithDescription("Apply the previewed checkpoint and drop the older turns it replaced"))
+		commands = append(commands, NewCommandItem(
+			c.com.Styles, "discard-checkpoint", "Discard Checkpoint", "",
+			ActionDiscardPreview{
+				SessionID:    c.sessionID,
+				CheckpointID: c.pendingPreview.CheckpointID,
+			},
+		).WithDescription("Throw the previewed checkpoint away and change nothing"))
+	}
+	// Compaction never deletes what it replaced, so the way back is offered
+	// whenever a checkpoint exists rather than only just after one.
+	if c.hasSession && c.hasCheckpoint {
+		commands = append(commands, NewCommandItem(
+			c.com.Styles, "restore", "Restore Checkpoint", "",
+			ActionRestoreSummarize{
+				SessionID: c.sessionID,
+			},
+		).WithAliases("uncompact", "undo").WithDescription("Undo the last compaction and bring back the messages it replaced"))
+	}
 
 	// Add reasoning toggle for models that support it
 	cfg := c.com.Config()
@@ -627,6 +670,19 @@ func (c *Commands) StopLoading() {
 // compactArguments describes what the compact dialog collects before it
 // compacts. It is a package-level function because defaultCommands shadows the
 // commands package with its own local slice of items.
+// SetHasCheckpoint records whether the current session has a checkpoint to
+// undo. The palette is built before any command runs, so the entry appears only
+// when there is something behind it to restore.
+// SetPendingPreview shows or hides the accept and discard entries. Passing nil
+// means nothing is staged, which is the normal state and the safe default.
+func (c *Commands) SetPendingPreview(preview *compaction.Preview) {
+	c.pendingPreview = preview
+}
+
+func (c *Commands) SetHasCheckpoint(has bool) {
+	c.hasCheckpoint = has
+}
+
 func compactArguments() []commands.Argument {
 	return []commands.Argument{{
 		ID:          CompactInstructionsArg,
