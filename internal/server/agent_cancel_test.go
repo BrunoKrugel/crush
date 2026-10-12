@@ -40,6 +40,7 @@ type runCoordinator struct {
 	enteredOne sync.Once
 
 	setMainAgentErr  error
+	summarizeErr     error
 	lastMainAgentSet atomic.Value
 	busy             bool
 }
@@ -139,6 +140,37 @@ func buildAgentWorkspace(t *testing.T, coord agent.Coordinator) (*controllerV1, 
 
 	s := &Server{backend: b}
 	return &controllerV1{backend: b, server: s}, ws.ID
+}
+
+func TestSummaryOutcome(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		err    error
+		status int
+	}{
+		{"success", nil, http.StatusOK},
+		{"cancelled", context.Canceled, http.StatusConflict},
+		{"failure", context.DeadlineExceeded, http.StatusInternalServerError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			coord := newRunCoordinator(nil)
+			coord.summarizeErr = tc.err
+			controller, workspaceID := buildAgentWorkspace(t, coord)
+			request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", nil)
+			request.SetPathValue("id", workspaceID)
+			request.SetPathValue("sid", "session")
+			response := httptest.NewRecorder()
+			controller.handlePostWorkspaceAgentSessionSummarize(response, request)
+			require.Equal(t, tc.status, response.Code)
+			if tc.err == context.Canceled {
+				require.JSONEq(t, `{"cancelled":true}`, response.Body.String())
+			} else {
+				require.NotContains(t, response.Body.String(), `"cancelled":true`)
+			}
+		})
+	}
 }
 
 func postAgent(t *testing.T, c *controllerV1, ctx context.Context, wsID, sessionID string) *httptest.ResponseRecorder {

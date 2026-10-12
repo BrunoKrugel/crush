@@ -437,10 +437,6 @@ func (app *App) RunNonInteractive(ctx context.Context, output io.Writer, prompt,
 		}
 	}
 
-	// Automatically approve all permission requests for this non-interactive
-	// session.
-	app.Permissions.AutoApproveSession(sess.ID)
-
 	// Report session identity to herdr.
 	app.ReportCurrentSession(ctx, sess.ID)
 
@@ -451,7 +447,7 @@ func (app *App) RunNonInteractive(ctx context.Context, output io.Writer, prompt,
 	done := make(chan response, 1)
 
 	go func(ctx context.Context, sessionID, prompt string) {
-		result, err := app.AgentCoordinator.Run(ctx, sess.ID, prompt)
+		result, err := app.AgentCoordinator.Run(permission.WithAutoApproveRequests(ctx), sessionID, prompt)
 		if err != nil {
 			done <- response{
 				err: fmt.Errorf("failed to start agent processing stream: %w", err),
@@ -506,8 +502,29 @@ func (app *App) RunNonInteractive(ctx context.Context, output io.Writer, prompt,
 
 		case event := <-messageEvents:
 			msg := event.Payload
-			if msg.SessionID != sess.ID || len(msg.Parts) == 0 {
-				continue
+			if msg.SessionID == sess.ID && msg.Role == message.Assistant && len(msg.Parts) > 0 {
+				stopSpinner()
+
+				content := msg.Content().String()
+				readBytes := messageReadBytes[msg.ID]
+
+				if len(content) < readBytes {
+					slog.Error("Non-interactive: message content is shorter than read bytes", "message_length", len(content), "read_bytes", readBytes)
+					return fmt.Errorf("message content is shorter than read bytes: %d < %d", len(content), readBytes)
+				}
+
+				part := content[readBytes:]
+				// Trim leading whitespace. Sometimes the LLM includes leading
+				// formatting and indentation, which we don't want here.
+				if readBytes == 0 {
+					part = strings.TrimLeft(part, " \t")
+				}
+				// Ignore initial whitespace-only messages.
+				if printed || strings.TrimSpace(part) != "" {
+					printed = true
+					fmt.Fprint(output, part)
+				}
+				messageReadBytes[msg.ID] = len(content)
 			}
 
 			// When showEvents is on, print tool calls and results

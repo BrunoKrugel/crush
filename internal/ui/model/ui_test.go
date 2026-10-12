@@ -130,13 +130,11 @@ type testWorkspace struct {
 	updateCalls       int
 	agentReady        bool
 	agentBusy         bool
-	cfg               *config.Config
 	runPrompts        []string
 	yolo              bool
 	runHidden         []bool
+	runSteering       []bool
 	compactCalls      []bool
-	cfg               *config.Config
-	cfg               *config.Config
 	mcpStates         map[string]mcp.ClientInfo
 }
 
@@ -180,6 +178,7 @@ func (w *testWorkspace) AgentReadyErr() error {
 func (w *testWorkspace) AgentRun(ctx context.Context, _ string, prompt string, _ ...message.Attachment) error {
 	w.runPrompts = append(w.runPrompts, prompt)
 	w.runHidden = append(w.runHidden, message.HiddenUserMessage(ctx))
+	w.runSteering = append(w.runSteering, message.OperatorSteering(ctx))
 	return nil
 }
 
@@ -762,6 +761,7 @@ func TestGeneratedPlanContinuationIsHidden(t *testing.T) {
 		}
 	}
 	require.Equal(t, []bool{true, false}, ws.runHidden)
+	require.Equal(t, []bool{true, true}, ws.runSteering)
 	require.Equal(t, []string{"Implement the plan.", "Implement the plan."}, ws.runPrompts)
 }
 
