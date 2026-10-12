@@ -87,11 +87,15 @@ func (s *runCoordinator) QueuedPrompts(string) int              { return 0 }
 func (s *runCoordinator) QueuedPromptsList(string) []string     { return nil }
 func (s *runCoordinator) ClearQueue(string)                     {}
 func (s *runCoordinator) ListCronTasks(string) []scheduler.Task { return nil }
-func (s *runCoordinator) Summarize(context.Context, string) error {
-	return nil
-}
 
 func (s *runCoordinator) DiscardSummarize(context.Context, string, string) error { return nil }
+func (s *runCoordinator) SummarizePreview(context.Context, string, string) (compaction.Preview, error) {
+	return compaction.Preview{}, nil
+}
+
+func (s *runCoordinator) ConfirmSummarize(context.Context, string, compaction.Preview) error {
+	return nil
+}
 
 func (s *runCoordinator) RestoreSummarize(context.Context, string) error { return nil }
 

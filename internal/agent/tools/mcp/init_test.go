@@ -907,14 +907,14 @@ func TestCreateSession_Sessionless(t *testing.T) {
 		require.Zero(t, listenTotal.Load(), "no subscriptions/listen stream should be opened when disabled")
 	})
 
-	t.Run("default opens listen stream and breaks sessionless server", func(t *testing.T) {
+	t.Run("default does not eagerly open a listen stream (go-sdk v1.8.0)", func(t *testing.T) {
 		srv, listenTotal := newStub(t)
 		const name = "sessionless-default"
 		states.Del(name)
 		t.Cleanup(func() { states.Del(name) })
-
-		// Connect itself succeeds; the listen stream fails asynchronously
-		// and poisons the connection, so the subsequent tools/list fails.
+		// Connect itself succeeds. Since go-sdk v1.8.0 a failing listen
+		// stream no longer poisons the connection: the 404 is tolerated
+		// and tools/list keeps working.
 		cfg := config.MCPConfig{Type: config.MCPHttp, URL: srv.URL, Timeout: 15}
 		sess, err := createSession(t.Context(), nil, name, cfg, resolver, false)
 		require.NoError(t, err)
@@ -922,8 +922,7 @@ func TestCreateSession_Sessionless(t *testing.T) {
 		t.Cleanup(func() { sess.Close() })
 
 		_, err = sess.ListTools(t.Context(), &mcp.ListToolsParams{})
-		require.Error(t, err, "default handlers open a listen stream that the sessionless server 404s")
-		require.Contains(t, err.Error(), "session not found")
-		require.GreaterOrEqual(t, listenTotal.Load(), int64(1), "expected the listen stream attempt")
+		require.NoError(t, err, "a sessionless server 404ing the listen stream no longer breaks tools/list")
+		require.Zero(t, listenTotal.Load(), "v1.8.0 no longer opens the listen stream eagerly for default handlers")
 	})
 }

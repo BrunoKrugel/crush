@@ -54,11 +54,15 @@ func (s *stubCoordinator) QueuedPrompts(string) int              { return 0 }
 func (s *stubCoordinator) QueuedPromptsList(string) []string     { return nil }
 func (s *stubCoordinator) ClearQueue(string)                     {}
 func (s *stubCoordinator) ListCronTasks(string) []scheduler.Task { return nil }
-func (s *stubCoordinator) Summarize(context.Context, string) error {
-	return nil
-}
 
 func (s *stubCoordinator) DiscardSummarize(context.Context, string, string) error { return nil }
+func (s *stubCoordinator) SummarizePreview(context.Context, string, string) (compaction.Preview, error) {
+	return compaction.Preview{}, nil
+}
+
+func (s *stubCoordinator) ConfirmSummarize(context.Context, string, compaction.Preview) error {
+	return nil
+}
 
 func (s *stubCoordinator) RestoreSummarize(context.Context, string) error { return nil }
 

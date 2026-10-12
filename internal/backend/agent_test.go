@@ -62,10 +62,19 @@ func (c *blockingCoordinator) QueuedPrompts(string) int                         
 func (c *blockingCoordinator) QueuedPromptsList(string) []string                 { return nil }
 func (c *blockingCoordinator) ClearQueue(string)                                 {}
 func (c *blockingCoordinator) ListCronTasks(string) []scheduler.Task             { return nil }
-func (c *blockingCoordinator) Summarize(context.Context, string) error           { return nil }
-func (c *blockingCoordinator) Model() agent.Model                                { return agent.Model{} }
-func (c *blockingCoordinator) UpdateModels(context.Context) error                { return nil }
-func (c *blockingCoordinator) GenerateTitle(context.Context, string, string)     {}
+func (c *blockingCoordinator) Summarize(context.Context, string, string) error   { return nil }
+func (c *blockingCoordinator) SummarizePreview(context.Context, string, string) (compaction.Preview, error) {
+	return compaction.Preview{}, nil
+}
+
+func (c *blockingCoordinator) ConfirmSummarize(context.Context, string, compaction.Preview) error {
+	return nil
+}
+func (c *blockingCoordinator) DiscardSummarize(context.Context, string, string) error { return nil }
+func (c *blockingCoordinator) RestoreSummarize(context.Context, string) error         { return nil }
+func (c *blockingCoordinator) Model() agent.Model                                     { return agent.Model{} }
+func (c *blockingCoordinator) UpdateModels(context.Context) error                     { return nil }
+func (c *blockingCoordinator) GenerateTitle(context.Context, string, string)          {}
 func (c *blockingCoordinator) SetMainAgent(agentName string) error {
 	c.lastMainAgentSet.Store(agentName)
 	return c.setMainAgentErr

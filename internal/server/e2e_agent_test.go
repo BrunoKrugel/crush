@@ -214,17 +214,26 @@ func (c *scriptedCoordinator) CancelAll() {
 	}
 }
 
-func (c *scriptedCoordinator) IsBusy() bool                                  { return false }
-func (c *scriptedCoordinator) IsSessionBusy(string) bool                     { return false }
-func (c *scriptedCoordinator) QueuedPrompts(string) int                      { return 0 }
-func (c *scriptedCoordinator) QueuedPromptsList(string) []string             { return nil }
-func (c *scriptedCoordinator) ClearQueue(string)                             {}
-func (c *scriptedCoordinator) ListCronTasks(string) []scheduler.Task         { return nil }
-func (c *scriptedCoordinator) Summarize(context.Context, string) error       { return nil }
-func (c *scriptedCoordinator) Model() agent.Model                            { return agent.Model{} }
-func (c *scriptedCoordinator) UpdateModels(context.Context) error            { return nil }
-func (c *scriptedCoordinator) SetMainAgent(string) error                     { return nil }
-func (c *scriptedCoordinator) GenerateTitle(context.Context, string, string) {}
+func (c *scriptedCoordinator) IsBusy() bool                                    { return false }
+func (c *scriptedCoordinator) IsSessionBusy(string) bool                       { return false }
+func (c *scriptedCoordinator) QueuedPrompts(string) int                        { return 0 }
+func (c *scriptedCoordinator) QueuedPromptsList(string) []string               { return nil }
+func (c *scriptedCoordinator) ClearQueue(string)                               {}
+func (c *scriptedCoordinator) ListCronTasks(string) []scheduler.Task           { return nil }
+func (c *scriptedCoordinator) Summarize(context.Context, string, string) error { return nil }
+func (c *scriptedCoordinator) SummarizePreview(context.Context, string, string) (compaction.Preview, error) {
+	return compaction.Preview{}, nil
+}
+
+func (c *scriptedCoordinator) ConfirmSummarize(context.Context, string, compaction.Preview) error {
+	return nil
+}
+func (c *scriptedCoordinator) DiscardSummarize(context.Context, string, string) error { return nil }
+func (c *scriptedCoordinator) RestoreSummarize(context.Context, string) error         { return nil }
+func (c *scriptedCoordinator) Model() agent.Model                                     { return agent.Model{} }
+func (c *scriptedCoordinator) UpdateModels(context.Context) error                     { return nil }
+func (c *scriptedCoordinator) SetMainAgent(string) error                              { return nil }
+func (c *scriptedCoordinator) GenerateTitle(context.Context, string, string)          {}
 
 // agentE2EHarness extends the SSE harness with a scripted coordinator
 // wired into the workspace's embedded app.App, so POST /agent drives a
