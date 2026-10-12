@@ -22,6 +22,7 @@ import (
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/question"
+	"github.com/charmbracelet/crush/internal/scheduler"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/skills"
 )
@@ -173,6 +174,7 @@ type Workspace interface {
 	AgentSummarizePreview(ctx context.Context, sessionID, instructions string) (compaction.Preview, error)
 	AgentConfirmSummarize(ctx context.Context, sessionID string, preview compaction.Preview) error
 	AgentDiscardSummarize(ctx context.Context, sessionID, checkpointID string) error
+	AgentListCronTasks(sessionID string) []scheduler.Task
 	UpdateAgentModel(ctx context.Context) error
 	InitCoderAgent(ctx context.Context) error
 	InitCoderAgentNonInteractive(ctx context.Context) error

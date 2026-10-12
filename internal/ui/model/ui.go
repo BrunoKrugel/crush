@@ -47,6 +47,7 @@ import (
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/question"
+	"github.com/charmbracelet/crush/internal/scheduler"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/skills"
 	"github.com/charmbracelet/crush/internal/stringext"
@@ -478,6 +479,10 @@ type UI struct {
 	// discarded and re-fetched instead of clobbering newer state.
 	busyFetchGen uint64
 	pillsView    string
+
+	// cronTasks holds the scheduled tasks for the current session,
+	// refreshed on session load and after cron tool results.
+	cronTasks []scheduler.Task
 
 	// Todo spinner
 	todoSpinner    spinner.Model
@@ -990,6 +995,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.promptQueue = 0
 		m.promptQueueItems = nil
 		m.promptQueueCheckedAt = time.Time{}
+		m.cronTasks = nil
 		if cmd := m.dispatchBusyRefresh(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
@@ -1024,6 +1030,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Reload prompt history for the new session.
 		m.historyReset()
 		cmds = append(cmds, m.loadPromptHistory())
+		m.refreshCronTasks()
 		m.updateLayoutAndSize()
 
 	case sessionFilesUpdatesMsg:
@@ -1931,6 +1938,11 @@ func (m *UI) appendSessionMessage(msg message.Message) tea.Cmd {
 			return nil
 		}
 		m.lastUserMessageTime = msg.CreatedAt
+		// A scheduled task's prompt arrives as an ordinary user
+		// message; firing also deletes one-shots from the store, so
+		// re-list to keep the scheduled pill from showing a task that
+		// has already run.
+		m.refreshCronTasks()
 		items := chat.ExtractMessageItems(m.com.Styles, &msg, nil, m.com.Workspace.WorkingDir())
 		m.chat.AppendMessages(items...)
 		m.chat.ScrollToBottom()
@@ -1959,6 +1971,12 @@ func (m *UI) appendSessionMessage(msg message.Message) tea.Cmd {
 				toolMsgItem.SetResult(&tr)
 				if m.chat.Follow() {
 					m.chat.ScrollToBottom()
+				}
+				// Refresh cron tasks after a cron tool result so the
+				// pill stays current.
+				toolName := toolMsgItem.ToolCall().Name
+				if toolName == agenttools.CronCreateToolName || toolName == agenttools.CronListToolName || toolName == agenttools.CronDeleteToolName {
+					m.refreshCronTasks()
 				}
 			}
 		}
@@ -4096,7 +4114,7 @@ func (m *UI) ShortHelp() []key.Binding {
 				k.Chat.PageDown,
 				k.Chat.Copy,
 			)
-			if m.pillsExpanded && hasIncompleteTodos(m.session.Todos) && m.promptQueue > 0 {
+			if m.pillsExpanded && len(m.pillSectionsWithContent()) > 1 {
 				binds = append(binds, k.Chat.PillLeft)
 			}
 		}
@@ -4263,7 +4281,7 @@ func (m *UI) FullHelp() [][]key.Binding {
 					k.Chat.ClearHighlight,
 				},
 			)
-			if m.pillsExpanded && hasIncompleteTodos(m.session.Todos) && m.promptQueue > 0 {
+			if m.pillsExpanded && len(m.pillSectionsWithContent()) > 1 {
 				binds = append(binds, []key.Binding{k.Chat.PillLeft})
 			}
 		}
@@ -5163,6 +5181,17 @@ func (m *UI) CurrentSession() *session.Session {
 	return m.session
 }
 
+// refreshCronTasks fetches the current session's scheduled tasks from
+// the workspace and re-renders the pills panel if the set changed.
+func (m *UI) refreshCronTasks() {
+	if !m.hasSession() {
+		m.cronTasks = nil
+		return
+	}
+	m.cronTasks = m.com.Workspace.AgentListCronTasks(m.session.ID)
+	m.renderPills()
+}
+
 // mimeOf detects the MIME type of the given content.
 func mimeOf(content []byte) string {
 	mimeBufferSize := min(512, len(content))
@@ -5723,8 +5752,9 @@ func (m *UI) openCommandsDialog() tea.Cmd {
 	}
 	hasTodos := hasSession && hasIncompleteTodos(m.session.Todos)
 	hasQueue := m.promptQueue > 0
+	hasCron := len(m.cronTasks) > 0
 
-	commands, err := dialog.NewCommands(m.com, sessionID, hasSession, hasTodos, hasQueue, m.customCommands, m.mcpPrompts)
+	commands, err := dialog.NewCommands(m.com, sessionID, hasSession, hasTodos, hasQueue, hasCron, m.customCommands, m.mcpPrompts)
 	if err != nil {
 		return util.ReportError(err)
 	}

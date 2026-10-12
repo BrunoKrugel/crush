@@ -34,7 +34,8 @@ type Prompt struct {
 	// re-enabled over the config. Nil means no overrides.
 	skillOverrides func(ctx context.Context) (disabled, enabled []string)
 
-	skills []*skills.Skill // pre-discovered; nil means discover at build time
+	skills     []*skills.Skill // pre-discovered; nil means discover at build time
+	scheduling bool
 }
 
 type PromptDat struct {
@@ -45,10 +46,12 @@ type PromptDat struct {
 	IsGitRepo          bool
 	Platform           string
 	Date               string
+	Time               string
 	GitStatus          string
 	ContextFiles       []ContextFile
 	GlobalContextFiles []ContextFile
 	AvailSkillXML      string
+	Scheduling         bool
 }
 
 type ContextFile struct {
@@ -108,6 +111,18 @@ func WithSkillOverrides(disabled, enabled func(ctx context.Context) []string) Op
 func WithSkills(skills []*skills.Skill) Option {
 	return func(p *Prompt) {
 		p.skills = skills
+	}
+}
+
+// WithScheduling enables the template's scheduling guidance, which tells the
+// model to reach for the cron_create / cron_list / cron_delete tools instead of
+// bash sleep loops. Guidance follows the tool: callers that build a coder
+// prompt without registering the cron tools — the agent package's own tests
+// among them — leave it off, so the model is never pointed at a tool it does
+// not have.
+func WithScheduling() Option {
+	return func(p *Prompt) {
+		p.scheduling = true
 	}
 }
 
@@ -283,7 +298,9 @@ func (p *Prompt) promptData(ctx context.Context, provider, model string, store *
 		IsGitRepo:     isGit,
 		Platform:      platform,
 		Date:          p.now().Format("1/2/2006"),
+		Time:          p.now().Format("3:04:05 PM MST"),
 		AvailSkillXML: availSkillXML,
+		Scheduling:    p.scheduling,
 	}
 	if isGit {
 		var err error

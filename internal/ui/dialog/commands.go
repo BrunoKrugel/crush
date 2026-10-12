@@ -54,14 +54,14 @@ type Commands struct {
 		Close key.Binding
 	}
 
-	sessionID  string
-	hasSession bool
-	hasTodos   bool
-	hasQueue   bool
-	// hasCheckpoint gates the undo entry: a session with no checkpoint has
-	// nothing to bring back.
+	sessionID     string
+	hasSession    bool
+	hasTodos      bool
 	hasCheckpoint bool
-	// pendingPreview is a staged checkpoint awaiting the user's answer.
+	hasQueue      bool
+	// hasCron reports whether the current session has scheduled tasks, so
+	// the palette only offers cron commands when they can do something.
+	hasCron        bool
 	pendingPreview *compaction.Preview
 	selected       CommandType
 
@@ -84,7 +84,7 @@ type Commands struct {
 var _ Dialog = (*Commands)(nil)
 
 // NewCommands creates a new commands dialog.
-func NewCommands(com *common.Common, sessionID string, hasSession, hasTodos, hasQueue bool, customCommands []commands.CustomCommand, mcpPrompts []commands.MCPPrompt) (*Commands, error) {
+func NewCommands(com *common.Common, sessionID string, hasSession, hasTodos, hasQueue, hasCron bool, customCommands []commands.CustomCommand, mcpPrompts []commands.MCPPrompt) (*Commands, error) {
 	c := &Commands{
 		com:            com,
 		selected:       SystemCommands,
@@ -92,6 +92,7 @@ func NewCommands(com *common.Common, sessionID string, hasSession, hasTodos, has
 		hasSession:     hasSession,
 		hasTodos:       hasTodos,
 		hasQueue:       hasQueue,
+		hasCron:        hasCron,
 		customCommands: customCommands,
 		mcpPrompts:     mcpPrompts,
 	}
@@ -589,16 +590,20 @@ func (c *Commands) defaultCommands() []*CommandItem {
 		}))
 	}
 
-	if c.hasTodos || c.hasQueue {
-		var label string
-		switch {
-		case c.hasTodos && c.hasQueue:
-			label = "Toggle To-Dos/Queue"
-		case c.hasQueue:
-			label = "Toggle Queue"
-		default:
-			label = "Toggle To-Dos"
+	// ctrl+t expands the pills panel, whose sections the label names so
+	// the command is discoverable whatever content is present.
+	if c.hasTodos || c.hasQueue || c.hasCron {
+		var sections []string
+		if c.hasTodos {
+			sections = append(sections, "To-Dos")
 		}
+		if c.hasQueue {
+			sections = append(sections, "Queue")
+		}
+		if c.hasCron {
+			sections = append(sections, "Scheduled")
+		}
+		label := "Toggle " + strings.Join(sections, "/")
 		commands = append(commands, NewCommandItem(c.com.Styles, "toggle_pills", label, "ctrl+t", ActionTogglePills{}))
 	}
 

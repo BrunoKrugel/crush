@@ -28,6 +28,7 @@ import (
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/question"
+	"github.com/charmbracelet/crush/internal/scheduler"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/skills"
 	"github.com/charmbracelet/crush/internal/version"
@@ -383,6 +384,16 @@ func (w *ClientWorkspace) AgentRestoreSummarize(ctx context.Context, sessionID s
 
 func (w *ClientWorkspace) AgentSummarize(ctx context.Context, sessionID, instructions string) error {
 	return w.client.AgentSummarizeSession(ctx, w.workspaceID(), sessionID, instructions)
+}
+
+// AgentListCronTasks returns nil in client/server mode.
+//
+// TODO: the cron store lives server-side, but there is no client API for
+// listing a session's scheduled tasks, so the scheduled-tasks pill never
+// appears in client/server mode. Add a workspace RPC that forwards to the
+// server-side coordinator so the pill works there too.
+func (w *ClientWorkspace) AgentListCronTasks(sessionID string) []scheduler.Task {
+	return nil
 }
 
 func (w *ClientWorkspace) UpdateAgentModel(ctx context.Context) error {
