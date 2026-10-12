@@ -2,12 +2,14 @@ package workspace
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/crush/internal/a2a"
 	"github.com/charmbracelet/crush/internal/agent"
 	mcptools "github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/app"
@@ -34,15 +36,46 @@ import (
 type AppWorkspace struct {
 	app   *app.App
 	store *config.ConfigStore
+	// agentTasks follows the app's A2A host's agent index (#421): the
+	// dispatched-agent surface the TUI reads, the same wire surface a
+	// client/server TUI reads through the server.
+	agentTasks *agentTaskWatcher
 }
 
 // NewAppWorkspace creates a new AppWorkspace wrapping the given app
 // and config store.
 func NewAppWorkspace(a *app.App, store *config.ConfigStore) *AppWorkspace {
-	return &AppWorkspace{
+	w := &AppWorkspace{
 		app:   a,
 		store: store,
 	}
+	w.agentTasks = newAgentTaskWatcher(w.dialAgentIndex, w.agentClient)
+	return w
+}
+
+// dialAgentIndex reaches the app's A2A host's agent index (#421). The
+// host exists once the coder agent initializes and is up once something
+// is served; until then ready says when to look again.
+func (w *AppWorkspace) dialAgentIndex() (a2a.AgentIndexConn, bool, <-chan struct{}) {
+	host, hostReady := w.app.A2AHost()
+	if host == nil {
+		return a2a.AgentIndexConn{}, false, hostReady
+	}
+	conn, ok := host.AgentIndexConn()
+	if !ok {
+		return a2a.AgentIndexConn{}, false, host.Started()
+	}
+	return conn, true, nil
+}
+
+// agentClient returns the app's A2A host, which steers and cancels the
+// dispatches it serves over its own socket.
+func (w *AppWorkspace) agentClient() (agentClient, bool) {
+	host, _ := w.app.A2AHost()
+	if host == nil {
+		return nil, false
+	}
+	return host, true
 }
 
 // -- Sessions --
@@ -59,12 +92,24 @@ func (w *AppWorkspace) ListSessions(ctx context.Context) ([]session.Session, err
 	return w.app.Sessions.List(ctx)
 }
 
+func (w *AppWorkspace) ListChildSessions(ctx context.Context, parentSessionID string) ([]session.Session, error) {
+	return w.app.Sessions.ListChildren(ctx, parentSessionID)
+}
+
+func (w *AppWorkspace) ListAllChildSessions(ctx context.Context) ([]session.Session, error) {
+	return w.app.Sessions.ListAllChildren(ctx)
+}
+
 func (w *AppWorkspace) SaveSession(ctx context.Context, sess session.Session) (session.Session, error) {
 	return w.app.Sessions.Save(ctx, sess)
 }
 
+func (w *AppWorkspace) SetSessionChannel(ctx context.Context, sessionID, channel string) (session.Session, error) {
+	return w.app.Sessions.SetChannel(ctx, sessionID, channel)
+}
+
 func (w *AppWorkspace) DeleteSession(ctx context.Context, sessionID string) error {
-	return w.app.Sessions.Delete(ctx, sessionID)
+	return w.app.DeleteSession(ctx, sessionID)
 }
 
 func (w *AppWorkspace) CreateAgentToolSessionID(messageID, toolCallID string) string {
@@ -80,7 +125,7 @@ func (w *AppWorkspace) ParseAgentToolSessionID(sessionID string) (string, string
 // is irrelevant in single-client local mode, but herdr still needs
 // to know which session is live to support agent resume.
 func (w *AppWorkspace) SetCurrentSession(ctx context.Context, sessionID string) error {
-	w.app.ReportCurrentSession(ctx, sessionID)
+	w.app.ReportCurrentSession(sessionID)
 	return nil
 }
 
@@ -234,6 +279,13 @@ func (w *AppWorkspace) AgentClearQueue(sessionID string) {
 	}
 }
 
+func (w *AppWorkspace) AgentListCronTasks(sessionID string) []scheduler.Task {
+	if w.app.AgentCoordinator == nil {
+		return nil
+	}
+	return w.app.AgentCoordinator.ListCronTasks(sessionID)
+}
+
 func (w *AppWorkspace) AgentSetMain(agentID string) error {
 	if w.app.AgentCoordinator == nil {
 		return errors.New("agent coordinator not initialized")
@@ -274,14 +326,6 @@ func (w *AppWorkspace) AgentSummarize(ctx context.Context, sessionID, instructio
 		return errors.New("agent coordinator not initialized")
 	}
 	return w.app.AgentCoordinator.Summarize(ctx, sessionID, instructions)
-}
-
-// AgentListCronTasks returns the scheduled tasks belonging to a session.
-func (w *AppWorkspace) AgentListCronTasks(sessionID string) []scheduler.Task {
-	if w.app.AgentCoordinator == nil {
-		return nil
-	}
-	return w.app.AgentCoordinator.ListCronTasks(sessionID)
 }
 
 func (w *AppWorkspace) UpdateAgentModel(ctx context.Context) error {
@@ -352,6 +396,33 @@ func (w *AppWorkspace) ListSessionHistory(ctx context.Context, sessionID string)
 	return w.app.History.ListBySession(ctx, sessionID)
 }
 
+// -- Agent tasks (#421) --
+
+func (w *AppWorkspace) ListAgentTasks(sessionID string) []AgentTask {
+	w.agentTasks.start(nil)
+	return w.agentTasks.list(sessionID)
+}
+
+func (w *AppWorkspace) AgentTask(sessionID string) (AgentTask, bool) {
+	w.agentTasks.start(nil)
+	return w.agentTasks.bySession(sessionID)
+}
+
+func (w *AppWorkspace) AgentTaskByHandle(sessionID, handle string) (AgentTask, bool) {
+	w.agentTasks.start(nil)
+	return w.agentTasks.byHandle(sessionID, handle)
+}
+
+func (w *AppWorkspace) SendAgentMessage(ctx context.Context, sessionID, handle, text string, attachments []message.Attachment) error {
+	w.agentTasks.start(nil)
+	return w.agentTasks.steer(ctx, sessionID, handle, text, attachments)
+}
+
+func (w *AppWorkspace) CancelAgentTask(ctx context.Context, ref string) error {
+	w.agentTasks.start(nil)
+	return w.agentTasks.cancelTask(ctx, ref)
+}
+
 // -- LSP --
 
 func (w *AppWorkspace) LSPStart(ctx context.Context, path string) {
@@ -403,6 +474,10 @@ func (w *AppWorkspace) Resolver() config.VariableResolver {
 	return w.store.Resolver()
 }
 
+func (w *AppWorkspace) LoadDiagnostics() []config.LoadDiagnostic {
+	return w.store.LoadDiagnostics()
+}
+
 // -- Config mutations --
 
 func (w *AppWorkspace) UpdatePreferredModel(scope config.Scope, modelType config.SelectedModelType, model config.SelectedModel) error {
@@ -452,11 +527,7 @@ func (w *AppWorkspace) MarkProjectInitialized() error {
 }
 
 func (w *AppWorkspace) InitializePrompt() (string, error) {
-	var active []*skills.Skill
-	if w.app.Skills != nil {
-		active = w.app.Skills.ActiveSkills()
-	}
-	return agent.InitializePrompt(w.store, active)
+	return agent.InitializePrompt(w.store)
 }
 
 func (w *AppWorkspace) ListSkills(_ context.Context) ([]skills.CatalogEntry, error) {
@@ -467,6 +538,35 @@ func (w *AppWorkspace) ListSkills(_ context.Context) ([]skills.CatalogEntry, err
 func (w *AppWorkspace) ReadSkill(_ context.Context, skillID string) ([]byte, skills.SkillReadResult, error) {
 	mgr := w.app.Skills
 	return skills.ReadContent(mgr.ActiveSkills(), mgr.ResolvedPaths(), mgr.WorkingDir(), skillID)
+}
+
+func (w *AppWorkspace) ReloadSkills() error {
+	mgr := w.app.Skills
+	if mgr == nil {
+		return nil
+	}
+	discoveryCfg := skills.DiscoveryConfig{
+		WorkingDir: w.store.WorkingDir(),
+		Resolver:   w.store.Resolver().ResolveValue,
+	}
+	opts := w.store.Config().Options
+	if opts != nil {
+		discoveryCfg.SkillsPaths = opts.SkillsPaths
+		discoveryCfg.DisabledSkills = opts.DisabledSkills
+	}
+	mgr.Reload(discoveryCfg)
+	return nil
+}
+
+func (w *AppWorkspace) ReloadModelDiscovery(ctx context.Context) (int, error) {
+	return w.store.ReloadModelDiscovery(ctx)
+}
+
+func (w *AppWorkspace) GetSkillStates() []*skills.SkillState {
+	if w.app.Skills == nil {
+		return nil
+	}
+	return w.app.Skills.States()
 }
 
 // -- MCP operations --
@@ -508,6 +608,24 @@ func (w *AppWorkspace) ListMCPPrompts(context.Context) ([]commands.MCPPrompt, er
 	return commands.LoadMCPPrompts()
 }
 
+// CallMCPTool invokes a tool on a named MCP server and returns its text
+// content plus any A2UI surface payload it embedded.
+func (w *AppWorkspace) CallMCPTool(ctx context.Context, name, toolName string, args map[string]any) (MCPToolCallResult, error) {
+	input, err := json.Marshal(args)
+	if err != nil {
+		return MCPToolCallResult{}, fmt.Errorf("failed to encode tool arguments: %w", err)
+	}
+	res, err := mcptools.RunTool(ctx, w.store, name, toolName, string(input))
+	if err != nil {
+		return MCPToolCallResult{}, err
+	}
+	out := MCPToolCallResult{Content: res.Content}
+	for _, s := range res.Surfaces {
+		out.Surfaces = append(out.Surfaces, MCPToolCallSurface{Payload: s.Payload, URI: s.URI})
+	}
+	return out, nil
+}
+
 func (w *AppWorkspace) GetMCPPrompt(clientID, promptID string, args map[string]string) (string, error) {
 	return commands.GetMCPPrompt(w.store, clientID, promptID, args)
 }
@@ -538,6 +656,16 @@ func (w *AppWorkspace) DisableDockerMCP() error {
 		return fmt.Errorf("failed to disable docker MCP: %w", err)
 	}
 	return w.store.DisableDockerMCP()
+}
+
+func (w *AppWorkspace) MCPReconnect(ctx context.Context, name string) error {
+	if err := mcptools.DisableSingle(w.store, name); err != nil {
+		return fmt.Errorf("failed to disconnect MCP %q: %w", name, err)
+	}
+	if err := w.store.ReloadFromDisk(ctx); err != nil {
+		slog.Warn("Failed to reload config from disk before reconnecting MCP; using existing config", "name", name, "error", err)
+	}
+	return mcptools.InitializeSingle(ctx, name, w.store)
 }
 
 // MCPServersDisabled returns the MCP servers disabled for this
@@ -630,10 +758,13 @@ func (w *AppWorkspace) MCPAuthURL(name string) string {
 // -- Lifecycle --
 
 func (w *AppWorkspace) Subscribe(program *tea.Program) {
+	// The agent index's changes reach the TUI as tea messages (#421).
+	w.agentTasks.start(program.Send)
 	w.app.Subscribe(program)
 }
 
 func (w *AppWorkspace) Shutdown() {
+	w.agentTasks.stop()
 	w.app.Shutdown()
 }
 

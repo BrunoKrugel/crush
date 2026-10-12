@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"charm.land/fantasy"
-	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/scheduler"
 	"github.com/stretchr/testify/require"
 )
@@ -30,67 +29,27 @@ func cronTestContext(sessionID string) context.Context {
 	return context.WithValue(context.Background(), SessionIDContextKey, sessionID)
 }
 
-// stubCronPermissions is a permission.Service whose Request always
-// answers allowed. Embedding the interface keeps the stub to the one
-// method the cron tools call.
-type stubCronPermissions struct {
-	permission.Service
-	allowed bool
-}
-
-func (s *stubCronPermissions) Request(ctx context.Context, opts permission.CreatePermissionRequest) (bool, error) {
-	return s.allowed, nil
-}
-
-func allowPermissions() *stubCronPermissions { return &stubCronPermissions{allowed: true} }
-func denyPermissions() *stubCronPermissions  { return &stubCronPermissions{allowed: false} }
-
 func TestCronToolNames(t *testing.T) {
 	t.Parallel()
 
 	store := scheduler.NewStore("")
-	require.Equal(t, CronCreateToolName, NewCronCreateTool(store, allowPermissions()).Info().Name)
+	require.Equal(t, CronCreateToolName, NewCronCreateTool(store).Info().Name)
 	require.Equal(t, CronListToolName, NewCronListTool(store).Info().Name)
 	require.Equal(t, CronDeleteToolName, NewCronDeleteTool(store).Info().Name)
-}
-
-// TestCronToolsUnavailableWithoutStore covers the headless coordinator,
-// which wires no cron store (EnableScheduler=false): the tools stay
-// registered but must answer with a clear, model-readable error instead
-// of failing obscurely or silently succeeding.
-func TestCronToolsUnavailableWithoutStore(t *testing.T) {
-	t.Parallel()
-
-	ctx := cronTestContext("test-session")
-
-	createResp, err := runCronTool(t, NewCronCreateTool(nil, allowPermissions()), CronCreateToolName, ctx, CronCreateParams{
-		Cron: "* * * * *", Prompt: "ping",
-	})
-	require.NoError(t, err)
-	require.Contains(t, createResp.Content, "not available in non-interactive mode")
-
-	listResp, err := runCronTool(t, NewCronListTool(nil), CronListToolName, ctx, struct{}{})
-	require.NoError(t, err)
-	require.Contains(t, listResp.Content, "not available in non-interactive mode")
-
-	deleteResp, err := runCronTool(t, NewCronDeleteTool(nil), CronDeleteToolName, ctx, CronDeleteParams{ID: "abc"})
-	require.NoError(t, err)
-	require.Contains(t, deleteResp.Content, "not available in non-interactive mode")
 }
 
 func TestCronCreateRequiresSession(t *testing.T) {
 	t.Parallel()
 
 	store := scheduler.NewStore("")
-	tool := NewCronCreateTool(store, allowPermissions())
+	tool := NewCronCreateTool(store)
 
-	resp, err := runCronTool(t, tool, CronCreateToolName, context.Background(), CronCreateParams{
+	_, err := runCronTool(t, tool, CronCreateToolName, context.Background(), CronCreateParams{
 		Cron:   "* * * * *",
 		Prompt: "hello",
 	})
-	require.NoError(t, err)
-	require.True(t, resp.IsError)
-	require.Contains(t, resp.Content, "session ID")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "session ID")
 }
 
 func TestCronToolsRejectSubAgentSessions(t *testing.T) {
@@ -99,21 +58,18 @@ func TestCronToolsRejectSubAgentSessions(t *testing.T) {
 	store := scheduler.NewStore("")
 	ctx := cronTestContext("message-id$$tool-call-id")
 
-	resp, err := runCronTool(t, NewCronCreateTool(store, allowPermissions()), CronCreateToolName, ctx, CronCreateParams{
+	_, err := runCronTool(t, NewCronCreateTool(store), CronCreateToolName, ctx, CronCreateParams{
 		Cron:   "* * * * *",
 		Prompt: "hello",
 	})
-	require.NoError(t, err)
-	require.True(t, resp.IsError)
-	require.Contains(t, resp.Content, "root session")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "root session")
 
-	resp, err = runCronTool(t, NewCronListTool(store), CronListToolName, ctx, struct{}{})
-	require.NoError(t, err)
-	require.True(t, resp.IsError)
+	_, err = runCronTool(t, NewCronListTool(store), CronListToolName, ctx, struct{}{})
+	require.Error(t, err)
 
-	resp, err = runCronTool(t, NewCronDeleteTool(store), CronDeleteToolName, ctx, CronDeleteParams{ID: "abc"})
-	require.NoError(t, err)
-	require.True(t, resp.IsError)
+	_, err = runCronTool(t, NewCronDeleteTool(store), CronDeleteToolName, ctx, CronDeleteParams{ID: "abc"})
+	require.Error(t, err)
 }
 
 func TestCronCreateValidatesExpression(t *testing.T) {
@@ -122,73 +78,29 @@ func TestCronCreateValidatesExpression(t *testing.T) {
 	store := scheduler.NewStore("")
 	ctx := cronTestContext("test-session")
 
-	resp, err := runCronTool(t, NewCronCreateTool(store, allowPermissions()), CronCreateToolName, ctx, CronCreateParams{
+	resp, err := runCronTool(t, NewCronCreateTool(store), CronCreateToolName, ctx, CronCreateParams{
 		Cron:   "not cron",
 		Prompt: "hello",
 	})
 	require.NoError(t, err)
 	require.True(t, resp.IsError)
-	require.Contains(t, resp.Content, "invalid cron expression")
-	require.Empty(t, store.List("test-session"))
+	require.Contains(t, resp.Content, "not cron")
+	require.Len(t, store.List("test-session"), 0)
 }
 
-// Validation failures must reach the model as error responses it can
-// read and retry, not as Go errors that end the tool call opaquely.
-func TestCronCreateValidationErrorsAreModelReadable(t *testing.T) {
-	t.Parallel()
-
-	store := scheduler.NewStore(t.TempDir() + "/scheduled_tasks.json")
-	ctx := cronTestContext("test-session")
-	tool := NewCronCreateTool(store, allowPermissions())
-
-	recurring := false
-	resp, err := runCronTool(t, tool, CronCreateToolName, ctx, CronCreateParams{
-		// February 30th parses but can never fire.
-		Cron:      "0 0 30 2 *",
-		Prompt:    "reminder",
-		Recurring: &recurring,
-	})
-	require.NoError(t, err)
-	require.True(t, resp.IsError)
-	require.Contains(t, resp.Content, "never fire")
-
-	// A one-shot whose fire time already passed today reports the next
-	// match so the model can correct the fields.
-	resp, err = runCronTool(t, tool, CronCreateToolName, ctx, CronCreateParams{
-		Cron:      "* * * * *",
-		Prompt:    "too late",
-		Recurring: &recurring,
-	})
-	require.NoError(t, err)
-	require.True(t, resp.IsError)
-	require.Contains(t, resp.Content, "already passed")
-}
-
-// CronCreate goes through the permission prompt like other tools that
-// have side effects; a denial must leave the store untouched.
-func TestCronCreateRequiresPermission(t *testing.T) {
+func TestCronCreateMissingPromptIsError(t *testing.T) {
 	t.Parallel()
 
 	store := scheduler.NewStore("")
 	ctx := cronTestContext("test-session")
 
-	resp, err := runCronTool(t, NewCronCreateTool(store, denyPermissions()), CronCreateToolName, ctx, CronCreateParams{
+	resp, err := runCronTool(t, NewCronCreateTool(store), CronCreateToolName, ctx, CronCreateParams{
 		Cron:   "* * * * *",
-		Prompt: "check the deploy",
+		Prompt: "",
 	})
 	require.NoError(t, err)
 	require.True(t, resp.IsError)
-	require.Contains(t, resp.Content, "denied permission")
-	require.Empty(t, store.List("test-session"))
-
-	resp, err = runCronTool(t, NewCronCreateTool(store, allowPermissions()), CronCreateToolName, ctx, CronCreateParams{
-		Cron:   "* * * * *",
-		Prompt: "check the deploy",
-	})
-	require.NoError(t, err)
-	require.False(t, resp.IsError)
-	require.Contains(t, resp.Content, "Scheduled task created")
-	require.Len(t, store.List("test-session"), 1)
+	require.Contains(t, resp.Content, "prompt is required")
 }
 
 func TestCronCreateDefaultsRecurring(t *testing.T) {
@@ -197,7 +109,7 @@ func TestCronCreateDefaultsRecurring(t *testing.T) {
 	store := scheduler.NewStore("")
 	ctx := cronTestContext("test-session")
 
-	resp, err := runCronTool(t, NewCronCreateTool(store, allowPermissions()), CronCreateToolName, ctx, CronCreateParams{
+	resp, err := runCronTool(t, NewCronCreateTool(store), CronCreateToolName, ctx, CronCreateParams{
 		Cron:   "* * * * *",
 		Prompt: "check the deploy",
 	})
@@ -221,7 +133,7 @@ func TestCronCreateOneShotAndDurable(t *testing.T) {
 	ctx := cronTestContext("test-session")
 
 	recurring := false
-	resp, err := runCronTool(t, NewCronCreateTool(store, allowPermissions()), CronCreateToolName, ctx, CronCreateParams{
+	resp, err := runCronTool(t, NewCronCreateTool(store), CronCreateToolName, ctx, CronCreateParams{
 		Cron:      "30 14 27 7 *",
 		Prompt:    "reminder",
 		Recurring: &recurring,
@@ -294,6 +206,18 @@ func TestCronDeleteUnknownID(t *testing.T) {
 	require.Contains(t, resp.Content, "deadbeef")
 }
 
+func TestCronDeleteMissingID(t *testing.T) {
+	t.Parallel()
+
+	store := scheduler.NewStore("")
+	ctx := cronTestContext("test-session")
+
+	resp, err := runCronTool(t, NewCronDeleteTool(store), CronDeleteToolName, ctx, CronDeleteParams{ID: ""})
+	require.NoError(t, err)
+	require.True(t, resp.IsError)
+	require.Contains(t, resp.Content, "id is required")
+}
+
 func TestCronDeleteOtherSessionsTask(t *testing.T) {
 	t.Parallel()
 
@@ -304,16 +228,7 @@ func TestCronDeleteOtherSessionsTask(t *testing.T) {
 	resp, err := runCronTool(t, NewCronDeleteTool(store), CronDeleteToolName, cronTestContext("test-session"), CronDeleteParams{ID: task.ID})
 	require.NoError(t, err)
 	require.True(t, resp.IsError)
-}
-
-func TestCronDeleteRequiresID(t *testing.T) {
-	t.Parallel()
-
-	store := scheduler.NewStore("")
-	resp, err := runCronTool(t, NewCronDeleteTool(store), CronDeleteToolName, cronTestContext("test-session"), CronDeleteParams{})
-	require.NoError(t, err)
-	require.True(t, resp.IsError)
-	require.Contains(t, resp.Content, "id is required")
+	require.Contains(t, resp.Content, task.ID)
 }
 
 func TestCronCreateEnforcesSessionLimit(t *testing.T) {
@@ -321,7 +236,7 @@ func TestCronCreateEnforcesSessionLimit(t *testing.T) {
 
 	store := scheduler.NewStore("")
 	ctx := cronTestContext("test-session")
-	tool := NewCronCreateTool(store, allowPermissions())
+	tool := NewCronCreateTool(store)
 
 	for range scheduler.MaxTasksPerSession {
 		_, err := runCronTool(t, tool, CronCreateToolName, ctx, CronCreateParams{

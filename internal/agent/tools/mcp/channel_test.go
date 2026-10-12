@@ -636,21 +636,21 @@ func TestChannelConnDiscardsBufferOnClosedGate(t *testing.T) {
 	}
 }
 
-// TestSubscribeEventsFiltersChannelMessages verifies that SubscribeEvents
-// strips EventChannelMessage events from the stream. The MCP broker is
-// process-global and channel events carry no workspace/session identity, so
-// forwarding them to every workspace's app event stream would be a
-// cross-workspace injection path. Channel delivery requires workspace-scoped
-// routing (deferred to a later PR); until then, SubscribeEvents must not
-// forward channel events.
-func TestSubscribeEventsFiltersChannelMessages(t *testing.T) {
+// TestSubscribeEventsForwardsChannelMessages verifies that SubscribeEvents
+// forwards EventChannelMessage events rather than filtering them out.
+//
+// This fork implements the workspace-scoped channel routing upstream defers:
+// channel events are routed to the correct workspace/session downstream
+// (internal/backend/channels.go, internal/server/events.go,
+// internal/workspace/client_workspace.go), so they must remain visible
+// through SubscribeEvents. The cross-workspace concern is handled at that
+// routing layer, not by filtering at the source.
+func TestSubscribeEventsForwardsChannelMessages(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	filtered := SubscribeEvents(ctx)
+	events := SubscribeEvents(ctx)
 
-	// Publish a state change (should pass through) and a channel message
-	// (should be filtered out).
 	broker.Publish(pubsub.UpdatedEvent, Event{
 		Type: EventStateChanged,
 		Name: "srv",
@@ -658,26 +658,49 @@ func TestSubscribeEventsFiltersChannelMessages(t *testing.T) {
 	broker.Publish(pubsub.CreatedEvent, Event{
 		Type:           EventChannelMessage,
 		Name:           "webhook",
-		ChannelMessage: `<channel source="webhook">leak?</channel>`,
+		ChannelMessage: `<channel source="webhook">hi</channel>`,
+		ChannelMeta:    map[string]string{"sender": "123"},
 	})
 
-	// We should receive the state change but NOT the channel message.
 	gotState := false
+	gotChannel := false
 	deadline := time.After(time.Second)
-	for {
+	for !gotState || !gotChannel {
 		select {
-		case ev := <-filtered:
-			if ev.Payload.Type == EventChannelMessage {
-				t.Fatal("EventChannelMessage leaked through SubscribeEvents filter")
-			}
-			if ev.Payload.Type == EventStateChanged {
+		case ev := <-events:
+			switch ev.Payload.Type {
+			case EventStateChanged:
 				gotState = true
+			case EventChannelMessage:
+				gotChannel = true
+				if ev.Payload.ChannelMeta["sender"] != "123" {
+					t.Fatalf("channel meta not preserved: %+v", ev.Payload.ChannelMeta)
+				}
 			}
 		case <-deadline:
-			if !gotState {
-				t.Fatal("state change event was not received")
-			}
-			return
+			t.Fatalf("timed out waiting for events: state=%v channel=%v", gotState, gotChannel)
 		}
+	}
+}
+
+// --- Fork: channel opt-in, meta preservation, and channel propagation ---
+func TestPublishChannelMessagePreservesMetadata(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	events := SubscribeEvents(ctx)
+	publishChannelMessage(ctx, "signal", json.RawMessage(`{"content":"hello","meta":{"sender":"123"}}`))
+
+	select {
+	case event := <-events:
+		if event.Payload.Name != "signal" {
+			t.Fatalf("name = %q, want signal", event.Payload.Name)
+		}
+		if event.Payload.ChannelMeta["sender"] != "123" {
+			t.Fatalf("meta = %v", event.Payload.ChannelMeta)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for channel event")
 	}
 }

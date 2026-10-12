@@ -31,6 +31,7 @@ WHERE id = ? LIMIT 1;
 -- name: GetLastSession :one
 SELECT *
 FROM sessions
+WHERE parent_session_id IS NULL
 ORDER BY updated_at DESC
 LIMIT 1;
 
@@ -39,6 +40,18 @@ SELECT *
 FROM sessions
 WHERE parent_session_id is NULL
 ORDER BY updated_at DESC;
+
+-- name: ListChildSessions :many
+SELECT *
+FROM sessions
+WHERE parent_session_id = ?
+ORDER BY created_at ASC, rowid ASC;
+
+-- name: ListAllChildSessions :many
+SELECT *
+FROM sessions
+WHERE parent_session_id IS NOT NULL
+ORDER BY parent_session_id, created_at, rowid;
 
 -- name: UpdateSession :one
 UPDATE sessions
@@ -70,6 +83,20 @@ SET
     updated_at = strftime('%s', 'now')
 WHERE id = ?;
 
+
+-- name: AddSessionCost :exec
+UPDATE sessions
+SET
+    cost = cost + ?
+WHERE id = ?;
+
+-- name: AddSessionUsage :exec
+UPDATE sessions
+SET
+    prompt_tokens = prompt_tokens + ?,
+    completion_tokens = completion_tokens + ?,
+    cost = cost + ?
+WHERE id = ?;
 
 -- name: RenameSession :exec
 UPDATE sessions

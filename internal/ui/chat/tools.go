@@ -108,13 +108,15 @@ type ToolRenderOpts struct {
 	Compact         bool
 	IsSpinning      bool
 	Status          ToolStatus
-	// StartedAt is when the tool call started rendering live. Zero for
-	// items restored from history, where the real start time is unknown,
-	// so no elapsed time is shown for them.
-	StartedAt time.Time
 	// Elapsed is how long the tool call has been (or was) running.
-	// Zero when the start time is unknown (restored items).
 	Elapsed time.Duration
+	// LiveSurfaces renders the item's live MCP A2UI surface models at the
+	// given width, and reports how many of the metadata's surfaces failed
+	// to draw. Set only when the result metadata carried renderable
+	// surfaces; nil otherwise, in which case renderers fall back to the
+	// static/text paths. Carried on the opts because the ToolRenderer
+	// interface does not see the owning item.
+	LiveSurfaces func(width int) (string, int)
 }
 
 // IsPending returns true if the tool call is still pending (not finished and
@@ -160,9 +162,13 @@ type baseToolMessageItem struct {
 
 	toolRenderer ToolRenderer
 	toolCall     message.ToolCall
-	result       *message.ToolResult
-	messageID    string
-	status       ToolStatus
+	// startedAt/finishedAt bound how long the call took, from the first
+	// tool-call delta to its terminal event.
+	startedAt  time.Time
+	finishedAt time.Time
+	result     *message.ToolResult
+	messageID  string
+	status     ToolStatus
 	// we use this so we can efficiently cache
 	// tools that have a capped width (e.x bash.. and others)
 	hasCappedWidth bool
@@ -175,21 +181,31 @@ type baseToolMessageItem struct {
 	sty             *styles.Styles
 	anim            *anim.Anim
 	expandedContent bool
-	startedAt       time.Time
-	finishedAt      time.Time
+
+	// hyperlinks holds the OSC 8 hyperlink spans in the last rendered
+	// output so a plain click on a URL opens it in the browser (see
+	// parseHyperlinkSpans for why the app must handle this itself).
+	hyperlinks []hyperlinkSpan
+
+	// a2ui holds the live surface models for an MCP-served A2UI payload:
+	// a read_mcp_resource or mcp_* tool whose result metadata carries
+	// surfaces. They render interactively and, being long-lived app UIs,
+	// are never retired on interaction. Nil for tools without surfaces.
+	// surfaceSrcHash fingerprints the metadata the models were built from
+	// so a re-render with the same metadata reuses the live models (and
+	// their edited values) instead of rebuilding; surfaceBuildFailed
+	// counts payloads that never produced a drawable model, so the
+	// renderer can alert on them. a2uiReadOnly holds the item's MCP
+	// surfaces in their read-only state — no focus, no keys — while the
+	// item is part of an inspected transcript (#407).
+	a2ui               a2uiSurfaceHost
+	a2uiReadOnly       bool
+	surfaceSrcHash     uint64
+	surfaceScanned     bool
+	surfaceBuildFailed int
 }
 
 var _ Expandable = (*baseToolMessageItem)(nil)
-
-// markRestored clears startedAt for items rebuilt from session history:
-// the real start time is unknown there, and a constructor timestamp would
-// restart the timer from zero and misreport the elapsed time.
-func (t *baseToolMessageItem) markRestored() {
-	if !t.startedAt.IsZero() {
-		t.startedAt = time.Time{}
-		t.Bump()
-	}
-}
 
 // newBaseToolMessageItem is the internal constructor for base tool message items.
 func newBaseToolMessageItem(
@@ -221,6 +237,7 @@ func newBaseToolMessageItem(
 		hasCappedWidth:           hasCappedWidth,
 		startedAt:                time.Now(),
 	}
+	t.a2ui.sty = sty
 	t.anim = anim.New(anim.Settings{
 		ID:          toolCall.ID,
 		Size:        15,
@@ -228,11 +245,6 @@ func newBaseToolMessageItem(
 		GradColorB:  sty.WorkingGradToColor,
 		LabelColor:  sty.WorkingLabelColor,
 		CycleColors: true,
-		// Timer on the pending spinner: quick tools (view, grep, edit)
-		// show the overall turn time, long-running ones their own
-		// elapsed time once it becomes the more useful signal.
-		Suffix:      t.spinnerTimer,
-		SuffixColor: sty.WorkingTimerColor,
 	})
 
 	return t
@@ -283,6 +295,8 @@ func NewToolMessageItem(
 		item = NewDiagnosticsToolMessageItem(sty, toolCall, result, canceled)
 	case agent.AgentToolName:
 		item = NewAgentToolMessageItem(sty, toolCall, result, canceled)
+	case agent.DispatchAgentToolName:
+		item = NewDispatchToolMessageItem(sty, toolCall, result, canceled)
 	case tools.AgenticFetchToolName:
 		item = NewAgenticFetchToolMessageItem(sty, toolCall, result, canceled)
 	case tools.WebFetchToolName:
@@ -373,9 +387,20 @@ func (t *baseToolMessageItem) RawRender(width int) string {
 		toolItemWidth = cappedMessageWidth(width)
 	}
 
+	// Build or refresh the live MCP surface models from the result
+	// metadata. While surfaces are live the content cache is
+	// bypassed: a surface's View reflects the current focus ring and
+	// edited values, not a frozen frame.
+	t.syncToolA2UISurfaces()
+	liveSurfaces := t.hasToolA2UISurfaces()
+	var liveRender func(width int) (string, int)
+	if liveSurfaces {
+		liveRender = t.renderToolA2UISurfaces
+	}
+
 	content, height, ok := t.getCachedRender(toolItemWidth)
 	// if we are spinning or there is no cache rerender
-	if !ok || t.isSpinning() {
+	if !ok || t.isSpinning() || liveSurfaces {
 		content = t.toolRenderer.RenderTool(t.sty, toolItemWidth, &ToolRenderOpts{
 			ToolCall:        t.toolCall,
 			Result:          t.result,
@@ -384,8 +409,7 @@ func (t *baseToolMessageItem) RawRender(width int) string {
 			Compact:         t.isCompact,
 			IsSpinning:      t.isSpinning(),
 			Status:          t.computeStatus(),
-			StartedAt:       t.startedAt,
-			Elapsed:         t.elapsed(),
+			LiveSurfaces:    liveRender,
 		})
 
 		// Prepend hook indicator if hooks ran for this tool call.
@@ -396,9 +420,17 @@ func (t *baseToolMessageItem) RawRender(width int) string {
 		}
 
 		height = lipgloss.Height(content)
-		// cache the rendered content
-		t.setCachedRender(content, toolItemWidth, height)
+		// cache the rendered content — but not while surfaces are live:
+		// the next interaction changes the view.
+		if !liveSurfaces {
+			t.setCachedRender(content, toolItemWidth, height)
+		}
 	}
+
+	// Re-index hyperlink spans on every render (cheap relative to the
+	// glamour/tool render above) so the click hit-test always matches
+	// what is on screen, cache hit or not.
+	t.hyperlinks = parseHyperlinkSpans(content)
 
 	return t.renderHighlighted(content, toolItemWidth, height)
 }
@@ -407,8 +439,14 @@ func (t *baseToolMessageItem) RawRender(width int) string {
 func (t *baseToolMessageItem) Render(width int) string {
 	// Cache the prefixed output keyed by (width, prefix variant).
 	// Bypass the cache while spinning (RawRender output is
-	// frame-dependent) or while a highlight range is active.
-	useCache := !t.isSpinning() && !t.isHighlighted()
+	// frame-dependent), while a highlight range is active, or while
+	// live MCP surfaces can change between frames.
+	//
+	// This decides whether the cache may be READ. It is not sufficient for
+	// the write: the surfaces do not exist yet on the first frame — it is
+	// RawRender below that builds them — so the surface check here is
+	// still false at that point and is re-run after RawRender.
+	useCache := !t.isSpinning() && !t.isHighlighted() && !t.hasToolA2UISurfaces()
 	var key uint64
 	switch {
 	case t.isCompact:
@@ -436,7 +474,14 @@ func (t *baseToolMessageItem) Render(width int) string {
 		lines[i] = prefix + ln
 	}
 	out := strings.Join(lines, "\n")
-	if useCache {
+	// Re-check now that RawRender has built the surfaces. Caching a frame
+	// that contains a live surface freezes it: getCachedPrefixedRender
+	// keys on (width, prefix) alone and ignores Version(), so once the
+	// server deletes the surface — flipping hasToolA2UISurfaces() back to
+	// false and re-enabling the cache — that first frame would be served
+	// again for the rest of the item's life, still drawing the surface
+	// that no longer exists. RawRender guards its own cache the same way.
+	if useCache && !t.hasToolA2UISurfaces() {
 		t.setCachedPrefixedRender(out, width, key)
 	}
 	return out
@@ -449,9 +494,7 @@ func (t *baseToolMessageItem) ToolCall() message.ToolCall {
 
 // SetToolCall sets the tool call associated with this message item.
 func (t *baseToolMessageItem) SetToolCall(tc message.ToolCall) {
-	// Capture the end time on the live finished transition so the tool's
-	// total duration can be shown after completion.
-	if tc.Finished && !t.toolCall.Finished && !t.startedAt.IsZero() {
+	if tc.Finished && t.finishedAt.IsZero() {
 		t.finishedAt = time.Now()
 	}
 	t.toolCall = tc
@@ -459,42 +502,12 @@ func (t *baseToolMessageItem) SetToolCall(tc message.ToolCall) {
 	t.Bump()
 }
 
-// elapsed returns how long the tool call has been (or was) running. Zero
-// when the start time is unknown (restored items).
-func (t *baseToolMessageItem) elapsed() time.Duration {
-	if t.startedAt.IsZero() {
-		return 0
-	}
-	end := t.finishedAt
-	if end.IsZero() {
-		end = time.Now()
-	}
-	return end.Sub(t.startedAt)
-}
-
-// toolTimerOwnTimeThreshold is how long a tool call must run before its
-// own elapsed time takes over the pending spinner's timer. Quick tools
-// (view, grep, edit) never cross it and keep showing the overall turn
-// time, which is the more useful signal for them; long-running ones
-// (bash, fetch, sub-agents) switch to their own duration once it starts
-// to matter.
-const toolTimerOwnTimeThreshold = 10 * time.Second
-
-// spinnerTimer returns the timer text shown next to the pending
-// spinner: the overall turn time while the tool is quick, its own
-// elapsed time once it has been running long enough to matter. Empty
-// when no turn is active and the start time is unknown, so renders of
-// restored sessions are unaffected.
-func (t *baseToolMessageItem) spinnerTimer() string {
-	if d := t.elapsed(); d >= toolTimerOwnTimeThreshold {
-		return common.FormatDuration(d)
-	}
-	return common.Elapsed()
-}
-
 // SetResult sets the tool result associated with this message item.
 func (t *baseToolMessageItem) SetResult(res *message.ToolResult) {
 	t.result = res
+	// New metadata may carry different surfaces; force a rebuild on the
+	// next render while preserving focus/edits when it is unchanged.
+	t.surfaceScanned = false
 	t.clearCache()
 	t.Bump()
 }
@@ -526,6 +539,14 @@ func (t *baseToolMessageItem) Status() ToolStatus {
 	return t.status
 }
 
+// HasResult reports whether a tool result has been recorded for this tool
+// call, either through the live event path or linked in from history.
+// The raw status cannot be used for this: the result path calls SetResult
+// and never SetStatus, so a finished tool stays Running here (#405).
+func (t *baseToolMessageItem) HasResult() bool {
+	return t.result != nil
+}
+
 // computeStatus computes the effective status considering the result.
 func (t *baseToolMessageItem) computeStatus() ToolStatus {
 	if t.result != nil {
@@ -546,9 +567,7 @@ func (t *baseToolMessageItem) isSpinning() bool {
 			Status:   t.status,
 		})
 	}
-	// Keep animating while waiting for the tool result too, so the
-	// "Waiting for tool response for Xs" label keeps ticking.
-	return (!t.toolCall.Finished || t.result == nil) && t.status != ToolStatusCanceled
+	return !t.toolCall.Finished && t.status != ToolStatusCanceled
 }
 
 // SetSpinningFunc sets a custom function to determine if the tool should spin.
@@ -581,16 +600,53 @@ func (t *baseToolMessageItem) Finished() bool {
 
 // HandleMouseClick implements MouseClickable.
 func (t *baseToolMessageItem) HandleMouseClick(btn ansi.MouseButton, x, y int) bool {
-	return btn == ansi.MouseLeft
+	handled, _ := t.HandleMouseClickCmd(btn, x, y)
+	return handled
 }
 
-// HandleKeyEvent implements KeyEventHandler.
+// HandleMouseClickCmd implements [list.MouseClickCommandable]. A plain
+// click on a hyperlink span in the tool output opens the URL in the
+// browser (producing a command, which suppresses the expansion toggle);
+// any other left click reports handled with a nil command so the generic
+// Expandable path toggles the item as before.
+func (t *baseToolMessageItem) HandleMouseClickCmd(btn ansi.MouseButton, x, y int) (bool, tea.Cmd) {
+	if btn != ansi.MouseLeft {
+		return false, nil
+	}
+	if url := spanAt(t.hyperlinks, y, x-MessageLeftPaddingTotal); url != "" {
+		return true, openURL(url)
+	}
+	return true, nil
+}
+
+// HandleKeyEvent implements KeyEventHandler. A focused live MCP surface
+// gets first claim on the keys it understands — Tab/Shift+Tab cycle
+// its focus ring, Enter activates a button (surfacing an
+// a2uievent.ButtonClicked the UI model routes per provenance) — and
+// every other key falls through, so the copy shortcut keeps working
+// whenever no surface consumes the key.
 func (t *baseToolMessageItem) HandleKeyEvent(key tea.KeyMsg) (bool, tea.Cmd) {
+	if handled, cmd := t.handleA2UIKeyEvent(key); handled {
+		return true, cmd
+	}
 	if k := key.String(); k == "c" || k == "y" {
 		text := t.formatToolForCopy()
 		return true, common.CopyToClipboard(text, "Tool content copied to clipboard")
 	}
 	return false, nil
+}
+
+// SetFocused implements MessageItem. Focus also drives the live MCP
+// surfaces: gaining focus grants it to the first live surface,
+// losing focus blurs them all — so the focus ring only ever lives on the
+// selected item.
+func (t *baseToolMessageItem) SetFocused(focused bool) {
+	t.focusableMessageItem.SetFocused(focused)
+	if focused {
+		t.focusToolA2UISurfaces()
+	} else {
+		t.blurToolA2UISurfaces()
+	}
 }
 
 // pendingTool renders a tool that is still in progress with an animation.
@@ -610,20 +666,6 @@ func pendingTool(sty *styles.Styles, name string, anim *anim.Anim, nested bool) 
 	return fmt.Sprintf("%s %s %s", icon, toolName, animView)
 }
 
-// waitingForToolMessage builds the "Waiting for tool response..." label,
-// including how long the tool has been running and, when a turn is
-// active, the total elapsed turn time.
-func waitingForToolMessage(opts *ToolRenderOpts) string {
-	msg := "Waiting for tool response"
-	if !opts.StartedAt.IsZero() {
-		msg += fmt.Sprintf(" for %s", common.FormatDuration(time.Since(opts.StartedAt)))
-	}
-	if total := common.Elapsed(); total != "" {
-		msg += fmt.Sprintf(" (%s total)", total)
-	}
-	return msg + "..."
-}
-
 // toolEarlyStateContent handles error/cancelled/pending states before content rendering.
 // Returns the rendered output and true if early state was handled.
 func toolEarlyStateContent(sty *styles.Styles, opts *ToolRenderOpts, width int) (string, bool) {
@@ -634,24 +676,13 @@ func toolEarlyStateContent(sty *styles.Styles, opts *ToolRenderOpts, width int) 
 	case ToolStatusCanceled:
 		msg = sty.Tool.StateCancelled.Render("Canceled.")
 	case ToolStatusAwaitingPermission:
-		msg = sty.Tool.StateWaiting.Render("Requesting permission...") + toolTimerSuffix(sty)
+		msg = sty.Tool.StateWaiting.Render("Requesting permission...")
 	case ToolStatusRunning:
-		msg = sty.Tool.StateWaiting.Render(waitingForToolMessage(opts))
+		msg = sty.Tool.StateWaiting.Render("Waiting for tool response...")
 	default:
 		return "", false
 	}
 	return msg, true
-}
-
-// toolTimerSuffix renders the live turn timer shown next to tool calls
-// that are still in flight. Returns an empty string when no turn is
-// active, so renders of persisted sessions are unaffected.
-func toolTimerSuffix(sty *styles.Styles) string {
-	elapsed := common.Elapsed()
-	if elapsed == "" {
-		return ""
-	}
-	return " " + lipgloss.NewStyle().Foreground(sty.WorkingTimerColor).Render(elapsed)
 }
 
 // toolErrorContent formats an error message with an ERROR or WARN tag.
@@ -784,6 +815,7 @@ func toolOutputPlainContent(sty *styles.Styles, content string, width int, expan
 	content = stringext.NormalizeSpace(content)
 	content = common.StripCursorControl(content)
 	content = common.RemapANSI16(content, sty.ANSI)
+	content = hyperlinkizeURLs(content)
 	lines := strings.Split(content, "\n")
 
 	maxLines := collapsedMaxLines(len(lines))
@@ -1852,4 +1884,44 @@ func prettifyToolName(name string) string {
 	default:
 		return humanizedToolName(name)
 	}
+}
+
+// elapsed returns how long the tool call has been (or was) running. Zero
+// when the start time is unknown (restored items).
+func (t *baseToolMessageItem) elapsed() time.Duration {
+	if t.startedAt.IsZero() {
+		return 0
+	}
+	end := t.finishedAt
+	if end.IsZero() {
+		end = time.Now()
+	}
+	return end.Sub(t.startedAt)
+}
+
+// markRestored clears startedAt for items rebuilt from session history:
+// the real start time is unknown there, and a constructor timestamp would
+// restart the timer from zero and misreport the elapsed time.
+func (t *baseToolMessageItem) markRestored() {
+	if !t.startedAt.IsZero() {
+		t.startedAt = time.Time{}
+		t.Bump()
+	}
+}
+
+// spinnerTimer returns the timer text shown next to the pending
+// spinner: the overall turn time while the tool is quick, its own
+// elapsed time once it has been running long enough to matter. Empty
+// when no turn is active and the start time is unknown, so renders of
+// restored sessions are unaffected.
+// toolTimerOwnTimeThreshold is how long a tool call must run before its own
+// elapsed time takes over the pending spinner's timer. Quick tools (view,
+// grep, edit) never cross it and keep showing the overall turn timer.
+const toolTimerOwnTimeThreshold = 10 * time.Second
+
+func (t *baseToolMessageItem) spinnerTimer() string {
+	if d := t.elapsed(); d >= toolTimerOwnTimeThreshold {
+		return common.FormatDuration(d)
+	}
+	return common.Elapsed()
 }

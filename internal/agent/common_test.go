@@ -12,7 +12,6 @@ import (
 	"charm.land/fantasy"
 	"charm.land/fantasy/providers/openaicompat"
 	"charm.land/x/vcr"
-	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/agent/prompt"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/config"
@@ -20,11 +19,9 @@ import (
 	"github.com/charmbracelet/crush/internal/db"
 	"github.com/charmbracelet/crush/internal/filetracker"
 	"github.com/charmbracelet/crush/internal/history"
-	"github.com/charmbracelet/crush/internal/ledger"
 	"github.com/charmbracelet/crush/internal/lsp"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/permission"
-	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/stretchr/testify/require"
 
@@ -39,10 +36,9 @@ type fakeEnv struct {
 	permissions permission.Service
 	history     history.Service
 	filetracker *filetracker.Service
-	// ledger is the session memory store; tests that exercise the render
-	// path attach it to the agent under test.
-	ledger     ledger.Service
-	lspClients *csync.Map[string, *lsp.Client]
+	lspClients  *csync.Map[string, *lsp.Client]
+	// cleanup is the owning test's t.Cleanup.
+	cleanup func(func())
 }
 
 type builderFunc func(t *testing.T, r *vcr.Recorder) (fantasy.LanguageModel, error)
@@ -68,19 +64,36 @@ func hyperBuilder(model string) builderFunc {
 }
 
 func testEnv(t *testing.T) fakeEnv {
+	return testEnvAtDir(t, t.TempDir())
+}
+
+// testEnvFixedDir is testEnv rooted at the pre-#422 fixed directory. The
+// VCR cassettes under testdata/TestCoderAgent/** record
+// "Working directory: /tmp/crush-test/..." in the request body, and
+// charm.land/x/vcr matches request bodies exactly, so setupAgent must
+// keep replaying against this path.
+func testEnvFixedDir(t *testing.T) fakeEnv {
+	t.Helper()
 	workingDir := filepath.Join("/tmp/crush-test/", t.Name())
 	os.RemoveAll(workingDir)
+	require.NoError(t, os.MkdirAll(workingDir, 0o755))
+	env := testEnvAtDir(t, workingDir)
+	t.Cleanup(func() { os.RemoveAll(workingDir) })
+	return env
+}
 
-	err := os.MkdirAll(workingDir, 0o755)
-	require.NoError(t, err)
-
+// testEnvAtDir builds a fakeEnv working in workingDir. t.TempDir()
+// cleanups remove the directory only after every t.Cleanup has run, so a
+// background run a test started still finds its directory until it ends
+// (#422).
+func testEnvAtDir(t *testing.T, workingDir string) fakeEnv {
+	t.Helper()
 	conn, err := db.Connect(t.Context(), t.TempDir())
 	require.NoError(t, err)
 
 	q := db.New(conn)
 	sessions := session.NewService(q, conn)
 	messages := message.NewService(q)
-	memory := ledger.NewService(q)
 
 	permissions := permission.NewPermissionService(workingDir, true, []string{})
 	history := history.NewService(q, conn)
@@ -88,35 +101,27 @@ func testEnv(t *testing.T) fakeEnv {
 	lspClients := csync.NewMap[string, *lsp.Client]()
 
 	t.Cleanup(func() {
-		conn.Close()
-		os.RemoveAll(workingDir)
+		require.NoError(t, conn.Close())
+		// Close closes only idle connections; one a run left checked
+		// out keeps crush.db open, and Windows then fails TempDir's
+		// cleanup.
+		require.Zero(t, conn.Stats().OpenConnections,
+			"a DB connection was still checked out when the test closed the database")
 	})
 
 	return fakeEnv{
-		workingDir:  workingDir,
-		sessions:    sessions,
-		messages:    messages,
-		permissions: permissions,
-		history:     history,
-		filetracker: &filetrackerService,
-		ledger:      memory,
-		lspClients:  lspClients,
+		workingDir,
+		sessions,
+		messages,
+		permissions,
+		history,
+		&filetrackerService,
+		lspClients,
+		t.Cleanup,
 	}
 }
 
 func testSessionAgent(env fakeEnv, large, small fantasy.LanguageModel, systemPrompt string, tools ...fantasy.AgentTool) SessionAgent {
-	return testSessionAgentWithNotifier(env, large, small, systemPrompt, nil, tools...)
-}
-
-// testSessionAgentWithNotifier is testSessionAgent with an agent notification
-// sink, so tests can observe events such as compaction.
-func testSessionAgentWithNotifier(
-	env fakeEnv,
-	large, small fantasy.LanguageModel,
-	systemPrompt string,
-	notifier pubsub.Publisher[notify.Notification],
-	tools ...fantasy.AgentTool,
-) SessionAgent {
 	largeModel := Model{
 		Model: large,
 		CatwalkCfg: catwalk.Model{
@@ -139,9 +144,19 @@ func testSessionAgentWithNotifier(
 		Sessions:     env.sessions,
 		Messages:     env.messages,
 		Tools:        tools,
-		Notify:       notifier,
 	})
+	env.joinTitles(agent)
 	return agent
+}
+
+// joinTitles makes the test wait for sa's detached title generations
+// before the env closes the database. Registered after the env's own
+// cleanup, it runs first, so no title write still holds a connection when
+// the zero-connection check runs.
+func (e fakeEnv) joinTitles(sa SessionAgent) {
+	if a, ok := sa.(*sessionAgent); ok {
+		e.cleanup(a.titles.Wait)
+	}
 }
 
 func coderAgent(r *vcr.Recorder, env fakeEnv, large, small fantasy.LanguageModel) (SessionAgent, error) {
@@ -188,7 +203,7 @@ func coderAgent(r *vcr.Recorder, env fakeEnv, large, small fantasy.LanguageModel
 	}
 
 	allTools := []fantasy.AgentTool{
-		tools.NewBashTool(env.permissions, env.workingDir, cfg.Config().Options.DataDirectory, cfg.Config().Options.Attribution, modelName),
+		tools.NewBashTool(env.permissions, env.workingDir, cfg.Config().Options.DataDirectory, cfg.Config().Options.Attribution, modelName, cfg.Config().Options.AllowedCommands, cfg.Config().Options.AllowAllCommands),
 		tools.NewDownloadTool(env.permissions, env.workingDir, r.GetDefaultClient()),
 		tools.NewEditTool(nil, env.permissions, env.history, *env.filetracker, env.workingDir),
 		tools.NewMultiEditTool(nil, env.permissions, env.history, *env.filetracker, env.workingDir),

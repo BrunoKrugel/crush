@@ -123,28 +123,28 @@ does not change them. A debug log line records the mismatch. See
 ## Dispatched agents misbehave
 
 :::info[Fork feature]
-[Multi-agent dispatch](/fork) has its own
-[troubleshooting page](/fork). The most common symptoms:
+[Multi-agent dispatch](/agents/overview) has its own
+[troubleshooting page](/agents/troubleshooting). The most common symptoms:
 :::
 
 | Symptom | Short answer |
 | --- | --- |
 | `dispatch unavailable: … is not a git repository` | Dispatch needs a git repository. The failure is remembered until Crush restarts |
 | A dispatched agent's work vanished | Exit keeps dispatch work: only dispatches you applied or dismissed, or ones that produced no work, are removed with their branches, and a crash is reconciled at the next launch the same way. The worktrees live under `<data dir>/worktrees/<repo-key>/`, not in your checkout — `crush dispatch list` finds them. If work still vanished, it was removed by hand or with `crush dispatch prune --force`; committed work may survive as unreachable commits |
-| An agent shows **Killed** | The wander kill stopped it: ignored todo nudges, stalled todos, a hard timeout, or a tool loop. See [Todo enforcement](/fork) |
+| An agent shows **Killed** | The wander kill stopped it: ignored todo nudges, stalled todos, a hard timeout, or a tool loop. See [Todo enforcement](/agents/todo-enforcement) |
 | `dispatch at capacity: …` | At most `options.dispatch.max_concurrent` (4) run at once. Wait, cancel one, or `option dispatch-max-concurrent 8` |
 | The main agent keeps getting todo reminders | The todo ladder nudges every agent with a `todos` tool and kills only dispatched ones. `option todo-nudge false` turns the nudges off |
-| `@tester …` went to the main agent | The handle must be the very first token (optionally followed by `: , . ? !`) and match an agent dispatched from this session; see [Handles](/fork) |
+| `@tester …` went to the main agent | The handle must be the very first token (optionally followed by `: , . ? !`) and match an agent dispatched from this session; see [Handles](/agents/handles-and-inspect#handles) |
 | No `dispatch_agent` tool | It is interactive-only: `crush run` never offers it. Or the `worker` is disabled, or the tools are denied |
 | A dispatched agent ran a command a hook should have blocked | Dispatched agents' tool calls are hooked; check the matcher against the tool name in the hook payload |
-| `dispatch to external agent "…" failed: …` | See [External agents](/fork) |
+| `dispatch to external agent "…" failed: …` | See [External agents](/agents/troubleshooting#external-agents) |
 
 ## Reporting a bug
 
 - Upstream Crush behaviour →
   [charmbracelet/crush/issues](https://github.com/charmbracelet/crush/issues)
 - A [fork addition](/introduction#about-this-fork) →
-  [joestump-agent/crush/issues](https://github.com/brunokrugel/crush/issues)
+  [joestump-agent/crush/issues](https://github.com/joestump-agent/crush/issues)
 - A missing or stale provider/model →
   [Catwalk](https://github.com/charmbracelet/catwalk)
 

@@ -12,10 +12,15 @@ import (
 	"charm.land/catwalk/pkg/catwalk"
 )
 
-// httpClient is shared across all discovery and enrichment calls. It
-// has a reasonable timeout so individual requests cannot block forever
-// even if the caller forgets to set a context deadline.
-var httpClient = &http.Client{Timeout: 10 * time.Second}
+// RequestTimeout is the backstop on every discovery and enrichment
+// request, so a request cannot block forever even if the caller forgets
+// to set a context deadline. It must stay above every caller's own
+// budget: a client timeout below the caller's deadline silently wins,
+// and a slow gateway the caller meant to wait for is dropped anyway.
+const RequestTimeout = 30 * time.Second
+
+// httpClient is shared across all discovery and enrichment calls.
+var httpClient = &http.Client{Timeout: RequestTimeout}
 
 // stripV1Suffix removes a trailing /v1 from a base URL. Enricher
 // endpoints (e.g. Ollama's /api/show, LM Studio's /api/v1/models) are
@@ -80,6 +85,10 @@ type Config struct {
 	BaseURL      string
 	APIKey       string
 	ExtraHeaders map[string]string
+	// APIType is the provider's wire protocol (e.g. openai-compat,
+	// anthropic). Enrichers that only make sense for one protocol use
+	// it to no-op for the others.
+	APIType string
 	// Existing models from config — IDs present in this list are skipped
 	// during discovery (user-specified models win).
 	ExistingModels []catwalk.Model

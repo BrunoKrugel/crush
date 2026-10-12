@@ -18,6 +18,9 @@
 - **Session-Based:** maintain multiple work sessions and contexts per project
 - **LSP-Enhanced:** Crush uses LSPs for additional context, just like you do
 - **Extensible:** add capabilities via MCPs (`http`, `stdio`, and `sse`)
+- **UI-Fluent:** models can speak [A2UI](https://a2ui.org) via [a2tea](https://github.com/charmbracelet/a2tea) and Crush will draw it — cards, lists, buttons, and dashboards rendered right in the chat
+- **Channel-Ready:** MCP servers can push real-time events into your session via [Claude Channels](https://code.claude.com/docs/en/channels-reference) — CI failures, webhooks, and more, acting on them without you typing a thing
+- **Multi-Agent:** dispatch background agents into their own git worktrees, steer them with `@handles`, and review their diffs when they finish — see the [multi-agent docs](https://joestump-agent.github.io/crush/agents/overview)
 - **Works Everywhere:** first-class support in every terminal on macOS, Linux, Windows (PowerShell and WSL), Android, FreeBSD, OpenBSD, and NetBSD
 - **Industrial Grade:** built on the Charm ecosystem, powering 25k+ applications, from leading open source projects to business-critical infrastructure
 
@@ -166,14 +169,12 @@ Or just install it with Go:
 go install github.com/charmbracelet/crush@latest
 ```
 
-On illumos (OpenIndiana, OmniOS), the command above works as-is. Only native
-OS notifications are unavailable there; terminal-based notifications (OSC) and
-the terminal bell still work. On Oracle Solaris, add `-tags sqlite3_dotlk` so
-the local database uses dot-file locking:
+Crush stores its local database with [modernc.org/sqlite][modernc], so it
+builds on the platforms that driver supports — which covers every platform
+binaries are published for, plus Android. The illumos and Solaris family is
+not among them and no longer builds.
 
-```
-go install -tags sqlite3_dotlk github.com/charmbracelet/crush@latest
-```
+[modernc]: https://pkg.go.dev/modernc.org/sqlite
 
 > [!WARNING]
 > Productivity may increase when using Crush and you may find yourself nerd
@@ -243,6 +244,39 @@ Is there a provider you’d like to see in Crush? Is there an existing model tha
 Crush’s default model listing is managed in [Catwalk](https://github.com/charmbracelet/catwalk), a community-supported, open source repository of Crush-compatible models, and you’re welcome to contribute.
 
 <a href="https://github.com/charmbracelet/catwalk"><img width="174" height="174" alt="Catwalk Badge" src="https://github.com/user-attachments/assets/95b49515-fe82-4409-b10d-5beb0873787d" /></a>
+
+## A2UI
+
+Sometimes prose isn’t the best answer. When an assistant reply contains an
+[A2UI](https://a2ui.org) message — structured JSON describing UI, wrapped in
+`<a2ui-json>` tags — Crush renders it as an actual element in the chat instead
+of dumping raw JSON:
+
+```text
+<a2ui-json>{"version":"v0.9","updateComponents":{...}}</a2ui-json>
+
+        …becomes…
+
+╭──────────────────────────────╮
+│ Build passed                 │
+│ 142 tests, 0 failures.       │
+│ ──────────────────────────── │
+│ [ Details ]  [ Re-run ]      │
+╰──────────────────────────────╯
+```
+
+Parsing and rendering are handled by
+[a2tea](https://github.com/joestump-agent/a2tea), which speaks the real A2UI
+v0.9 protocol. The core catalog draws with proper styling: text with heading
+variants, bordered cards, columns, rows, lists, dividers, and buttons, plus
+read-only visuals for input components. Chrome is monochrome on purpose, so
+your theme stays yours.
+
+> [!NOTE]
+> Prose around a surface still renders as Markdown, and a block that fails to
+> parse shows an alert rather than silently disappearing. Interactivity
+> (clicking those buttons and sending the result back to the model) is on the
+> roadmap — today surfaces are display-only in the chat.
 
 ## Configuration
 
@@ -433,6 +467,174 @@ mcp add streaming-service --type sse --url "https://example.com/mcp/sse" \
   --timeout 10 --header API-Key "$API_KEY"
 ```
 
+Headers (both MCP `headers` and provider `extra_headers`) whose value
+resolves to the empty string are dropped from the outgoing request rather
+than sent as `Header:`. That keeps optional env-gated headers like
+`"OpenAI-Organization": "$OPENAI_ORG_ID"` clean when the variable is unset.
+
+Provider `extra_body` is a non-expanding JSON passthrough; put env-driven
+values in `extra_headers` or the provider's `api_key` / `base_url`, all of
+which do expand.
+
+> **Security note:** `crushrc` and `crush.json` are trusted code. Any `$(...)`
+> in either runs at load time with your shell's privileges, before the UI
+> appears. Don't launch Crush in a directory whose config you haven't reviewed.
+
+MCP servers can equally be declared in `crush.json` — the form the
+[Signal Setup](#signal-setup) example below refers to:
+
+```json
+{
+  "$schema": "https://charm.land/crush.json",
+  "mcp": {
+    "signal": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/path/to/signal-mcp",
+        "python",
+        "signal_mcp/main.py",
+        "--user-id",
+        "+15551234567",
+        "--channel"
+      ]
+    }
+  }
+}
+```
+
+#### Channels (experimental)
+
+An MCP server can also act as a **channel**: instead of only exposing tools it
+calls, it *pushes* events straight into your session so Crush reacts to things
+happening outside the terminal — a webhook, a CI failure, a chat message. See
+the [channels reference](https://code.claude.com/docs/en/channels-reference)
+for the protocol.
+
+A server becomes a channel by declaring the `claude/channel` capability in its
+`initialize` result (`capabilities.experimental["claude/channel"] = {}`) and
+emitting `notifications/claude/channel` events with a `content` body and an
+optional `meta` map. Crush injects each event into the active session as a
+`<channel>` element:
+
+```text
+<channel source="webhook" severity="high" run_id="1234">
+build failed on main: https://ci.example.com/run/1234
+</channel>
+```
+
+Listing a channel server in `mcp` is **not** enough to enable it — pushing is
+gated behind an explicit opt-in, so a server present in config stays silent
+until you ask for it. Opt in per launch with the `--channels` flag:
+
+```bash
+# Enable one or more configured MCP servers as channels for this session.
+crush --channels server:webhook
+crush --channels server:webhook --channels server:signal
+```
+
+Or persistently, with `channel_enabled` on the server's `mcp` entry — no CLI
+flag needed on each launch:
+
+```json
+{
+  "mcp": {
+    "webhook": {
+      "type": "http",
+      "url": "https://example.com/mcp",
+      "channel_enabled": true
+    }
+  }
+}
+```
+
+Either source enables the channel; the server must still declare the
+`claude/channel` capability.
+
+#### Signal Setup
+
+A common interactive channel is [Signal MCP](https://github.com/joestump/signal-mcp), which lets Crush send and receive Signal messages through a [signal-cli](https://github.com/AsamK/signal-cli) daemon.
+
+1. **Start the daemon:** `signal-cli -a +15551234567 daemon --tcp 127.0.0.1:7583 --receive-mode on-start --no-receive-stdout`
+2. **Add to `crush.json`:** Use the example in the [MCPs](#mcps) section above.
+3. **Launch with channel:** `crush --channels server:signal`
+
+Incoming messages arrive as `<channel>` tags; use the `send_message_to_user` tool to reply.
+
+#### Channel reply routing
+
+By default a channel-originated turn only produces terminal output, so a
+person messaging you on Signal never sees the answer unless the model decides
+to call a send tool itself. Adding a `channel_reply` block to a channel
+server's MCP config makes the routing deterministic: when a turn that
+originated from that channel finishes without the model having replied through
+the channel, Crush sends the final assistant response back through the
+configured tool — to the sender for direct messages, or to the group for group
+messages.
+
+```json
+{
+  "mcp": {
+    "signal": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "signal_mcp/main.py", "--operator", "+15551234567", "--channel"],
+      "channel_reply": {
+        "user": { "tool": "send_message_to_user", "target_param": "user_id" },
+        "group": { "tool": "send_message_to_group", "target_param": "group_id" },
+        "suppress_tools": ["send"]
+      }
+    }
+  }
+}
+```
+
+How it routes:
+
+- **Group pushes** (meta carries `group`) go through the `group` route;
+  **direct pushes** (meta carries `sender`) go through the `user` route.
+  `target_meta` overrides which meta attribute supplies the target;
+  `message_param` (default `message`) names the tool argument that receives
+  the reply text.
+- If the model already called a route tool — or any tool listed in
+  `suppress_tools` — during the turn, the automatic reply is skipped, so
+  richer model-driven replies aren't duplicated.
+- Local (non-channel) turns and channels without a `channel_reply` block are
+  unaffected.
+
+The same shape works for any messaging channel (Discord, Slack, …): point the
+routes at that server's send tools and the matching meta attributes.
+
+The `source` attribute is always the (trusted) server name. Payloads are
+untrusted, server-initiated input: Crush validates their structure, caps the
+body and attribute sizes, restricts `meta` keys to identifiers
+(`[A-Za-z0-9_]`), escapes all content so a payload cannot break out of the
+`<channel>` element or forge attributes, and drops malformed payloads. A
+server that has not been opted in via `--channels`, or that never declared the
+capability, cannot inject anything.
+
+Channel delivery works in the default in-process `crush` and against a shared
+`crush serve` backend. In-process, an event routes into the session you have
+open, or starts one if none is open, so it is never dropped. Against a
+`crush serve` backend the server routes each event exactly once — into the
+session an attached client is viewing (the most recently updated one when
+clients are viewing different sessions), otherwise into the workspace's most
+recent session, creating one only when none exists. That holds even with no
+clients connected, so a headless server still processes channel pushes;
+attached clients see the injected turn arrive through the normal event
+stream. Servers that are live channels are marked `channel` in the MCP list
+so you can confirm the opt-in took effect.
+
+**Two-way channels.** A channel can also be interactive. Because a channel is a
+regular MCP server, any tool it exposes (a `reply` tool, say) is available to
+the agent through the normal MCP tool path — nothing channel-specific is
+required. Declare `tools` in the server's capabilities, register the tool, and
+use the server's `instructions` string (injected into the system prompt) to
+tell Crush when to call it and which `<channel>` attribute to pass back (like a
+`chat_id`).
+
 #### MCP OAuth
 
 HTTP and SSE MCP servers that require OAuth can use Crush's built-in
@@ -588,6 +790,52 @@ permissions. Use this with care.
 ```bash
 permissions allow view ls grep edit mcp_context7_get-library-doc
 ```
+
+The `bash` tool additionally runs a small set of read-only commands (`ls`,
+`pwd`, `git status`, `git log`, …) without prompting. Crush parses the command
+to decide, so it applies only when the whole command is provably inert: a
+redirection, a variable assignment, a command substitution, a pipeline, a
+wrapper such as `timeout` or `env` around anything that is not itself
+read-only, or an argument that mutates state (`git branch -D`,
+`git remote set-url`) all fall back to the normal permission prompt.
+
+### Allowing Blocked Commands
+
+The `bash` tool blocks a set of potentially dangerous commands by default (for
+example `ssh`, `curl`, `systemctl`, and various package managers). You can
+selectively remove commands from that blocklist with `options.allowed_commands`:
+
+```json
+{
+  "$schema": "https://charm.land/crush.json",
+  "options": {
+    "allowed_commands": ["ssh", "curl", "scp"]
+  }
+}
+```
+
+The same can be set for a single session via CLI flags or environment variables
+(flags take precedence over the environment variables):
+
+```bash
+# Allow specific commands (repeatable flag, or a comma-separated env var).
+crush --allow-commands ssh --allow-commands curl
+CRUSH_ALLOW_COMMANDS="ssh,curl,scp" crush
+
+# Remove every command restriction (dangerous).
+crush --allow-all-commands
+CRUSH_ALLOW_ALL_COMMANDS=1 crush
+```
+
+Two things to keep in mind:
+
+- `allowed_commands` only removes commands from the exact-command blocklist. It
+  does **not** unlock the package-manager argument blocks (such as `apt install`
+  or `npm -g`); use `allow_all_commands` (or `--allow-all-commands`) to remove
+  those as well.
+- Allowing a command does not auto-approve it. Blocked commands are simply a
+  hard filter in front of the normal permission flow, so an allowed command is
+  still subject to the usual permission prompt unless you also enable `--yolo`.
 
 ### Disabling Built-In Tools
 

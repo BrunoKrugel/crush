@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"charm.land/catwalk/pkg/catwalk"
@@ -29,6 +30,7 @@ import (
 	"github.com/charmbracelet/crush/internal/compaction"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/discover"
+	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/event"
 	"github.com/charmbracelet/crush/internal/filetracker"
 	"github.com/charmbracelet/crush/internal/history"
@@ -44,8 +46,10 @@ import (
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/question"
 	"github.com/charmbracelet/crush/internal/scheduler"
+	"github.com/charmbracelet/crush/internal/semantic"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/skills"
+	"github.com/charmbracelet/crush/internal/symbols"
 	"golang.org/x/sync/errgroup"
 
 	"charm.land/fantasy/providers/anthropic"
@@ -62,16 +66,12 @@ import (
 
 // Coordinator errors.
 var (
-	errCoderAgentNotConfigured         = errors.New("coder agent not configured")
-	errPlanAgentNotConfigured          = errors.New("plan agent not configured")
-	errMainAgentNotFound               = errors.New("main agent not found")
-	errModelProviderNotConfigured      = errors.New("model provider not configured")
-	errLargeModelNotSelected           = errors.New("large model not selected")
-	errSmallModelNotSelected           = errors.New("small model not selected")
-	errLargeModelProviderNotConfigured = errors.New("large model provider not configured")
-	errSmallModelProviderNotConfigured = errors.New("small model provider not configured")
-	errLargeModelNotFound              = errors.New("large model not found in provider config")
-	errSmallModelNotFound              = errors.New("small model not found in provider config")
+	errCoderAgentNotConfigured    = errors.New("coder agent not configured")
+	errMainAgentNotFound          = errors.New("main agent not found")
+	errModelProviderNotConfigured = errors.New("model provider not configured")
+	errModelNotFound              = errors.New("model not found in provider config")
+	errLargeModelNotSelected      = errors.New("large model not selected")
+	errSmallModelNotSelected      = errors.New("small model not selected")
 )
 
 // Copilot models that use the Responses API instead of Chat Completions.
@@ -87,12 +87,8 @@ var copilotResponsesModels = map[string]bool{
 	"gpt-5.6-terra": true,
 	"gpt-5.6-sol":   true,
 	"gpt-6-astra":   true,
-	"gpt-6-luna":    true,
-	"gpt-6-sol":     true,
-	"gpt-6.1-sol":   true,
 	"grok-4.5":      true,
 	"grok-4.6":      true,
-	"grok-4.7":      true,
 }
 
 // OpenCode models that use the Anthropic Messages API instead of Chat
@@ -125,6 +121,14 @@ func isOpenCodeResponsesModel(modelID string) bool {
 
 type Coordinator interface {
 	SetMainAgent(agentName string) error
+	// SetInteractive flips the coordinator between the interactive and
+	// non-interactive tool palettes in place (#420): the question,
+	// dispatch, message_agent and cancel tools follow the flag in
+	// buildTools. A re-init after a new client attach calls it instead
+	// of rebuilding the coordinator, so the dispatch registry, the
+	// injection targets, the cron scheduler and the sweep survive.
+	// Same-mode calls are a no-op; the last attach decides the mode.
+	SetInteractive(ctx context.Context, interactive bool) error
 	Run(ctx context.Context, sessionID, prompt string, attachments ...message.Attachment) (*fantasy.AgentResult, error)
 	// RunAccepted runs a call that was already accepted via
 	// BeginAccepted on the fire-and-forget dispatch path. The handle is
@@ -142,23 +146,49 @@ type Coordinator interface {
 	QueuedPrompts(sessionID string) int
 	QueuedPromptsList(sessionID string) []string
 	ClearQueue(sessionID string)
-
-	Summarize(context.Context, string, string) error
-	// AgentRestoreSummarize undoes the session's most recent compaction,
-	// bringing back the messages its checkpoint replaced.
-	RestoreSummarize(context.Context, string) error
-	// SummarizePreview writes a checkpoint the user can accept or discard.
-	SummarizePreview(ctx context.Context, sessionID, instructions string) (compaction.Preview, error)
-	ConfirmSummarize(ctx context.Context, sessionID string, preview compaction.Preview) error
-	DiscardSummarize(ctx context.Context, sessionID, checkpointID string) error
 	ListCronTasks(sessionID string) []scheduler.Task
-
+	// Summarize compacts a session and adopts the checkpoint it writes.
+	Summarize(ctx context.Context, sessionID, instructions string) error
+	// SummarizePreview writes a checkpoint without adopting it.
+	SummarizePreview(ctx context.Context, sessionID, instructions string) (compaction.Preview, error)
+	// ConfirmSummarize adopts a previewed checkpoint.
+	ConfirmSummarize(ctx context.Context, sessionID string, preview compaction.Preview) error
+	// DiscardSummarize throws away a previewed checkpoint.
+	DiscardSummarize(ctx context.Context, sessionID, checkpointID string) error
+	// RestoreSummarize undoes the session's most recent compaction.
+	RestoreSummarize(ctx context.Context, sessionID string) error
 	Model() Model
 	UpdateModels(ctx context.Context) error
 	GenerateTitle(ctx context.Context, sessionID, prompt string)
+	// DeliverAgentMessage delivers a message to the dispatched agent
+	// running on the message's session as its next input (#312) — the
+	// transport-agnostic injection seam shared by the message_agent tool,
+	// the editor's @handle routing (#313), and #71's A2A follow-up
+	// messages. Addressing a finished session returns a refusal; so does
+	// a message whose FromSessionID does not own the dispatch (#399).
+	DeliverAgentMessage(ctx context.Context, msg AgentMessage) error
+	// DispatchLive returns the snapshots of every non-terminal dispatch
+	// created from sessionID (#313/#399): a session with one still
+	// running cannot be deleted. Finished handles and other sessions'
+	// dispatches never appear.
+	DispatchLive(sessionID string) []dispatch.TodoSnapshot
+}
+
+// liveDispatch is the coordinator's record of one running dispatch
+// (#371): the cancel for the dispatch's root context, the task session
+// and agent behind the run, the wander-kill state, and a done channel
+// closed when the run's teardown drops the record. #372 (cancel at
+// shutdown) and #373 (user-initiated cancel) build on it.
+type liveDispatch struct {
+	cancel    context.CancelFunc
+	sessionID string
+	agent     SessionAgent
+	kill      *dispatchKill
+	done      chan struct{}
 }
 
 type coordinator struct {
+	ledger      ledger.Service
 	cfg         *config.ConfigStore
 	sessions    session.Service
 	messages    message.Service
@@ -170,42 +200,123 @@ type coordinator struct {
 	notify      pubsub.Publisher[notify.Notification]
 	runComplete pubsub.Publisher[notify.RunComplete]
 	interactive bool
-	ledger      ledger.Service
 
-	// agentMu guards mainAgent and mainAgentName: SetMainAgent runs on
-	// HTTP handler goroutines while runs, cancels, and probes read the
-	// current agent from their own goroutines.
+	// agentMu guards mainAgent, mainAgentName and interactive:
+	// SetMainAgent and SetInteractive run on HTTP handler goroutines
+	// while runs, cancels, and probes read them from their own
+	// goroutines.
 	agentMu       sync.RWMutex
 	mainAgent     SessionAgent
 	mainAgentName string
 	agents        map[string]SessionAgent
 
-	cronStore *scheduler.Store // nil when the scheduler is disabled (headless runs)
+	// buildsMu guards builds: the readiness latch of every agent build
+	// whose background work has not finished (#515). That work renders
+	// the system prompt, which runs git in the working directory, and
+	// nothing else joins it: every run rebuilds the tool palette, and the
+	// task sub-agent built there is only waited on if it ever runs.
+	// Teardown waits on these latches instead (waitAgentBuilds). Lazily
+	// created because tests construct the coordinator struct directly.
+	buildsMu sync.Mutex
+	builds   map[*readiness]struct{}
+	// promptBuildHook runs on an agent build's system-prompt goroutine
+	// just before the render; a test-only seam, nil in production.
+	promptBuildHook func()
 
-	// schedCancel and schedDone stop and join the cron scheduler
-	// goroutine, so Close can shut it down deterministically instead of
-	// relying on process exit. Both are nil when the scheduler never
-	// started.
-	schedCancel context.CancelFunc
-	schedDone   chan struct{}
+	cronStore *scheduler.Store
 
-	// fireWg tracks in-flight runs started by fireScheduledTask, so
-	// Close can cancel them (they carry the scheduler's context) and
-	// wait for them before releasing the cron store.
-	fireWg sync.WaitGroup
+	// Worktree dispatch (#61): the agent registry is created eagerly (it
+	// is pure in-memory state and never fails), while the git worktree
+	// provider is created lazily on first dispatch because a non-git
+	// working directory must not fail coordinator construction, and the
+	// failure is cached so later dispatches report it instead of
+	// retrying. dispatchAgentBuilder is the dispatched-agent constructor
+	// the DispatchAgent tool uses; nil means the real one, and tests
+	// substitute a fake through it.
+	dispatchMu           sync.Mutex
+	dispatchReg          *dispatch.AgentRegistry
+	dispatchProvider     *dispatch.GitWorktreeProvider
+	dispatchProviderErr  error
+	dispatchAgentBuilder func(context.Context, dispatchAgentOptions) (*dispatchedAgent, error)
+	// spawnDispatch starts a dispatch's background run; nil means the
+	// production `go f()`. Tests install a WaitGroup-backed spawner so
+	// a test can never end while a runDispatch it started is still
+	// running (#422).
+	spawnDispatch func(func())
+	// pendingResults holds each parent session's dispatch results whose
+	// delivery turn has not succeeded yet (#388): a result arrives while
+	// the parent is busy, so it waits here — outside the prompt queue
+	// the user's Esc clears — and flushPendingResults delivers it on the
+	// next idle. Guarded by dispatchMu; lazily created because tests
+	// construct the coordinator struct directly.
+	pendingResults map[string][]dispatch.DispatchResult
+	// dispatchCollector reduces dispatched-session state into
+	// per-dispatch snapshots for the configured sinks (#65); created
+	// with the provider and run on the coordinator's lifetime context.
+	dispatchCollector *dispatch.TodoCollector
+	// liveDispatches maps each running dispatch's ID to its live record
+	// (#371): the per-dispatch root cancel, the task session and agent
+	// behind the run, the wander-kill, and a done channel closed at
+	// teardown. Guarded by dispatchMu; #372 (cancel at shutdown) and
+	// #373 (user-initiated cancel) build on it.
+	liveDispatches map[string]*liveDispatch
+	// shuttingDown is set when CancelAll begins (#372): while it is set,
+	// a finishing dispatch still records its terminal result and status
+	// in the registry, but neither deliverDispatchResult nor the
+	// run-end flush starts a parent turn.
+	shuttingDown atomic.Bool
+	// dispatchShutdownWait bounds the shared wait CancelAll gives the
+	// live dispatches' graceful agent.Cancel to finish each run (#372);
+	// dispatchShutdownRootWait is the extra shared bound the root-cancel
+	// fallback gets. Zero keeps the defaults, 5s and 1s, matching
+	// sessionAgent.CancelAll's own bound; tests shorten them.
+	dispatchShutdownWait     time.Duration
+	dispatchShutdownRootWait time.Duration
+	// dispatchSlots counts the dispatch slots currently held (#390):
+	// setups in flight plus live dispatches, capped by the resolved
+	// dispatch.max_concurrent. Guarded by dispatchMu.
+	dispatchSlots int
+	// dispatchCtx is the NewCoordinator context the collector's
+	// subscriptions run on; nil-safe (tests construct the coordinator
+	// struct directly) — dispatchWorkspaceProvider falls back to
+	// context.Background.
+	dispatchCtx   context.Context
+	dispatchSinks []dispatch.TodoSink
+	// dispatchHost is the A2A protocol boundary every dispatch runs
+	// behind (#70, #71); nil until the app wires a2a.ServerFactory, and
+	// nil means dispatches are refused at the tool — nothing runs
+	// unserved (#347).
+	dispatchHost DispatchHost
+	// dispatchQuestions is the one-slot semaphore dispatched agents'
+	// questions take turns on (#352): the question service holds one
+	// pending question at a time. Made on first use under dispatchMu.
+	dispatchQuestions chan struct{}
+	// dispatchPersistWindow bounds how long a finished run waits for the
+	// parent turn to persist its dispatch_agent tool result (#410).
+	// NewCoordinator sets dispatchResultPersistWindow; a coordinator
+	// built as a struct literal (tests) leaves it zero and makes a single
+	// attempt, so a test that never writes the parent result does not sit
+	// out the window.
+	dispatchPersistWindow time.Duration
 
-	// servedMu guards servedSessions: the set of sessions this process
-	// is actively serving, used to decide where a durable task may fire
-	// (see fireScheduledTask).
-	servedMu       sync.Mutex
-	servedSessions map[string]bool
+	// dispatchRecords is the durable a2a_dispatches store (#355); nil
+	// until the app wires it, and nil means dispatches leave no restart
+	// record — every record write and the startup reconcile delivery
+	// are nil-safe no-ops.
+	dispatchRecords dispatch.DispatchRecords
+
+	// semanticStore and semanticClient back the semantic_search and
+	// semantic_index tools. Both are nil unless an embedding provider is
+	// configured and the store initialised, in which case neither tool
+	// is registered.
+	semanticStore   *semantic.Store
+	semanticClient  *semantic.Client
+	semanticSymbols *symbols.Extractor
 
 	// Skills discovery results (session-start snapshot).
 	allSkills    []*skills.Skill // Pre-filter: all discovered after dedup.
 	activeSkills []*skills.Skill // Post-filter: active skills only.
 	skillTracker *skills.Tracker
-
-	readyWg errgroup.Group
 }
 
 // CoordinatorOptions holds the dependencies for NewCoordinator. Using a
@@ -220,22 +331,38 @@ type CoordinatorOptions struct {
 	History     history.Service
 	FileTracker filetracker.Service
 	LSPManager  *lsp.Manager
+	Ledger      ledger.Service
 	Notify      pubsub.Publisher[notify.Notification]
 	RunComplete pubsub.Publisher[notify.RunComplete]
 	Skills      *skills.Manager
 	Interactive bool
 
-	// Ledger persists session memory. Nil disables observation and leaves
-	// compaction summarizing with a model, which is the default.
-	Ledger ledger.Service
-	// EnableScheduler starts the scheduled-tasks scheduler loop and
-	// takes the ownership lock for durable tasks. Only long-lived
-	// interactive surfaces (the TUI and the server) set it: a short-lived
-	// headless `crush run` must not take the ownership lock and start
-	// firing other sessions' durable tasks — with --yolo that would
-	// auto-approve every prompt they run. When false the cron tools are
-	// still registered but report that scheduled tasks are unavailable.
-	EnableScheduler bool
+	// SemanticStore/SemanticClient enable the semantic_search and
+	// semantic_index tools. Both must be non-nil for the tools to be
+	// registered; the caller (app) is responsible for constructing them
+	// from the configured embedding provider.
+	SemanticStore  *semantic.Store
+	SemanticClient *semantic.Client
+
+	// DispatchSinks receive the per-dispatch todo snapshots the
+	// collector reduces (#65). The app passes the broker sink that
+	// feeds the agent block; #174's A2A TaskStatusUpdateEvent bridge
+	// will attach as a second sink over the same reduction. Empty in
+	// callers that do not observe progress.
+	DispatchSinks []dispatch.TodoSink
+
+	// DispatchHost is the A2A protocol boundary every dispatch runs
+	// behind (#70, #71): the app passes a2a.ServerFactory. Nil (tests
+	// that opt out, or any caller without the factory wired) means
+	// dispatches are refused at the tool — there is no unserved run
+	// (#347).
+	DispatchHost DispatchHost
+
+	// DispatchRecords persists the durable dispatch records (#355); the
+	// app passes dispatch.NewSQLiteRecordStore. Nil (tests, or any
+	// caller without the database wired) means dispatches keep no
+	// restart record, which is exactly the pre-#355 behavior.
+	DispatchRecords dispatch.DispatchRecords
 }
 
 func NewCoordinator(ctx context.Context, opts CoordinatorOptions) (Coordinator, error) {
@@ -252,32 +379,38 @@ func NewCoordinator(ctx context.Context, opts CoordinatorOptions) (Coordinator, 
 	}
 	skillTracker := skills.NewTracker(activeSkills)
 
-	var cronStore *scheduler.Store
-	if opts.EnableScheduler {
-		cronStore = scheduler.NewStore(filepath.Join(opts.Config.Config().Options.DataDirectory, "scheduled_tasks.json"))
-		if err := cronStore.Load(); err != nil {
-			slog.Error("Failed to load scheduled tasks", "error", err)
-		}
+	cronStore := scheduler.NewStore(filepath.Join(opts.Config.Config().Options.DataDirectory, "scheduled_tasks.json"))
+	if err := cronStore.Load(); err != nil {
+		slog.Error("Failed to load scheduled tasks", "error", err)
 	}
 
 	c := &coordinator{
-		cfg:          opts.Config,
-		sessions:     opts.Sessions,
-		messages:     opts.Messages,
-		permissions:  opts.Permissions,
-		questions:    opts.Questions,
-		history:      opts.History,
-		filetracker:  opts.FileTracker,
-		lspManager:   opts.LSPManager,
-		notify:       opts.Notify,
-		runComplete:  opts.RunComplete,
-		agents:       make(map[string]SessionAgent),
-		cronStore:    cronStore,
-		allSkills:    allSkills,
-		activeSkills: activeSkills,
-		skillTracker: skillTracker,
-		interactive:  opts.Interactive,
-		ledger:       opts.Ledger,
+		cfg:             opts.Config,
+		sessions:        opts.Sessions,
+		messages:        opts.Messages,
+		permissions:     opts.Permissions,
+		questions:       opts.Questions,
+		history:         opts.History,
+		filetracker:     opts.FileTracker,
+		lspManager:      opts.LSPManager,
+		notify:          opts.Notify,
+		runComplete:     opts.RunComplete,
+		agents:          make(map[string]SessionAgent),
+		cronStore:       cronStore,
+		allSkills:       allSkills,
+		activeSkills:    activeSkills,
+		skillTracker:    skillTracker,
+		interactive:     opts.Interactive,
+		semanticStore:   opts.SemanticStore,
+		semanticClient:  opts.SemanticClient,
+		semanticSymbols: symbols.NewExtractor(),
+		dispatchReg:     dispatch.NewAgentRegistry(),
+		dispatchCtx:     ctx,
+		dispatchSinks:   opts.DispatchSinks,
+		dispatchHost:    opts.DispatchHost,
+		dispatchRecords: opts.DispatchRecords,
+
+		dispatchPersistWindow: dispatchResultPersistWindow,
 	}
 
 	agentCfg, ok := opts.Config.Config().Agents[config.AgentCoder]
@@ -285,65 +418,67 @@ func NewCoordinator(ctx context.Context, opts CoordinatorOptions) (Coordinator, 
 		return nil, errCoderAgentNotConfigured
 	}
 
-	coderPrompt, err := coderPrompt(
-		append(c.skillOverrideOptions(), prompt.WithSkills(c.activeSkills), prompt.WithScheduling())...,
-	)
-	if err != nil {
-		return nil, err
+	// A2UI is on unless the user disables it; see prompt.WithA2UI for the
+	// host-capability trade-off. The cron tools are registered
+	// unconditionally in buildAgent, so the matching prompt guidance is
+	// always on for the coder agent. These coder-only sections ride the
+	// coder agent's build (#432): the definition's prompt — builtin or
+	// file — renders with them, and a file-based template that does not
+	// reference the fields is unaffected.
+	coderOpts := []prompt.Option{prompt.WithScheduling()}
+	if !c.cfg.Config().Options.DisableA2UI {
+		coderOpts = append(coderOpts, prompt.WithA2UI())
 	}
 
-	agent, err := c.buildAgent(ctx, coderPrompt, agentCfg, false)
+	agent, err := c.buildAgent(ctx, agentCfg, false, coderOpts...)
 	if err != nil {
 		return nil, err
 	}
 	c.agents[config.AgentCoder] = agent
 
 	planCfg, ok := c.cfg.Config().Agents[config.AgentPlan]
-	if !ok {
-		return nil, errPlanAgentNotConfigured
+	if ok && !planCfg.Disabled {
+		planAgent, err := c.buildAgent(ctx, planCfg, false)
+		if err != nil {
+			return nil, err
+		}
+		c.agents[config.AgentPlan] = planAgent
 	}
 
-	planSystemPrompt, err := planPrompt(
-		append(c.skillOverrideOptions(), prompt.WithSkills(c.activeSkills), prompt.WithScheduling())...,
-	)
-	if err != nil {
-		return nil, err
+	// #392: every agent definition is published on the per-process A2A
+	// host as one stable card, whether or not its entry point routes
+	// its turns through the runtime yet — the definitions are the
+	// host's card listing, and the per-definition routes are live
+	// protocol surfaces that reject runs until an entry point serves a
+	// turn on them. Publishing is best-effort: a host that cannot
+	// listen fails the runs that need it, not the whole coordinator.
+	if catalog, ok := opts.DispatchHost.(AgentCatalog); ok {
+		for id, ag := range opts.Config.Config().Agents {
+			if ag.Disabled {
+				continue
+			}
+			if err := catalog.PublishAgentDefinition(ctx, AgentDefinitionCard{
+				ID:          id,
+				Name:        ag.Name,
+				Description: ag.Description,
+			}); err != nil {
+				slog.Error("Failed to publish agent definition card", "agent", id, "error", err)
+			}
+		}
 	}
 
-	planAgent, err := c.buildAgent(ctx, planSystemPrompt, planCfg, false)
-	if err != nil {
-		return nil, err
-	}
-	c.agents[config.AgentPlan] = planAgent
+	cronScheduler := scheduler.NewScheduler(c.cronStore, c.fireScheduledTask)
+	go cronScheduler.Run(ctx)
+
+	// Dispatch session-end backstop: release the workspaces that are
+	// safe to remove when the coordinator's context ends (#63's Sweep,
+	// wired here per #64; #367 makes the pass selective, keeping work
+	// worth salvaging on disk).
+	go c.sweepDispatchOnDone(ctx)
 
 	c.mainAgent = agent
 	c.mainAgentName = config.AgentCoder
-
-	if cronStore != nil {
-		cronScheduler := scheduler.NewScheduler(c.cronStore, c.fireScheduledTask, c.sessionServed)
-		schedCtx, schedCancel := context.WithCancel(ctx)
-		c.schedCancel = schedCancel
-		c.schedDone = make(chan struct{})
-		go func() {
-			defer close(c.schedDone)
-			cronScheduler.Run(schedCtx)
-		}()
-	}
-
 	return c, nil
-}
-
-// Close stops the cron scheduler, waits for in-flight fired runs (they
-// carry the scheduler's context, so they are asked to abort first), so
-// an explicit shutdown does not leave the goroutine running. It is an
-// optional capability outside the Coordinator interface: callers that
-// need it type-assert to interface{ Close() }.
-func (c *coordinator) Close() {
-	if c.schedCancel != nil {
-		c.schedCancel()
-		<-c.schedDone
-	}
-	c.fireWg.Wait()
 }
 
 // activeAgent returns the coordinator's current main agent and its config
@@ -367,6 +502,11 @@ func (c *coordinator) SetMainAgent(agentName string) error {
 	defer c.agentMu.Unlock()
 	agent, ok := c.agents[agentName]
 	if !ok {
+		if c.cfg != nil {
+			if cfg, ok := c.cfg.Config().Agents[agentName]; ok && cfg.Disabled {
+				return fmt.Errorf("agent %q is disabled", agentName)
+			}
+		}
 		return fmt.Errorf("%w: %s", errMainAgentNotFound, agentName)
 	}
 	c.mainAgent = agent
@@ -374,103 +514,76 @@ func (c *coordinator) SetMainAgent(agentName string) error {
 	return nil
 }
 
-// transientFireRetryDelay is how long a task waits after a transient
-// fire failure (database hiccup, canceled context) before retrying.
-const transientFireRetryDelay = 30 * time.Second
+// isInteractive reports the current tool-palette mode. Reads take the
+// lock because SetInteractive flips the flag from attach goroutines.
+func (c *coordinator) isInteractive() bool {
+	c.agentMu.RLock()
+	defer c.agentMu.RUnlock()
+	return c.interactive
+}
 
-// unservedSessionRetryDelay is how long a durable task whose session is
-// not served by any process waits before its fire is retried.
-const unservedSessionRetryDelay = time.Minute
+// SetInteractive implements Coordinator.
+func (c *coordinator) SetInteractive(ctx context.Context, interactive bool) error {
+	c.agentMu.Lock()
+	if c.interactive == interactive {
+		c.agentMu.Unlock()
+		return nil
+	}
+	c.interactive = interactive
+	c.agentMu.Unlock()
+
+	// The flag flips before the rebuild so a run interleaving mid-flight
+	// picks up the new palette on its own updateAgentModels pass, and so
+	// a partially-failed rebuild self-heals on the next run. Rebuild
+	// without agentMu held (run and UpdateModels call it the same way),
+	// and cover both main agents so a SetMainAgent'd plan agent is
+	// rebuilt too. The dispatch registry, the injection targets, the
+	// cron scheduler and the sweep are deliberately untouched: they
+	// belong to the coordinator, not to either palette (#420).
+	for _, name := range []string{config.AgentCoder, config.AgentPlan} {
+		c.agentMu.RLock()
+		agent, ok := c.agents[name]
+		c.agentMu.RUnlock()
+		if !ok || agent == nil {
+			continue
+		}
+		if err := c.updateAgentModels(ctx, agent, name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // fireScheduledTask runs a due scheduled task's prompt against its
 // session. The prompt is injected as a normal user turn so it respects
 // the session's busy queue: it fires between turns, never mid-response,
 // matching Claude Code's scheduler semantics.
 func (c *coordinator) fireScheduledTask(ctx context.Context, task scheduler.Task) error {
-	// A canceled context (shutdown) must never be mistaken for a dead
-	// session: the lookup below would fail with anything, and dropping
-	// durable tasks on exit would lose them.
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return &scheduler.TransientError{Err: ctxErr, RetryIn: transientFireRetryDelay}
-	}
 	if _, err := c.sessions.Get(ctx, task.SessionID); err != nil {
-		// Only a session that is genuinely gone retires its tasks:
-		// leaving them behind means the scheduler retries a dead session
-		// on every fire, forever. Any other lookup failure (a brief
-		// database hiccup, a canceled context) is transient, so the task
-		// is retried instead of dropped.
-		if errors.Is(err, sql.ErrNoRows) {
-			c.cronStore.DropSession(task.SessionID)
-			return fmt.Errorf("session %s for scheduled task %s no longer exists", task.SessionID, task.ID)
-		}
-		return &scheduler.TransientError{Err: err, RetryIn: transientFireRetryDelay}
-	}
-
-	// The scheduler only hands this coordinator a durable task when this
-	// process is serving the task's session (see DueTasks): a session is
-	// "served" from the moment the TUI loads it (ListCronTasks) or a user
-	// turn runs in it (Run/RunAccepted), so the fire lands where somebody
-	// can see it, and the on-disk claim keeps it exactly-once. Firing into
-	// an unserved session would run a prompt with nobody watching, and any
-	// permission request it raises would hang until someone answers it.
-	// The check below is the second line of defense — it also covers
-	// session-only tasks and direct calls — and defers instead of failing:
-	// a TransientError keeps the task, skips this fire, and records no
-	// failure. When no process ever serves the session, the task waits.
-	if !c.sessionServed(task.SessionID) {
-		return &scheduler.TransientError{
-			Err:     fmt.Errorf("session %s is not open in a process that can run it", task.SessionID),
-			RetryIn: unservedSessionRetryDelay,
-		}
+		// The session is gone (deleted or never persisted), so nothing
+		// this task fires can ever land. Drop the whole session's tasks,
+		// durable ones included: leaving them behind means the scheduler
+		// retries a dead session on every fire, forever.
+		c.cronStore.DropSession(task.SessionID)
+		return fmt.Errorf("session %s for scheduled task %s no longer exists", task.SessionID, task.ID)
 	}
 
 	prompt := task.Prompt
-	// The run is dispatched in the background and tracked on fireWg so a
-	// slow or permission-blocked run can never stall the scheduler loop
-	// or other tasks: the fire returns immediately, MarkFired advances
-	// the schedule, and the run's own outcome is recorded afterwards via
-	// SetLastError. A permission request nobody answers blocks only this
-	// goroutine, and only until its context (the scheduler's) is canceled
-	// on Close.
-	c.fireWg.Add(1)
 	go func() {
-		defer c.fireWg.Done()
 		if _, err := c.run(ctx, nil, task.SessionID, prompt); err != nil {
 			slog.Error("Scheduled task run failed", "id", task.ID, "session_id", task.SessionID, "error", err)
-			c.cronStore.SetLastError(task.ID, err)
 		}
 	}()
 	return nil
 }
 
-// markSessionServed records that this process is actively serving
-// sessionID, making it eligible to fire that session's scheduled tasks.
-func (c *coordinator) markSessionServed(sessionID string) {
-	c.servedMu.Lock()
-	defer c.servedMu.Unlock()
-	if c.servedSessions == nil {
-		c.servedSessions = make(map[string]bool)
-	}
-	c.servedSessions[sessionID] = true
-}
-
-// sessionServed reports whether this process is actively serving
-// sessionID.
-func (c *coordinator) sessionServed(sessionID string) bool {
-	c.servedMu.Lock()
-	defer c.servedMu.Unlock()
-	return c.servedSessions[sessionID]
-}
-
 // Run implements Coordinator.
 func (c *coordinator) Run(ctx context.Context, sessionID string, prompt string, attachments ...message.Attachment) (*fantasy.AgentResult, error) {
-	c.markSessionServed(sessionID)
 	return c.run(ctx, nil, sessionID, prompt, attachments...)
 }
 
 // RunAccepted implements Coordinator.
 func (c *coordinator) RunAccepted(ctx context.Context, accept *AcceptedRun, sessionID string, prompt string, attachments ...message.Attachment) (*fantasy.AgentResult, error) {
-	c.markSessionServed(sessionID)
 	return c.run(ctx, accept, sessionID, prompt, attachments...)
 }
 
@@ -480,10 +593,6 @@ func (c *coordinator) RunAccepted(ctx context.Context, accept *AcceptedRun, sess
 // dispatchMu; when nil (the in-process/local path) no accept tracking
 // applies.
 func (c *coordinator) run(ctx context.Context, accept *AcceptedRun, sessionID string, prompt string, attachments ...message.Attachment) (*fantasy.AgentResult, error) {
-	if err := c.readyWg.Wait(); err != nil {
-		return nil, err
-	}
-
 	// MCP servers connect asynchronously (see mcp.Initialize).
 	//
 	// Interactive runs never wait for that to finish: the tool list below
@@ -500,7 +609,7 @@ func (c *coordinator) run(ctx context.Context, accept *AcceptedRun, sessionID st
 	// mid-handshake cannot stall a headless run for minutes. Past the
 	// budget the turn proceeds without the stragglers; their tools simply
 	// stay absent from this run.
-	if !c.interactive {
+	if !c.isInteractive() {
 		if err := mcp.WaitForInitBudget(ctx, mcp.InitWaitBudget); err != nil {
 			return nil, fmt.Errorf("failed to wait for MCP initialization: %w", err)
 		}
@@ -510,6 +619,16 @@ func (c *coordinator) run(ctx context.Context, accept *AcceptedRun, sessionID st
 	// its model settings, and the model refresh below must all target the
 	// same agent even if SetMainAgent swaps the main agent mid-flight.
 	agent, agentName := c.activeAgent()
+
+	// Wait for this agent's own build-time setup (system prompt, initial
+	// tool list) rather than for coordinator-wide state: a latch belonging
+	// to the agent cannot be rearmed by a later build while this run is
+	// parked on it. Waiting on the snapshot keeps the wait and the run on
+	// the same agent. See readiness and joestump-agent/crush#298.
+	if err := agent.WaitReady(); err != nil {
+		return nil, err
+	}
+
 	if err := c.updateAgentModels(ctx, agent, agentName); err != nil {
 		return nil, fmt.Errorf("failed to update models: %w", err)
 	}
@@ -557,17 +676,22 @@ func (c *coordinator) run(ctx context.Context, accept *AcceptedRun, sessionID st
 	// the coalesce closure publishes the final outcome under that
 	// same correlator.
 	runID := RunIDFromContext(ctx)
+	systemDelivery := SystemDeliveryFromContext(ctx)
+	// A delivery turn's queue verdict (#355): set only on the dispatch
+	// delivery path, it stamps the durable records once a queued
+	// delivery reaches the parent. Nil everywhere else.
+	onConsumed := deliveryConsumedFromContext(ctx)
 	channel := ChannelFromContext(ctx)
 	c.syncSessionChannel(ctx, sessionID, channel)
 	run := func() (*fantasy.AgentResult, error) {
 		return agent.Run(ctx, SessionAgentCall{
 			SessionID:         sessionID,
 			RunID:             runID,
-			Channel:           channel,
-			Prompt:            prompt,
 			HiddenUserMessage: message.HiddenUserMessage(ctx),
-			OperatorSteering:  message.OperatorSteering(ctx),
 			PermissionPolicy:  permission.RequestPolicyFromContext(ctx),
+			Channel:           ChannelFromContext(ctx),
+			ContentWidth:      ContentWidthFromContext(ctx),
+			Prompt:            prompt,
 			Attachments:       attachments,
 			MaxOutputTokens:   maxTokens,
 			ProviderOptions:   mergedOptions,
@@ -576,7 +700,9 @@ func (c *coordinator) run(ctx context.Context, accept *AcceptedRun, sessionID st
 			TopK:              callTopK(providerCfg, topK),
 			FrequencyPenalty:  freqPenalty,
 			PresencePenalty:   presPenalty,
+			systemDelivery:    systemDelivery,
 			OnComplete:        onComplete,
+			OnConsumed:        onConsumed,
 			Accepted:          accept,
 			OnAuthRefresh:     c.makeAuthRefreshCallback(providerCfg),
 		})
@@ -604,6 +730,17 @@ func (c *coordinator) run(ctx context.Context, accept *AcceptedRun, sessionID st
 		// error it is about to receive.
 		MarkRunCompletePublished(ctx)
 	}
+	// A run on this session just ended (#388): dispatch results that
+	// pended while it was busy can deliver now. Inline, not on a
+	// goroutine: the flush reads the parent session from the store, and
+	// that read must finish before run returns. Callers that wait for
+	// the run and then close the database (Workspace.Shutdown's runWG,
+	// a test's cleanup) would otherwise close it with the connection
+	// still checked out, which database/sql leaves open until the read
+	// returns it, and Windows will not delete an open SQLite file. The
+	// delivery turn itself stays detached (startDispatchRun), so this
+	// never waits on a model call.
+	c.flushPendingResults(sessionID)
 	return result, originalErr
 }
 
@@ -963,41 +1100,37 @@ func mergeCallOptions(model Model, cfg config.ProviderConfig) (fantasy.ProviderO
 	return modelOptions, temp, topP, topK, freqPenalty, presPenalty
 }
 
-// skillOverrideOptions returns the prompt options carrying the
-// repository-scoped skill toggle overrides. They read the DB at Build
-// time, the same point where the config's disabled list is applied, so a
-// running agent picks up toggles on its next rebuild (agent build).
-func (c *coordinator) skillOverrideOptions() []prompt.Option {
-	disabled := func(ctx context.Context) []string {
-		names, err := c.sessions.SkillsDisabled(ctx)
-		if err != nil {
-			slog.Error("Failed to list disabled skills for prompt", "error", err)
-			return nil
-		}
-		return names
-	}
-	enabled := func(ctx context.Context) []string {
-		names, err := c.sessions.SkillsEnabled(ctx)
-		if err != nil {
-			slog.Error("Failed to list enabled skills for prompt", "error", err)
-			return nil
-		}
-		return names
-	}
-	return []prompt.Option{
-		prompt.WithWorkingDir(c.cfg.WorkingDir()),
-		prompt.WithSkillOverrides(disabled, enabled),
-	}
-}
-
-func (c *coordinator) buildAgent(ctx context.Context, prompt *prompt.Prompt, agent config.Agent, isSubAgent bool) (SessionAgent, error) {
+// buildAgent builds one agent from its resolved definition (#432): the
+// model comes from the definition (slot ref or explicit pin) over the
+// configured slots, the prompt renders from the definition's prompt
+// reference with the definition's context paths and skills, and the
+// tools build from the definition's allow list. extraOpts carry
+// caller-owned prompt sections — the coder-only scheduling guidance and
+// A2UI; a file-based template that does not reference those fields is
+// unaffected by them.
+func (c *coordinator) buildAgent(ctx context.Context, agent config.Agent, isSubAgent bool, extraOpts ...prompt.Option) (SessionAgent, error) {
 	large, small, err := c.buildAgentModels(ctx, isSubAgent)
 	if err != nil {
 		return nil, err
 	}
 
+	large, err = c.agentModel(ctx, agent, large, small, isSubAgent)
+	if err != nil {
+		return nil, err
+	}
+
 	largeProviderCfg, _ := c.cfg.Config().Providers.Get(large.ModelCfg.Provider)
-	result := NewSessionAgent(SessionAgentOptions{
+
+	promptOpts := append([]prompt.Option{
+		prompt.WithWorkingDir(c.cfg.WorkingDir()),
+	}, extraOpts...)
+	promptOpts = append(promptOpts, agentPromptOptions(agent)...)
+	systemPromptTemplate, err := agentPrompt(agent, c.cfg.WorkingDir(), promptOpts...)
+	if err != nil {
+		return nil, err
+	}
+
+	result := newSessionAgent(SessionAgentOptions{
 		LargeModel:           large,
 		SmallModel:           small,
 		SystemPromptPrefix:   largeProviderCfg.SystemPromptPrefix,
@@ -1011,10 +1144,14 @@ func (c *coordinator) buildAgent(ctx context.Context, prompt *prompt.Prompt, age
 		Tools:                nil,
 		Notify:               c.notify,
 		RunComplete:          c.runComplete,
-
-		CompactionHooks: c.compactionHooks(isSubAgent),
-		Ledger:          c.ledger,
-		ObserveMemory:   c.observesMemory(isSubAgent),
+		Ledger:               c.ledger,
+		ObserveMemory:        c.observesMemory(isSubAgent),
+		CompactionHooks:      c.compactionHooks(isSubAgent),
+		// The todo enforcement ladder (#315) applies to every agent the
+		// coordinator builds (main, plan, and agent-tool sub-agents
+		// alike) with this agent type's overrides layered over the
+		// global options.
+		TodoEnforcement: agent.ResolvedTodoEnforcement(c.cfg.Config().Options.TodoEnforcement),
 	})
 
 	// The readiness goroutines below perform one-time setup — building the
@@ -1029,8 +1166,24 @@ func (c *coordinator) buildAgent(ctx context.Context, prompt *prompt.Prompt, age
 	// values; the work is local and always completes.
 	initCtx := context.WithoutCancel(ctx)
 
-	c.readyWg.Go(func() error {
-		systemPrompt, err := prompt.Build(initCtx, large.Model.Provider(), large.Model.Model(), c.cfg)
+	// The group is local to this build and the latch belongs to the agent it
+	// builds, so a later buildAgent never touches either. Sharing one group
+	// across builds and runs is what crash-looped channel mode: a build's
+	// Add landed while a run's Wait was outstanding, which Go 1.27's
+	// sync.WaitGroup panics on (joestump-agent/crush#298).
+	ready := newReadiness()
+	result.ready = ready
+	// The coordinator tracks the latch until the work below is done, so
+	// teardown can wait for it (#515): the prompt render runs git in the
+	// working directory, and an agent nobody runs is never waited on.
+	c.trackBuild(ready)
+
+	var build errgroup.Group
+	build.Go(func() error {
+		if c.promptBuildHook != nil {
+			c.promptBuildHook()
+		}
+		systemPrompt, err := agentSystemPrompt(initCtx, systemPromptTemplate, agent, c.cfg.WorkingDir(), large.Model.Provider(), large.Model.Model(), c.cfg)
 		if err != nil {
 			return err
 		}
@@ -1038,7 +1191,7 @@ func (c *coordinator) buildAgent(ctx context.Context, prompt *prompt.Prompt, age
 		return nil
 	})
 
-	c.readyWg.Go(func() error {
+	build.Go(func() error {
 		tools, err := c.buildTools(initCtx, agent, isSubAgent)
 		if err != nil {
 			return err
@@ -1047,12 +1200,88 @@ func (c *coordinator) buildAgent(ctx context.Context, prompt *prompt.Prompt, age
 		return nil
 	})
 
+	go func() {
+		err := build.Wait()
+		// Untracked before the settle: the work is done, and a teardown
+		// that already snapshotted the latch still returns on the settle.
+		c.untrackBuild(ready)
+		ready.settle(err)
+	}()
+
 	return result, nil
 }
 
+// trackBuild records an agent build's readiness latch as in flight
+// (#515).
+func (c *coordinator) trackBuild(r *readiness) {
+	c.buildsMu.Lock()
+	defer c.buildsMu.Unlock()
+	if c.builds == nil {
+		c.builds = make(map[*readiness]struct{})
+	}
+	c.builds[r] = struct{}{}
+}
+
+// untrackBuild drops a finished build's latch (#515).
+func (c *coordinator) untrackBuild(r *readiness) {
+	c.buildsMu.Lock()
+	defer c.buildsMu.Unlock()
+	delete(c.builds, r)
+}
+
+// waitAgentBuilds blocks until no agent build's background work is in
+// flight, or ctx ends (#515). A build that starts while it waits — a run
+// that was mid-rebuild when teardown began — is waited on too. Each
+// latch is a one-shot channel, never a shared WaitGroup, so a build
+// starting during the wait cannot trip Go 1.27's reuse panic (#298).
+func (c *coordinator) waitAgentBuilds(ctx context.Context) error {
+	for {
+		c.buildsMu.Lock()
+		pending := make([]*readiness, 0, len(c.builds))
+		for r := range c.builds {
+			pending = append(pending, r)
+		}
+		c.buildsMu.Unlock()
+		if len(pending) == 0 {
+			return nil
+		}
+		for _, r := range pending {
+			select {
+			case <-r.done:
+			case <-ctx.Done():
+				return fmt.Errorf("%d agent builds still running: %w", len(pending), ctx.Err())
+			}
+		}
+	}
+}
+
 func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubAgent bool) ([]fantasy.AgentTool, error) {
+	// One snapshot for the whole palette: SetInteractive may flip the
+	// mode mid-build, and a torn palette (question without dispatch) is
+	// worse than either mode alone.
+	interactive := c.isInteractive()
+
+	// Effective palette: the definition's allow list (#432) minus the
+	// user's disabled tools, applied last so a definition can never
+	// widen user policy. A disabled task agent takes the `agent` tool
+	// off the main agents' palettes — there is no sub-agent to run —
+	// and with no enabled dispatch agent the dispatch, message, cancel,
+	// apply, and dismiss tools have nothing to act on.
+	allowedTools := effectiveToolNames(agent.AllowedTools, c.cfg.Config().Options.DisabledTools)
+	if taskCfg, ok := c.cfg.Config().Agents[config.AgentTask]; ok && taskCfg.Disabled {
+		allowedTools = slices.DeleteFunc(allowedTools, func(name string) bool {
+			return name == AgentToolName
+		})
+	}
+	if !hasEnabledDispatchAgent(c.cfg.Config()) {
+		allowedTools = slices.DeleteFunc(allowedTools, func(name string) bool {
+			return name == DispatchAgentToolName || name == MessageAgentToolName || name == CancelDispatchToolName ||
+				name == ApplyDispatchToolName || name == DismissDispatchToolName
+		})
+	}
+
 	var allTools []fantasy.AgentTool
-	if slices.Contains(agent.AllowedTools, AgentToolName) {
+	if slices.Contains(allowedTools, AgentToolName) {
 		agentTool, err := c.agentTool(ctx)
 		if err != nil {
 			return nil, err
@@ -1060,7 +1289,7 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 		allTools = append(allTools, agentTool)
 	}
 
-	if slices.Contains(agent.AllowedTools, tools.AgenticFetchToolName) {
+	if slices.Contains(allowedTools, tools.AgenticFetchToolName) {
 		agenticFetchTool, err := c.agenticFetchTool(ctx, nil)
 		if err != nil {
 			return nil, err
@@ -1068,15 +1297,70 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 		allTools = append(allTools, agenticFetchTool)
 	}
 
-	// Get the model name for the agent
+	// Worktree dispatch (#64) is a coder-level tool. Sub-agents never
+	// get it: dispatching from inside a dispatch would recurse across
+	// the isolation boundary the dispatch toolchain enforces. It is also
+	// interactive-only (#387): a non-interactive `crush run` exits when
+	// the parent's turn ends, so a dispatch would die mid-run with its
+	// result undelivered.
+	if !isSubAgent && interactive && slices.Contains(allowedTools, DispatchAgentToolName) {
+		allTools = append(allTools, c.dispatchTool())
+	}
+
+	// Mid-run message injection (#312) is the model-facing front door of
+	// the injection queue. Main agents only: a dispatched agent steering
+	// a sibling would cross the same isolation boundary the dispatch
+	// toolchain enforces, and worker-to-worker routing is deliberately
+	// deferred (A2A epic #67). Interactive-only for the same reason
+	// dispatch is (#387): a non-interactive run ends with the parent's
+	// turn, so there is no live run left to inject into.
+	if !isSubAgent && interactive && slices.Contains(allowedTools, MessageAgentToolName) {
+		allTools = append(allTools, c.messageAgentTool())
+	}
+
+	// On-demand cancel (#373) is the model-facing front door for stopping
+	// one dispatched agent. It rides the same gate as dispatch and
+	// message: main agents only, interactive only — the same reasons
+	// apply, and a tool with nothing running behind it is dead weight.
+	if !isSubAgent && interactive && slices.Contains(allowedTools, CancelDispatchToolName) {
+		allTools = append(allTools, c.cancelDispatchTool())
+	}
+
+	// Apply and dismiss (#368) are the model-facing front door for the
+	// review decision a finished dispatch's terminal message asks for.
+	// They ride the same gate as cancel: main agents only, interactive
+	// only — a non-interactive run exits with the parent's turn, so
+	// nothing is left to apply or dismiss.
+	if !isSubAgent && interactive && slices.Contains(allowedTools, ApplyDispatchToolName) {
+		allTools = append(allTools, c.applyDispatchTool())
+	}
+	if !isSubAgent && interactive && slices.Contains(allowedTools, DismissDispatchToolName) {
+		allTools = append(allTools, c.dismissDispatchTool())
+	}
+
+	// Get the model name for the agent: an explicit pin (#432) names it,
+	// otherwise the agent's slot does.
 	modelID := ""
-	if modelCfg, ok := c.cfg.Config().Models[agent.Model]; ok {
+	if agent.ModelRef != nil {
+		if model := c.cfg.Config().GetModel(agent.ModelRef.Provider, agent.ModelRef.Model); model != nil {
+			modelID = model.ID
+		}
+	} else if modelCfg, ok := c.cfg.Config().Models[agent.Model]; ok {
 		if model := c.cfg.Config().GetModel(modelCfg.Provider, modelCfg.Model); model != nil {
 			modelID = model.ID
 		}
 	}
 
 	logFile := filepath.Join(c.cfg.Config().Options.DataDirectory, "logs", "crush.log")
+
+	// Effective bash allow-list: config-file values plus any runtime overrides
+	// from --allow-commands / --allow-all-commands (or their env vars). The
+	// overrides live on the store rather than in Options so they survive the
+	// config reloads triggered by MCP reconnects and model changes.
+	bashOpts := c.cfg.Config().Options
+	bashOverrides := c.cfg.Overrides()
+	allowedCommands := append(append([]string{}, bashOpts.AllowedCommands...), bashOverrides.AllowedCommands...)
+	allowAllCommands := bashOpts.AllowAllCommands || bashOverrides.AllowAllCommands
 
 	// Build hook runner if PreToolUse hooks are configured.
 	var hookRunner *hooks.Runner
@@ -1086,10 +1370,10 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 
 	allTools = append(
 		allTools,
-		tools.NewBashTool(c.permissions, c.cfg.WorkingDir(), c.cfg.Config().Options.DataDirectory, c.cfg.Config().Options.Attribution, modelID),
-		tools.NewCrushInfoTool(c.cfg, c.lspManager, c.allSkills, c.activeSkills, c.skillTracker),
+		tools.NewBashTool(c.permissions, c.cfg.WorkingDir(), c.cfg.Config().Options.DataDirectory, c.cfg.Config().Options.Attribution, modelID, allowedCommands, allowAllCommands),
+		tools.NewCrushInfoTool(c.cfg, c.lspManager, c.allSkills, c.activeSkills, c.skillTracker, c.semanticStore),
 		tools.NewCrushLogsTool(logFile),
-		tools.NewCronCreateTool(c.cronStore, c.permissions),
+		tools.NewCronCreateTool(c.cronStore),
 		tools.NewCronListTool(c.cronStore),
 		tools.NewCronDeleteTool(c.cronStore),
 		tools.NewJobOutputTool(c.cfg.Config().Options.DataDirectory),
@@ -1107,15 +1391,8 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 		tools.NewWriteTool(c.lspManager, c.permissions, c.history, c.filetracker, c.cfg.WorkingDir()),
 	)
 
-	// Memory recall is only offered where memory exists. A session that records
-	// nothing has nothing to recall, and the tool's description would be prompt
-	// weight paid on every request for no capability.
-	if c.ledger != nil && c.observesMemory(isSubAgent) {
-		allTools = append(allTools, tools.NewRecallTool(c.ledger, c.messages))
-	}
-
 	// Question tool is interactive-only and not available to sub-agents.
-	if !isSubAgent && c.interactive {
+	if !isSubAgent && interactive {
 		allTools = append(allTools, tools.NewQuestionTool(c.questions))
 	}
 
@@ -1134,50 +1411,35 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 		)
 	}
 
+	// Semantic search tools are registered only when an embedding
+	// provider is configured and the store initialised — the same
+	// conditional-registration style as the LSP and MCP blocks above.
+	if c.semanticStore != nil && c.semanticClient != nil {
+		allTools = append(
+			allTools,
+			tools.NewSemanticSearchTool(c.cfg, c.semanticStore, c.semanticClient),
+			tools.NewSemanticIndexTool(c.cfg, c.semanticStore, c.semanticSymbols, c.cfg.WorkingDir()),
+		)
+	}
+
 	if len(c.cfg.Config().MCP) > 0 {
 		allTools = append(
 			allTools,
 			tools.NewListMCPResourcesTool(c.cfg, c.permissions),
 			tools.NewReadMCPResourceTool(c.cfg, c.permissions),
+			tools.NewListMCPPromptsTool(c.cfg, c.permissions),
+			tools.NewCallMCPPromptTool(c.cfg, c.permissions),
 		)
-		// mcp_search only earns a slot when something is actually hidden.
-		// With every server pinned the eager list already carries the
-		// schemas, so a search would have nothing to load.
-		if c.cfg.Config().AnyMCPLazy() {
-			allTools = append(allTools, tools.NewMCPSearchTool(c.cfg))
-		}
 	}
 
 	var filteredTools []fantasy.AgentTool
 	for _, tool := range allTools {
-		if slices.Contains(agent.AllowedTools, tool.Info().Name) {
+		if slices.Contains(allowedTools, tool.Info().Name) {
 			filteredTools = append(filteredTools, tool)
 		}
 	}
 
-	for _, tool := range tools.GetMCPTools(c.permissions, c.cfg, c.cfg.WorkingDir()) {
-		if agent.AllowedMCP == nil {
-			// No MCP restrictions
-			filteredTools = append(filteredTools, tool)
-			continue
-		}
-		if len(agent.AllowedMCP) == 0 {
-			// No MCPs allowed
-			slog.Debug("No MCPs allowed", "tool", tool.Name(), "agent", agent.Name)
-			break
-		}
-
-		for mcp, tools := range agent.AllowedMCP {
-			if mcp != tool.MCP() {
-				continue
-			}
-			if len(tools) == 0 || slices.Contains(tools, tool.MCPToolName()) {
-				filteredTools = append(filteredTools, tool)
-				break
-			}
-			slog.Debug("MCP not allowed", "tool", tool.Name(), "agent", agent.Name)
-		}
-	}
+	filteredTools = append(filteredTools, filterMCPTools(agent, tools.GetMCPTools(c.permissions, c.cfg, c.cfg.WorkingDir()))...)
 	slices.SortFunc(filteredTools, func(a, b fantasy.AgentTool) int {
 		return strings.Compare(a.Info().Name, b.Info().Name)
 	})
@@ -1192,40 +1454,92 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 	return filteredTools, nil
 }
 
-// TODO: when we support multiple agents we need to change this so that we pass in the agent specific model config
+// effectiveToolNames computes an agent's effective tool list: the
+// definition's resolved allow list minus the user's disabled tools,
+// applied last so a definition can never widen user policy (#432).
+// The returned slice is a fresh copy; the definition's list is shared.
+func effectiveToolNames(allowed, disabled []string) []string {
+	return slices.DeleteFunc(slices.Clone(allowed), func(name string) bool {
+		return slices.Contains(disabled, name)
+	})
+}
 
-// compactionHooks hands the agent a way to fire compaction events. Sub-agents
-// never compact, so they are given nothing; for the main agent each event
-// resolves to its own configured command list, or to nothing at all.
-func (c *coordinator) compactionHooks(isSubAgent bool) func(string) CompactionHookRunner {
-	if isSubAgent {
-		return nil
-	}
-	return func(event string) CompactionHookRunner {
-		configured := c.cfg.Config().Hooks[event]
-		if len(configured) == 0 {
-			return nil
+// hasEnabledDispatchAgent reports whether any builtin dispatch-role
+// agent is enabled (#432). With none, the dispatch and message tools
+// have nothing to act on and stay off the palette.
+func hasEnabledDispatchAgent(c *config.Config) bool {
+	for _, a := range c.Agents {
+		if a.Role == config.AgentRoleDispatch && a.Runtime == config.AgentRuntimeBuiltin && !a.Disabled {
+			return true
 		}
-		return hooks.NewRunner(configured, c.cfg.WorkingDir(), c.cfg.WorkingDir())
+	}
+	return false
+}
+
+// mcpAgentTool is the slice of *tools.Tool filterMCPTools reads: the
+// tool itself plus the server and tool names it is filtered by.
+type mcpAgentTool interface {
+	fantasy.AgentTool
+	Name() string
+	MCP() string
+	MCPToolName() string
+}
+
+// filterMCPTools keeps the MCP tools an agent's definition allows
+// (#432): a nil AllowedMCP means no restriction, an empty one allows
+// no MCP tools, and entries allow a whole server or named tools on it
+// (the config resolves server:tool pairs on load).
+func filterMCPTools[T mcpAgentTool](agent config.Agent, mcpTools []T) []fantasy.AgentTool {
+	var filtered []fantasy.AgentTool
+	for _, tool := range mcpTools {
+		if agent.AllowedMCP == nil {
+			// No MCP restrictions
+			filtered = append(filtered, tool)
+			continue
+		}
+		if len(agent.AllowedMCP) == 0 {
+			// No MCPs allowed
+			slog.Debug("No MCPs allowed", "tool", tool.Name(), "agent", agent.Name)
+			break
+		}
+
+		for mcp, names := range agent.AllowedMCP {
+			if mcp != tool.MCP() {
+				continue
+			}
+			if len(names) == 0 || slices.Contains(names, tool.MCPToolName()) {
+				filtered = append(filtered, tool)
+				break
+			}
+			slog.Debug("MCP not allowed", "tool", tool.Name(), "agent", agent.Name)
+		}
+	}
+	return filtered
+}
+
+// agentModel returns the model an agent's session runs on, given the
+// configured slots (#432). The session agent runs on its large slot, so
+// an agent whose definition names the small slot gets the small model
+// there, and an agent pinned to an explicit provider and model gets the
+// pin. The small slot stays the user's small model for auxiliary work
+// either way.
+func (c *coordinator) agentModel(ctx context.Context, agent config.Agent, large, small Model, isSubAgent bool) (Model, error) {
+	switch {
+	case agent.ModelRef != nil:
+		return c.buildModelFromSelected(ctx, config.SelectedModel{
+			Provider: agent.ModelRef.Provider,
+			Model:    agent.ModelRef.Model,
+		}, isSubAgent)
+	case agent.Model == config.SelectedModelTypeSmall:
+		return small, nil
+	default:
+		return large, nil
 	}
 }
 
-// observesMemory reports whether this agent should distill its turns into the
-// memory ledger. Sub-agents never do: they are the compaction's own machinery
-// and a memory of a memory is the erosion the ledger exists to prevent. The
-// ledger service being absent also disables it, so a build without one keeps
-// working unchanged. Recording is on unless explicitly disabled: the ledger
-// only pays for itself if it has been accumulating since the turns a later
-// compaction will replace.
-
-func (c *coordinator) observesMemory(isSubAgent bool) bool {
-	if isSubAgent || c.ledger == nil {
-		return false
-	}
-	co := c.cfg.Config().Options.Compaction
-	return co == nil || co.ObserveMemory == nil || *co.ObserveMemory
-}
-
+// buildAgentModels resolves the configured large and small model slots.
+// agentModel picks which one an agent runs on, or its explicit pin
+// (#432).
 func (c *coordinator) buildAgentModels(ctx context.Context, isSubAgent bool) (Model, Model, error) {
 	largeModelCfg, ok := c.cfg.Config().Models[config.SelectedModelTypeLarge]
 	if !ok {
@@ -1236,91 +1550,67 @@ func (c *coordinator) buildAgentModels(ctx context.Context, isSubAgent bool) (Mo
 		return Model{}, Model{}, errSmallModelNotSelected
 	}
 
-	largeProviderCfg, ok := c.cfg.Config().Providers.Get(largeModelCfg.Provider)
-	if !ok {
-		return Model{}, Model{}, errLargeModelProviderNotConfigured
-	}
-
-	largeProvider, err := c.buildProvider(largeProviderCfg, largeModelCfg, isSubAgent)
+	large, err := c.buildModelFromSelected(ctx, largeModelCfg, isSubAgent)
 	if err != nil {
 		return Model{}, Model{}, err
 	}
-
-	smallProviderCfg, ok := c.cfg.Config().Providers.Get(smallModelCfg.Provider)
-	if !ok {
-		return Model{}, Model{}, errSmallModelProviderNotConfigured
-	}
-
-	smallProvider, err := c.buildProvider(smallProviderCfg, smallModelCfg, true)
+	small, err := c.buildModelFromSelected(ctx, smallModelCfg, true)
 	if err != nil {
 		return Model{}, Model{}, err
+	}
+	return large, small, nil
+}
+
+// buildModelFromSelected builds one Model from a selected model: the
+// provider is constructed, the model resolved against the provider's
+// catalog, and the request-timeout and Hyper-credits wrappers applied.
+func (c *coordinator) buildModelFromSelected(ctx context.Context, selected config.SelectedModel, isSubAgent bool) (Model, error) {
+	providerCfg, ok := c.cfg.Config().Providers.Get(selected.Provider)
+	if !ok {
+		return Model{}, fmt.Errorf("%w: %q", errModelProviderNotConfigured, selected.Provider)
+	}
+
+	provider, err := c.buildProvider(providerCfg, selected, isSubAgent)
+	if err != nil {
+		return Model{}, err
 	}
 
 	// Resolve the selected model from the provider's whole catalog: an
 	// API-key model, a ChatGPT subscription model, or a Grok one. The
 	// subscription catalogs live outside Models, so looking only there
 	// strands a Grok/ChatGPT model that catwalk doesn't also publish.
-	largeCatwalkModel := c.cfg.Config().GetModel(largeModelCfg.Provider, largeModelCfg.Model)
-	smallCatwalkModel := c.cfg.Config().GetModel(smallModelCfg.Provider, smallModelCfg.Model)
-
-	if largeCatwalkModel == nil {
-		return Model{}, Model{}, errLargeModelNotFound
+	catwalkModel := c.cfg.Config().GetModel(selected.Provider, selected.Model)
+	if catwalkModel == nil {
+		return Model{}, fmt.Errorf("%w: %q in provider %q", errModelNotFound, selected.Model, selected.Provider)
 	}
 
-	if smallCatwalkModel == nil {
-		return Model{}, Model{}, errSmallModelNotFound
+	modelID := selected.Model
+	if selected.Provider == openrouter.Name && isExactoSupported(modelID) {
+		modelID += ":exacto"
 	}
 
-	largeModelID := largeModelCfg.Model
-	smallModelID := smallModelCfg.Model
-
-	if largeModelCfg.Provider == openrouter.Name && isExactoSupported(largeModelID) {
-		largeModelID += ":exacto"
-	}
-
-	if smallModelCfg.Provider == openrouter.Name && isExactoSupported(smallModelID) {
-		smallModelID += ":exacto"
-	}
-
-	largeModel, err := largeProvider.LanguageModel(ctx, largeModelID)
+	model, err := provider.LanguageModel(ctx, modelID)
 	if err != nil {
-		return Model{}, Model{}, err
-	}
-	smallModel, err := smallProvider.LanguageModel(ctx, smallModelID)
-	if err != nil {
-		return Model{}, Model{}, err
+		return Model{}, err
 	}
 
 	// Bound each request with the configured timeout so unreachable or hung
 	// providers fail instead of blocking a session forever. The wrapper is
 	// applied per request, so retries get a fresh budget each attempt.
-	requestTimeout := c.cfg.Config().Options.GetRequestTimeout()
-	largeModel = newRequestTimeoutModel(largeModel, requestTimeout)
-	smallModel = newRequestTimeoutModel(smallModel, requestTimeout)
+	model = newRequestTimeoutModel(model, c.cfg.Config().Options.GetRequestTimeout())
 
 	// Hyper completions no longer report the hypercredit balance, so wrap
 	// the Hyper models to fetch it from /v1/credits on every request.
-	if largeModelCfg.Provider == hyper.Name {
-		largeModel = newHyperCreditsModel(largeModel, c.hyperAPIKey)
-	}
-	if smallModelCfg.Provider == hyper.Name {
-		smallModel = newHyperCreditsModel(smallModel, c.hyperAPIKey)
+	if selected.Provider == hyper.Name {
+		model = newHyperCreditsModel(model, c.hyperAPIKey)
 	}
 
-	large := Model{
-		Model:      largeModel,
-		CatwalkCfg: *largeCatwalkModel,
-		ModelCfg:   largeModelCfg,
-		FlatRate:   largeProviderCfg.FlatRate,
-	}
-	small := Model{
-		Model:      smallModel,
-		CatwalkCfg: *smallCatwalkModel,
-		ModelCfg:   smallModelCfg,
-		FlatRate:   smallProviderCfg.FlatRate,
-	}
-
-	return large, small, nil
+	return Model{
+		Model:      model,
+		CatwalkCfg: *catwalkModel,
+		ModelCfg:   selected,
+		FlatRate:   providerCfg.FlatRate,
+	}, nil
 }
 
 // hyperAPIKey resolves the Hyper API key from the live config, so an
@@ -1671,21 +1961,39 @@ func (c *coordinator) Cancel(sessionID string) {
 }
 
 func (c *coordinator) CancelAll() {
+	// Shutdown begins before any run is canceled (#372). Canceling the
+	// main agent ends its runs, every run end fires the pending-result
+	// flush, and a dispatch can finish while that cancel waits. Raised
+	// any later, the flag lets either one start a delivery turn against
+	// a coordinator that is canceling everything.
+	c.shuttingDown.Store(true)
 	c.currentAgent().CancelAll()
+	// Quitting stops dispatched agents too (#372): they run on detached
+	// contexts, so the agent cancel above never reaches them.
+	c.cancelDispatchesForShutdown()
+	// Agent builds outlive the runs that start them (#515): every run
+	// rebuilds the tool palette, and the sub-agent built there renders
+	// its system prompt — git status in the working directory — on a
+	// detached goroutine. The work cannot be canceled without killing git
+	// mid-write and leaving its index.lock behind, so shutdown waits for
+	// it, bounded like the agent and dispatch waits above.
+	ctx, cancel := context.WithTimeout(context.Background(), agentBuildShutdownWait)
+	defer cancel()
+	if err := c.waitAgentBuilds(ctx); err != nil {
+		slog.Warn("Agent build still running after shutdown wait", "error", err)
+	}
 }
+
+// agentBuildShutdownWait bounds CancelAll's wait for in-flight agent
+// builds (#515), matching sessionAgent.CancelAll's own bound.
+const agentBuildShutdownWait = 5 * time.Second
 
 func (c *coordinator) ClearQueue(sessionID string) {
 	c.currentAgent().ClearQueue(sessionID)
 }
 
 // ListCronTasks returns the scheduled tasks belonging to sessionID.
-// The TUI calls it when a session loads, which also marks the session as
-// served in this process, making it eligible to fire its durable tasks.
 func (c *coordinator) ListCronTasks(sessionID string) []scheduler.Task {
-	c.markSessionServed(sessionID)
-	if c.cronStore == nil {
-		return nil
-	}
 	return c.cronStore.List(sessionID)
 }
 
@@ -1716,20 +2024,22 @@ func (c *coordinator) UpdateModels(ctx context.Context) error {
 // updateAgentModels rebuilds the model and tool configuration for the
 // given agent from the current config.
 func (c *coordinator) updateAgentModels(ctx context.Context, agent SessionAgent, name string) error {
-	if agent == nil {
-		return fmt.Errorf("%w: %s", errMainAgentNotFound, name)
-	}
-	// build the models again so we make sure we get the latest config
-	large, small, err := c.buildAgentModels(ctx, false)
-	if err != nil {
-		return err
-	}
-	agent.SetModels(large, small)
-
 	agentCfg, ok := c.cfg.Config().Agents[name]
 	if !ok {
 		return fmt.Errorf("%w: %s", errMainAgentNotFound, name)
 	}
+
+	// build the models again so we make sure we get the latest config,
+	// keeping the agent's own slot or pin (#432)
+	large, small, err := c.buildAgentModels(ctx, false)
+	if err != nil {
+		return err
+	}
+	large, err = c.agentModel(ctx, agentCfg, large, small, false)
+	if err != nil {
+		return err
+	}
+	agent.SetModels(large, small)
 
 	tools, err := c.buildTools(ctx, agentCfg, false)
 	if err != nil {
@@ -1933,6 +2243,14 @@ type subAgentParams struct {
 	ToolCallID     string
 	Prompt         string
 	SessionTitle   string
+	// SessionSetup is an optional callback invoked after session creation
+	// but before agent execution, for custom session configuration.
+	SessionSetup func(sessionID string)
+	// AgentName and AgentDescription describe the card of the agent
+	// served for the turn when it runs through the A2A runtime (#392);
+	// empty falls back to a generic sub-agent identity.
+	AgentName        string
+	AgentDescription string
 }
 
 // callTopK returns topK for use on fantasy.Call.TopK, suppressing it for
@@ -1946,15 +2264,44 @@ func callTopK(providerCfg config.ProviderConfig, topK *int64) *int64 {
 	return topK
 }
 
-// runSubAgent runs a sub-agent and handles session management and cost accumulation.
-// It creates a sub-session, runs the agent with the given prompt, and propagates
-// the cost to the parent session.
-func (c *coordinator) runSubAgent(ctx context.Context, params subAgentParams) (fantasy.ToolResponse, error) {
+// subAgentTurn is one prepared sub-agent invocation (#392): the session
+// it runs against and the call template its turn runs with, with the
+// model and provider shaping already resolved. SessionID, Prompt and
+// RunID are per execution path — set directly for the in-process
+// runner, by the A2A executor from the binding and the served task for
+// a turn that runs through the runtime.
+type subAgentTurn struct {
+	sessionID string
+	call      SessionAgentCall
+	provider  string
+}
+
+// prepareSubAgent does the session and call shaping every sub-agent
+// execution path shares (#392): wait for the agent's setup, create its
+// task session, run the caller's setup hook, and resolve the model and
+// provider options the turn runs with.
+func (c *coordinator) prepareSubAgent(ctx context.Context, params subAgentParams) (*subAgentTurn, error) {
+	// A sub-agent built by buildAgent is handed to its tool before its
+	// system prompt and tool list land, so wait for its own setup here.
+	// Previously the only wait was coordinator.run's, which covered whichever
+	// builds happened to be registered when a run started — so a sub-agent
+	// could take a turn with an empty prompt, and a sub-agent build error
+	// surfaced on an unrelated later run instead of on the call that needed
+	// it.
+	if err := params.Agent.WaitReady(); err != nil {
+		return nil, fmt.Errorf("sub-agent setup failed: %w", err)
+	}
+
 	// Create sub-session
 	agentToolSessionID := c.sessions.CreateAgentToolSessionID(params.AgentMessageID, params.ToolCallID)
 	session, err := c.sessions.CreateTaskSession(ctx, agentToolSessionID, params.SessionID, params.SessionTitle)
 	if err != nil {
-		return fantasy.ToolResponse{}, fmt.Errorf("create session: %w", err)
+		return nil, fmt.Errorf("create session: %w", err)
+	}
+
+	// Call session setup function if provided
+	if params.SessionSetup != nil {
+		params.SessionSetup(session.ID)
 	}
 
 	// Get model configuration
@@ -1966,15 +2313,18 @@ func (c *coordinator) runSubAgent(ctx context.Context, params subAgentParams) (f
 
 	providerCfg, ok := c.cfg.Config().Providers.Get(model.ModelCfg.Provider)
 	if !ok {
-		return fantasy.ToolResponse{}, errModelProviderNotConfigured
+		return nil, errModelProviderNotConfigured
 	}
 
-	// Run the agent
-	run := func() (*fantasy.AgentResult, error) {
-		return params.Agent.Run(ctx, SessionAgentCall{
-			SessionID:        session.ID,
-			Prompt:           params.Prompt,
-			PermissionPolicy: permission.RequestPolicyFromContext(ctx),
+	return &subAgentTurn{
+		sessionID: session.ID,
+		provider:  model.ModelCfg.Provider,
+		call: SessionAgentCall{
+			// Inherit the parent turn's UI width hint: the sub-agent's
+			// PrepareStep stamps call.ContentWidth over the tool-call
+			// context unconditionally, so leaving this zero would clobber
+			// the value the parent already carries.
+			ContentWidth:     tools.GetContentWidthFromContext(ctx),
 			MaxOutputTokens:  maxTokens,
 			ProviderOptions:  getProviderOptions(model, providerCfg),
 			Temperature:      model.ModelCfg.Temperature,
@@ -1984,37 +2334,229 @@ func (c *coordinator) runSubAgent(ctx context.Context, params subAgentParams) (f
 			PresencePenalty:  model.ModelCfg.PresencePenalty,
 			NonInteractive:   true,
 			OnAuthRefresh:    c.makeAuthRefreshCallback(providerCfg),
-		})
+		},
+	}, nil
+}
+
+// runSubAgent runs a sub-agent in-process and handles session management
+// and cost accumulation. It creates a sub-session, runs the agent with the
+// given prompt, and propagates the cost to the parent session.
+//
+// This is the transitional direct path (#392): the agent-tool entry point
+// still runs here; every entry point that has switched serves its turn on
+// the A2A host instead (runSubAgentOverA2A), and this path is deleted
+// once the last one moves.
+func (c *coordinator) runSubAgent(ctx context.Context, params subAgentParams) (fantasy.ToolResponse, error) {
+	turn, err := c.prepareSubAgent(ctx, params)
+	if err != nil {
+		return fantasy.ToolResponse{}, err
 	}
-	result, err := run()
+	call := turn.call
+	call.SessionID = turn.sessionID
+	call.Prompt = params.Prompt
+	result, err := params.Agent.Run(ctx, call)
+	return c.finishSubAgent(ctx, turn, params.SessionID, subAgentOutput(result), err)
+}
+
+// finishSubAgent maps a finished sub-agent turn onto the tool response
+// its tool call expects (#392): a provider failure becomes an error
+// response carrying the reason, the child session's cost is propagated
+// to the parent on a best-effort basis, and empty output is its own
+// error response. Shared by every execution path, so the visible
+// contract cannot drift between them.
+func (c *coordinator) finishSubAgent(ctx context.Context, turn *subAgentTurn, parentSessionID, output string, runErr error) (fantasy.ToolResponse, error) {
 	// Notify only if still unauthorized after retry. AWS SSO is handled
 	// transparently inside OnAuthRefresh, so it needs no post-run notice.
-	if err != nil && isUnauthorized(err) && c.notify != nil && model.ModelCfg.Provider == hyper.Name {
+	if runErr != nil && isUnauthorized(runErr) && c.notify != nil && turn.provider == hyper.Name {
 		c.notify.Publish(pubsub.CreatedEvent, notify.Notification{
 			Type:       notify.TypeReAuthenticate,
-			ProviderID: model.ModelCfg.Provider,
+			ProviderID: turn.provider,
 		})
 	}
-	if err != nil {
-		return fantasy.NewTextErrorResponse(fmt.Sprintf("Failed to generate response: %s", err)), nil
+	if runErr != nil {
+		return fantasy.NewTextErrorResponse(fmt.Sprintf("Failed to generate response: %s", runErr)), nil
 	}
 
 	// Update parent session cost on a best-effort basis. A failure here must
 	// not discard the sub-agent output that was already produced.
-	if err := c.updateParentSessionCost(ctx, session.ID, params.SessionID); err != nil {
+	if err := c.updateParentSessionCost(ctx, turn.sessionID, parentSessionID); err != nil {
 		slog.Warn(
 			"Failed to update parent session cost",
-			"child_session", session.ID,
-			"parent_session", params.SessionID,
+			"child_session", turn.sessionID,
+			"parent_session", parentSessionID,
 			"error", err,
 		)
 	}
 
-	output := subAgentOutput(result)
 	if output == "" {
 		return fantasy.NewTextErrorResponse("Sub-agent completed but produced no text output."), nil
 	}
 	return fantasy.NewTextResponse(output), nil
+}
+
+// runSubAgentOverA2A runs a sub-agent turn through the A2A runtime
+// (#392): the agent is served on the process host for the turn's
+// lifetime — one card, one context (the sub-agent's task session, per
+// #350), one task — and the coordinator drives it with the A2A client,
+// consuming the stream to its terminal state. There is no direct-run
+// fallback: a coordinator with no host fails the turn. Transcripts stay
+// in the session store; only execution moves to the runtime.
+func (c *coordinator) runSubAgentOverA2A(ctx context.Context, params subAgentParams) (fantasy.ToolResponse, error) {
+	turn, err := c.prepareSubAgent(ctx, params)
+	if err != nil {
+		return fantasy.ToolResponse{}, err
+	}
+
+	host := c.a2aHost()
+	if host == nil {
+		return c.finishSubAgent(ctx, turn, params.SessionID, "", errors.New("sub-agent unavailable: no A2A host is wired"))
+	}
+
+	// Serve the turn: the agent answers at its own route for exactly the
+	// turn's lifetime, its context bound to the task session. Diff, todos
+	// and usage stay unset — a sub-agent turn produces text, not a
+	// workspace artifact, and carries no workspace toolchain.
+	endpoint, card, stop, err := host.StartDispatchServer(ctx, DispatchServerParams{
+		DispatchID:  subAgentRouteID(turn.sessionID),
+		SessionID:   turn.sessionID,
+		Runner:      params.Agent,
+		Name:        params.AgentName,
+		Description: params.AgentDescription,
+		Call:        turn.call,
+	})
+	if err != nil {
+		return c.finishSubAgent(ctx, turn, params.SessionID, "", fmt.Errorf("serve sub-agent: %w", err))
+	}
+	defer stop()
+
+	if TraceparentFromContext(ctx) == "" {
+		if tp, terr := NewTraceparent(); terr == nil {
+			ctx = WithTraceparent(ctx, tp)
+		}
+	}
+	traceID := TraceIDFromTraceparent(TraceparentFromContext(ctx))
+	slog.Debug("Sub-agent A2A turn starting", "session_id", turn.sessionID, "parent_session_id", params.SessionID, "context_id", turn.sessionID, "trace_id", traceID)
+
+	// The context is the task session (#350): the served executor resolves
+	// it to this turn's runner and session, and each turn is a fresh task.
+	var taskID string
+	outcome, err := host.StreamDispatch(ctx, DispatchTransportParams{
+		Endpoint:  endpoint,
+		Card:      card,
+		Prompt:    params.Prompt,
+		ContextID: turn.sessionID,
+		OnTask: func(id string) {
+			taskID = id
+			slog.Debug("Sub-agent A2A task started", "session_id", turn.sessionID, "task_id", id, "trace_id", traceID)
+		},
+	})
+	if err != nil {
+		outcome = c.recoverSubAgentOutcome(ctx, host, params, turn.sessionID, endpoint, card, taskID, err)
+	}
+	output, runErr := subAgentOutcomeFromTransport(outcome)
+	return c.finishSubAgent(ctx, turn, params.SessionID, output, runErr)
+}
+
+// recoverSubAgentOutcome ends a sub-agent turn whose stream broke before
+// a terminal state (#392). The served run is orphaned — the executor
+// runs its turn on a detached context — so the parent's cancel must
+// reach it through tasks/cancel (#348's protocol path), never by going
+// out of scope. The canceled-or-failed task is then read back so the
+// caller maps the run's real terminal state; if even that fails, the
+// stream error stands as a failure.
+func (c *coordinator) recoverSubAgentOutcome(ctx context.Context, host DispatchHost, params subAgentParams, runSessionID string, endpoint string, card any, taskID string, streamErr error) DispatchTransportOutcome {
+	slog.Warn("Sub-agent A2A stream failed; recovering the served run", "session_id", runSessionID, "parent_session_id", params.SessionID, "task_id", taskID, "error", streamErr)
+
+	if taskID != "" {
+		recoverCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		if canceler, ok := host.(DispatchCanceler); ok {
+			if cerr := canceler.CancelDispatch(recoverCtx, DispatchCancelParams{
+				Endpoint: endpoint,
+				Card:     card,
+				TaskID:   taskID,
+				Reason:   "parent turn canceled",
+			}); cerr != nil {
+				// The protocol cancel is best-effort here; the direct
+				// cancel covers a host that cannot deliver it. The run
+				// lives on its task session, so the cancel names that.
+				slog.Warn("Sub-agent tasks/cancel failed; canceling the runner directly", "session_id", runSessionID, "task_id", taskID, "error", cerr)
+				params.Agent.Cancel(runSessionID)
+			}
+			if st, gerr := waitSubAgentTerminal(recoverCtx, host, endpoint, card, taskID); gerr == nil {
+				return DispatchTransportOutcome{Status: st.Status, Text: st.Text}
+			}
+		} else {
+			// No canceler on the seam (a bare test fake): the direct
+			// cancel is the only way the run ends.
+			params.Agent.Cancel(runSessionID)
+		}
+	} else {
+		// The stream died before any task was named: the direct cancel
+		// is a no-op if the run never started, and reaches it if it did.
+		params.Agent.Cancel(runSessionID)
+	}
+	return DispatchTransportOutcome{Status: transportStatusFailed, Text: streamErr.Error()}
+}
+
+// waitSubAgentTerminal polls tasks/get until the task leaves working
+// state or the context ends (#392): tasks/cancel is asynchronous — the
+// SDK resolves it when the run actually ends — so the terminal state
+// lands a beat after the cancel is accepted.
+func waitSubAgentTerminal(ctx context.Context, host DispatchHost, endpoint string, card any, taskID string) (DispatchTaskStatus, error) {
+	getter, ok := host.(interface {
+		GetDispatchTask(ctx context.Context, params GetDispatchTaskParams) (DispatchTaskStatus, error)
+	})
+	if !ok {
+		return DispatchTaskStatus{}, errors.New("host does not expose tasks/get")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		st, err := getter.GetDispatchTask(ctx, GetDispatchTaskParams{Endpoint: endpoint, Card: card, TaskID: taskID})
+		if err == nil && st.Status != "" && st.Status != "working" {
+			return st, nil
+		}
+		if ctx.Err() != nil || time.Now().After(deadline) {
+			return st, errors.New("timed out waiting for the sub-agent task to end")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// subAgentOutcomeFromTransport maps a served sub-agent turn's terminal
+// outcome onto the (output, error) the shared finish expects (#392):
+// completed carries the terminal status message as the turn's output;
+// every other terminal state is a run error whose text is the served
+// side's reason.
+func subAgentOutcomeFromTransport(outcome DispatchTransportOutcome) (string, error) {
+	switch outcome.Status {
+	case transportStatusCompleted:
+		return outcome.Text, nil
+	case transportStatusCanceled:
+		if outcome.Text == "" {
+			return "", errors.New("sub-agent run was canceled")
+		}
+		return "", fmt.Errorf("sub-agent run was canceled: %s", outcome.Text)
+	case transportStatusFailed:
+		if outcome.Text == "" {
+			return "", errors.New("sub-agent run failed")
+		}
+		return "", errors.New(outcome.Text)
+	case "":
+		return "", errors.New("sub-agent run ended without a terminal state")
+	default:
+		if outcome.Text == "" {
+			return "", fmt.Errorf("sub-agent run ended with status %q", outcome.Status)
+		}
+		return "", fmt.Errorf("%s: %s", outcome.Status, outcome.Text)
+	}
+}
+
+// subAgentRouteID is the route a sub-agent turn is served under
+// (#392): unique per turn's task session, namespaced away from dispatch
+// entry ids.
+func subAgentRouteID(sessionID string) string {
+	return "agent-" + sessionID
 }
 
 func subAgentOutput(result *fantasy.AgentResult) string {
@@ -2024,22 +2566,22 @@ func subAgentOutput(result *fantasy.AgentResult) string {
 	return result.Response.Content.Text()
 }
 
-// updateParentSessionCost accumulates the cost from a child session to its parent session.
+// updateParentSessionCost accumulates the cost from a child session to its
+// parent session. The parent row is read only to confirm it exists. The
+// cost is applied with a single atomic increment, so the parent's own
+// full-row saves during its turn cannot race the write (#389).
 func (c *coordinator) updateParentSessionCost(ctx context.Context, childSessionID, parentSessionID string) error {
 	childSession, err := c.sessions.Get(ctx, childSessionID)
 	if err != nil {
 		return fmt.Errorf("get child session: %w", err)
 	}
 
-	parentSession, err := c.sessions.Get(ctx, parentSessionID)
-	if err != nil {
+	if _, err := c.sessions.Get(ctx, parentSessionID); err != nil {
 		return fmt.Errorf("get parent session: %w", err)
 	}
 
-	parentSession.Cost += childSession.Cost
-
-	if _, err := c.sessions.Save(ctx, parentSession); err != nil {
-		return fmt.Errorf("save parent session: %w", err)
+	if err := c.sessions.AddCost(ctx, parentSessionID, childSession.Cost); err != nil {
+		return fmt.Errorf("add cost to parent session: %w", err)
 	}
 
 	return nil
@@ -2067,6 +2609,7 @@ func discoverSkills(cfg *config.ConfigStore) (allSkills, activeSkills []*skills.
 	allSkills, activeSkills, states := skills.DiscoverFromConfig(skills.DiscoveryConfig{
 		SkillsPaths:    paths,
 		DisabledSkills: disabled,
+		WorkingDir:     cfg.WorkingDir(),
 		Resolver:       resolver,
 	})
 	logDiscoveryStats(states, paths, allSkills, activeSkills, disabled)
@@ -2163,3 +2706,32 @@ func logDiscoveryStats(
 		"active_names", activeNames,
 	)
 }
+
+func (c *coordinator) observesMemory(isSubAgent bool) bool {
+	if isSubAgent || c.ledger == nil {
+		return false
+	}
+	co := c.cfg.Config().Options.Compaction
+	return co == nil || co.ObserveMemory == nil || *co.ObserveMemory
+}
+
+func (c *coordinator) compactionHooks(isSubAgent bool) func(string) CompactionHookRunner {
+	if isSubAgent {
+		return nil
+	}
+	return func(event string) CompactionHookRunner {
+		configured := c.cfg.Config().Hooks[event]
+		if len(configured) == 0 {
+			return nil
+		}
+		return hooks.NewRunner(configured, c.cfg.WorkingDir(), c.cfg.WorkingDir())
+	}
+}
+
+// observesMemory reports whether this agent should distill its turns into the
+// memory ledger. Sub-agents never do: they are the compaction's own machinery
+// and a memory of a memory is the erosion the ledger exists to prevent. The
+// ledger service being absent also disables it, so a build without one keeps
+// working unchanged. Recording is on unless explicitly disabled: the ledger
+// only pays for itself if it has been accumulating since the turns a later
+// compaction will replace.

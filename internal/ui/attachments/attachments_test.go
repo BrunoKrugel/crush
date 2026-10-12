@@ -1,8 +1,6 @@
 package attachments
 
 import (
-	"fmt"
-	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -76,8 +74,8 @@ func TestRender_ShowRemoveFalseKeepsGapBetweenChips(t *testing.T) {
 		{FileName: "alpha.txt"},
 		{FileName: "beta.txt"},
 	}
-	bare := lipgloss.Width(r.styles.Text.String()+r.styles.Normal.Render("alpha.txt")) +
-		lipgloss.Width(r.styles.Text.String()+r.styles.Normal.Render("beta.txt"))
+	bare := lipgloss.Width(r.textStyle.String()+r.normalStyle.Render("alpha.txt")) +
+		lipgloss.Width(r.textStyle.String()+r.normalStyle.Render("beta.txt"))
 
 	got := lipgloss.Width(r.Render(atts, false, false, 200))
 	require.Equal(t, bare+2, got,
@@ -385,229 +383,230 @@ func TestHandleClick_EmptyListIgnored(t *testing.T) {
 	require.False(t, handled)
 }
 
-// overflowFixture is a set of attachments wide enough to overflow any
-// reasonable editor, so tests can exercise the hint path.
-func overflowFixture() []message.Attachment {
-	atts := make([]message.Attachment, 8)
-	for i := range atts {
-		atts[i] = message.Attachment{FileName: fmt.Sprintf("file-%d.txt", i)}
-	}
-	return atts
-}
-
-// chipWidth is the rendered width of a lone editor chip for the given
-// filename. Below this a row cannot fit even one chip, so it is the
-// natural floor for any "the row fits" assertion.
-func chipWidth(r *Renderer, name string) int {
-	return lipgloss.Width(r.Render([]message.Attachment{{FileName: name}}, false, true, 1000))
-}
-
-// hintCount returns the number the "N more…" hint claims, or 0 when the
-// row carries no hint. The trailing trim matters: a hint padded out to a
-// fixed width would otherwise read as no hint at all.
-func hintCount(out string) int {
-	plain := strings.TrimRight(ansi.Strip(out), " ")
-	if !strings.HasSuffix(plain, "more…") {
-		return 0
-	}
-	fields := strings.Fields(plain)
-	n, err := strconv.Atoi(fields[len(fields)-2])
-	if err != nil {
-		return 0
-	}
-	return n
-}
-
-func TestRender_SingleVisibleChipHasNoMoreHint(t *testing.T) {
+// TestRemoveByFilePath pins the semantics the atomic-backspace caller in
+// internal/ui/model depends on: exactly one attachment goes, chosen by path,
+// and anything else on the toolbar is left alone.
+func TestRemoveByFilePath(t *testing.T) {
 	t.Parallel()
 
-	// Regression: the row used to budget every chip at the maximum filename
-	// width, so on a narrow editor a single short-named attachment was
-	// counted as overflowing its own row. The chip rendered fine and then
-	// "1 more…" was tacked on beside it, promising a file that was already
-	// on screen. Widths are now measured as chips are laid out.
-	r := newTestRenderer()
-	atts := []message.Attachment{{FileName: "paste_1.png"}}
-	for width := range 121 {
-		require.Zero(t, hintCount(r.Render(atts, false, true, width)),
-			"a lone attachment must never claim there are others (width %d)", width)
-	}
-}
-
-func TestRender_HintOnlyAppearsWhenSomethingIsHidden(t *testing.T) {
-	t.Parallel()
-
-	// The stronger form of the regression above: for any number of
-	// attachments at any width, a hint may appear only when chips were
-	// actually left out, and it must name exactly how many. A single-
-	// attachment test cannot catch a hint that is off by one for n >= 2.
-	r := newTestRenderer()
-	all := overflowFixture()
-	for n := 1; n <= len(all); n++ {
-		for width := chipWidth(r, "file-0.txt"); width < 161; width++ {
-			out := r.Render(all[:n], false, true, width)
-			drawn := strings.Count(out, styles.TextIcon)
-			require.Positive(t, drawn, "some chip must always be drawn (n=%d width=%d)", n, width)
-			if got := hintCount(out); got != 0 {
-				require.Equal(t, n-drawn, got,
-					"hint must name exactly the chips left out (n=%d width=%d drew=%d)", n, width, drawn)
-			} else {
-				require.True(t, drawn == n || drawn == 1,
-					"a row may go without the hint only when everything fit, or when "+
-						"a single chip crowded the hint out (n=%d width=%d drew=%d)", n, width, drawn)
-			}
+	newList := func(paths ...string) *Attachments {
+		a := New(nil, Keymap{})
+		for _, p := range paths {
+			a.list = append(a.list, message.Attachment{FilePath: p, FileName: p})
 		}
+		return a
 	}
-}
-
-func TestRender_DrawnChipsAreTheLeadingRun(t *testing.T) {
-	t.Parallel()
-
-	// Overflow drops chips off the end, never the middle. Click handling
-	// indexes straight into the attachment slice with the chip's position,
-	// so a gap would remove the wrong file.
-	r := newTestRenderer()
-	atts := overflowFixture()
-	for width := chipWidth(r, "file-0.txt"); width < 161; width++ {
-		out := ansi.Strip(r.Render(atts, false, true, width))
-		drawn := strings.Count(out, styles.TextIcon)
-		for i := range drawn {
-			name := fmt.Sprintf("file-%d.txt", i)
-			if drawn == 1 && width >= minFilename {
-				require.True(t, showsName(out, name),
-					"the only drawn chip must be chip %d (width %d)", i, width)
-				continue
-			}
-			require.Contains(t, out, name,
-				"chip %d must be present when %d chips were drawn (width %d)", i, drawn, width)
+	paths := func(a *Attachments) []string {
+		var out []string
+		for _, at := range a.List() {
+			out = append(out, at.FilePath)
 		}
-		for i := drawn; i < len(atts); i++ {
-			require.NotContains(t, out, fmt.Sprintf("file-%d.txt", i),
-				"chip %d must be absent when only %d chips were drawn (width %d)", i, drawn, width)
-		}
+		return out
 	}
+
+	t.Run("removes the matching attachment", func(t *testing.T) {
+		t.Parallel()
+		a := newList("a.go", "b.go", "c.go")
+		a.RemoveByFilePath("b.go")
+		require.Equal(t, []string{"a.go", "c.go"}, paths(a))
+	})
+
+	t.Run("no match leaves the list untouched", func(t *testing.T) {
+		t.Parallel()
+		a := newList("a.go", "b.go")
+		a.RemoveByFilePath("nope.go")
+		require.Equal(t, []string{"a.go", "b.go"}, paths(a))
+	})
+
+	t.Run("removes only the first of duplicate paths", func(t *testing.T) {
+		t.Parallel()
+		// Duplicates should not arise from the completion path (fileCmd
+		// dedupes), but the method is exported: removing every match would
+		// silently drop an attachment the caller still expects to hold.
+		a := newList("dup.go", "dup.go")
+		a.RemoveByFilePath("dup.go")
+		require.Equal(t, []string{"dup.go"}, paths(a))
+	})
+
+	t.Run("empty path matches nothing on a normal list", func(t *testing.T) {
+		t.Parallel()
+		a := newList("a.go")
+		a.RemoveByFilePath("")
+		require.Equal(t, []string{"a.go"}, paths(a))
+	})
+
+	t.Run("empty list is a no-op", func(t *testing.T) {
+		t.Parallel()
+		a := newList()
+		a.RemoveByFilePath("a.go")
+		require.Empty(t, a.List())
+	})
 }
 
-// showsName reports whether the stripped row shows name, either whole or
-// trimmed down to a leading run followed by an ellipsis.
-func showsName(out, name string) bool {
-	if strings.Contains(out, name) {
-		return true
-	}
-	for n := len(name) - 1; n > 0; n-- {
-		if strings.Contains(out, name[:n]+"…") {
-			return true
-		}
-	}
-	return false
-}
-
-func TestRender_MoreHintUsesTheThemeStyle(t *testing.T) {
-	t.Parallel()
-
-	// The hint used to be rendered with a bare lipgloss.Style, so it came
-	// out in the terminal's default foreground next to the themed chips.
-	// The expectation is built from the theme rather than from the
-	// renderer, so this cannot pass by agreeing with itself.
-	r := newTestRenderer()
-	atts := overflowFixture()
-	out := r.Render(atts, false, true, 60)
-
-	n := hintCount(out)
-	require.Positive(t, n, "width 60 must overflow for this to mean anything")
-	want := styles.CharmtonePantera().Attachments.More.Render(fmt.Sprintf("%d more…", n))
-	require.Contains(t, want, "\x1b[", "the theme's hint style must actually set a color")
-	require.Contains(t, out, want, "the row must render the hint through the theme style")
-}
-
-func TestRender_RowNeverSpills(t *testing.T) {
+// TestChipSpecForMCPPrompt pins the prompt chip's label rule: the full prompt
+// name, never truncated, plus how many arguments it carries. The name is what
+// distinguishes two prompts from the same server, so truncating it the way
+// filenames are truncated would make them ambiguous.
+func TestChipSpecForMCPPrompt(t *testing.T) {
 	t.Parallel()
 
 	r := newTestRenderer()
-	atts := overflowFixture()
-	for width := range 161 {
-		require.LessOrEqual(t, lipgloss.Width(r.Render(atts, false, true, width)), width,
-			"the attachment row must not spill past the editor (width %d)", width)
-	}
-}
 
-func TestRender_OverflowHoldsInEveryMode(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		name                 string
-		deleting, showRemove bool
-	}{
-		{"editor", false, true},
-		{"delete mode", true, true},
-		{"posted message", false, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			r := newTestRenderer()
-			atts := overflowFixture()
-			out := r.Render(atts, tc.deleting, tc.showRemove, 60)
-			drawn := strings.Count(out, styles.TextIcon)
-			require.Less(t, drawn, len(atts), "width 60 must overflow for this to mean anything")
-			require.Equal(t, len(atts)-drawn, hintCount(out))
-			require.LessOrEqual(t, lipgloss.Width(out), 60)
+	t.Run("full name is kept past the filename budget", func(t *testing.T) {
+		t.Parallel()
+		spec := r.chipSpecFor(message.Attachment{
+			Kind:           message.AttachmentKindMCPPrompt,
+			FileName:       "/gitea:some-very-long-prompt-name",
+			PromptArgCount: 2,
 		})
+		require.Equal(t, "/gitea:some-very-long-prompt-name (2 args)", spec.label)
+		require.NotContains(t, spec.label, "…", "a prompt name must not be truncated")
+	})
+
+	t.Run("singular for one argument", func(t *testing.T) {
+		t.Parallel()
+		spec := r.chipSpecFor(message.Attachment{
+			Kind:           message.AttachmentKindMCPPrompt,
+			FileName:       "/cairn:run",
+			PromptArgCount: 1,
+		})
+		require.Equal(t, "/cairn:run (1 arg)", spec.label)
+	})
+
+	t.Run("no suffix when the prompt takes no arguments", func(t *testing.T) {
+		t.Parallel()
+		spec := r.chipSpecFor(message.Attachment{
+			Kind:     message.AttachmentKindMCPPrompt,
+			FileName: "/cairn:run",
+		})
+		require.Equal(t, "/cairn:run", spec.label)
+	})
+
+	t.Run("a path-shaped argument value is not eaten by filepath.Base", func(t *testing.T) {
+		t.Parallel()
+		// File chips call filepath.Base, which would cut "gitea:review" out
+		// of a label ending in a slash-bearing value. Prompt labels must not
+		// go through it.
+		spec := r.chipSpecFor(message.Attachment{
+			Kind:           message.AttachmentKindMCPPrompt,
+			FileName:       "/gitea:review",
+			PromptArgCount: 1,
+		})
+		require.Equal(t, "/gitea:review (1 arg)", spec.label)
+	})
+}
+
+// TestChipSpecForFileKeepsTruncation pins that the file rule is unchanged:
+// basename only, truncated to the shared budget.
+func TestChipSpecForFileKeepsTruncation(t *testing.T) {
+	t.Parallel()
+
+	r := newTestRenderer()
+	spec := r.chipSpecFor(message.Attachment{
+		FileName: "/some/deep/path/a-very-long-file-name.go",
+		MimeType: "text/plain",
+	})
+	require.Contains(t, spec.label, "…")
+	require.NotContains(t, spec.label, "/", "file chips show the basename only")
+}
+
+// TestRenderVariableWidthChipsDoNotOverflow pins the layout change. The fit
+// cutoff used to divide the available width by one nominal chip width, which
+// silently assumed every chip was the same size; a prompt chip is not.
+func TestRenderVariableWidthChipsDoNotOverflow(t *testing.T) {
+	t.Parallel()
+
+	atts := []message.Attachment{
+		{Kind: message.AttachmentKindMCPPrompt, FileName: "/gitea:a-long-prompt-name", PromptArgCount: 3},
+		{Kind: message.AttachmentKindMCPPrompt, FileName: "/cairn:another-long-one", PromptArgCount: 2},
+		{FileName: "main.go", MimeType: "text/plain"},
+		{FileName: "other.go", MimeType: "text/plain"},
+	}
+
+	t.Run("row never exceeds the width it was given", func(t *testing.T) {
+		t.Parallel()
+		// Sweep widths, including ones too narrow for even the first chip.
+		for _, width := range []int{10, 20, 40, 60, 80, 120, 200} {
+			out := newTestRenderer().Render(atts, false, true, width)
+			require.LessOrEqual(t, lipgloss.Width(out), width,
+				"width %d: the chip row must not render wider than its space", width)
+		}
+	})
+
+	t.Run("chips that do not fit are reported, not dropped", func(t *testing.T) {
+		t.Parallel()
+		// Wide enough for some but not all of them.
+		out := newTestRenderer().Render(atts, false, true, 80)
+		require.Contains(t, ansi.Strip(out), "more…")
+	})
+
+	t.Run("everything fits when there is room", func(t *testing.T) {
+		t.Parallel()
+		out := newTestRenderer().Render(atts, false, true, 300)
+		stripped := ansi.Strip(out)
+		require.NotContains(t, stripped, "more…")
+		require.Contains(t, stripped, "/gitea:a-long-prompt-name (3 args)",
+			"a prompt name must survive intact when there is room")
+	})
+}
+
+// TestRenderNarrowRowKeepsRemoveButtonAndBounds pins the two failures the
+// untruncated prompt label introduced.
+//
+// Prompt labels are deliberately not capped at maxFilename, so a long one
+// could overrun the row: the trailing ✕ was truncated away by the row-level
+// backstop while r.bounds still claimed a hit region there, and clicking the
+// resulting blank space silently deleted an attachment. The overflow marker
+// disappeared the same way, so extra attachments went unreported.
+func TestRenderNarrowRowKeepsRemoveButtonAndBounds(t *testing.T) {
+	t.Parallel()
+
+	atts := []message.Attachment{
+		{
+			Kind:           message.AttachmentKindMCPPrompt,
+			FileName:       "/stumpcloud-ansible:deploy_production_playbook",
+			PromptArgCount: 3,
+		},
+		{FileName: "main.go", MimeType: "text/plain"},
+	}
+
+	for _, width := range []int{20, 27, 28, 30, 40, 60} {
+		r := newTestRenderer()
+		out := r.Render(atts, false, true, width)
+		stripped := ansi.Strip(out)
+
+		require.LessOrEqual(t, lipgloss.Width(out), width,
+			"width %d: row must not overflow", width)
+
+		// Every recorded hit region must sit inside what was actually drawn,
+		// or a click lands on a button that is not there.
+		for _, b := range r.bounds {
+			require.LessOrEqual(t, b.removeEnd, lipgloss.Width(out),
+				"width %d: hit region %v extends past the drawn row %q",
+				width, b, stripped)
+		}
 	}
 }
 
-func TestHitTestRemove_OverflowBoundsOnlyCoverDrawnChips(t *testing.T) {
+// TestHitTestRemoveDoesNotMatchTruncatedButton is the click-level form of the
+// same bug: no hit region may survive for a button the user cannot see.
+func TestHitTestRemoveDoesNotMatchTruncatedButton(t *testing.T) {
 	t.Parallel()
 
-	r := newTestRenderer()
-	atts := overflowFixture()
-	out := r.Render(atts, false, true, 60)
-	drawn := strings.Count(out, styles.TextIcon)
-	require.Less(t, drawn, len(atts), "width 60 must overflow for this to mean anything")
-	require.Len(t, r.bounds, drawn, "only drawn chips may carry a clickable remove button")
+	atts := []message.Attachment{{
+		Kind:           message.AttachmentKindMCPPrompt,
+		FileName:       "/gitea:review",
+		PromptArgCount: 1,
+	}}
 
-	for x := range lipgloss.Width(out) {
-		require.Less(t, r.HitTestRemove(atts, x), drawn,
-			"column %d hit-tests to a chip that was never drawn", x)
+	for _, width := range []int{27, 28} {
+		r := newTestRenderer()
+		out := r.Render(atts, false, true, width)
+		drawn := lipgloss.Width(out)
+		for x := drawn; x < drawn+4; x++ {
+			require.Equal(t, -1, r.HitTestRemove(atts, x),
+				"width %d: x=%d is past the drawn row but hit-tests as a remove button",
+				width, x)
+		}
 	}
-}
-
-func TestRender_LoneChipTrimsItsNameToKeepTheHint(t *testing.T) {
-	t.Parallel()
-
-	r := newTestRenderer()
-	atts := overflowFixture()
-	full := chipWidth(r, "file-0.txt")
-
-	hint := lipgloss.Width(styles.CharmtonePantera().Attachments.More.
-		Render(fmt.Sprintf("%d more…", len(atts)-1)))
-	width := full + hint - 1
-
-	out := r.Render(atts, false, true, width)
-	require.Equal(t, 1, strings.Count(out, styles.TextIcon),
-		"only one chip should fit at width %d", width)
-	require.Equal(t, len(atts)-1, hintCount(out),
-		"the hint must survive and name every file left off (width %d)", width)
-	require.NotContains(t, ansi.Strip(out), "file-0.txt",
-		"the name must have been trimmed to make that room")
-	require.LessOrEqual(t, lipgloss.Width(out), width,
-		"the trimmed row must still fit the width it was given")
-}
-
-func TestRender_NonPositiveWidthRendersNothing(t *testing.T) {
-	t.Parallel()
-
-	r := newTestRenderer()
-	atts := []message.Attachment{{FileName: "a.txt"}, {FileName: "b.txt"}}
-	for _, width := range []int{-5, 0} {
-		require.Empty(t, r.Render(atts, false, true, width))
-		require.Empty(t, r.bounds)
-	}
-}
-
-func TestRender_NoAttachmentsRendersNothing(t *testing.T) {
-	t.Parallel()
-
-	r := newTestRenderer()
-	require.Empty(t, r.Render(nil, false, true, 80))
-	require.Empty(t, r.bounds)
 }

@@ -6,12 +6,12 @@ import (
 
 	"charm.land/bubbles/v2/filepicker"
 	"charm.land/bubbles/v2/help"
-	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2/ansi"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/crush/internal/ui/diffview"
+	"github.com/charmbracelet/crush/internal/ui/textarea"
 	uv "github.com/charmbracelet/ultraviolet"
 )
 
@@ -209,7 +209,6 @@ func quickStyle(o quickStyleOpts) Styles {
 			CursorLineNumber: base.Foreground(o.fgMostSubtle),
 			Placeholder:      base.Foreground(o.fgMostSubtle),
 			Prompt:           base.Foreground(o.accent),
-			Selection:        base.Foreground(o.onPrimary).Background(o.secondary),
 		},
 		Blurred: textarea.StyleState{
 			Base:             base,
@@ -219,7 +218,6 @@ func quickStyle(o quickStyleOpts) Styles {
 			CursorLineNumber: base.Foreground(o.fgMoreSubtle),
 			Placeholder:      base.Foreground(o.fgMostSubtle),
 			Prompt:           base.Foreground(o.fgMoreSubtle),
-			Selection:        base.Foreground(o.onPrimary).Background(o.secondary),
 		},
 		Cursor: textarea.CursorStyle{
 			Color: o.secondary,
@@ -888,6 +886,12 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Editor.QuestionCheckOn = lipgloss.NewStyle().Foreground(o.secondary).SetString(RadioOn)
 	s.Editor.QuestionCheckOff = lipgloss.NewStyle().Foreground(o.fgSubtle).SetString(RadioOff)
 
+	// Inline prompt tokens: @file mentions use the primary accent, /skill
+	// references the secondary, both bolded so they stand apart from prompt
+	// prose.
+	s.Editor.TokenFile = lipgloss.NewStyle().Foreground(o.primary).Bold(true)
+	s.Editor.TokenSkill = lipgloss.NewStyle().Foreground(o.secondary).Bold(true)
+
 	s.Radio.On = lipgloss.NewStyle().Foreground(o.fgSubtle).SetString(RadioOn)
 	s.Radio.Off = lipgloss.NewStyle().Foreground(o.fgSubtle).SetString(RadioOff)
 	s.Radio.Label = lipgloss.NewStyle().Foreground(o.fgSubtle)
@@ -978,6 +982,7 @@ func quickStyle(o quickStyleOpts) Styles {
 	// Sidebar
 	s.Sidebar.SessionTitle = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
 	s.Sidebar.WorkingDir = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
+	s.Sidebar.AgentInspect = lipgloss.NewStyle().Foreground(o.secondary).Bold(true)
 
 	// ModelInfo
 	s.ModelInfo.Icon = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
@@ -1054,6 +1059,22 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Messages.AssistantInfoDuration = subtle
 	s.Messages.SubduedHypercreditIcon = subtle
 	s.Messages.AssistantCanceled = lipgloss.NewStyle().Foreground(o.fgSubtle).Italic(true)
+	s.Messages.AssistantCopyIcon = muted
+
+	// Channel message metadata styles.
+	s.Messages.ChannelInfoIcon = subtle
+	s.Messages.ChannelInfoSender = muted
+	s.Messages.ChannelInfoProvider = subtle
+	s.Messages.ChannelInfoTimestamp = subtle
+
+	// Plan section styles. The plan card is a bordered box with no background
+	// fill: the terminal background shows through, and only intentional chips
+	// (inline code, H1 badge) keep a background of their own.
+	s.Messages.PlanBox = lipgloss.NewStyle().
+		Foreground(o.fgBase).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(o.plan).
+		Padding(1, 2)
 
 	// Plan section styles. The plan card is a bordered box with no background
 	// fill: the terminal background shows through, and only intentional chips
@@ -1081,6 +1102,14 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Messages.ThinkingTruncationHint = muted
 	s.Messages.ThinkingFooterTitle = muted
 	s.Messages.ThinkingFooterDuration = subtle
+
+	// A2UI surface container. a2tea renders its chrome with terminal
+	// defaults, so a subtle themed frame makes surfaces read as part of
+	// the chat (like the thinking box) rather than plain output.
+	s.Messages.A2UISurface = base.
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(o.bgMostVisible).
+		Padding(0, 1)
 
 	// Text selection.
 	s.TextSelection = lipgloss.NewStyle().Foreground(o.onPrimary).Background(o.primary)
@@ -1204,12 +1233,14 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Completions.Normal = base.Background(o.bgLessVisible).Foreground(o.fgBase)
 	s.Completions.Focused = base.Background(o.primary).Foreground(o.onPrimary)
 	s.Completions.Match = base.Underline(true)
+	s.Completions.Agent = base.Foreground(o.secondary).Bold(true)
 
 	// Attachments styles
 	attachmentIconStyle := base.Foreground(o.bgLessVisible).Background(o.success).Padding(0, 1)
 	s.Attachments.Image = attachmentIconStyle.SetString(ImageIcon)
 	s.Attachments.Text = attachmentIconStyle.SetString(TextIcon)
 	s.Attachments.Skill = attachmentIconStyle.SetString(SkillIcon)
+	s.Attachments.Prompt = attachmentIconStyle.SetString(PromptIcon)
 	s.Attachments.Normal = base.Padding(0, 1).Background(o.fgMoreSubtle).Foreground(o.fgBase)
 	// Remove and Deleting share the same slot on the right side of a chip
 	// and must keep the same geometry so toggling delete-mode doesn't

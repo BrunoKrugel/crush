@@ -65,6 +65,15 @@ type RuntimeOverrides struct {
 	// pushes channel events when it also appears here. Entries may be written
 	// as "server:<name>" or as a bare "<name>".
 	EnabledChannels []string
+	// AllowAllCommands, when true, removes every bash-tool command block for
+	// this session (via the --allow-all-commands flag or CRUSH_ALLOW_ALL_COMMANDS).
+	AllowAllCommands bool
+	// AllowedCommands lists commands to drop from the bash tool's default
+	// banned list for this session (via the --allow-commands flag or
+	// CRUSH_ALLOW_COMMANDS). It is merged with options.allowed_commands from
+	// the config file. Held here rather than in Options so it survives config
+	// reloads.
+	AllowedCommands []string
 	// Models records the model choices made in this instance, whether
 	// persisted or not. They are reapplied after a config reload so that a
 	// selection made here always outranks whatever the shared config file
@@ -90,16 +99,39 @@ type RuntimeOverrides struct {
 // as immutable: a mutator clones, mutates the clone, and swaps it in under
 // writeMu rather than mutating the live Config in place.
 type ConfigStore struct {
-	config             *Config
-	workingDir         string
-	resolver           VariableResolver
-	globalDataPath     string   // ~/.local/share/crush/crush.json
-	workspacePath      string   // .crush/crush.json
-	loadedPaths        []string // config files that were successfully loaded
-	knownProviders     []catwalk.Provider
+	config         *Config
+	workingDir     string
+	resolver       VariableResolver
+	globalDataPath string   // ~/.local/share/crush/crush.json
+	workspacePath  string   // .crush/crush.json
+	loadedPaths    []string // config files that were successfully loaded
+	knownProviders []catwalk.Provider
+	// loadDiagnostics is what SetupAgents reported for the published
+	// config (#560), plus what the command recorded from inputs the
+	// load cannot see, like the flag and env allow-commands values
+	// (#578): the problems that did not fail the load. Load collects
+	// them before any logger exists; the command replays them once it
+	// does. A reload replaces the set with the new config's, and a
+	// rolled-back reload keeps the old. Guarded by writeMu.
+	loadDiagnostics    []LoadDiagnostic
 	overrides          RuntimeOverrides
 	trackedConfigPaths []string                // unique, normalized config file paths
 	snapshots          map[string]fileSnapshot // path -> snapshot at last capture
+
+	// userConfiguredModels records, per custom provider, the models the
+	// user explicitly listed in config, captured by configureProviders
+	// before load-time discovery merges endpoint models into the live
+	// provider config. ReloadModelDiscovery seeds re-discovery from this
+	// set so endpoint-removed models get pruned while user-specified
+	// models survive. Guarded by writeMu.
+	userConfiguredModels map[string][]catwalk.Model
+
+	// failedDiscoveryProviders records custom providers dropped during
+	// configureProviders because model discovery failed (or found
+	// nothing) and they had no user-specified models to fall back on.
+	// ReloadModelDiscovery retries them and resurrects any that succeed.
+	// Guarded by writeMu.
+	failedDiscoveryProviders map[string]ProviderConfig
 
 	// configMu guards the config pointer field against concurrent
 	// readers (Config) and the writeMu-serialised swap (setConfig). It
@@ -122,6 +154,11 @@ type ConfigStore struct {
 	// real network calls. Production code leaves it nil, and exchange falls
 	// back to the real provider clients.
 	exchangeToken func(ctx context.Context, providerID, refreshToken string) (*oauth.Token, error)
+
+	// fetchOpenAIModels fetches the ChatGPT model catalog. A field for the
+	// same reason as exchangeToken: tests stub it to avoid network calls,
+	// production leaves it nil and refetchOpenAIModels calls the real one.
+	fetchOpenAIModels func(ctx context.Context, token *oauth.Token) ([]catwalk.Model, error)
 
 	// authSignalMu guards authSignals, which maps provider IDs to
 	// channels that WaitForTokenChange blocks on. SignalAuthComplete
@@ -156,6 +193,43 @@ func (s *ConfigStore) setConfig(cfg *Config) {
 // WorkingDir returns the current working directory.
 func (s *ConfigStore) WorkingDir() string {
 	return s.workingDir
+}
+
+// WithWorkingDir returns a new store that is s's configuration viewed
+// from another working directory: the published config, variable
+// resolver, runtime overrides, and config-file paths come from s, and
+// only workingDir differs. It reads no file and runs no shell config,
+// so a directory the caller does not trust cannot contribute
+// configuration: directory-scoped behavior (path-scoped tools, LSP
+// roots, project lookups) resolves against dir while every policy value
+// (permissions, command allow-lists, LSP servers, skills paths,
+// disabled skills, MCP) stays the parent's (#374).
+//
+// The returned store is a snapshot: a reload or runtime-override change
+// on either store is not visible to the other. It is for reading —
+// reloads and config-file writes have no meaning on it and must not be
+// called.
+func (s *ConfigStore) WithWorkingDir(dir string) *ConfigStore {
+	s.configMu.RLock()
+	config := s.config
+	s.configMu.RUnlock()
+	s.writeMu.RLock()
+	defer s.writeMu.RUnlock()
+	overrides := s.overrides
+	if overrides.Models != nil {
+		overrides.Models = maps.Clone(overrides.Models)
+	}
+	return &ConfigStore{
+		config:             config,
+		workingDir:         dir,
+		resolver:           s.resolver,
+		globalDataPath:     s.globalDataPath,
+		workspacePath:      s.workspacePath,
+		loadedPaths:        slices.Clone(s.loadedPaths),
+		knownProviders:     slices.Clone(s.knownProviders),
+		overrides:          overrides,
+		trackedConfigPaths: slices.Clone(s.trackedConfigPaths),
+	}
 }
 
 // Resolver returns the variable resolver.
@@ -233,19 +307,47 @@ func (s *ConfigStore) RefetchHyperProvider(ctx context.Context) error {
 		}
 		nc.Providers.Set(string(hyperProvider.ID), pc)
 	}
+	// Finish building the clone before publishing it: the store's
+	// contract forbids in-place mutation of the live snapshot, which is
+	// exactly what s.SetupAgents did after the setConfig below.
+	nc.SetupAgents()
 	s.setConfig(nc)
 
 	// Also update the memoized provider list so callers of
 	// config.Providers() (e.g. the models dialog) see fresh data.
 	UpdateProviderInList(hyperProvider)
 
-	s.SetupAgents()
 	return nil
 }
 
-// SetupAgents configures the coder and task agents on the config.
+// SetupAgents resolves the agents on the live config and records the
+// load diagnostics that raised (#560). Load calls it while holding
+// writeMu, which is what guards loadDiagnostics.
 func (s *ConfigStore) SetupAgents() {
-	s.Config().SetupAgents()
+	s.loadDiagnostics = s.Config().SetupAgents()
+}
+
+// LoadDiagnostics returns the diagnostics the last successful load or
+// reload raised (#560), plus the ones the command recorded (#578), in a
+// stable order. Empty when the load was clean and nothing was recorded.
+func (s *ConfigStore) LoadDiagnostics() []LoadDiagnostic {
+	s.writeMu.RLock()
+	defer s.writeMu.RUnlock()
+	return slices.Clone(s.loadDiagnostics)
+}
+
+// AddLoadDiagnostic records a diagnostic the command found from inputs
+// the load itself cannot see — the flag and env allow-commands values
+// (#578) — into the set LoadDiagnostics returns, keeping its stable
+// order. The replays that run once the logger exists (crush.log,
+// `crush run`'s stderr, the TUI startup notice) carry it like a
+// load-raised one; a later reload replaces the set with the new
+// config's.
+func (s *ConfigStore) AddLoadDiagnostic(d LoadDiagnostic) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	s.loadDiagnostics = append(s.loadDiagnostics, d)
+	sortLoadDiagnostics(s.loadDiagnostics)
 }
 
 // Overrides returns the runtime overrides for this store.
@@ -324,7 +426,7 @@ func (s *ConfigStore) atomicWrite(scope Scope, fn func(current []byte) ([]byte, 
 		return err
 	}
 
-	return atomicWriteFile(path, newData, 0o600)
+	return AtomicWriteFile(path, newData, 0o600)
 }
 
 // configPath returns the file path for the given scope.
@@ -1199,6 +1301,13 @@ func NewTestStore(cfg *Config, loadedPaths ...string) *ConfigStore {
 	}
 }
 
+// SetTestStoreWorkingDir sets the workingDir on a test ConfigStore so
+// that ReloadFromDisk can locate config files. This is needed because
+// workingDir is an unexported field.
+func SetTestStoreWorkingDir(s *ConfigStore, dir string) {
+	s.workingDir = dir
+}
+
 // ImportCopilot attempts to import a GitHub Copilot token from disk.
 func (s *ConfigStore) ImportCopilot() (*oauth.Token, bool) {
 	if s.HasConfigField(ScopeGlobal, "providers.copilot.api_key") || s.HasConfigField(ScopeGlobal, "providers.copilot.oauth") {
@@ -1417,6 +1526,17 @@ func (s *ConfigStore) reloadFromDiskLocked(ctx context.Context) error {
 		return fmt.Errorf("invalid hook configuration on reload: %w", err)
 	}
 
+	// Save current state for potential rollback BEFORE configureProviders,
+	// which may write to disk via RemoveConfigField (e.g. removing stale
+	// OAuth providers). Capturing after would snapshot a config that has
+	// already been mutated, and the rollback would restore corrupted state.
+	oldConfig := s.Config()
+	oldLoadedPaths := s.loadedPaths
+	oldResolver := s.resolver
+	oldKnownProviders := s.knownProviders
+	oldOverrides := s.overrides
+	oldWorkspacePath := s.workspacePath
+
 	// Preserve runtime overrides
 	overrides := s.overrides
 
@@ -1447,23 +1567,63 @@ func (s *ConfigStore) reloadFromDiskLocked(ctx context.Context) error {
 		return fmt.Errorf("failed to configure providers during reload: %w", err)
 	}
 
-	// Update store state BEFORE running model/agent setup (so they see new config)
+	// Setup models and agents against the NEW config BEFORE publishing it.
+	// The store's contract forbids in-place mutation of the live snapshot:
+	// readers may hold the published pointer the moment it swaps in, and a
+	// coordinator goroutine reading Config().Agents has raced exactly the
+	// old publish-then-SetupAgents window. s.SetupAgents reads the live
+	// pointer, so run setup directly on cfg instead.
+	var setupErr error
+	var diags []LoadDiagnostic
+	// A bad agents block rolls the reload back the same way a failed
+	// model resolution does: nothing from the new config is published.
+	if err := cfg.ValidateAgents(s.workingDir); err != nil {
+		setupErr = fmt.Errorf("invalid agent definitions: %w", err)
+	}
+	if setupErr == nil {
+		if !cfg.IsConfigured() {
+			slog.Warn("No providers configured after reload")
+		} else {
+			resolved, resolveErr := resolveSelectedModels(cfg, providers)
+			if resolveErr != nil {
+				setupErr = fmt.Errorf("failed to configure selected models during reload: %w", resolveErr)
+			} else {
+				cfg.Models[SelectedModelTypeLarge] = resolved.Large
+				cfg.Models[SelectedModelTypeSmall] = resolved.Small
+				if err := cfg.ValidateAgentModelRefs(); err != nil {
+					setupErr = fmt.Errorf("invalid agent definitions: %w", err)
+				} else {
+					diags = cfg.SetupAgents()
+					if err := cfg.ValidateDispatchDefaultAgent(); err != nil {
+						setupErr = fmt.Errorf("invalid dispatch configuration: %w", err)
+					} else if err := cfg.ValidateAgentToolsets(); err != nil {
+						setupErr = fmt.Errorf("invalid agent definitions: %w", err)
+					}
+				}
+			}
+		}
+	}
+
+	// Rollback on setup failure
+	if setupErr != nil {
+		s.setConfig(oldConfig)
+		s.loadedPaths = oldLoadedPaths
+		s.resolver = oldResolver
+		s.knownProviders = oldKnownProviders
+		s.overrides = oldOverrides
+		s.workspacePath = oldWorkspacePath
+		return setupErr
+	}
+
+	// Publish the fully built config only after setup has succeeded, so
+	// the snapshot readers get is never mutated in place.
 	s.setConfig(cfg)
 	s.loadedPaths = loadedPaths
 	s.resolver = resolver
 	s.knownProviders = providers
 	s.overrides = overrides
 	s.workspacePath = workspacePath
-
-	// Mirror startup flow: setup models and agents against NEW config.
-	// Resolving models cannot fail: an unresolvable selection is dropped
-	// rather than substituted, so there is nothing to roll back to here.
-	if !cfg.IsConfigured() {
-		slog.Warn("No providers configured after reload")
-	} else {
-		cfg.applySelectedModels(resolveSelectedModels(cfg, providers))
-		s.SetupAgents()
-	}
+	s.loadDiagnostics = diags
 
 	// Rebuild staleness tracking. Track every discovered config path, not
 	// just the ones that loaded, so a config file created after this reload

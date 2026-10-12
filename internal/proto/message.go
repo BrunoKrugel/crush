@@ -103,8 +103,12 @@ func (ReasoningContent) isPart() {}
 
 // TextContent represents a text part of a message.
 type TextContent struct {
-	Text   string `json:"text"`
-	Hidden bool   `json:"hidden,omitempty"`
+	Text string `json:"text"`
+	// Hidden marks generated user continuations that remain in model history.
+	Hidden bool `json:"hidden,omitempty"`
+	// Steer marks a message injected into a running dispatched agent;
+	// mirrored from message.TextContent (#410).
+	Steer bool `json:"steer,omitempty"`
 }
 
 // String returns the text content as a string.
@@ -645,15 +649,22 @@ type Attachment struct {
 	FileName string `json:"file_name"`
 	MimeType string `json:"mime_type"`
 	Content  []byte `json:"content"`
+	// Kind and PromptArgCount carry presentation identity that MimeType
+	// cannot express; see [message.AttachmentKind]. Both are omitempty so
+	// an ordinary file attachment serializes exactly as it did before.
+	Kind           string `json:"kind,omitempty"`
+	PromptArgCount int    `json:"prompt_arg_count,omitempty"`
 }
 
 // ToMessage converts a proto Attachment to a [message.Attachment].
 func (a Attachment) ToMessage() message.Attachment {
 	return message.Attachment{
-		FilePath: a.FilePath,
-		FileName: a.FileName,
-		MimeType: a.MimeType,
-		Content:  a.Content,
+		FilePath:       a.FilePath,
+		FileName:       a.FileName,
+		MimeType:       a.MimeType,
+		Content:        a.Content,
+		Kind:           message.AttachmentKind(a.Kind),
+		PromptArgCount: a.PromptArgCount,
 	}
 }
 
@@ -661,10 +672,12 @@ func (a Attachment) ToMessage() message.Attachment {
 // Attachment.
 func AttachmentFromMessage(a message.Attachment) Attachment {
 	return Attachment{
-		FilePath: a.FilePath,
-		FileName: a.FileName,
-		MimeType: a.MimeType,
-		Content:  a.Content,
+		FilePath:       a.FilePath,
+		FileName:       a.FileName,
+		MimeType:       a.MimeType,
+		Content:        a.Content,
+		Kind:           string(a.Kind),
+		PromptArgCount: a.PromptArgCount,
 	}
 }
 

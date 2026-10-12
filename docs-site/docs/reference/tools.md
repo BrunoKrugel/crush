@@ -28,7 +28,7 @@ names [hook matchers](/features/hooks) test against.
 | `grep` | Search file contents by regex or literal, sorted by modification time |
 | `ls` | List files and directories as a tree, skipping hidden and system dirs |
 | `sourcegraph` | Search code across public GitHub repos via Sourcegraph — regex, language, repo, and file filters |
-| `semantic_search` | Vector search over the local index by meaning. Registered only when an embeddings provider is configured — see [Semantic search](/fork) |
+| `semantic_search` | Vector search over the local index by meaning. Registered only when an embeddings provider is configured — see [Semantic search](/features/semantic-search) |
 | `semantic_index` | Build or refresh that index. Incremental; unchanged files are skipped |
 
 The `glob`, `grep`, and `ls` result limits are tunable under the top-level
@@ -127,7 +127,7 @@ See [Scheduled tasks](/features/scheduled-tasks).
 
 | Tool | Does |
 | --- | --- |
-| `todos` | A structured task list for multi-step work; each task is pending, in progress, or completed. In the fork, an agent that works without one is nudged to start one — see [Todo enforcement](/fork) |
+| `todos` | A structured task list for multi-step work; each task is pending, in progress, or completed. In the fork, an agent that works without one is nudged to start one — see [Todo enforcement](/agents/todo-enforcement) |
 | `question` | Ask you a structured question and wait for the answer. Interactive sessions only; never available to sub-agents. A [dispatched agent](#what-dispatched-agents-get) gets it while the session is interactive |
 | `crush_info` | Crush's live runtime state: active model and provider, LSP/MCP status, skills, hooks, permissions, disabled tools |
 | `crush_logs` | Read Crush's internal application logs — useful when debugging Crush itself |
@@ -136,7 +136,7 @@ See [Scheduled tasks](/features/scheduled-tasks).
 ## Dispatched agents
 
 :::info[Fork feature]
-See [Multi-agent dispatch](/fork).
+See [Multi-agent dispatch](/agents/overview).
 :::
 
 | Tool | Does |
@@ -171,7 +171,7 @@ fire your hooks N times. The outer sub-agent tool call itself *is* hooked.
 ## What dispatched agents get
 
 A dispatched agent's tools come from its
-[agent definition](/fork), filtered by
+[agent definition](/agents/configuration#agent-definitions), filtered by
 your deny list. The built-in `worker` allows `@read` (`glob`, `grep`, `ls`,
 `view`, and the `lsp_definition`, `lsp_symbols` and `lsp_call_hierarchy`
 lookups when language servers are on), `@write` (`bash`, `edit`,

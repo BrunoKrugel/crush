@@ -71,6 +71,11 @@ type TextContent struct {
 	Text string `json:"text"`
 	// Hidden marks generated user continuations that remain in model history.
 	Hidden bool `json:"hidden,omitempty"`
+	// Steer marks a message injected into a running dispatched agent
+	// (#312). It is UI metadata only — it never reaches the model — and
+	// lets a rebuilt transcript tell steers apart from the dispatch's
+	// initial prompt and from todo nudges (#410).
+	Steer bool `json:"steer,omitempty"`
 }
 
 func (tc TextContent) String() string {
@@ -94,6 +99,14 @@ type BinaryContent struct {
 	Path     string
 	MIMEType string
 	Data     []byte
+	// Kind and PromptArgCount carry an attachment's presentation identity
+	// across the message boundary. Without them a chip loses what it is the
+	// moment the message is sent: the transcript rebuilds attachments from
+	// these parts, and MIMEType alone cannot distinguish an MCP prompt from
+	// any other text attachment. Both are omitempty and zero-valued for
+	// ordinary files, so existing persisted messages decode unchanged.
+	Kind           AttachmentKind `json:",omitempty"`
+	PromptArgCount int            `json:",omitempty"`
 }
 
 func (bc BinaryContent) String(p catwalk.InferenceProvider) string {
@@ -298,7 +311,7 @@ func (m *Message) AppendContent(delta string) {
 	found := false
 	for i, part := range m.Parts {
 		if c, ok := part.(TextContent); ok {
-			m.Parts[i] = TextContent{Text: c.Text + delta, Hidden: c.Hidden}
+			m.Parts[i] = TextContent{Text: c.Text + delta, Hidden: c.Hidden, Steer: c.Steer}
 			found = true
 		}
 	}
@@ -550,7 +563,11 @@ func (m *Message) ToAIMessage() []fantasy.Message {
 		text := strings.TrimSpace(m.Content().Text)
 		var textAttachments []Attachment
 		for _, content := range m.BinaryContent() {
-			if !strings.HasPrefix(content.MIMEType, "text/") {
+			// Same predicate as the initial send (Attachment.IsText): the
+			// history rebuild must inline exactly what the first turn
+			// inlined, or application/* text attachments come back as
+			// binary file parts that providers reject.
+			if !IsTextMIME(content.MIMEType) {
 				continue
 			}
 			textAttachments = append(textAttachments, Attachment{
@@ -573,8 +590,9 @@ func (m *Message) ToAIMessage() []fantasy.Message {
 			parts = append(parts, fantasy.TextPart{Text: text})
 		}
 		for _, content := range m.BinaryContent() {
-			// skip text attachements
-			if strings.HasPrefix(content.MIMEType, "text/") {
+			// Skip text attachments — they were inlined above. Must mirror
+			// the inlining predicate exactly.
+			if IsTextMIME(content.MIMEType) {
 				continue
 			}
 			parts = append(parts, fantasy.FilePart{

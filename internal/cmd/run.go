@@ -53,9 +53,6 @@ crush run --quiet "Generate a README for this project"
 # Run in verbose mode (show logs)
 crush run --verbose "Generate a README for this project"
 
-# Show tool calls and results during the run
-crush run --show-events "Fix the typo in main.go"
-
 # Use a specific reasoning effort
 # Levels depend on the model, unsupported values are rejected
 # with the accepted values listed
@@ -72,7 +69,6 @@ crush run --continue "Follow up on your last response"
 		var (
 			quiet, _           = cmd.Flags().GetBool("quiet")
 			verbose, _         = cmd.Flags().GetBool("verbose")
-			showEvents, _      = cmd.Flags().GetBool("show-events")
 			largeModel, _      = cmd.Flags().GetString("model")
 			smallModel, _      = cmd.Flags().GetString("small-model")
 			reasoningEffort, _ = cmd.Flags().GetString("reasoning-effort")
@@ -135,7 +131,7 @@ crush run --continue "Follow up on your last response"
 				slog.SetDefault(slog.New(log.New(os.Stderr)))
 			}
 
-			return runNonInteractive(ctx, c, ws, prompt, largeModel, smallModel, reasoningEffort, quiet || verbose, sessionID, useLast, showEvents)
+			return runNonInteractive(ctx, c, ws, prompt, largeModel, smallModel, reasoningEffort, quiet || verbose, sessionID, useLast)
 		}
 
 		ws, cleanup, err := setupLocalWorkspace(cmd)
@@ -143,6 +139,11 @@ crush run --continue "Follow up on your last response"
 			return err
 		}
 		defer cleanup()
+
+		// A definition that loaded with a warning is told to the user
+		// here, not only to crush.log, so a refused dispatch later in
+		// the run is no surprise (#560).
+		writeLoadDiagnostics(os.Stderr, ws.LoadDiagnostics())
 
 		event.AppInitialized()
 
@@ -164,14 +165,13 @@ crush run --continue "Follow up on your last response"
 			sessionID = sess.ID
 		}
 
-		return appWs.App().RunNonInteractive(ctx, os.Stdout, prompt, largeModel, smallModel, reasoningEffort, quiet || verbose, sessionID, useLast, showEvents)
+		return appWs.App().RunNonInteractive(ctx, os.Stdout, prompt, largeModel, smallModel, reasoningEffort, quiet || verbose, sessionID, useLast)
 	},
 }
 
 func init() {
 	runCmd.Flags().BoolP("quiet", "q", false, "Hide spinner")
 	runCmd.Flags().BoolP("verbose", "v", false, "Show logs")
-	runCmd.Flags().BoolP("show-events", "e", false, "Show tool calls and results during the run")
 	runCmd.Flags().StringP("model", "m", "", "Model to use. Accepts 'model' or 'provider/model' to disambiguate models with the same name across providers")
 	runCmd.Flags().String("small-model", "", "Small model to use. If not provided, uses the default small model for the provider")
 	runCmd.Flags().String("reasoning-effort", "", "Reasoning effort for the model (e.g. low, medium, high). Levels depend on the model; unsupported values are rejected with the accepted values listed")
@@ -190,7 +190,6 @@ func runNonInteractive(
 	hideSpinner bool,
 	continueSessionID string,
 	useLast bool,
-	showEvents bool,
 ) error {
 	slog.Info("Running in non-interactive mode")
 
@@ -291,27 +290,20 @@ func runNonInteractive(
 	// loop would exit on whichever RunComplete arrived first for
 	// the same session and drop the queued prompt's output.
 	runID := uuid.New().String()
-	if err := c.SendMessage(ctx, ws.ID, sess.ID, runID, "", prompt, proto.PermissionRequestPolicyAutoApprove); err != nil {
+	if err := c.SendMessage(ctx, ws.ID, sess.ID, runID, "", 0, prompt); err != nil {
 		return fmt.Errorf("failed to send message: %w", err)
 	}
 
 	stream := &runStream{
-		sessionID:  sess.ID,
-		runID:      runID,
-		out:        os.Stdout,
-		read:       make(map[string]int),
-		showEvents: showEvents,
-		events:     format.NewEventPrinter(os.Stderr),
+		sessionID: sess.ID,
+		runID:     runID,
+		out:       os.Stdout,
+		read:      make(map[string]int),
 	}
 
 	// Start herdr integration when running inside a herdr pane.
 	hc := herdr.Init()
-	hc.SetSession(sess.ID, sess.Title)
-	if ws.Config != nil {
-		if model, ok := ws.Config.Models[config.SelectedModelTypeLarge]; ok {
-			hc.ReportModel(model.Model)
-		}
-	}
+	hc.SetSessionID(sess.ID)
 	defer hc.Close()
 
 	defer func() {
@@ -369,13 +361,11 @@ func runNonInteractive(
 // and live message streaming, which is still correct for the
 // single-turn case.
 type runStream struct {
-	sessionID  string
-	runID      string
-	out        io.Writer
-	read       map[string]int
-	printed    bool
-	showEvents bool
-	events     *format.EventPrinter
+	sessionID string
+	runID     string
+	out       io.Writer
+	read      map[string]int
+	printed   bool
 }
 
 // handle processes one SSE event. Returns done=true when the run
@@ -393,50 +383,21 @@ func (s *runStream) handle(ev any, stopSpinner func()) (done bool, err error) {
 	switch e := ev.(type) {
 	case pubsub.Event[proto.Message]:
 		msg := e.Payload
-		if msg.SessionID != s.sessionID || len(msg.Parts) == 0 {
+		if msg.SessionID != s.sessionID || msg.Role != proto.Assistant || len(msg.Parts) == 0 {
 			return false, nil
 		}
-
-		// When showEvents is on, print tool calls and results to
-		// stderr as compact one-line summaries. This works in both
-		// the runID-correlated and fallback streaming paths.
-		if s.showEvents && s.events != nil {
-			for _, tc := range msg.ToolCalls() {
-				s.events.PrintToolCall(tc.Name, tc.ID, tc.Input, tc.Finished)
-			}
-			for _, tr := range msg.ToolResults() {
-				s.events.PrintToolResult(tr.Name, tr.Content, tr.IsError)
-			}
-		}
-
-		// Only Assistant messages carry streamable text to stdout.
-		if msg.Role != proto.Assistant {
-			return false, nil
-		}
-		// When we have a RunID, suppress live text streaming — the
-		// RunComplete reconciliation path handles stdout.
 		if s.runID != "" {
 			return false, nil
 		}
 		stop()
 
 		content := msg.Content().String()
-		readBytes := s.read[msg.ID]
-		if len(content) < readBytes {
-			slog.Error("Non-interactive: message content shorter than read bytes",
-				"message_length", len(content), "read_bytes", readBytes)
-			return false, fmt.Errorf("message content is shorter than read bytes: %d < %d", len(content), readBytes)
-		}
-
-		part := content[readBytes:]
-		if readBytes == 0 {
-			part = strings.TrimLeft(part, " \t")
-		}
+		part, next := format.NextStreamChunk(content, s.read[msg.ID])
 		if s.printed || strings.TrimSpace(part) != "" {
 			s.printed = true
 			fmt.Fprint(s.out, part)
 		}
-		s.read[msg.ID] = len(content)
+		s.read[msg.ID] = next
 		return false, nil
 
 	case pubsub.Event[proto.RunComplete]:
@@ -493,11 +454,13 @@ func (s *runStream) handle(ev any, stopSpinner func()) (done bool, err error) {
 		// Attribute the error to our run before treating it as
 		// fatal. Async errors from an unrelated workspace run share
 		// this channel, so a foreign failure must not abort us:
-		//   - if either side carries a RunID, require an exact match.
-		//     An anonymous queued error cannot terminate a correlated run.
-		//   - only when neither side has a RunID, fall back to a nonempty,
-		//     matching SessionID.
-		if s.runID != "" || e.Payload.RunID != "" {
+		//   - if the event carries a RunID, it is the authoritative
+		//     correlator: it must match our run exactly, otherwise it
+		//     belongs to a different request and we ignore it.
+		//   - if the event carries no RunID (older server), fall back
+		//     to SessionID: it must be present and match our session,
+		//     otherwise we ignore it.
+		if e.Payload.RunID != "" {
 			if e.Payload.RunID != s.runID {
 				return false, nil
 			}

@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/crush/internal/agent/prompt"
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/stretchr/testify/require"
@@ -17,7 +16,13 @@ import (
 // config: one openai-typed provider pointed at a closed port, with large and
 // small models selected so model resolution and the system-prompt build both
 // succeed without any network access.
-func newGateTestCoordinator(t *testing.T, interactive bool) *coordinator {
+//
+// Any configure hooks run before the coder agent is built. Mutating the
+// returned coordinator's fields instead races the background tool build that
+// buildAgent starts, which reads them.
+//
+// @joestump-agent 09/22/2026 - Added the configure hooks to fix that race.
+func newGateTestCoordinator(t *testing.T, interactive bool, configure ...func(*coordinator)) *coordinator {
 	t.Helper()
 
 	env := testEnv(t)
@@ -47,11 +52,13 @@ func newGateTestCoordinator(t *testing.T, interactive bool) *coordinator {
 		interactive: interactive,
 	}
 
-	p, err := coderPrompt(prompt.WithWorkingDir(env.workingDir))
-	require.NoError(t, err)
+	for _, fn := range configure {
+		fn(coord)
+	}
+
 	agentCfg := cfg.Config().Agents[config.AgentCoder]
 
-	agent, err := coord.buildAgent(context.Background(), p, agentCfg, false)
+	agent, err := coord.buildAgent(context.Background(), agentCfg, false)
 	require.NoError(t, err)
 	coord.mainAgent = agent
 	coord.mainAgentName = config.AgentCoder

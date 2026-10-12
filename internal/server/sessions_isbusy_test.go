@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/backend"
 	"github.com/charmbracelet/crush/internal/compaction"
+	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/scheduler"
@@ -54,8 +55,10 @@ func (s *stubCoordinator) QueuedPrompts(string) int              { return 0 }
 func (s *stubCoordinator) QueuedPromptsList(string) []string     { return nil }
 func (s *stubCoordinator) ClearQueue(string)                     {}
 func (s *stubCoordinator) ListCronTasks(string) []scheduler.Task { return nil }
+func (s *stubCoordinator) Summarize(context.Context, string, string) error {
+	return nil
+}
 
-func (s *stubCoordinator) DiscardSummarize(context.Context, string, string) error { return nil }
 func (s *stubCoordinator) SummarizePreview(context.Context, string, string) (compaction.Preview, error) {
 	return compaction.Preview{}, nil
 }
@@ -64,19 +67,14 @@ func (s *stubCoordinator) ConfirmSummarize(context.Context, string, compaction.P
 	return nil
 }
 
+func (s *stubCoordinator) DiscardSummarize(context.Context, string, string) error { return nil }
+
 func (s *stubCoordinator) RestoreSummarize(context.Context, string) error { return nil }
-
-func (s *stubCoordinator) Summarize(context.Context, string, string) error {
-	return nil
-}
-
-func (s *stubCoordinator) Model() agent.Model { return agent.Model{} }
-
-func (s *stubCoordinator) UpdateModels(context.Context) error { return nil }
-
-func (s *stubCoordinator) SetMainAgent(string) error { return nil }
-
-func (s *stubCoordinator) GenerateTitle(context.Context, string, string) {}
+func (s *stubCoordinator) Model() agent.Model                             { return agent.Model{} }
+func (s *stubCoordinator) UpdateModels(context.Context) error             { return nil }
+func (s *stubCoordinator) SetInteractive(context.Context, bool) error     { return nil }
+func (s *stubCoordinator) SetMainAgent(string) error                      { return nil }
+func (s *stubCoordinator) GenerateTitle(context.Context, string, string)  {}
 
 // stubSessions is a minimal session.Service that returns a fixed list
 // (and supports Get by ID). All other methods return zero values; the
@@ -97,6 +95,10 @@ func (s *stubSessions) Get(_ context.Context, id string) (session.Session, error
 		}
 	}
 	return session.Session{}, errors.New("not found")
+}
+
+func (s *stubSessions) ListAllChildren(context.Context) ([]session.Session, error) {
+	return s.all, nil
 }
 
 // buildBusyWorkspace returns a controller wired to a backend that owns
@@ -355,4 +357,12 @@ func TestSessionGetIncludesAttachedClients(t *testing.T) {
 	var got proto.Session
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
 	require.Equal(t, 1, got.AttachedClients)
+}
+
+func (s *stubCoordinator) DeliverAgentMessage(ctx context.Context, msg agent.AgentMessage) error {
+	return errors.New("not implemented")
+}
+
+func (s *stubCoordinator) DispatchLive(sessionID string) []dispatch.TodoSnapshot {
+	return nil
 }

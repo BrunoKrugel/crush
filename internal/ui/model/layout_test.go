@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"charm.land/bubbles/v2/textarea"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/ui/chat"
 	"github.com/charmbracelet/crush/internal/ui/common"
+	"github.com/charmbracelet/crush/internal/ui/textarea"
 	uv "github.com/charmbracelet/ultraviolet"
 )
 
@@ -243,9 +243,6 @@ func TestAutoExpandPillsIfReasonable(t *testing.T) {
 		if !u.pillsExpanded {
 			t.Fatal("expected pillsExpanded to be true")
 		}
-		if u.focusedPillSection != pillSectionTodos {
-			t.Fatalf("expected focusedPillSection to be pillSectionTodos, got %d", u.focusedPillSection)
-		}
 	})
 
 	t.Run("does not expand when terminal is too short", func(t *testing.T) {
@@ -310,9 +307,6 @@ func TestAutoExpandPillsIfReasonable(t *testing.T) {
 
 		if !u.pillsExpanded {
 			t.Fatal("expected pillsExpanded to be true for prompt queue")
-		}
-		if u.focusedPillSection != pillSectionQueue {
-			t.Fatalf("expected focusedPillSection to be pillSectionQueue, got %d", u.focusedPillSection)
 		}
 	})
 

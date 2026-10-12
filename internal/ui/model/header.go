@@ -1,8 +1,13 @@
 package model
 
 import (
+	"cmp"
 	"fmt"
+	"net"
+	"os"
+	"os/user"
 	"strings"
+	"sync"
 
 	"charm.land/lipgloss/v2"
 	"charm.land/x/nerdfont"
@@ -22,6 +27,71 @@ const (
 	rightPadding         = 1
 	diagToDetailsSpacing = 1 // space between diagonal pattern and details section
 )
+
+// defaultWorkingDirFormat is used when options.tui.working_dir_format is
+// unset. It mirrors the familiar user@host:cwd shell prompt so the header
+// stays unambiguous when hopping between hosts.
+const defaultWorkingDirFormat = "{user}@{host}:{cwd}"
+
+// currentUserHost resolves the current username and hostname once per
+// process. The hostname is shortened to its first label so long FQDNs do
+// not crowd the header.
+var currentUserHost = sync.OnceValue(func() userHost {
+	host, err := os.Hostname()
+	if err != nil {
+		host = ""
+	}
+	name := ""
+	if u, err := user.Current(); err == nil {
+		name = u.Username
+	}
+	if name == "" {
+		name = cmp.Or(os.Getenv("USER"), os.Getenv("USERNAME"), os.Getenv("LOGNAME"))
+	}
+	return userHost{name: shortUsername(name), host: shortHostname(host)}
+})
+
+type userHost struct {
+	name string
+	host string
+}
+
+// shortHostname reduces a hostname to its first DNS label so long FQDNs do
+// not crowd the header. IP literals are left intact and an empty hostname
+// falls back to "localhost".
+func shortHostname(host string) string {
+	if host == "" {
+		return "localhost"
+	}
+	if net.ParseIP(host) != nil {
+		return host
+	}
+	if label, _, ok := strings.Cut(host, "."); ok && label != "" {
+		return label
+	}
+	return host
+}
+
+// shortUsername strips a Windows-style DOMAIN\ prefix from a username.
+func shortUsername(name string) string {
+	if _, short, ok := strings.Cut(name, `\`); ok && short != "" {
+		return short
+	}
+	return name
+}
+
+// formatWorkingDir expands {cwd}, {user} and {host} placeholders in a
+// working directory format string. Unknown placeholders are left verbatim.
+// A blank format falls back to defaultWorkingDirFormat.
+func formatWorkingDir(format, cwd, user, host string) string {
+	if strings.TrimSpace(format) == "" {
+		format = defaultWorkingDirFormat
+	}
+	// Sequential ReplaceAll avoids building a Replacer trie on every frame.
+	out := strings.ReplaceAll(format, "{host}", host)
+	out = strings.ReplaceAll(out, "{user}", user)
+	return strings.ReplaceAll(out, "{cwd}", cwd)
+}
 
 type header struct {
 	// cached logo and compact logo
@@ -176,21 +246,31 @@ func renderHeaderDetails(
 	metadata = dot + metadata
 
 	const dirTrimLimit = 4
-	workingDir := com.Workspace.WorkingDir()
-	cwd := t.Header.WorkingDir.Render(fsext.DirTrim(fsext.PrettyPath(workingDir), dirTrimLimit))
+	cwd := fsext.DirTrim(fsext.PrettyPath(com.Workspace.WorkingDir()), dirTrimLimit)
 
+	format := ""
+	if cfg := com.Config().Options.TUI; cfg != nil {
+		format = cfg.WorkingDirFormat
+	}
+	uh := currentUserHost()
+	dir := formatWorkingDir(format, cwd, uh.name, uh.host)
+	// Truncation drops from the right, which is where the metadata lives.
+	// When the formatted directory would crowd out the metadata, fall back
+	// to the bare path rather than losing the token usage and keystroke hint.
+	if lipgloss.Width(dir+metadata) > availWidth && lipgloss.Width(cwd+metadata) <= availWidth {
+		dir = cwd
+	}
+	dirStr := t.Header.WorkingDir.Render(dir)
 	if gitBranch != "" {
 		// Reserve space for the dot separator between branch and path and
 		// at least some of the path.
 		branchSep := t.Header.Separator.Render(" • ")
-		metadataWidth := lipgloss.Width(metadata)
-		maxBranchWidth := max(0, availWidth-metadataWidth-lipgloss.Width(cwd)-lipgloss.Width(branchSep))
+		maxBranchWidth := max(0, availWidth-lipgloss.Width(metadata)-lipgloss.Width(dirStr)-lipgloss.Width(branchSep))
 		if maxBranchWidth > 0 {
 			truncBranch := ansi.Truncate(gitBranch, maxBranchWidth, "…")
-			cwd = t.Header.GitBranch.Render(truncBranch) + branchSep + cwd
+			dirStr = t.Header.GitBranch.Render(truncBranch) + branchSep + dirStr
 		}
 	}
-
-	result := cwd + metadata
+	result := dirStr + metadata
 	return ansi.Truncate(result, max(0, availWidth), "…")
 }

@@ -139,7 +139,7 @@ Beyond tools, Crush surfaces the other two MCP primitives.
 | `read_mcp_resource` | Read a resource by URI |
 
 Resources whose URI ends in `/a2ui` render as
-[A2UI surfaces](/fork) rather than raw text.
+[A2UI surfaces](/features/a2ui) rather than raw text.
 
 **Prompts.** The agent can call them, and so can you:
 
@@ -151,7 +151,7 @@ Resources whose URI ends in `/a2ui` render as
 :::info[Fork feature]
 `list_mcp_prompts` and `call_mcp_prompt`, MCP prompts in the inline `/`
 completions and the command palette, and loading prompts at startup rather than
-on first use are all additions in the `brunokrugel/crush` fork. The
+on first use are all additions in the `joestump-agent/crush` fork. The
 resource tools above are upstream.
 :::
 
@@ -169,7 +169,7 @@ channel-specific plumbing.
 ## The MCP Servers dialog
 
 :::info[Fork feature]
-The MCP servers dialog is an addition in the `brunokrugel/crush` fork.
+The MCP servers dialog is an addition in the `joestump-agent/crush` fork.
 :::
 
 Open it from the command palette (<kbd>ctrl+p</kbd> → **MCP Servers**, or type
@@ -189,7 +189,7 @@ confirm an opt-in actually took effect.
 :::info[Fork feature]
 The bounded init wait, the per-server lifecycle serialization, and reaping
 stdio server process groups on shutdown are fixes carried by this fork. See
-[What this fork adds](/fork).
+[What this fork adds](/fork#fixes-this-fork-carries).
 :::
 
 ## Checking state
@@ -200,4 +200,4 @@ active model, LSPs, skills, hooks, and permissions.
 ## Next
 
 - **[Channels](/features/channels)** — MCP servers that push events at you.
-- **[A2UI](/fork)** — rendering server-owned surfaces inline.
+- **[A2UI](/features/a2ui)** — rendering server-owned surfaces inline.

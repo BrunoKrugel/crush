@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/compaction"
+	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/scheduler"
@@ -63,6 +64,7 @@ func (c *blockingCoordinator) QueuedPromptsList(string) []string                
 func (c *blockingCoordinator) ClearQueue(string)                                 {}
 func (c *blockingCoordinator) ListCronTasks(string) []scheduler.Task             { return nil }
 func (c *blockingCoordinator) Summarize(context.Context, string, string) error   { return nil }
+
 func (c *blockingCoordinator) SummarizePreview(context.Context, string, string) (compaction.Preview, error) {
 	return compaction.Preview{}, nil
 }
@@ -70,11 +72,14 @@ func (c *blockingCoordinator) SummarizePreview(context.Context, string, string) 
 func (c *blockingCoordinator) ConfirmSummarize(context.Context, string, compaction.Preview) error {
 	return nil
 }
+
 func (c *blockingCoordinator) DiscardSummarize(context.Context, string, string) error { return nil }
-func (c *blockingCoordinator) RestoreSummarize(context.Context, string) error         { return nil }
-func (c *blockingCoordinator) Model() agent.Model                                     { return agent.Model{} }
-func (c *blockingCoordinator) UpdateModels(context.Context) error                     { return nil }
-func (c *blockingCoordinator) GenerateTitle(context.Context, string, string)          {}
+
+func (c *blockingCoordinator) RestoreSummarize(context.Context, string) error { return nil }
+func (c *blockingCoordinator) Model() agent.Model                             { return agent.Model{} }
+func (c *blockingCoordinator) UpdateModels(context.Context) error             { return nil }
+func (c *blockingCoordinator) SetInteractive(context.Context, bool) error     { return nil }
+func (c *blockingCoordinator) GenerateTitle(context.Context, string, string)  {}
 func (c *blockingCoordinator) SetMainAgent(agentName string) error {
 	c.lastMainAgentSet.Store(agentName)
 	return c.setMainAgentErr
@@ -232,4 +237,12 @@ func TestSetMainAgent_PropagatesCoordinatorError(t *testing.T) {
 
 	err := b.SetMainAgent(ws.ID, "123")
 	require.ErrorIs(t, err, wantErr)
+}
+
+func (c *blockingCoordinator) DeliverAgentMessage(ctx context.Context, msg agent.AgentMessage) error {
+	return errors.New("not implemented")
+}
+
+func (c *blockingCoordinator) DispatchLive(sessionID string) []dispatch.TodoSnapshot {
+	return nil
 }

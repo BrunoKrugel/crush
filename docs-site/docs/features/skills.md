@@ -46,7 +46,7 @@ authoring checklist, and Claude Code compatibility. See
 ### `a2ui`
 
 :::info[Fork feature]
-The `a2ui` skill only exists in the `brunokrugel/crush` fork. Upstream ships
+The `a2ui` skill only exists in the `joestump-agent/crush` fork. Upstream ships
 three built-in skills; this fork ships four.
 :::
 
@@ -56,7 +56,7 @@ three built-in skills; this fork ships four.
 
 Teaches both delivery paths (MCP `/a2ui` resource vs. inline `<a2ui-json>`), the
 component catalog, the form submission loop, the A2UI-over-MCP contract, and the
-anti-patterns. See [A2UI](/fork).
+anti-patterns. See [A2UI](/features/a2ui).
 
 ### `jq`
 
@@ -216,7 +216,7 @@ option disable-skill jq
 ## Seeing what loaded
 
 :::info[Fork feature]
-The `/skills` dialog is an addition in the `brunokrugel/crush` fork. Skill
+The `/skills` dialog is an addition in the `joestump-agent/crush` fork. Skill
 discovery and loading themselves are upstream.
 :::
 

@@ -146,8 +146,47 @@ var bannedCommands = []string{
 	"ufw",
 }
 
-func bashDescription(attribution *config.Attribution, modelID string) string {
-	bannedCommandsStr := strings.Join(bannedCommands, ", ")
+// effectiveBannedCommands returns the default banned command list with any
+// entries in allowed removed. The order of the defaults is preserved so the
+// tool description and the enforcement layer never drift apart.
+func effectiveBannedCommands(allowed []string) []string {
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, cmd := range allowed {
+		allowedSet[cmd] = struct{}{}
+	}
+	effective := make([]string, 0, len(bannedCommands))
+	for _, cmd := range bannedCommands {
+		if _, ok := allowedSet[cmd]; !ok {
+			effective = append(effective, cmd)
+		}
+	}
+	return effective
+}
+
+// UnknownAllowedCommands returns the entries in allowed that are not present
+// in the default banned list. Such entries subtract nothing from the block
+// list and usually indicate a typo, so callers can warn about them.
+func UnknownAllowedCommands(allowed []string) []string {
+	bannedSet := make(map[string]struct{}, len(bannedCommands))
+	for _, cmd := range bannedCommands {
+		bannedSet[cmd] = struct{}{}
+	}
+	var unknown []string
+	for _, cmd := range allowed {
+		if _, ok := bannedSet[cmd]; !ok {
+			unknown = append(unknown, cmd)
+		}
+	}
+	return unknown
+}
+
+func bashDescription(attribution *config.Attribution, modelID string, allowedCommands []string, allowAllCommands bool) string {
+	// Build the effective banned list for display. When every command is
+	// allowed the block list is empty.
+	bannedCommandsStr := "(none - all commands allowed)"
+	if !allowAllCommands {
+		bannedCommandsStr = strings.Join(effectiveBannedCommands(allowedCommands), ", ")
+	}
 	var out bytes.Buffer
 	if err := bashDescriptionTpl.Execute(&out, bashDescriptionData{
 		BannedCommands:  bannedCommandsStr,
@@ -163,9 +202,16 @@ func bashDescription(attribution *config.Attribution, modelID string) string {
 	return out.String()
 }
 
-func blockFuncs() []shell.BlockFunc {
+func blockFuncs(allowedCommands []string, allowAllCommands bool) []shell.BlockFunc {
+	// If allowAllCommands is set, don't block any commands. Note this also
+	// removes the argument-level blockers below (apt install, npm -g, ...);
+	// allowed_commands only subtracts from the exact-command block list.
+	if allowAllCommands {
+		return []shell.BlockFunc{}
+	}
+
 	return []shell.BlockFunc{
-		shell.CommandsBlocker(bannedCommands),
+		shell.CommandsBlocker(effectiveBannedCommands(allowedCommands)),
 
 		// System package managers
 		shell.ArgumentsBlocker("apk", []string{"add"}, nil),
@@ -195,10 +241,10 @@ func blockFuncs() []shell.BlockFunc {
 	}
 }
 
-func NewBashTool(permissions permission.Service, workingDir, spillDir string, attribution *config.Attribution, modelID string) fantasy.AgentTool {
+func NewBashTool(permissions permission.Service, workingDir, spillDir string, attribution *config.Attribution, modelID string, allowedCommands []string, allowAllCommands bool) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		BashToolName,
-		string(bashDescription(attribution, modelID)),
+		string(bashDescription(attribution, modelID, allowedCommands, allowAllCommands)),
 		func(ctx context.Context, params BashParams, call fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			if params.Command == "" {
 				return fantasy.NewTextErrorResponse("missing command"), nil
@@ -207,25 +253,13 @@ func NewBashTool(permissions permission.Service, workingDir, spillDir string, at
 			// Determine working directory
 			execWorkingDir := cmp.Or(params.WorkingDir, workingDir)
 
-			isSafeReadOnly := false
-			cmdLower := strings.ToLower(params.Command)
-
-			if !containsCommandChaining(params.Command) {
-				for _, safe := range safeCommands {
-					if strings.HasPrefix(cmdLower, safe) {
-						if len(cmdLower) == len(safe) || cmdLower[len(safe)] == ' ' || cmdLower[len(safe)] == '-' {
-							isSafeReadOnly = true
-							break
-						}
-					}
-				}
-			}
+			safeReadOnly := isSafeReadOnly(params.Command)
 
 			sessionID := GetSessionFromContext(ctx)
 			if sessionID == "" {
 				return fantasy.ToolResponse{}, fmt.Errorf("session ID is required for executing shell command")
 			}
-			if !isSafeReadOnly {
+			if !safeReadOnly {
 				p, err := permissions.Request(
 					ctx,
 					permission.CreatePermissionRequest{
@@ -251,8 +285,10 @@ func NewBashTool(permissions permission.Service, workingDir, spillDir string, at
 				startTime := time.Now()
 				bgManager := shell.GetBackgroundShellManager()
 				bgManager.Cleanup()
-				// Use background context so it continues after tool returns
-				bgShell, err := bgManager.Start(context.Background(), execWorkingDir, blockFuncs(), params.Command, params.Description)
+				// Use background context so it continues after tool returns;
+				// tag the job with the calling session so the session's
+				// teardown kills it (#385).
+				bgShell, err := bgManager.Start(context.Background(), sessionID, execWorkingDir, blockFuncs(allowedCommands, allowAllCommands), params.Command, params.Description)
 				if err != nil {
 					return fantasy.ToolResponse{}, fmt.Errorf("error starting background shell: %w", err)
 				}
@@ -304,10 +340,12 @@ func NewBashTool(permissions permission.Service, workingDir, spillDir string, at
 			// Start synchronous execution with auto-background support
 			startTime := time.Now()
 
-			// Start with detached context so it can survive if moved to background
+			// Start with detached context so it can survive if moved to
+			// background; tag the job with the calling session so the
+			// session's teardown kills it (#385).
 			bgManager := shell.GetBackgroundShellManager()
 			bgManager.Cleanup()
-			bgShell, err := bgManager.Start(context.Background(), execWorkingDir, blockFuncs(), params.Command, params.Description)
+			bgShell, err := bgManager.Start(context.Background(), sessionID, execWorkingDir, blockFuncs(allowedCommands, allowAllCommands), params.Command, params.Description)
 			if err != nil {
 				return fantasy.ToolResponse{}, fmt.Errorf("error starting shell: %w", err)
 			}

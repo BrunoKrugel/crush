@@ -195,6 +195,43 @@ func (c *controllerV1) handlePostWorkspaceSkillRead(w http.ResponseWriter, r *ht
 	jsonEncode(w, proto.ReadSkillResponse{Content: content, Result: result})
 }
 
+// handlePostWorkspaceSkillsReload triggers a skill re-discovery.
+//
+//	@Summary		Reload skills
+//	@Tags			skills
+//	@Param			id	path	string	true	"Workspace ID"
+//	@Success		200
+//	@Failure		404	{object}	proto.Error
+//	@Failure		500	{object}	proto.Error
+//	@Router			/workspaces/{id}/skills/reload [post]
+func (c *controllerV1) handlePostWorkspaceSkillsReload(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := c.backend.ReloadSkills(id); err != nil {
+		c.handleError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// handlePostWorkspaceConfigReloadDiscovery re-runs model discovery.
+//
+//	@Summary		Reload model discovery
+//	@Tags			config
+//	@Param			id	path		string	true	"Workspace ID"
+//	@Success		200	{object}	proto.ReloadModelDiscoveryResponse
+//	@Failure		404	{object}	proto.Error
+//	@Failure		500	{object}	proto.Error
+//	@Router			/workspaces/{id}/config/reload-discovery [post]
+func (c *controllerV1) handlePostWorkspaceConfigReloadDiscovery(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	added, err := c.backend.ReloadModelDiscovery(r.Context(), id)
+	if err != nil {
+		c.handleError(w, r, err)
+		return
+	}
+	jsonEncode(w, proto.ReloadModelDiscoveryResponse{Added: added})
+}
+
 // handlePostWorkspaceMCPEnableDocker enables the Docker MCP server.
 func (c *controllerV1) handlePostWorkspaceMCPEnableDocker(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
@@ -350,6 +387,35 @@ func (c *controllerV1) handleGetWorkspaceMCPServersEnabled(w http.ResponseWriter
 	jsonEncode(w, servers)
 }
 
+// handlePostWorkspaceMCPReconnect reconnects a named MCP server.
+//
+//	@Summary		Reconnect MCP server
+//	@Tags			mcp
+//	@Accept			json
+//	@Param			id		path	string					true	"Workspace ID"
+//	@Param			request	body	proto.MCPNameRequest	true	"MCP name request"
+//	@Success		200
+//	@Failure		400	{object}	proto.Error
+//	@Failure		404	{object}	proto.Error
+//	@Failure		500	{object}	proto.Error
+//	@Router			/workspaces/{id}/mcp/reconnect [post]
+func (c *controllerV1) handlePostWorkspaceMCPReconnect(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	var req proto.MCPNameRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		c.server.logError(r, "Failed to decode request", "error", err)
+		jsonError(w, http.StatusBadRequest, "failed to decode request")
+		return
+	}
+
+	if err := c.backend.MCPReconnect(r.Context(), id, req.Name); err != nil {
+		c.handleError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
 // handlePostWorkspaceMCPStartServer starts a named MCP server even when
 // its config entry is disabled.
 //
@@ -430,6 +496,56 @@ func (c *controllerV1) handleGetWorkspaceMCPPrompts(w http.ResponseWriter, r *ht
 	jsonEncode(w, prompts)
 }
 
+// a2uiCallableTools is the allow-list this route will invoke. The route
+// exists solely for the A2UI surface round-trip, which is not gated on the
+// agent's permission system (a button press is its own consent). Accepting an
+// arbitrary tool name here would turn it into remote execution of any tool on
+// any configured MCP server — file writes, shell-backed tools, network calls —
+// with no permission prompt at all.
+var a2uiCallableTools = map[string]bool{
+	"a2ui_action": true,
+	"a2ui_error":  true,
+}
+
+// handlePostWorkspaceMCPCallTool calls a tool on an MCP server. Only the A2UI
+// round-trip tools are callable; see [a2uiCallableTools].
+//
+//	@Summary		Call MCP tool
+//	@Tags			mcp
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string					true	"Workspace ID"
+//	@Param			request	body		proto.MCPCallToolRequest	true	"MCP call tool request"
+//	@Success		200		{object}	object
+//	@Failure		400		{object}	proto.Error
+//	@Failure		403		{object}	proto.Error
+//	@Failure		404		{object}	proto.Error
+//	@Failure		500		{object}	proto.Error
+//	@Router			/workspaces/{id}/mcp/call-tool [post]
+func (c *controllerV1) handlePostWorkspaceMCPCallTool(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	var req proto.MCPCallToolRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		c.server.logError(r, "Failed to decode request", "error", err)
+		jsonError(w, http.StatusBadRequest, "failed to decode request")
+		return
+	}
+
+	if !a2uiCallableTools[req.ToolName] {
+		c.server.logError(r, "Rejected non-A2UI MCP tool call", "tool", req.ToolName)
+		jsonError(w, http.StatusForbidden, "only the A2UI round-trip tools may be called over this route")
+		return
+	}
+
+	result, err := c.backend.CallMCPTool(r.Context(), id, req.Name, req.ToolName, req.Args)
+	if err != nil {
+		c.handleError(w, r, err)
+		return
+	}
+	jsonEncode(w, result)
+}
+
 // handlePostWorkspaceMCPGetPrompt retrieves a prompt from an MCP server.
 func (c *controllerV1) handlePostWorkspaceMCPGetPrompt(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
@@ -464,6 +580,7 @@ func (c *controllerV1) handleGetWorkspaceMCPStates(w http.ResponseWriter, r *htt
 			ResourceCount: v.Counts.Resources,
 			ConnectedAt:   v.ConnectedAt,
 			Channel:       v.Channel,
+			A2UITools:     v.A2UITools,
 		}
 	}
 	jsonEncode(w, result)

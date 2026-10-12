@@ -5,28 +5,32 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"sync"
 	"testing"
-	"time"
 
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy"
 	"charm.land/fantasy/providers/anthropic"
 	"charm.land/fantasy/providers/bedrock"
 	"charm.land/fantasy/providers/openaicompat"
-	"github.com/charmbracelet/crush/internal/compaction"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/discover"
-	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // mockSessionAgent is a minimal mock for the SessionAgent interface.
+// cancellations is mutex-guarded: the A2A executor cancels the served
+// runner from its own goroutine, so tests read the record while a run
+// may still be in flight.
 type mockSessionAgent struct {
 	model     Model
 	runFunc   func(ctx context.Context, call SessionAgentCall) (*fantasy.AgentResult, error)
+	cancelMu  sync.Mutex
 	cancelled []string
+	readyErr  error
 }
 
 func (m *mockSessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy.AgentResult, error) {
@@ -37,47 +41,35 @@ func (m *mockSessionAgent) BeginAccepted(sessionID string) *AcceptedRun {
 	return &AcceptedRun{sessionID: sessionID}
 }
 
-func (m *mockSessionAgent) Model() Model { return m.model }
-
-func (m *mockSessionAgent) SetModels(large, small Model) {}
-
-func (m *mockSessionAgent) SetTools(tools []fantasy.AgentTool) {}
-
+func (m *mockSessionAgent) Model() Model                        { return m.model }
+func (m *mockSessionAgent) SetModels(large, small Model)        {}
+func (m *mockSessionAgent) SetTools(tools []fantasy.AgentTool)  {}
 func (m *mockSessionAgent) SetSystemPrompt(systemPrompt string) {}
-
+func (m *mockSessionAgent) WaitReady() error                    { return m.readyErr }
 func (m *mockSessionAgent) Cancel(sessionID string) {
+	m.cancelMu.Lock()
+	defer m.cancelMu.Unlock()
 	m.cancelled = append(m.cancelled, sessionID)
 }
 
-func (m *mockSessionAgent) CancelAll() {}
-
-func (m *mockSessionAgent) IsSessionBusy(sessionID string) bool { return false }
-
-func (m *mockSessionAgent) IsBusy() bool { return false }
-
-func (m *mockSessionAgent) QueuedPrompts(sessionID string) int { return 0 }
-
+// cancellations returns a snapshot of the session IDs Cancel was called
+// with.
+func (m *mockSessionAgent) cancellations() []string {
+	m.cancelMu.Lock()
+	defer m.cancelMu.Unlock()
+	return slices.Clone(m.cancelled)
+}
+func (m *mockSessionAgent) CancelAll()                                  {}
+func (m *mockSessionAgent) IsSessionBusy(sessionID string) bool         { return false }
+func (m *mockSessionAgent) IsBusy() bool                                { return false }
+func (m *mockSessionAgent) QueuedPrompts(sessionID string) int          { return 0 }
 func (m *mockSessionAgent) QueuedPromptsList(sessionID string) []string { return nil }
-
-func (m *mockSessionAgent) ClearQueue(sessionID string) {}
-
-func (m *mockSessionAgent) RestoreSummarize(context.Context, string) error { return nil }
-
-func (m *mockSessionAgent) SummarizePreview(context.Context, string, string, fantasy.ProviderOptions, func(context.Context, *fantasy.ProviderError) error) (compaction.Preview, error) {
-	return compaction.Preview{}, nil
-}
-
-func (m *mockSessionAgent) ConfirmSummarize(context.Context, string, compaction.Preview) error {
+func (m *mockSessionAgent) ClearQueue(sessionID string)                 {}
+func (m *mockSessionAgent) Summarize(context.Context, string, fantasy.ProviderOptions, func(context.Context, *fantasy.ProviderError) error) error {
 	return nil
 }
-
-func (m *mockSessionAgent) DiscardSummarize(context.Context, string, string) error { return nil }
-
-func (m *mockSessionAgent) Summarize(context.Context, string, string, fantasy.ProviderOptions, func(context.Context, *fantasy.ProviderError) error) error {
-	return nil
-}
-
 func (m *mockSessionAgent) GenerateTitle(context.Context, string, string) {}
+func (m *mockSessionAgent) EnqueueWhenBusy(call SessionAgentCall) bool    { return false }
 
 // newTestCoordinator creates a minimal coordinator for unit testing runSubAgent.
 func newTestCoordinator(t *testing.T, env fakeEnv, providerID string, providerCfg config.ProviderConfig) *coordinator {
@@ -120,15 +112,7 @@ func agentResultWithText(text string) *fantasy.AgentResult {
 func TestCopilotResponsesModels(t *testing.T) {
 	t.Parallel()
 
-	for _, modelID := range []string{
-		"gpt-6-astra",
-		"gpt-6-luna",
-		"gpt-6-sol",
-		"gpt-6.1-sol",
-		"grok-4.5",
-		"grok-4.6",
-		"grok-4.7",
-	} {
+	for _, modelID := range []string{"gpt-6-astra", "grok-4.5", "grok-4.6"} {
 		assert.True(t, copilotResponsesModels[modelID], modelID)
 	}
 	assert.False(t, copilotResponsesModels["gpt-4.1"])
@@ -316,6 +300,36 @@ func TestRunSubAgent(t *testing.T) {
 		require.Error(t, err)
 	})
 
+	t.Run("sub-agent setup failure stops before the run", func(t *testing.T) {
+		env := testEnv(t)
+		coord := newTestCoordinator(t, env, providerID, providerCfg)
+
+		parentSession, err := env.sessions.Create(t.Context(), "Parent")
+		require.NoError(t, err)
+
+		buildErr := errors.New("tool build failed")
+		agent := newMockAgent(providerID, 4096, func(_ context.Context, _ SessionAgentCall) (*fantasy.AgentResult, error) {
+			t.Error("a sub-agent whose setup failed must not take a turn")
+			return nil, nil
+		})
+		agent.readyErr = buildErr
+
+		_, err = coord.runSubAgent(t.Context(), subAgentParams{
+			Agent:          agent,
+			SessionID:      parentSession.ID,
+			AgentMessageID: "msg-1",
+			ToolCallID:     "call-1",
+			Prompt:         "test",
+			SessionTitle:   "Test",
+		})
+		require.ErrorIs(t, err, buildErr)
+
+		// The wait precedes sub-session creation, so a failed build leaves
+		// no orphaned task session behind.
+		_, err = env.sessions.Get(t.Context(), env.sessions.CreateAgentToolSessionID("msg-1", "call-1"))
+		require.Error(t, err, "no task session may be created for a sub-agent that never became ready")
+	})
+
 	t.Run("provider not configured", func(t *testing.T) {
 		env := testEnv(t)
 		coord := newTestCoordinator(t, env, providerID, providerCfg)
@@ -363,6 +377,33 @@ func TestRunSubAgent(t *testing.T) {
 		assert.Equal(t, "Failed to generate response: provider request failed", resp.Content)
 	})
 
+	t.Run("session setup callback is invoked", func(t *testing.T) {
+		env := testEnv(t)
+		coord := newTestCoordinator(t, env, providerID, providerCfg)
+
+		parentSession, err := env.sessions.Create(t.Context(), "Parent")
+		require.NoError(t, err)
+
+		var setupCalledWith string
+		agent := newMockAgent(providerID, 4096, func(_ context.Context, _ SessionAgentCall) (*fantasy.AgentResult, error) {
+			return agentResultWithText("ok"), nil
+		})
+
+		_, err = coord.runSubAgent(t.Context(), subAgentParams{
+			Agent:          agent,
+			SessionID:      parentSession.ID,
+			AgentMessageID: "msg-1",
+			ToolCallID:     "call-1",
+			Prompt:         "test",
+			SessionTitle:   "Test",
+			SessionSetup: func(sessionID string) {
+				setupCalledWith = sessionID
+			},
+		})
+		require.NoError(t, err)
+		assert.NotEmpty(t, setupCalledWith, "SessionSetup should have been called")
+	})
+
 	t.Run("cost propagation to parent session", func(t *testing.T) {
 		env := testEnv(t)
 		coord := newTestCoordinator(t, env, providerID, providerCfg)
@@ -398,188 +439,6 @@ func TestRunSubAgent(t *testing.T) {
 		require.NoError(t, err)
 		assert.InDelta(t, 0.05, updated.Cost, 1e-9)
 	})
-}
-
-func newPermissionTestCoordinator(t *testing.T) (*coordinator, session.Session, permission.Service, string) {
-	t.Helper()
-	const providerID = "test-provider"
-	env := testEnv(t)
-	coord := newTestCoordinator(t, env, providerID, config.ProviderConfig{ID: providerID})
-	permissions := permission.NewPermissionService(env.workingDir, false, nil)
-	parentSession, err := env.sessions.Create(t.Context(), "Parent")
-	require.NoError(t, err)
-	return coord, parentSession, permissions, t.TempDir()
-}
-
-func requestOutsideWorkspace(ctx context.Context, permissions permission.Service, sessionID, toolCallID, path string) (bool, error) {
-	return permissions.Request(ctx, permission.CreatePermissionRequest{
-		SessionID: sessionID, ToolCallID: toolCallID, ToolName: "ls", Action: "list", Path: path,
-	})
-}
-
-func TestRunSubAgentInheritsNonInteractivePermissionPolicy(t *testing.T) {
-	coord, parentSession, permissions, outsidePath := newPermissionTestCoordinator(t)
-	agent := newMockAgent("test-provider", 4096, func(ctx context.Context, call SessionAgentCall) (*fantasy.AgentResult, error) {
-		assert.NotEqual(t, parentSession.ID, call.SessionID)
-		assert.Equal(t, permission.RequestPolicyAutoApprove, call.PermissionPolicy)
-		granted, err := requestOutsideWorkspace(ctx, permissions, call.SessionID, "child-call", outsidePath)
-		if err != nil {
-			return nil, err
-		}
-		if !granted {
-			return nil, errors.New("child permission was denied")
-		}
-		return agentResultWithText("done"), nil
-	})
-
-	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
-	defer cancel()
-
-	resp, err := coord.runSubAgent(permission.WithAutoApproveRequests(ctx), subAgentParams{
-		Agent:          agent,
-		SessionID:      parentSession.ID,
-		AgentMessageID: "msg-1",
-		ToolCallID:     "call-1",
-		Prompt:         "inspect outside the workspace",
-		SessionTitle:   "Validator",
-	})
-	require.NoError(t, err)
-	assert.False(t, resp.IsError)
-	assert.Equal(t, "done", resp.Content)
-}
-
-func TestRunSubAgentInteractiveParentDoesNotApproveChild(t *testing.T) {
-	for _, tc := range []struct {
-		name          string
-		cancelRequest bool
-	}{
-		{name: "denied"},
-		{name: "cancelled", cancelRequest: true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			coord, parentSession, permissions, outsidePath := newPermissionTestCoordinator(t)
-			events := permissions.Subscribe(t.Context())
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			calls := make(chan SessionAgentCall, 1)
-			agent := newMockAgent("test-provider", 4096, func(ctx context.Context, call SessionAgentCall) (*fantasy.AgentResult, error) {
-				calls <- call
-				granted, err := requestOutsideWorkspace(ctx, permissions, call.SessionID, "child-call", outsidePath)
-				if err != nil {
-					return nil, err
-				}
-				if granted {
-					return agentResultWithText("granted"), nil
-				}
-				return agentResultWithText("denied"), nil
-			})
-
-			type subAgentResult struct {
-				response fantasy.ToolResponse
-				err      error
-			}
-			result := make(chan subAgentResult, 1)
-			go func() {
-				response, err := coord.runSubAgent(ctx, subAgentParams{
-					Agent:          agent,
-					SessionID:      parentSession.ID,
-					AgentMessageID: "msg-1",
-					ToolCallID:     "call-1",
-					Prompt:         "inspect outside the workspace",
-					SessionTitle:   "Validator",
-				})
-				result <- subAgentResult{response: response, err: err}
-			}()
-
-			select {
-			case call := <-calls:
-				assert.True(t, call.NonInteractive)
-				assert.Equal(t, permission.RequestPolicyPrompt, call.PermissionPolicy)
-				assert.NotEqual(t, parentSession.ID, call.SessionID)
-			case <-time.After(2 * time.Second):
-				t.Fatal("child agent was never run")
-			}
-
-			select {
-			case event := <-events:
-				if tc.cancelRequest {
-					cancel()
-				} else {
-					assert.True(t, permissions.Deny(event.Payload))
-				}
-			case <-time.After(2 * time.Second):
-				t.Fatal("child permission request was never published")
-			}
-
-			select {
-			case got := <-result:
-				require.NoError(t, got.err)
-				assert.Equal(t, tc.cancelRequest, got.response.IsError)
-				if tc.cancelRequest {
-					assert.Contains(t, got.response.Content, context.Canceled.Error())
-				} else {
-					assert.Equal(t, "denied", got.response.Content)
-				}
-			case <-time.After(2 * time.Second):
-				t.Fatal("child agent did not return after permission resolution")
-			}
-		})
-	}
-}
-
-func TestRunSubAgentNestedDescendantInheritsPermissionPolicy(t *testing.T) {
-	coord, parentSession, permissions, outsidePath := newPermissionTestCoordinator(t)
-	grandchildSessions := make(chan string, 1)
-	grandchild := newMockAgent("test-provider", 4096, func(ctx context.Context, call SessionAgentCall) (*fantasy.AgentResult, error) {
-		grandchildSessions <- call.SessionID
-		granted, err := requestOutsideWorkspace(ctx, permissions, call.SessionID, "grandchild-permission", outsidePath)
-		if err != nil {
-			return nil, err
-		}
-		if !granted {
-			return nil, errors.New("grandchild permission was denied")
-		}
-		return agentResultWithText("nested done"), nil
-	})
-
-	child := newMockAgent("test-provider", 4096, func(ctx context.Context, call SessionAgentCall) (*fantasy.AgentResult, error) {
-		response, err := coord.runSubAgent(ctx, subAgentParams{
-			Agent:          grandchild,
-			SessionID:      call.SessionID,
-			AgentMessageID: "child-msg",
-			ToolCallID:     "grandchild-call",
-			Prompt:         "inspect outside the workspace",
-			SessionTitle:   "Nested Validator",
-		})
-		if err != nil {
-			return nil, err
-		}
-		if response.IsError {
-			return nil, errors.New(response.Content)
-		}
-		return agentResultWithText(response.Content), nil
-	})
-
-	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
-	defer cancel()
-	response, err := coord.runSubAgent(permission.WithAutoApproveRequests(ctx), subAgentParams{
-		Agent:          child,
-		SessionID:      parentSession.ID,
-		AgentMessageID: "parent-msg",
-		ToolCallID:     "child-call",
-		Prompt:         "delegate validation",
-		SessionTitle:   "Validator",
-	})
-	require.NoError(t, err)
-	assert.False(t, response.IsError)
-	assert.Equal(t, "nested done", response.Content)
-
-	select {
-	case grandchildSessionID := <-grandchildSessions:
-		assert.NotEqual(t, parentSession.ID, grandchildSessionID)
-	case <-time.After(2 * time.Second):
-		t.Fatal("grandchild agent was never run")
-	}
 }
 
 func TestUpdateParentSessionCost(t *testing.T) {
@@ -686,6 +545,86 @@ func TestUpdateParentSessionCost(t *testing.T) {
 		updated, err := env.sessions.Get(t.Context(), parent.ID)
 		require.NoError(t, err)
 		assert.InDelta(t, 0.0, updated.Cost, 1e-9)
+	})
+
+	t.Run("concurrent child cost updates sum exactly", func(t *testing.T) {
+		env := testEnv(t)
+		cfg, err := config.Init(env.workingDir, "", false)
+		require.NoError(t, err)
+		coord := &coordinator{cfg: cfg, sessions: env.sessions}
+
+		parent, err := env.sessions.Create(t.Context(), "Parent")
+		require.NoError(t, err)
+
+		const n = 20
+		childIDs := make([]string, n)
+		for i := 0; i < n; i++ {
+			child, err := env.sessions.CreateTaskSession(t.Context(), fmt.Sprintf("tool-%d", i), parent.ID, fmt.Sprintf("Child%d", i))
+			require.NoError(t, err)
+			child.Cost = 0.01
+			_, err = env.sessions.Save(t.Context(), child)
+			require.NoError(t, err)
+			childIDs[i] = child.ID
+		}
+
+		var wg sync.WaitGroup
+		errs := make([]error, n)
+		for i, childID := range childIDs {
+			wg.Add(1)
+			go func(i int, childID string) {
+				defer wg.Done()
+				errs[i] = coord.updateParentSessionCost(t.Context(), childID, parent.ID)
+			}(i, childID)
+		}
+		wg.Wait()
+		for _, err := range errs {
+			require.NoError(t, err)
+		}
+
+		updated, err := env.sessions.Get(t.Context(), parent.ID)
+		require.NoError(t, err)
+		assert.InDelta(t, 0.20, updated.Cost, 1e-9)
+	})
+
+	t.Run("parent fields written after child creation survive the cost update", func(t *testing.T) {
+		env := testEnv(t)
+		cfg, err := config.Init(env.workingDir, "", false)
+		require.NoError(t, err)
+		coord := &coordinator{cfg: cfg, sessions: env.sessions}
+
+		parent, err := env.sessions.Create(t.Context(), "Parent")
+		require.NoError(t, err)
+
+		child, err := env.sessions.CreateTaskSession(t.Context(), "tool-1", parent.ID, "Child")
+		require.NoError(t, err)
+
+		// Write the parent's fields after the child is created and before
+		// the cost update, mirroring the dispatch completion ordering.
+		parent.Title = "Parent title"
+		parent.SummaryMessageID = "msg-9"
+		parent.Todos = []session.Todo{{
+			Content:    "Write the plan",
+			Status:     session.TodoStatusInProgress,
+			ActiveForm: "Writing the plan",
+		}}
+		_, err = env.sessions.Save(t.Context(), parent)
+		require.NoError(t, err)
+
+		child.Cost = 0.07
+		_, err = env.sessions.Save(t.Context(), child)
+		require.NoError(t, err)
+
+		err = coord.updateParentSessionCost(t.Context(), child.ID, parent.ID)
+		require.NoError(t, err)
+
+		updated, err := env.sessions.Get(t.Context(), parent.ID)
+		require.NoError(t, err)
+		assert.InDelta(t, 0.07, updated.Cost, 1e-9)
+		assert.Equal(t, "Parent title", updated.Title)
+		assert.Equal(t, "msg-9", updated.SummaryMessageID)
+		require.Len(t, updated.Todos, 1)
+		assert.Equal(t, "Write the plan", updated.Todos[0].Content)
+		assert.Equal(t, session.TodoStatusInProgress, updated.Todos[0].Status)
 	})
 }
 

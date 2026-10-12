@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"encoding/xml"
 	"fmt"
 	"image"
 	"strings"
@@ -263,6 +264,13 @@ func newFocusableMessageItem(v *list.Versioned) *focusableMessageItem {
 	return &focusableMessageItem{version: v}
 }
 
+// isFocused reports the current focus state. It tolerates a nil receiver
+// so helpers can query partially-constructed items (tests build them
+// without the focus rail).
+func (f *focusableMessageItem) isFocused() bool {
+	return f != nil && f.focused
+}
+
 // SetFocused implements MessageItem.
 func (f *focusableMessageItem) SetFocused(focused bool) {
 	if f.focused == focused {
@@ -302,6 +310,22 @@ type AssistantInfoItem struct {
 	sty                 *styles.Styles
 	cfg                 *config.Config
 	lastUserMessageTime time.Time
+
+	// sourceAgent names the sub-agent whose transcript this line belongs
+	// to, set by the model while a child session is on screen in the
+	// inspect view (#415). Empty on the parent's own lines.
+	sourceAgent string
+}
+
+// SetSourceAgent labels this metadata line with the inspected sub-agent's
+// name and drops any cached render so the tag appears immediately.
+func (a *AssistantInfoItem) SetSourceAgent(name string) {
+	if a.sourceAgent == name {
+		return
+	}
+	a.sourceAgent = name
+	a.clearCache()
+	a.Bump()
 }
 
 // NewAssistantInfoItem creates a new AssistantInfoItem.
@@ -382,11 +406,17 @@ func (a *AssistantInfoItem) renderContent(width int) string {
 		modelFormatted = fmt.Sprintf("%s %s %s", modelFormatted, arrow, routedModel)
 	}
 	savings := prismSavingsSuffix(a.sty, a.message)
+	// An inspected sub-agent's line carries its handle next to the
+	// model, so the transcript reads as that agent's work (#415).
+	agentTag := ""
+	if a.sourceAgent != "" {
+		agentTag = a.sty.Messages.AssistantInfoProvider.Render(styles.AgentIcon+" "+a.sourceAgent) + " "
+	}
 	if !isFinalTurn {
 		if savings != "" {
-			return fmt.Sprintf("%s %s %s", icon, modelFormatted, savings)
+			return fmt.Sprintf("%s %s%s %s", icon, agentTag, modelFormatted, savings)
 		}
-		return fmt.Sprintf("%s %s", icon, modelFormatted)
+		return fmt.Sprintf("%s %s%s", icon, agentTag, modelFormatted)
 	}
 	providerName := a.message.Provider
 	if providerConfig, ok := a.cfg.Providers.Get(a.message.Provider); ok {
@@ -395,11 +425,122 @@ func (a *AssistantInfoItem) renderContent(width int) string {
 	provider := a.sty.Messages.AssistantInfoProvider.Render(fmt.Sprintf("via %s", providerName))
 	duration := time.Unix(finishData.Time, 0).Sub(a.lastUserMessageTime)
 	infoMsg := a.sty.Messages.AssistantInfoDuration.Render(fmt.Sprintf("in %s", duration))
-	assistant := fmt.Sprintf("%s %s %s %s", icon, modelFormatted, provider, infoMsg)
+	assistant := fmt.Sprintf("%s %s%s %s %s", icon, agentTag, modelFormatted, provider, infoMsg)
 	if savings != "" {
 		assistant = fmt.Sprintf("%s %s", assistant, savings)
 	}
 	return common.Section(a.sty, assistant, width)
+}
+
+// ChannelInfoID returns a stable ID for channel-info items.
+func ChannelInfoID(messageID string) string {
+	return fmt.Sprintf("%s:channel-info", messageID)
+}
+
+// ChannelInfoItem renders sender/channel/timestamp metadata for a
+// channel-originated user message. It is emitted as a separate list item
+// below the message body, mirroring how AssistantInfoItem appears below
+// assistant messages.
+type ChannelInfoItem struct {
+	*list.Versioned
+	*cachedMessageItem
+
+	id      string
+	message *message.Message
+	sty     *styles.Styles
+}
+
+// NewChannelInfoItem creates a new ChannelInfoItem.
+func NewChannelInfoItem(sty *styles.Styles, msg *message.Message) MessageItem {
+	return &ChannelInfoItem{
+		Versioned:         list.NewVersioned(),
+		cachedMessageItem: &cachedMessageItem{},
+		id:                ChannelInfoID(msg.ID),
+		message:           msg,
+		sty:               sty,
+	}
+}
+
+// Finished implements list.Item. Channel metadata is immutable once
+// rendered, so the entry is always safe to freeze.
+func (c *ChannelInfoItem) Finished() bool {
+	return true
+}
+
+// ID implements MessageItem.
+func (c *ChannelInfoItem) ID() string {
+	return c.id
+}
+
+// RawRender implements MessageItem.
+func (c *ChannelInfoItem) RawRender(width int) string {
+	innerWidth := max(0, width-MessageLeftPaddingTotal)
+	content, _, ok := c.getCachedRender(innerWidth)
+	if !ok {
+		content = c.renderContent(innerWidth)
+		height := lipgloss.Height(content)
+		c.setCachedRender(content, innerWidth, height)
+	}
+	return content
+}
+
+// Render implements MessageItem.
+func (c *ChannelInfoItem) Render(width int) string {
+	if cached, ok := c.getCachedPrefixedRender(width, 0); ok {
+		return cached
+	}
+	prefix := c.sty.Messages.SectionHeader.Render()
+	lines := strings.Split(c.RawRender(width), "\n")
+	for i, line := range lines {
+		lines[i] = prefix + line
+	}
+	out := strings.Join(lines, "\n")
+	c.setCachedPrefixedRender(out, width, 0)
+	return out
+}
+
+func (c *ChannelInfoItem) renderContent(width int) string {
+	raw := strings.TrimSpace(c.message.Content().Text)
+	var ch channelMessage
+	if err := xml.Unmarshal([]byte(raw), &ch); err != nil {
+		return ""
+	}
+
+	parts := make([]string, 0, 3)
+
+	sender := ch.SenderName
+	if sender == "" {
+		sender = ch.Sender
+	}
+	if sender != "" {
+		parts = append(parts, c.sty.Messages.ChannelInfoSender.Render(sender))
+	}
+
+	if ch.Source != "" {
+		parts = append(parts, c.sty.Messages.ChannelInfoProvider.Render(fmt.Sprintf("via %s", ch.Source)))
+	}
+
+	ts := ch.Time
+	if ts == "" && c.message.CreatedAt > 0 {
+		ts = time.Unix(c.message.CreatedAt, 0).Format(time.TimeOnly)
+	}
+	if ts != "" {
+		parts = append(parts, c.sty.Messages.ChannelInfoTimestamp.Render(fmt.Sprintf("at %s", ts)))
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+
+	icon := c.sty.Messages.ChannelInfoIcon.Render(styles.ChannelIcon)
+	metaStr := fmt.Sprintf("%s %s", icon, strings.Join(parts, " "))
+	return common.Section(c.sty, metaStr, width)
+}
+
+// IsChannelMessage reports whether the given message content is a
+// channel-originated message (i.e. starts with the <channel XML tag).
+func IsChannelMessage(msg *message.Message) bool {
+	return strings.HasPrefix(strings.TrimSpace(msg.Content().Text), "<channel")
 }
 
 // cappedMessageWidth returns the maximum width for message content for readability.
@@ -456,7 +597,11 @@ func ExtractMessageItems(sty *styles.Styles, msg *message.Message, toolResults m
 			return items
 		}
 		r := attachments.NewRenderer(sty.Attachments)
-		return []MessageItem{NewUserMessageItem(sty, msg, r)}
+		items = []MessageItem{NewUserMessageItem(sty, msg, r)}
+		if IsChannelMessage(msg) {
+			items = append(items, NewChannelInfoItem(sty, msg))
+		}
+		return items
 	case message.Assistant:
 		var items []MessageItem
 		if ShouldRenderAssistantMessage(msg) {

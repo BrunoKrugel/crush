@@ -40,6 +40,21 @@ type Session struct {
 	input              textinput.Model
 	selectedSessionInx int
 	sessions           []session.Session
+	// children maps a parent session ID to its inspectable sub-agent
+	// task sessions (#314). They nest under their parent through the
+	// same sub-menu pattern the commands dialog uses. It starts empty:
+	// the batch is fetched off the Update loop (#409) and applied by
+	// SetChildren once it lands.
+	children map[string][]session.Session
+	// childrenLoaded reports whether the child-session batch has
+	// landed. Until it has, ctrl+] reports "Loading" instead of
+	// "no sub-agent sessions" — empty means unknown, not none.
+	childrenLoaded bool
+
+	// menuStack / breadcrumb implement the sub-menu: one level per
+	// entered parent, mirroring dialog/commands.go.
+	menuStack  []sessionsMenuLevel
+	breadcrumb []string
 
 	sessionsMode  sessionsMode
 	bodyArea      image.Rectangle
@@ -49,6 +64,7 @@ type Session struct {
 
 	keyMap struct {
 		Select        key.Binding
+		Agents        key.Binding
 		Next          key.Binding
 		Previous      key.Binding
 		UpDown        key.Binding
@@ -60,6 +76,12 @@ type Session struct {
 		CancelDelete  key.Binding
 		Close         key.Binding
 	}
+}
+
+// sessionsMenuLevel is one pushed sub-menu level: the items to restore
+// when the level is popped.
+type sessionsMenuLevel struct {
+	items []list.Item
 }
 
 var _ Dialog = (*Session)(nil)
@@ -74,6 +96,11 @@ func NewSessions(com *common.Common, selectedSessionID string) (*Session, error)
 		return nil, err
 	}
 
+	// Sub-agent children are fetched in one batch off the Update loop
+	// (#409) and applied by SetChildren when the model receives the
+	// result, so opening the picker stays synchronous-fetch free.
+	s.children = make(map[string][]session.Session)
+
 	s.sessions = sessions
 	for i, sess := range sessions {
 		if sess.ID == selectedSessionID {
@@ -86,7 +113,7 @@ func NewSessions(com *common.Common, selectedSessionID string) (*Session, error)
 	help.Styles = com.Styles.DialogHelpStyles()
 
 	s.help = help
-	s.list = list.NewFilterableList(sessionItems(com.Styles, sessionsModeNormal, sessions...)...)
+	s.list = list.NewFilterableList(sessionItems(com.Styles, sessionsModeNormal, s.childCount, sessions...)...)
 	s.list.Focus()
 	s.list.SetSelected(s.selectedSessionInx)
 
@@ -99,6 +126,11 @@ func NewSessions(com *common.Common, selectedSessionID string) (*Session, error)
 	s.keyMap.Select = key.NewBinding(
 		key.WithKeys("enter", "tab", "ctrl+y"),
 		key.WithHelp("enter", "choose"),
+	)
+	// The same chord that drills into an agent block in the chat (#314).
+	s.keyMap.Agents = key.NewBinding(
+		key.WithKeys("ctrl+]"),
+		key.WithHelp("ctrl+]", "agents"),
 	)
 	s.keyMap.Next = key.NewBinding(
 		key.WithKeys("down", "ctrl+n"),
@@ -155,21 +187,21 @@ func (s *Session) HandleMsg(msg tea.Msg) Action {
 			switch {
 			case key.Matches(msg, s.keyMap.ConfirmDelete):
 				action := s.confirmDeleteSession()
-				s.list.SetItems(sessionItems(s.com.Styles, sessionsModeNormal, s.sessions...)...)
+				s.rebuildItems()
 				return action
 			case key.Matches(msg, s.keyMap.CancelDelete):
 				s.sessionsMode = sessionsModeNormal
-				s.list.SetItems(sessionItems(s.com.Styles, sessionsModeNormal, s.sessions...)...)
+				s.rebuildItems()
 			}
 		case sessionsModeUpdating:
 			switch {
 			case key.Matches(msg, s.keyMap.ConfirmRename):
 				action := s.confirmRenameSession()
-				s.list.SetItems(sessionItems(s.com.Styles, sessionsModeNormal, s.sessions...)...)
+				s.rebuildItems()
 				return action
 			case key.Matches(msg, s.keyMap.CancelRename):
 				s.sessionsMode = sessionsModeNormal
-				s.list.SetItems(sessionItems(s.com.Styles, sessionsModeNormal, s.sessions...)...)
+				s.rebuildItems()
 			default:
 				item := s.list.SelectedItem()
 				if item == nil {
@@ -182,16 +214,20 @@ func (s *Session) HandleMsg(msg tea.Msg) Action {
 		default:
 			switch {
 			case key.Matches(msg, s.keyMap.Close):
+				if s.inSubMenu() {
+					s.popMenu()
+					return nil
+				}
 				return ActionClose{}
-			case key.Matches(msg, s.keyMap.Rename):
+			case key.Matches(msg, s.keyMap.Rename) && !s.inSubMenu():
 				s.sessionsMode = sessionsModeUpdating
-				s.list.SetItems(sessionItems(s.com.Styles, sessionsModeUpdating, s.sessions...)...)
-			case key.Matches(msg, s.keyMap.Delete):
+				s.rebuildItems()
+			case key.Matches(msg, s.keyMap.Delete) && !s.inSubMenu():
 				if s.isCurrentSessionBusy() {
 					return ActionCmd{util.ReportWarn("Agent is busy, please wait...")}
 				}
 				s.sessionsMode = sessionsModeDeleting
-				s.list.SetItems(sessionItems(s.com.Styles, sessionsModeDeleting, s.sessions...)...)
+				s.rebuildItems()
 			case key.Matches(msg, s.keyMap.Previous):
 				s.list.Focus()
 				if s.list.IsSelectedFirst() {
@@ -212,6 +248,22 @@ func (s *Session) HandleMsg(msg tea.Msg) Action {
 				if item := s.list.SelectedItem(); item != nil {
 					sessionItem := item.(*SessionItem)
 					return ActionSelectSession{sessionItem.Session}
+				}
+			case key.Matches(msg, s.keyMap.Agents) && !s.inSubMenu():
+				// Enter keeps opening the session itself; its sub-agent
+				// task sessions are one chord away (#314).
+				if item := s.list.SelectedItem(); item != nil {
+					sessionItem := item.(*SessionItem)
+					if !s.childrenLoaded {
+						// The batch is still in flight (#409): empty
+						// means unknown, not none.
+						return ActionCmd{util.ReportInfo("Loading sub-agent sessions…")}
+					}
+					if len(s.children[sessionItem.Session.ID]) == 0 {
+						return ActionCmd{util.ReportInfo("No sub-agent sessions to inspect")}
+					}
+					s.pushMenu(sessionItem)
+					return nil
 				}
 			default:
 				prevValue := s.input.Value()
@@ -271,6 +323,105 @@ func (s *Session) resetMouseClick() {
 	s.lastClickID = ""
 }
 
+// rebuildItems rebuilds the top-level session items for the current
+// mode, re-deriving each row's sub-agent count.
+func (s *Session) rebuildItems() {
+	s.list.SetItems(sessionItems(s.com.Styles, s.sessionsMode, s.childCount, s.sessions...)...)
+}
+
+// childCount returns the number of inspectable sub-agent sessions nested
+// under the given session (#314).
+func (s *Session) childCount(id string) int {
+	return len(s.children[id])
+}
+
+// ChildrenLoaded reports whether the child-session batch has landed
+// (#409). Until it has, ctrl+] reports "Loading" rather than offering an
+// empty sub-menu.
+func (s *Session) ChildrenLoaded() bool {
+	return s.childrenLoaded
+}
+
+// SetChildren applies the child-session batch fetched off the Update
+// loop (#409). It groups the sessions by their parent, keeps only
+// inspectable agent-tool task sessions (IDs carrying the
+// "messageID$$toolCallID" shape, which excludes the title-generation
+// helper sessions — the same filter the constructor applied before
+// #409), and refreshes the row counts in place so the filter text,
+// selection and scroll all survive the batch landing.
+func (s *Session) SetChildren(all []session.Session) {
+	byParent := make(map[string][]session.Session)
+	for _, kid := range all {
+		if _, _, ok := s.com.Workspace.ParseAgentToolSessionID(kid.ID); ok {
+			byParent[kid.ParentSessionID] = append(byParent[kid.ParentSessionID], kid)
+		}
+	}
+	s.children = byParent
+	s.childrenLoaded = true
+
+	for _, item := range s.list.Items() {
+		if si, ok := item.(*SessionItem); ok && !si.child {
+			si.SetAgentCount(len(s.children[si.Session.ID]))
+		}
+	}
+	// A sub-menu open before the batch landed snapshots the parent
+	// rows; they are the same pointers, so counts on the snapshot
+	// refresh with the walk above. Nothing else to do: the FilterableList
+	// re-derives its visible items from the same pointers each frame.
+}
+
+// inSubMenu reports whether the dialog is currently inside a sub-menu.
+func (s *Session) inSubMenu() bool {
+	return len(s.menuStack) > 0
+}
+
+// pushMenu saves the current list state and navigates into the parent's
+// sub-agent sub-menu (#314).
+func (s *Session) pushMenu(parent *SessionItem) {
+	// Clear any active filter before snapshotting so popping back
+	// restores the full parent list, not the matched subset.
+	s.input.SetValue("")
+	s.list.SetFilter("")
+
+	s.menuStack = append(s.menuStack, sessionsMenuLevel{items: s.list.FilteredItems()})
+	s.breadcrumb = append(s.breadcrumb, parent.Title)
+
+	children := s.children[parent.Session.ID]
+	kids := make([]list.FilterableItem, len(children))
+	for i, kid := range children {
+		item := newSessionItem(s.com.Styles, sessionsModeNormal, kid)
+		item.child = true
+		kids[i] = item
+	}
+	s.list.SetItems(kids...)
+	s.list.SetFilter("")
+	s.list.ScrollToTop()
+	s.list.SetSelected(0)
+	s.input.SetValue("")
+}
+
+// popMenu restores the previous menu level.
+func (s *Session) popMenu() {
+	if len(s.menuStack) == 0 {
+		return
+	}
+	level := s.menuStack[len(s.menuStack)-1]
+	s.menuStack = s.menuStack[:len(s.menuStack)-1]
+	s.breadcrumb = s.breadcrumb[:len(s.breadcrumb)-1]
+
+	fitems := make([]list.FilterableItem, 0, len(level.items))
+	for _, item := range level.items {
+		if fi, ok := item.(list.FilterableItem); ok {
+			fitems = append(fitems, fi)
+		}
+	}
+	s.list.SetItems(fitems...)
+	s.list.SetFilter("")
+	s.list.ScrollToTop()
+	s.list.SetSelected(0)
+	s.input.SetValue("")
+}
+
 // Cursor returns the cursor position relative to the dialog.
 func (s *Session) Cursor() *tea.Cursor {
 	return InputCursor(s.com.Styles, s.input.Cursor())
@@ -300,6 +451,9 @@ func (s *Session) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	var cur *tea.Cursor
 	rc := NewRenderContext(t, width)
 	rc.Title = "Sessions"
+	if s.inSubMenu() {
+		rc.Title = "Sessions ▸ " + strings.Join(s.breadcrumb, " ▸ ")
+	}
 	switch s.sessionsMode {
 	case sessionsModeDeleting:
 		rc.TitleStyle = t.Dialog.Sessions.DeletingTitle
@@ -471,6 +625,13 @@ func (s *Session) isCurrentSessionBusy() bool {
 
 // ShortHelp implements [help.KeyMap].
 func (s *Session) ShortHelp() []key.Binding {
+	if s.inSubMenu() {
+		return []key.Binding{
+			s.keyMap.UpDown,
+			s.keyMap.Select,
+			s.keyMap.Close,
+		}
+	}
 	switch s.sessionsMode {
 	case sessionsModeDeleting:
 		return []key.Binding{
@@ -483,6 +644,18 @@ func (s *Session) ShortHelp() []key.Binding {
 			s.keyMap.CancelRename,
 		}
 	default:
+		if s.selectedHasChildren() {
+			// The help line truncates, so the ctrl+] hint leads the
+			// optional bindings while it applies.
+			return []key.Binding{
+				s.keyMap.UpDown,
+				s.keyMap.Select,
+				s.keyMap.Agents,
+				s.keyMap.Rename,
+				s.keyMap.Delete,
+				s.keyMap.Close,
+			}
+		}
 		return []key.Binding{
 			s.keyMap.UpDown,
 			s.keyMap.Rename,
@@ -493,6 +666,16 @@ func (s *Session) ShortHelp() []key.Binding {
 	}
 }
 
+// selectedHasChildren reports whether the selected top-level row has
+// sub-agent task sessions to open with ctrl+].
+func (s *Session) selectedHasChildren() bool {
+	if s.inSubMenu() {
+		return false
+	}
+	item, ok := s.list.SelectedItem().(*SessionItem)
+	return ok && item != nil && s.childCount(item.Session.ID) > 0
+}
+
 // FullHelp implements [help.KeyMap].
 func (s *Session) FullHelp() [][]key.Binding {
 	m := [][]key.Binding{}
@@ -501,19 +684,28 @@ func (s *Session) FullHelp() [][]key.Binding {
 		s.keyMap.Rename,
 		s.keyMap.Delete,
 		s.keyMap.Select,
+		s.keyMap.Agents,
 		s.keyMap.Close,
 	}
 
-	switch s.sessionsMode {
-	case sessionsModeDeleting:
+	if s.inSubMenu() {
 		slice = []key.Binding{
-			s.keyMap.ConfirmDelete,
-			s.keyMap.CancelDelete,
+			s.keyMap.UpDown,
+			s.keyMap.Select,
+			s.keyMap.Close,
 		}
-	case sessionsModeUpdating:
-		slice = []key.Binding{
-			s.keyMap.ConfirmRename,
-			s.keyMap.CancelRename,
+	} else {
+		switch s.sessionsMode {
+		case sessionsModeDeleting:
+			slice = []key.Binding{
+				s.keyMap.ConfirmDelete,
+				s.keyMap.CancelDelete,
+			}
+		case sessionsModeUpdating:
+			slice = []key.Binding{
+				s.keyMap.ConfirmRename,
+				s.keyMap.CancelRename,
+			}
 		}
 	}
 	for i := 0; i < len(slice); i += 4 {

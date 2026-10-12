@@ -16,6 +16,8 @@ type Workspace struct {
 	ID       string         `json:"id"`
 	Path     string         `json:"path"`
 	YOLO     bool           `json:"yolo,omitempty"`
+	AllowAllCommands bool     `json:"allow_all_commands,omitempty"`
+	AllowedCommands  []string `json:"allowed_commands,omitempty"`
 	Debug    bool           `json:"debug,omitempty"`
 	DataDir  string         `json:"data_dir,omitempty"`
 	Version  string         `json:"version,omitempty"`
@@ -162,6 +164,7 @@ type AgentMessage struct {
 	RunID             string                  `json:"run_id,omitempty"`
 	Channel           string                  `json:"channel,omitempty"`
 	Prompt            string                  `json:"prompt"`
+	ContentWidth      int                     `json:"content_width"`
 	PermissionPolicy  PermissionRequestPolicy `json:"permission_policy,omitempty"`
 	Attachments       []Attachment            `json:"attachments,omitempty"`
 }

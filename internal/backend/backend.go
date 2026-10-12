@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/crush/internal/a2a"
+	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/csync"
@@ -136,6 +138,11 @@ type Backend struct {
 	createGrace time.Duration
 	lingerDelay time.Duration
 	detachGrace time.Duration
+
+	// tracker counts workspaces whose teardown hook has not yet
+	// returned. It is the only observable that reports resource
+	// release rather than map membership; see [workspaceTracker].
+	tracker workspaceTracker
 }
 
 // clientState tracks one client's claim on a workspace.
@@ -177,6 +184,10 @@ type Workspace struct {
 	Env    []string
 	Skills *skills.Manager
 
+	// a2aHost, when set, is where A2AHost finds the workspace's agent
+	// host instead of its app (#421); tests set it.
+	a2aHost func() (*a2a.ServerFactory, <-chan struct{})
+
 	// resolvedPath is the path used as the dedup key in
 	// Backend.pathIndex. It is filepath.EvalSymlinks(filepath.Abs(Path))
 	// with fallback to the cleaned absolute path.
@@ -210,11 +221,33 @@ type Workspace struct {
 	// embedded [app.App.Shutdown]; tests may override it to avoid
 	// driving a full [app.App] through shutdown.
 	shutdownFn func()
+
+	// tracker, when non-nil, is the owning backend's lifecycle
+	// counter. invokeShutdown reports to it exactly once, after the
+	// teardown hook has returned. retiredOnce keeps that report
+	// single-shot: the losing-race paths in CreateWorkspace and
+	// teardown both funnel through invokeShutdown, and a workspace
+	// reaching it twice must not double-decrement the counter.
+	tracker     *workspaceTracker
+	retiredOnce sync.Once
+}
+
+// trackWith registers w with the backend's lifecycle counter. It must
+// be called once, at the point where w starts owning resources, and
+// before w becomes reachable by any teardown path.
+func (w *Workspace) trackWith(t *workspaceTracker) {
+	w.tracker = t
+	t.born()
 }
 
 // invokeShutdown calls the workspace shutdown hook if set, falling
 // back to the workspace [Workspace.Shutdown] wrapper when not.
 func (w *Workspace) invokeShutdown() {
+	// Report AFTER the hook returns, not before: the whole point of
+	// the counter is that the resources are actually released.
+	if w.tracker != nil {
+		defer func() { w.retiredOnce.Do(w.tracker.retired) }()
+	}
 	if w.shutdownFn != nil {
 		w.shutdownFn()
 		return
@@ -424,6 +457,11 @@ func (b *Backend) CreateWorkspace(args proto.Workspace) (*Workspace, proto.Works
 
 	cfg.Overrides().SkipPermissionRequests = args.YOLO
 	cfg.Overrides().EnabledChannels = args.Channels
+	cfg.Overrides().AllowAllCommands = args.AllowAllCommands
+	cfg.Overrides().AllowedCommands = args.AllowedCommands
+	if unknown := tools.UnknownAllowedCommands(append(append([]string{}, cfg.Config().Options.AllowedCommands...), args.AllowedCommands...)); len(unknown) > 0 {
+		slog.Warn("Ignoring allow-commands entries not in the default banned list", "commands", unknown)
+	}
 
 	if err := createDotCrushDir(cfg.Config().Options.DataDirectory); err != nil {
 		return nil, proto.Workspace{}, fmt.Errorf("failed to create data directory: %w", err)
@@ -464,6 +502,11 @@ func (b *Backend) CreateWorkspace(args proto.Workspace) (*Workspace, proto.Works
 		cancel:       wsCancel,
 		clients:      make(map[string]*clientState),
 	}
+	// Register before ws is reachable by any teardown path. From here
+	// on every exit out of this function releases ws through
+	// invokeShutdown, including the two lost-race paths below, so the
+	// counter is balanced.
+	ws.trackWith(&b.tracker)
 
 	b.mu.Lock()
 	// Re-check admission: the client may have retired while the slow
@@ -1076,15 +1119,17 @@ func validateClientID(id string) (string, error) {
 func workspaceToProto(ws *Workspace) proto.Workspace {
 	cfg := ws.Cfg.Config()
 	out := proto.Workspace{
-		ID:       ws.ID,
-		Path:     ws.Path,
-		YOLO:     ws.Cfg.Overrides().SkipPermissionRequests,
-		Channels: ws.Cfg.Overrides().EnabledChannels,
-		DataDir:  cfg.Options.DataDirectory,
-		Debug:    cfg.Options.Debug,
-		Config:   cfg,
-		Env:      ws.Env,
-		Version:  version.Version,
+		ID:               ws.ID,
+		Path:             ws.Path,
+		YOLO:             ws.Cfg.Overrides().SkipPermissionRequests,
+		Channels:         ws.Cfg.Overrides().EnabledChannels,
+		AllowAllCommands: ws.Cfg.Overrides().AllowAllCommands,
+		AllowedCommands:  ws.Cfg.Overrides().AllowedCommands,
+		DataDir:          cfg.Options.DataDirectory,
+		Debug:            cfg.Options.Debug,
+		Config:           cfg,
+		Env:              ws.Env,
+		Version:          version.Version,
 	}
 	if ws.Skills != nil {
 		out.Skills = skillStatesToProto(ws.Skills.States())
@@ -1103,11 +1148,14 @@ func workspaceToProto(ws *Workspace) proto.Workspace {
 // while the first set one will still log the mismatch.
 func logFirstWinsMismatch(existing *Workspace, args proto.Workspace) {
 	existingCfg := existing.Cfg.Config()
-	existingYOLO := existing.Cfg.Overrides().SkipPermissionRequests
-	existingChannels := existing.Cfg.Overrides().EnabledChannels
+	existingOverrides := existing.Cfg.Overrides()
+	existingYOLO := existingOverrides.SkipPermissionRequests
+	existingChannels := existingOverrides.EnabledChannels
 	if existingYOLO == args.YOLO &&
 		existingCfg.Options.Debug == args.Debug &&
 		existingCfg.Options.DataDirectory == args.DataDir &&
+		existingOverrides.AllowAllCommands == args.AllowAllCommands &&
+		stringSlicesEqual(existingOverrides.AllowedCommands, args.AllowedCommands) &&
 		stringSlicesEqual(existing.Env, args.Env) &&
 		stringSlicesEqual(existingChannels, args.Channels) {
 		return
@@ -1122,6 +1170,10 @@ func logFirstWinsMismatch(existing *Workspace, args proto.Workspace) {
 		"requested_debug", args.Debug,
 		"existing_data_dir", existingCfg.Options.DataDirectory,
 		"requested_data_dir", args.DataDir,
+		"existing_allow_all_commands", existingOverrides.AllowAllCommands,
+		"requested_allow_all_commands", args.AllowAllCommands,
+		"existing_allowed_commands", existingOverrides.AllowedCommands,
+		"requested_allowed_commands", args.AllowedCommands,
 		"existing_env", existing.Env,
 		"requested_env", args.Env,
 		"existing_channels", existingChannels,

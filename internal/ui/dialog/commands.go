@@ -10,7 +10,6 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/crush/internal/commands"
-	"github.com/charmbracelet/crush/internal/compaction"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/list"
@@ -20,6 +19,11 @@ import (
 
 // CommandsID is the identifier for the commands dialog.
 const CommandsID = "commands"
+
+// menuLevel captures the parent state when navigating into a sub-menu.
+type menuLevel struct {
+	items []list.Item
+}
 
 // CommandType represents the type of commands being displayed.
 type CommandType uint
@@ -51,6 +55,7 @@ type Commands struct {
 		Previous,
 		Tab,
 		ShiftTab,
+		Back,
 		Close key.Binding
 	}
 
@@ -58,15 +63,8 @@ type Commands struct {
 	hasSession bool
 	hasTodos   bool
 	hasQueue   bool
-	// hasCheckpoint gates the undo entry: a session with no checkpoint has
-	// nothing to bring back.
-	hasCheckpoint bool
-	// pendingPreview is a staged checkpoint awaiting the user's answer.
-	pendingPreview *compaction.Preview
-	selected       CommandType
-	// hasCron reports whether the current session has scheduled tasks, so
-	// the palette only offers cron commands when they can do something.
-	hasCron bool
+	hasCron    bool
+	selected   CommandType
 
 	spinner spinner.Model
 	loading bool
@@ -82,6 +80,9 @@ type Commands struct {
 
 	dockerMCPAvailable     *bool
 	dockerMCPCheckInFlight bool
+
+	menuStack  []menuLevel
+	breadcrumb []string
 }
 
 var _ Dialog = (*Commands)(nil)
@@ -138,6 +139,10 @@ func NewCommands(com *common.Common, sessionID string, hasSession, hasTodos, has
 	c.keyMap.ShiftTab = key.NewBinding(
 		key.WithKeys("shift+tab"),
 		key.WithHelp("shift+tab", "switch selection prev"),
+	)
+	c.keyMap.Back = key.NewBinding(
+		key.WithKeys("backspace", "alt+left"),
+		key.WithHelp("backspace", "back"),
 	)
 	closeKey := CloseKey
 	closeKey.SetHelp("esc", "cancel")
@@ -196,7 +201,18 @@ func (c *Commands) HandleMsg(msg tea.Msg) Action {
 	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, c.keyMap.Close):
+			if c.inSubMenu() {
+				c.popMenu()
+				return nil
+			}
 			return ActionClose{}
+		case key.Matches(msg, c.keyMap.Back) && c.inSubMenu():
+			// Backspace pops out of a sub-menu, but only while in one. At the
+			// top level it must fall through to the input so it can edit the
+			// type-ahead filter (otherwise the case swallows it and backspace
+			// does nothing).
+			c.popMenu()
+			return nil
 		case key.Matches(msg, c.keyMap.Previous):
 			c.list.Focus()
 			if c.list.IsSelectedFirst() {
@@ -216,24 +232,37 @@ func (c *Commands) HandleMsg(msg tea.Msg) Action {
 		case key.Matches(msg, c.keyMap.Select):
 			if selectedItem := c.list.SelectedItem(); selectedItem != nil {
 				if item, ok := selectedItem.(*CommandItem); ok && item != nil {
+					if item.HasChildren() {
+						c.pushMenu(item)
+						return nil
+					}
 					return item.Action()
 				}
 			}
 		case key.Matches(msg, c.keyMap.Tab):
-			if len(c.customCommands) > 0 || len(c.mcpPrompts) > 0 {
+			if !c.inSubMenu() && (len(c.customCommands) > 0 || len(c.mcpPrompts) > 0) {
 				c.selected = c.nextCommandType()
 				c.setCommandItems(c.selected)
 			}
 		case key.Matches(msg, c.keyMap.ShiftTab):
-			if len(c.customCommands) > 0 || len(c.mcpPrompts) > 0 {
+			if !c.inSubMenu() && (len(c.customCommands) > 0 || len(c.mcpPrompts) > 0) {
 				c.selected = c.previousCommandType()
 				c.setCommandItems(c.selected)
 			}
 		default:
+			// Typing '/' while the filter is empty closes the dialog
+			// so the user can dismiss it without reaching for Escape.
+			if msg.String() == "/" && c.input.Value() == "" {
+				return ActionClose{}
+			}
 			var cmd tea.Cmd
 			for _, item := range c.list.FilteredItems() {
 				if item, ok := item.(*CommandItem); ok && item != nil {
 					if msg.String() == item.Shortcut() {
+						if item.HasChildren() {
+							c.pushMenu(item)
+							return nil
+						}
 						return item.Action()
 					}
 				}
@@ -306,7 +335,13 @@ func (c *Commands) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	if area.Dx() != c.windowWidth && c.selected == SystemCommands {
 		c.windowWidth = area.Dx()
 		// since some items in the list depend on width (e.g. toggle sidebar command),
-		// we need to reset the command items when width changes
+		// we need to reset the command items when width changes. Repopulating
+		// replaces the list with top-level items, so any open sub-menu must be
+		// abandoned too — resetting to the top level is simpler than re-deriving
+		// the open sub-menu's children against the regenerated item set, and
+		// keeps the list, menu stack, and breadcrumb consistent.
+		c.menuStack = nil
+		c.breadcrumb = nil
 		c.setCommandItems(c.selected)
 	}
 
@@ -325,7 +360,11 @@ func (c *Commands) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 
 	rc := NewRenderContext(t, width)
 	rc.Title = "Commands"
-	rc.TitleInfo = commandsRadioView(t, c.selected, len(c.customCommands) > 0, len(c.mcpPrompts) > 0)
+	if c.inSubMenu() {
+		rc.Title = "Commands ▸ " + strings.Join(c.breadcrumb, " ▸ ")
+	} else {
+		rc.TitleInfo = commandsRadioView(t, c.selected, len(c.customCommands) > 0, len(c.mcpPrompts) > 0)
+	}
 	inputView := t.Dialog.InputPrompt.Render(c.input.View())
 	rc.AddPart(inputView)
 	listView := t.Dialog.List.Height(c.list.Height()).Render(c.list.Render())
@@ -345,19 +384,26 @@ func (c *Commands) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 
 // ShortHelp implements [help.KeyMap].
 func (c *Commands) ShortHelp() []key.Binding {
-	return []key.Binding{
+	binds := []key.Binding{
 		c.keyMap.Tab,
 		c.keyMap.UpDown,
 		c.keyMap.Select,
-		c.keyMap.Close,
 	}
+	if c.inSubMenu() {
+		binds = append(binds, c.keyMap.Back)
+	}
+	return append(binds, c.keyMap.Close)
 }
 
 // FullHelp implements [help.KeyMap].
 func (c *Commands) FullHelp() [][]key.Binding {
+	second := []key.Binding{c.keyMap.Close}
+	if c.inSubMenu() {
+		second = append([]key.Binding{c.keyMap.Back}, second...)
+	}
 	return [][]key.Binding{
 		{c.keyMap.Select, c.keyMap.Next, c.keyMap.Previous, c.keyMap.Tab},
-		{c.keyMap.Close},
+		second,
 	}
 }
 
@@ -405,6 +451,60 @@ func (c *Commands) previousCommandType() CommandType {
 	default:
 		return SystemCommands
 	}
+}
+
+// inSubMenu reports whether the dialog is currently inside a sub-menu.
+func (c *Commands) inSubMenu() bool {
+	return len(c.menuStack) > 0
+}
+
+// pushMenu saves the current list state and navigates into a sub-menu.
+func (c *Commands) pushMenu(parent *CommandItem) {
+	// Clear any active filter before snapshotting so we save the FULL parent
+	// list, not just the currently-matched subset. Otherwise popping back would
+	// drop every top-level item that didn't match the filter that was active
+	// when the user entered the sub-menu.
+	c.input.SetValue("")
+	c.list.SetFilter("")
+
+	// Save current visible items (includes FilterableItem interface).
+	c.menuStack = append(c.menuStack, menuLevel{
+		items: c.list.FilteredItems(),
+	})
+	c.breadcrumb = append(c.breadcrumb, parent.title)
+
+	children := make([]list.FilterableItem, len(parent.children))
+	for i, child := range parent.children {
+		children[i] = child
+	}
+	c.list.SetItems(children...)
+	c.list.SetFilter("")
+	c.list.ScrollToTop()
+	c.list.SetSelected(0)
+	c.input.SetValue("")
+}
+
+// popMenu restores the previous menu level from the stack.
+func (c *Commands) popMenu() {
+	if len(c.menuStack) == 0 {
+		return
+	}
+	level := c.menuStack[len(c.menuStack)-1]
+	c.menuStack = c.menuStack[:len(c.menuStack)-1]
+	c.breadcrumb = c.breadcrumb[:len(c.breadcrumb)-1]
+
+	// Restore items by re-setting them as FilterableItems.
+	fitems := make([]list.FilterableItem, 0, len(level.items))
+	for _, item := range level.items {
+		if fi, ok := item.(list.FilterableItem); ok {
+			fitems = append(fitems, fi)
+		}
+	}
+	c.list.SetItems(fitems...)
+	c.list.SetFilter("")
+	c.list.ScrollToTop()
+	c.list.SetSelected(0)
+	c.input.SetValue("")
 }
 
 // setCommandItems sets the command items based on the specified command type.
@@ -465,50 +565,7 @@ func (c *Commands) defaultCommands() []*CommandItem {
 
 	// Only show compact command if there's an active session
 	if c.hasSession {
-		commands = append(commands, NewCommandItem(
-			c.com.Styles, "compact", "Compact Session", "",
-			ActionSummarize{
-				SessionID: c.sessionID,
-				Arguments: compactArguments(),
-			},
-		).WithAliases("summarize", "compress"))
-	}
-	// Preview is offered next to the fast path rather than replacing it:
-	// sometimes a checkpoint should just happen.
-	if c.hasSession && c.pendingPreview == nil {
-		commands = append(commands, NewCommandItem(
-			c.com.Styles, "compact-preview", "Compact (Preview First)", "",
-			ActionPreviewSummarize{
-				SessionID: c.sessionID,
-				Arguments: compactArguments(),
-			},
-		))
-	}
-	if c.pendingPreview != nil {
-		commands = append(commands, NewCommandItem(
-			c.com.Styles, "keep-checkpoint", "Keep Checkpoint", "",
-			ActionAcceptPreview{
-				SessionID: c.sessionID,
-				Preview:   *c.pendingPreview,
-			},
-		))
-		commands = append(commands, NewCommandItem(
-			c.com.Styles, "discard-checkpoint", "Discard Checkpoint", "",
-			ActionDiscardPreview{
-				SessionID:    c.sessionID,
-				CheckpointID: c.pendingPreview.CheckpointID,
-			},
-		))
-	}
-	// Compaction never deletes what it replaced, so the way back is offered
-	// whenever a checkpoint exists rather than only just after one.
-	if c.hasSession && c.hasCheckpoint {
-		commands = append(commands, NewCommandItem(
-			c.com.Styles, "restore", "Restore Checkpoint", "",
-			ActionRestoreSummarize{
-				SessionID: c.sessionID,
-			},
-		).WithAliases("uncompact", "undo"))
+		commands = append(commands, NewCommandItem(c.com.Styles, "summarize", "Summarize Session", "/compact", ActionSummarize{SessionID: c.sessionID}))
 	}
 
 	// Add reasoning toggle for models that support it
@@ -575,26 +632,10 @@ func (c *Commands) defaultCommands() []*CommandItem {
 		commands = append(commands, NewCommandItem(c.com.Styles, "toggle_mcps", "Toggle MCPs", "", ActionOpenDialog{
 			DialogID: MCPTogglesID,
 		}))
-
-		// The label carries the current state so the switch is legible
-		// without opening anything. Laziness is on unless something has
-		// written it false.
-		lazyLabel := "Disable Lazy MCP Tools"
-		if !cfg.Options.GetLazyMCP() {
-			lazyLabel = "Enable Lazy MCP Tools"
-		}
-		commands = append(commands, NewCommandItem(c.com.Styles, "toggle_lazy_mcp", lazyLabel, "", ActionToggleLazyMCP{}))
 	}
 
-	// Toggle skills for this repository when any are configured.
-	if len(cfg.Options.SkillsPaths) > 0 {
-		commands = append(commands, NewCommandItem(c.com.Styles, "toggle_skills", "Toggle Skills", "", ActionOpenDialog{
-			DialogID: SkillsTogglesID,
-		}))
-	}
-
-	// ctrl+t expands the pills panel, whose sections the label names so
-	// the command is discoverable whatever content is present.
+	// ctrl+t expands every section that has content, so the label names all of
+	// them rather than just the first.
 	if c.hasTodos || c.hasQueue || c.hasCron {
 		var sections []string
 		if c.hasTodos {
@@ -627,6 +668,15 @@ func (c *Commands) defaultCommands() []*CommandItem {
 		transparentLabel = "Enable Background Color"
 	}
 	commands = append(commands, NewCommandItem(c.com.Styles, "toggle_transparent", transparentLabel, "", ActionToggleTransparentBackground{}))
+
+	// Add MCP servers command — opens the MCP servers management dialog.
+	commands = append(commands, NewCommandItem(c.com.Styles, "mcp_servers", "MCP Servers", "", ActionOpenDialog{DialogID: MCPServersID}))
+
+	// Add Channels command — opens the channels management dialog.
+	commands = append(commands, NewCommandItem(c.com.Styles, "channels", "Channels", "", ActionOpenDialog{DialogID: ChannelsID}))
+
+	// Add Skills management command.
+	commands = append(commands, NewCommandItem(c.com.Styles, "skills", "Skills", "", ActionOpenDialog{DialogID: SkillsID}))
 
 	commands = append(commands, NewCommandItem(c.com.Styles, "switch_theme", "Themes", "", ActionOpenDialog{ThemeID}))
 
@@ -673,22 +723,6 @@ func (c *Commands) StartLoading() tea.Cmd {
 // StopLoading implements [LoadingDialog].
 func (c *Commands) StopLoading() {
 	c.loading = false
-}
-
-// compactArguments describes what the compact dialog collects before it
-// compacts. It is a package-level function because defaultCommands shadows the
-// commands package with its own local slice of items.
-// SetHasCheckpoint records whether the current session has a checkpoint to
-// undo. The palette is built before any command runs, so the entry appears only
-// when there is something behind it to restore.
-// SetPendingPreview shows or hides the accept and discard entries. Passing nil
-// means nothing is staged, which is the normal state and the safe default.
-func (c *Commands) SetPendingPreview(preview *compaction.Preview) {
-	c.pendingPreview = preview
-}
-
-func (c *Commands) SetHasCheckpoint(has bool) {
-	c.hasCheckpoint = has
 }
 
 func compactArguments() []commands.Argument {

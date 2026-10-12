@@ -24,7 +24,7 @@ running build.
 | <kbd>ctrl+y</kbd> | Toggle [yolo mode](/configuration/permissions#yolo-mode) |
 :::info[Fork feature]
 <kbd>tab</kbd> is three-state here — chat, editor, sidebar — because the fork
-makes the [sidebar focusable](/fork).
+makes the [sidebar focusable](/fork#sidebar-and-header).
 :::
 
 ## Editor
@@ -95,8 +95,8 @@ Both the click-to-copy icon and click-to-open hyperlinks are fork additions.
 ## Inspect mode
 
 :::info[Fork feature]
-Inspect mode is part of [multi-agent dispatch](/fork). See
-[Handles and inspect](/fork).
+Inspect mode is part of [multi-agent dispatch](/agents/overview). See
+[Handles and inspect](/agents/handles-and-inspect).
 :::
 
 Read a sub-agent's full transcript — reasoning, tool calls, results — in the
@@ -135,7 +135,7 @@ Typing certain characters opens an inline completion list:
 
 | Trigger | Completes |
 | --- | --- |
-| <kbd>@</kbd> | Files in the project, and live [dispatched agents](/fork) by handle, each shown with its role, status, and current todo |
+| <kbd>@</kbd> | Files in the project, and live [dispatched agents](/agents/handles-and-inspect) by handle, each shown with its role, status, and current todo |
 | <kbd>/</kbd> | Commands, [user-invocable skills](/features/skills#user-invocable-skills), and MCP prompts |
 
 A prompt that *starts* with a live agent's `@handle` is delivered to that agent

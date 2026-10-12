@@ -72,6 +72,14 @@ func (m *mockSessionService) UpdateTitleAndUsage(context.Context, string, string
 	return nil
 }
 
+func (m *mockSessionService) AddCost(context.Context, string, float64) error {
+	return nil
+}
+
+func (m *mockSessionService) AddSessionUsage(context.Context, string, int64, int64, float64) error {
+	return nil
+}
+
 func (m *mockSessionService) Rename(context.Context, string, string) error {
 	return nil
 }
@@ -119,6 +127,14 @@ func (m *mockSessionService) ParseAgentToolSessionID(sessionID string) (string, 
 func (m *mockSessionService) IsAgentToolSession(sessionID string) bool {
 	_, _, ok := m.ParseAgentToolSessionID(sessionID)
 	return ok
+}
+
+func (m *mockSessionService) ListChildren(context.Context, string) ([]session.Session, error) {
+	return nil, nil
+}
+
+func (m *mockSessionService) ListAllChildren(context.Context) ([]session.Session, error) {
+	return nil, nil
 }
 
 func newTestApp(sessions session.Service) *App {
@@ -203,4 +219,20 @@ func TestResolveSession_Last_NoSessions(t *testing.T) {
 	_, err := app.resolveSession(t.Context(), "", true)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no sessions found")
+}
+
+// TestResolveSession_Last_RefusesChild pins the second guard of #413:
+// even if GetLast ever returns a child session, --continue must not
+// continue it.
+func TestResolveSession_Last_RefusesChild(t *testing.T) {
+	mock := &mockSessionService{
+		sessions: []session.Session{
+			{ID: "msg-1$$call-1", ParentSessionID: "parent-id", Title: "Task session"},
+		},
+	}
+	app := newTestApp(mock)
+
+	_, err := app.resolveSession(t.Context(), "", true)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no sessions found to continue")
 }

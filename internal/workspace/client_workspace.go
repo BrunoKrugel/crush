@@ -11,6 +11,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/crush/internal/a2a"
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/app"
@@ -52,6 +53,10 @@ type ClientWorkspace struct {
 	// whole workspace) may have been re-created in the meantime.
 	lastSession string
 
+	// agentTasks follows the workspace host's agent index through the
+	// server's proxy (#421).
+	agentTasks *agentTaskWatcher
+
 	// subCtx bounds the lifetime of the event subscription (and its
 	// reconnect loop). Shutdown cancels it so Subscribe stops
 	// reconnecting instead of racing the teardown.
@@ -70,12 +75,31 @@ type ClientWorkspace struct {
 	herdrClient *herdr.Client
 }
 
-// SSE reconnect backoff bounds for the workspace event stream. Declared
-// as vars (not consts) so tests can shrink the delays.
+// SSE reconnect backoff bounds for the workspace event stream. Stored
+// atomically because the subscription goroutine reads them while tests
+// shrink and restore them from cleanup: a plain var read there is a data
+// race (caught by CI's race detector when a leaked subscription goroutine
+// outlived its test). Read through the same-named accessors.
 var (
-	sseReconnectInitialBackoff = 250 * time.Millisecond
-	sseReconnectMaxBackoff     = 10 * time.Second
+	sseReconnectInitialBackoffNS atomic.Int64 // nanoseconds
+	sseReconnectMaxBackoffNS     atomic.Int64 // nanoseconds
 )
+
+func init() {
+	sseReconnectInitialBackoffNS.Store(int64(250 * time.Millisecond))
+	sseReconnectMaxBackoffNS.Store(int64(10 * time.Second))
+}
+
+// sseReconnectInitialBackoff is the delay before the first reconnect
+// attempt after the workspace event stream drops.
+func sseReconnectInitialBackoff() time.Duration {
+	return time.Duration(sseReconnectInitialBackoffNS.Load())
+}
+
+// sseReconnectMaxBackoff caps the reconnect backoff growth.
+func sseReconnectMaxBackoff() time.Duration {
+	return time.Duration(sseReconnectMaxBackoffNS.Load())
+}
 
 // NewClientWorkspace creates a new ClientWorkspace that proxies all
 // operations through the given client SDK. The ws parameter is the
@@ -102,29 +126,26 @@ func NewClientWorkspace(c *client.Client, ws proto.Workspace) *ClientWorkspace {
 		subDone:     make(chan struct{}),
 		herdrClient: herdr.Init(),
 	}
-	w.reportModel()
+	w.agentTasks = newAgentTaskWatcher(w.dialAgentIndex, w.agentClient)
 	return w
 }
 
-// reportModel pushes the configured large model id to herdr's pane
-// metadata. Best-effort: the model token is also refreshed from
-// every assistant message, so a missed update self-heals on the
-// next turn.
-func (w *ClientWorkspace) reportModel() {
-	if cfg := w.Config(); cfg != nil {
-		if model, ok := cfg.Models[config.SelectedModelTypeLarge]; ok {
-			w.herdrClient.ReportModel(model.Model)
-		}
+// refreshWorkspace re-fetches the workspace from the server, updating
+// the cached snapshot. Called after config-mutating operations. Failures
+// are logged only; callers that must surface them use
+// refreshWorkspaceErr instead.
+func (w *ClientWorkspace) refreshWorkspace() {
+	if err := w.refreshWorkspaceErr(); err != nil {
+		slog.Error("Failed to refresh workspace", "error", err)
 	}
 }
 
-// refreshWorkspace re-fetches the workspace from the server, updating
-// the cached snapshot. Called after config-mutating operations.
-func (w *ClientWorkspace) refreshWorkspace() {
+// refreshWorkspaceErr re-fetches the workspace from the server, updating
+// the cached snapshot, and returns any fetch error to the caller.
+func (w *ClientWorkspace) refreshWorkspaceErr() error {
 	updated, err := w.client.GetWorkspace(context.Background(), w.workspaceID())
 	if err != nil {
-		slog.Error("Failed to refresh workspace", "error", err)
-		return
+		return err
 	}
 	if updated.Config != nil {
 		updated.Config.SetupAgents()
@@ -133,7 +154,7 @@ func (w *ClientWorkspace) refreshWorkspace() {
 	w.mu.Lock()
 	w.ws = *updated
 	w.mu.Unlock()
-	w.reportModel()
+	return nil
 }
 
 // cached returns a snapshot of the cached workspace.
@@ -178,12 +199,45 @@ func (w *ClientWorkspace) ListSessions(ctx context.Context) ([]session.Session, 
 	return sessions, nil
 }
 
+func (w *ClientWorkspace) ListChildSessions(ctx context.Context, parentSessionID string) ([]session.Session, error) {
+	protoSessions, err := w.client.ListChildSessions(ctx, w.workspaceID(), parentSessionID)
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]session.Session, len(protoSessions))
+	for i, s := range protoSessions {
+		sessions[i] = protoToSession(s)
+	}
+	return sessions, nil
+}
+
+func (w *ClientWorkspace) ListAllChildSessions(ctx context.Context) ([]session.Session, error) {
+	protoSessions, err := w.client.ListAllChildSessions(ctx, w.workspaceID())
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]session.Session, len(protoSessions))
+	for i, s := range protoSessions {
+		sessions[i] = protoToSession(s)
+	}
+	return sessions, nil
+}
+
 func (w *ClientWorkspace) SaveSession(ctx context.Context, sess session.Session) (session.Session, error) {
 	saved, err := w.client.SaveSession(ctx, w.workspaceID(), sessionToProto(sess))
 	if err != nil {
 		return session.Session{}, err
 	}
 	return protoToSession(*saved), nil
+}
+
+func (w *ClientWorkspace) SetSessionChannel(ctx context.Context, sessionID, channel string) (session.Session, error) {
+	sess, err := w.GetSession(ctx, sessionID)
+	if err != nil {
+		return session.Session{}, err
+	}
+	sess.Channel = channel
+	return w.SaveSession(ctx, sess)
 }
 
 func (w *ClientWorkspace) DeleteSession(ctx context.Context, sessionID string) error {
@@ -207,23 +261,7 @@ func (w *ClientWorkspace) ParseAgentToolSessionID(sessionID string) (string, str
 // are propagated to the caller; the TUI logs and ignores them since
 // the presence record is a hint, not correctness-critical state.
 func (w *ClientWorkspace) SetCurrentSession(ctx context.Context, sessionID string) error {
-	// Resolve the title so herdr's pane metadata reflects the
-	// session immediately: no session event fires on a plain
-	// switch. A lookup failure still reports the session id; the
-	// title catches up on the next session event. Outside a herdr
-	// pane the lookup has no consumer, so skip the round trip —
-	// this runs on every switch and on every reconnect re-assert.
-	if w.herdrClient != nil {
-		var title string
-		if sessionID != "" {
-			if sess, err := w.GetSession(ctx, sessionID); err == nil {
-				title = sess.Title
-			} else {
-				slog.Debug("Failed to look up session title for herdr", "session_id", sessionID, "error", err)
-			}
-		}
-		w.herdrClient.SetSession(sessionID, title)
-	}
+	w.herdrClient.SetSessionID(sessionID)
 	w.mu.Lock()
 	w.lastSession = sessionID
 	w.mu.Unlock()
@@ -270,7 +308,11 @@ func (w *ClientWorkspace) AgentRun(ctx context.Context, sessionID, prompt string
 	// completion detection (it observes message events directly),
 	// so passing an empty RunID is correct here: it skips the
 	// correlator stamping path without functional consequences.
-	return w.client.SendMessage(ctx, w.workspaceID(), sessionID, "", "", prompt, proto.PermissionRequestPolicyPrompt, attachments...)
+	//
+	// The content-width hint rides the context locally but cannot cross
+	// the HTTP boundary as a context value, so it is lifted onto the wire
+	// message here and re-attached server-side (backend.runAgent).
+	return w.client.SendMessage(ctx, w.workspaceID(), sessionID, "", "", prompt, proto.PermissionRequestPolicyFromContextOrDefault(ctx), attachments...)
 }
 
 func (w *ClientWorkspace) AgentRunChannel(ctx context.Context, channel, sessionID, prompt string, attachments ...message.Attachment) error {
@@ -356,44 +398,18 @@ func (w *ClientWorkspace) AgentClearQueue(sessionID string) {
 	_ = w.client.ClearAgentSessionQueuedPrompts(context.Background(), w.workspaceID(), sessionID)
 }
 
+// AgentListCronTasks returns nil in client/server mode: the cron store
+// lives server-side and there is no client API for it yet.
+func (w *ClientWorkspace) AgentListCronTasks(sessionID string) []scheduler.Task {
+	return nil
+}
+
 func (w *ClientWorkspace) AgentSetMain(agentID string) error {
 	return w.client.SetMainAgent(context.Background(), w.workspaceID(), agentID)
 }
 
-// errPreviewOverWireIsUnsupported marks the checkpoint-preview methods as
-// local-only. A remote workspace could stage through a new endpoint, but until
-// it exists the honest answer is "not here" rather than a preview that quietly
-// commits.
-var errPreviewOverWireIsUnsupported = errors.New("checkpoint preview requires a local workspace")
-
-func (w *ClientWorkspace) AgentSummarizePreview(context.Context, string, string) (compaction.Preview, error) {
-	return compaction.Preview{}, errPreviewOverWireIsUnsupported
-}
-
-func (w *ClientWorkspace) AgentConfirmSummarize(context.Context, string, compaction.Preview) error {
-	return errPreviewOverWireIsUnsupported
-}
-
-func (w *ClientWorkspace) AgentDiscardSummarize(context.Context, string, string) error {
-	return errPreviewOverWireIsUnsupported
-}
-
-func (w *ClientWorkspace) AgentRestoreSummarize(ctx context.Context, sessionID string) error {
-	return w.client.AgentRestoreSummarizeSession(ctx, w.workspaceID(), sessionID)
-}
-
 func (w *ClientWorkspace) AgentSummarize(ctx context.Context, sessionID, instructions string) error {
 	return w.client.AgentSummarizeSession(ctx, w.workspaceID(), sessionID, instructions)
-}
-
-// AgentListCronTasks returns nil in client/server mode.
-//
-// TODO: the cron store lives server-side, but there is no client API for
-// listing a session's scheduled tasks, so the scheduled-tasks pill never
-// appears in client/server mode. Add a workspace RPC that forwards to the
-// server-side coordinator so the pill works there too.
-func (w *ClientWorkspace) AgentListCronTasks(sessionID string) []scheduler.Task {
-	return nil
 }
 
 func (w *ClientWorkspace) UpdateAgentModel(ctx context.Context) error {
@@ -543,6 +559,50 @@ func (w *ClientWorkspace) ListSessionHistory(ctx context.Context, sessionID stri
 	return protoToFiles(files), nil
 }
 
+// -- Agent tasks (#421) --
+
+// The agent surface (#421) is the same watcher local mode runs, reaching
+// the workspace's A2A host through the server's proxy. The workspace ID
+// is read on every dial, so after a recovery the watcher follows the
+// workspace that replaced the old one.
+
+// dialAgentIndex reaches the workspace host's index through the proxy.
+// The server holds a stream until the host starts, so there is nothing
+// to wait for here.
+func (w *ClientWorkspace) dialAgentIndex() (a2a.AgentIndexConn, bool, <-chan struct{}) {
+	return w.client.A2AProxy(w.workspaceID()).IndexConn(), true, nil
+}
+
+// agentClient steers and cancels through the proxy.
+func (w *ClientWorkspace) agentClient() (agentClient, bool) {
+	return w.client.A2AProxy(w.workspaceID()), true
+}
+
+func (w *ClientWorkspace) ListAgentTasks(sessionID string) []AgentTask {
+	w.agentTasks.start(nil)
+	return w.agentTasks.list(sessionID)
+}
+
+func (w *ClientWorkspace) AgentTask(sessionID string) (AgentTask, bool) {
+	w.agentTasks.start(nil)
+	return w.agentTasks.bySession(sessionID)
+}
+
+func (w *ClientWorkspace) AgentTaskByHandle(sessionID, handle string) (AgentTask, bool) {
+	w.agentTasks.start(nil)
+	return w.agentTasks.byHandle(sessionID, handle)
+}
+
+func (w *ClientWorkspace) SendAgentMessage(ctx context.Context, sessionID, handle, text string, attachments []message.Attachment) error {
+	w.agentTasks.start(nil)
+	return w.agentTasks.steer(ctx, sessionID, handle, text, attachments)
+}
+
+func (w *ClientWorkspace) CancelAgentTask(ctx context.Context, ref string) error {
+	w.agentTasks.start(nil)
+	return w.agentTasks.cancelTask(ctx, ref)
+}
+
 // -- LSP --
 
 func (w *ClientWorkspace) LSPStart(ctx context.Context, path string) {
@@ -613,6 +673,12 @@ func (w *ClientWorkspace) GitBranch(ctx context.Context) (string, error) {
 
 func (w *ClientWorkspace) Resolver() config.VariableResolver {
 	return config.IdentityResolver()
+}
+
+// LoadDiagnostics is nil in client mode: the server loaded the config
+// with its logger already up, so the diagnostics are in its log.
+func (w *ClientWorkspace) LoadDiagnostics() []config.LoadDiagnostic {
+	return nil
 }
 
 // -- Config mutations --
@@ -731,6 +797,36 @@ func (w *ClientWorkspace) ReadSkill(ctx context.Context, skillID string) ([]byte
 	}, nil
 }
 
+func (w *ClientWorkspace) ReloadSkills() error {
+	return w.client.ReloadSkills(context.Background(), w.workspaceID())
+}
+
+func (w *ClientWorkspace) ReloadModelDiscovery(ctx context.Context) (int, error) {
+	added, err := w.client.ReloadModelDiscovery(ctx, w.workspaceID())
+	if err != nil {
+		return added, err
+	}
+	if added == 0 {
+		// Nothing changed server-side, so the cached snapshot is
+		// already current.
+		return 0, nil
+	}
+	// Pull the server's updated config so the newly discovered models are
+	// visible in this client's cached view (e.g. the /models dialog). A
+	// stale snapshot must not masquerade as success.
+	if err := w.refreshWorkspaceErr(); err != nil {
+		return added, fmt.Errorf("reload succeeded but refreshing workspace failed: %w", err)
+	}
+	return added, nil
+}
+
+func (w *ClientWorkspace) GetSkillStates() []*skills.SkillState {
+	if w.skills == nil {
+		return nil
+	}
+	return w.skills.States()
+}
+
 // -- MCP operations --
 
 // mcpStatesTimeout bounds a single MCP state probe. The client SDK sets no
@@ -761,6 +857,7 @@ func (w *ClientWorkspace) MCPGetStates() map[string]mcp.ClientInfo {
 			},
 			ConnectedAt: v.ConnectedAt,
 			Channel:     v.Channel,
+			A2UITools:   v.A2UITools,
 		}
 	}
 	return result
@@ -827,12 +924,30 @@ func (w *ClientWorkspace) GetMCPPrompt(clientID, promptID string, args map[strin
 	return w.client.GetMCPPrompt(context.Background(), w.workspaceID(), clientID, promptID, args)
 }
 
+// CallMCPTool invokes a tool on a named MCP server via the server and
+// returns its text content plus any A2UI surface payload it embedded.
+func (w *ClientWorkspace) CallMCPTool(ctx context.Context, name, toolName string, args map[string]any) (MCPToolCallResult, error) {
+	res, err := w.client.CallMCPTool(ctx, w.workspaceID(), name, toolName, args)
+	if err != nil {
+		return MCPToolCallResult{}, err
+	}
+	out := MCPToolCallResult{Content: res.Content}
+	for _, s := range res.Surfaces {
+		out.Surfaces = append(out.Surfaces, MCPToolCallSurface{Payload: s.Payload, URI: s.URI})
+	}
+	return out, nil
+}
+
 func (w *ClientWorkspace) EnableDockerMCP(ctx context.Context) error {
 	return w.client.EnableDockerMCP(ctx, w.workspaceID())
 }
 
 func (w *ClientWorkspace) DisableDockerMCP() error {
 	return w.client.DisableDockerMCP(context.Background(), w.workspaceID())
+}
+
+func (w *ClientWorkspace) MCPReconnect(ctx context.Context, name string) error {
+	return w.client.MCPReconnect(ctx, w.workspaceID(), name)
 }
 
 func (w *ClientWorkspace) MCPServersDisabled(ctx context.Context) ([]string, error) {
@@ -849,26 +964,6 @@ func (w *ClientWorkspace) MCPSetServerDisabled(ctx context.Context, name string,
 
 func (w *ClientWorkspace) MCPSetServerConfigDisabled(ctx context.Context, name string, disabled bool) error {
 	return w.client.SetMCPServerConfigDisabled(ctx, w.workspaceID(), name, disabled)
-}
-
-func (w *ClientWorkspace) SkillsDisabled(ctx context.Context) ([]string, error) {
-	return w.client.SkillsDisabled(ctx, w.workspaceID())
-}
-
-func (w *ClientWorkspace) SkillSetDisabled(ctx context.Context, name string, disabled bool) error {
-	return w.client.SetSkillDisabled(ctx, w.workspaceID(), name, disabled)
-}
-
-func (w *ClientWorkspace) SkillsEnabled(ctx context.Context) ([]string, error) {
-	return w.client.SkillsEnabled(ctx, w.workspaceID())
-}
-
-func (w *ClientWorkspace) SkillSetConfigDisabled(ctx context.Context, name string, disabled bool) error {
-	return w.client.SetSkillConfigDisabled(ctx, w.workspaceID(), name, disabled)
-}
-
-func (w *ClientWorkspace) MCPSetLazy(ctx context.Context, name string, lazy bool) error {
-	return w.client.SetMCPLazy(ctx, w.workspaceID(), name, lazy)
 }
 
 func (w *ClientWorkspace) MCPStartServer(ctx context.Context, name string) error {
@@ -944,6 +1039,7 @@ func (w *ClientWorkspace) Subscribe(program *tea.Program) {
 		program.Quit()
 	})
 
+	w.agentTasks.start(program.Send)
 	w.runSubscription(program.Send)
 }
 
@@ -958,8 +1054,18 @@ const maxRecoveryEscalate = 20
 // generous because workspace startup is slow (config, database, LSP, MCP);
 // it exists only so an unresponsive server cannot pin the subscription
 // goroutine indefinitely, and the loop simply retries when it trips.
-// A var, not a const, so tests can shrink it.
-var recoveryCreateTimeout = 30 * time.Second
+// Stored atomically for the same reason as the backoff bounds above, and
+// read through the same-named accessor.
+var recoveryCreateTimeoutNS atomic.Int64 // nanoseconds
+
+func init() {
+	recoveryCreateTimeoutNS.Store(int64(30 * time.Second))
+}
+
+// recoveryCreateTimeout is the bound on a single re-registration attempt.
+func recoveryCreateTimeout() time.Duration {
+	return time.Duration(recoveryCreateTimeoutNS.Load())
+}
 
 // runSubscription subscribes to the workspace event stream and forwards
 // translated events to send, reconnecting with capped exponential
@@ -977,7 +1083,7 @@ func (w *ClientWorkspace) runSubscription(send func(tea.Msg)) {
 	w.subStarted.Store(true)
 	defer close(w.subDone)
 
-	backoff := sseReconnectInitialBackoff
+	backoff := sseReconnectInitialBackoff()
 	degraded := false
 	recoveryFailures := 0
 	markDegraded := func(err error, stuck bool) {
@@ -1005,7 +1111,7 @@ func (w *ClientWorkspace) runSubscription(send func(tea.Msg)) {
 			} else if w.recoverWorkspace() == nil {
 				// Re-registered: resubscribe immediately under the fresh
 				// workspace ID.
-				backoff = sseReconnectInitialBackoff
+				backoff = sseReconnectInitialBackoff()
 				continue
 			} else if w.subCtx.Err() == nil {
 				recoveryFailures++
@@ -1016,7 +1122,7 @@ func (w *ClientWorkspace) runSubscription(send func(tea.Msg)) {
 			if !w.sleepOrDone(backoff) {
 				return
 			}
-			backoff = min(backoff*2, sseReconnectMaxBackoff)
+			backoff = min(backoff*2, sseReconnectMaxBackoff())
 			continue
 		}
 
@@ -1025,7 +1131,7 @@ func (w *ClientWorkspace) runSubscription(send func(tea.Msg)) {
 			recoveryFailures = 0
 			w.afterReconnect(send)
 		}
-		backoff = sseReconnectInitialBackoff
+		backoff = sseReconnectInitialBackoff()
 		w.consumeEvents(evc, send)
 
 		// The event channel closed: the server restarted, the stream was
@@ -1041,7 +1147,7 @@ func (w *ClientWorkspace) runSubscription(send func(tea.Msg)) {
 		if !w.sleepOrDone(backoff) {
 			return
 		}
-		backoff = min(backoff*2, sseReconnectMaxBackoff)
+		backoff = min(backoff*2, sseReconnectMaxBackoff())
 	}
 }
 
@@ -1062,7 +1168,7 @@ func (w *ClientWorkspace) runSubscription(send func(tea.Msg)) {
 // SDK sets no request timeout of its own.
 func (w *ClientWorkspace) recoverWorkspace() error {
 	ctx, cancel := context.WithTimeout(
-		context.WithoutCancel(w.subCtx), recoveryCreateTimeout,
+		context.WithoutCancel(w.subCtx), recoveryCreateTimeout(),
 	)
 	defer cancel()
 	created, err := w.client.CreateWorkspace(ctx, w.recreateArgs())
@@ -1080,6 +1186,13 @@ func (w *ClientWorkspace) recoverWorkspace() error {
 	w.mu.Unlock()
 	slog.Info("Re-registered workspace after server-side loss",
 		"old_id", oldID, "new_id", created.ID)
+	if created.ID != oldID {
+		// The old workspace's agent host went with it (#421), so its
+		// agents still showing live are not running anywhere: end them
+		// now. The new host's agents arrive with its first snapshot,
+		// which can be a while — it starts with the first dispatch.
+		w.agentTasks.apply(a2a.AgentIndexEvent{}, true)
+	}
 
 	if created.Config != nil && created.Config.IsConfigured() {
 		if err := w.InitCoderAgent(w.subCtx); err != nil {
@@ -1177,6 +1290,7 @@ func (w *ClientWorkspace) Shutdown() {
 		w.subCancel()
 	}
 	w.awaitSubscription()
+	w.agentTasks.stop()
 	w.herdrClient.Close()
 
 	// Retiring the client releases every claim it holds, on every workspace,
@@ -1310,11 +1424,9 @@ func (w *ClientWorkspace) translateEvent(ev any) tea.Msg {
 			SessionTitle: e.Payload.SessionTitle,
 			RunID:        e.Payload.RunID,
 			Type:         notify.Type(e.Payload.Type),
-			FinishState:  e.Payload.FinishState,
+			FinishState:  notify.FinishState(e.Payload.FinishState),
 			AWSSOCommand: e.Payload.AWSSOCommand,
 			AWSSOURL:     e.Payload.AWSSOURL,
-			Progress:     e.Payload.Progress,
-			Done:         e.Payload.Done,
 		}
 		if e.Payload.Error != nil {
 			n.Message = e.Payload.Error.Error()
@@ -1449,7 +1561,7 @@ func protoToMessage(m proto.Message) message.Message {
 	for _, p := range m.Parts {
 		switch v := p.(type) {
 		case proto.TextContent:
-			msg.Parts = append(msg.Parts, message.TextContent{Text: v.Text, Hidden: v.Hidden})
+			msg.Parts = append(msg.Parts, message.TextContent{Text: v.Text, Hidden: v.Hidden, Steer: v.Steer})
 		case proto.ReasoningContent:
 			msg.Parts = append(msg.Parts, message.ReasoningContent{
 				Thinking:   v.Thinking,
@@ -1591,4 +1703,45 @@ func protoQuestionsToDomain(qs []proto.QuestionItem) []question.Question {
 		}
 	}
 	return out
+}
+
+func (w *ClientWorkspace) AgentSummarizePreview(context.Context, string, string) (compaction.Preview, error) {
+	return compaction.Preview{}, errPreviewOverWireIsUnsupported
+}
+
+// errPreviewOverWireIsUnsupported reports that checkpoint previews are
+// unavailable in client/server mode: the workspace does not proxy the
+// preview RPCs yet.
+var errPreviewOverWireIsUnsupported = errors.New("checkpoint preview is unavailable in client/server mode")
+
+func (w *ClientWorkspace) AgentConfirmSummarize(context.Context, string, compaction.Preview) error {
+	return errPreviewOverWireIsUnsupported
+}
+
+func (w *ClientWorkspace) AgentDiscardSummarize(context.Context, string, string) error {
+	return errPreviewOverWireIsUnsupported
+}
+
+func (w *ClientWorkspace) AgentRestoreSummarize(ctx context.Context, sessionID string) error {
+	return w.client.AgentRestoreSummarizeSession(ctx, w.workspaceID(), sessionID)
+}
+
+func (w *ClientWorkspace) MCPSetLazy(ctx context.Context, name string, lazy bool) error {
+	return w.client.SetMCPLazy(ctx, w.workspaceID(), name, lazy)
+}
+
+func (w *ClientWorkspace) SkillSetConfigDisabled(ctx context.Context, name string, disabled bool) error {
+	return w.client.SetSkillConfigDisabled(ctx, w.workspaceID(), name, disabled)
+}
+
+func (w *ClientWorkspace) SkillSetDisabled(ctx context.Context, name string, disabled bool) error {
+	return w.client.SetSkillDisabled(ctx, w.workspaceID(), name, disabled)
+}
+
+func (w *ClientWorkspace) SkillsDisabled(ctx context.Context) ([]string, error) {
+	return w.client.SkillsDisabled(ctx, w.workspaceID())
+}
+
+func (w *ClientWorkspace) SkillsEnabled(ctx context.Context) ([]string, error) {
+	return w.client.SkillsEnabled(ctx, w.workspaceID())
 }

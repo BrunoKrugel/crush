@@ -40,6 +40,29 @@ func (b *Backend) ListSessions(ctx context.Context, workspaceID string) ([]sessi
 	return ws.Sessions.List(ctx)
 }
 
+// ListChildSessions returns the child sessions of the given session in
+// the given workspace (#314).
+func (b *Backend) ListChildSessions(ctx context.Context, workspaceID, parentSessionID string) ([]session.Session, error) {
+	ws, err := b.GetWorkspace(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+
+	return ws.Sessions.ListChildren(ctx, parentSessionID)
+}
+
+// ListAllChildSessions returns every child session of every parent in
+// the given workspace in one grouped query (#408), grouped by parent
+// and oldest-created first.
+func (b *Backend) ListAllChildSessions(ctx context.Context, workspaceID string) ([]session.Session, error) {
+	ws, err := b.GetWorkspace(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+
+	return ws.Sessions.ListAllChildren(ctx)
+}
+
 // GetAgentSession returns session metadata with the agent's busy
 // status.
 func (b *Backend) GetAgentSession(ctx context.Context, workspaceID, sessionID string) (proto.AgentSession, error) {
@@ -232,14 +255,16 @@ func (b *Backend) StartMCPServer(ctx context.Context, workspaceID, name string) 
 	return mcptools.InitializeSingleForced(ctx, name, ws.Cfg)
 }
 
-// DeleteSession deletes a session from the given workspace.
+// DeleteSession deletes a session and its descendant sessions from the
+// given workspace (#418), refusing while a dispatched agent running on
+// the session or any descendant has not been canceled.
 func (b *Backend) DeleteSession(ctx context.Context, workspaceID, sessionID string) error {
 	ws, err := b.GetWorkspace(workspaceID)
 	if err != nil {
 		return err
 	}
 
-	return ws.Sessions.Delete(ctx, sessionID)
+	return ws.DeleteSession(ctx, sessionID)
 }
 
 // ListUserMessages returns user-role messages for a session.

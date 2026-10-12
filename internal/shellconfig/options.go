@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // handleOption implements the `option` builtin.
@@ -33,6 +34,7 @@ import (
 //	option auto-lsp false
 //	option request-timeout 300
 //	option request-timeout 0
+//	option a2a-listen 127.0.0.1:7443
 //
 // Boolean shortcuts: for boolean fields, omitting the value sets it to true.
 func handleOption(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
@@ -107,6 +109,54 @@ func handleOption(ctx context.Context, args []string, stdin io.Reader, stdout, s
 		childMap(o, "attribution")["generated_with"] = bv
 		slog.Info("Option set in shell config", "key", key, "value", bv)
 		return nil
+	}
+
+	if key == "dispatch-max-concurrent" {
+		if val == "" {
+			return usage(stderr, "option: dispatch-max-concurrent requires a value")
+		}
+		n, err := strconv.Atoi(val)
+		if err != nil || n < 1 {
+			return usage(stderr, fmt.Sprintf("option: dispatch-max-concurrent expects a positive integer, got %q", val))
+		}
+		// Nested-section pattern (like option ui): the value lands under
+		// options.dispatch, not beside the other flat option keys.
+		childMap(o, "dispatch")["max_concurrent"] = n
+		slog.Info("Option set in shell config", "key", key, "value", n)
+		return nil
+	}
+
+	if key == "dispatch-default-agent" {
+		if val == "" {
+			return usage(stderr, "option: dispatch-default-agent requires a value")
+		}
+		// The id itself is validated at load, against the resolved
+		// agents (#433): a bad default is a load error, not a shell
+		// config error.
+		childMap(o, "dispatch")["default_agent"] = val
+		slog.Info("Option set in shell config", "key", key, "value", val)
+		return nil
+	}
+
+	// The a2a-* keys write into the nested options.a2a block (#358),
+	// the same nested-section pattern as dispatch-default-agent.
+	if jsonKey, ok := a2aOptions[key]; ok {
+		if val == "" {
+			return usage(stderr, fmt.Sprintf("option: %s requires a value", key))
+		}
+		// The address and the files are validated at load, against the
+		// working directory (#358): a bad value is a load error, not a
+		// shell config error, exactly as it is for crush.json.
+		childMap(o, "a2a")[jsonKey] = val
+		slog.Info("Option set in shell config", "key", key, "value", val)
+		return nil
+	}
+
+	// The todo-*/dispatch-* keys write into the nested
+	// options.todo_enforcement block, so they are a special case like
+	// attribution-*, not entries in optionSpecs.
+	if strings.HasPrefix(key, "todo-") || strings.HasPrefix(key, "dispatch-") {
+		return handleTodoDispatchOption(key, val, o, stderr)
 	}
 
 	spec, ok := optionSpecs[key]
@@ -198,7 +248,6 @@ var optionSpecs = map[string]optionSpec{
 	"debug-lsp": {jsonKey: "debug_lsp", kind: optBool},
 	"auto-lsp":  {jsonKey: "auto_lsp", kind: optBool},
 	"progress":  {jsonKey: "progress", kind: optBool},
-	"lazy-mcp":  {jsonKey: "lazy_mcp", kind: optBool},
 
 	// Boolean fields exposed positively but stored as their negation.
 	"metrics":              {jsonKey: "disable_metrics", kind: optBool, inverted: true},
@@ -221,11 +270,22 @@ var optionSpecs = map[string]optionSpec{
 	"disable-skill":       {jsonKey: "disabled_skills", kind: optList},
 }
 
+// a2aOptions maps the a2a-* keys to their field under options.a2a
+// (#358): the A2A host's optional TLS-only TCP listener. Like the
+// dispatch-* keys they write a nested block, so they are handled as a
+// special case in handleOption rather than listed in optionSpecs.
+var a2aOptions = map[string]string{
+	"a2a-listen":    "listen",
+	"a2a-tls-cert":  "tls_cert",
+	"a2a-tls-key":   "tls_key",
+	"a2a-client-ca": "client_ca",
+}
+
 // optionUI implements "option ui <key> <value>" for TUI-specific settings
 // that live under options.tui rather than as top-level options.
 func optionUI(options map[string]any, args []string, stderr io.Writer) error {
 	if len(args) != 4 {
-		return usage(stderr, "usage: option ui <compact|diff|transparent|mouse|nerd-fonts|scrollbar|completions-max-depth|completions-max-items|exit-banner> <value>")
+		return usage(stderr, "usage: option ui <compact|diff|transparent|mouse|scrollbar|working-dir-format|completions-max-depth|completions-max-items|exit-banner> <value>")
 	}
 
 	key := args[2]
@@ -233,7 +293,7 @@ func optionUI(options map[string]any, args []string, stderr io.Writer) error {
 	ui := childMap(options, "tui")
 
 	switch key {
-	case "compact", "transparent", "mouse", "nerd-fonts":
+	case "compact", "transparent", "mouse":
 		parsed, err := parseBool(value)
 		if err != nil {
 			return usage(stderr, fmt.Sprintf("option ui %s expects true/false, got %q", key, value))
@@ -241,9 +301,6 @@ func optionUI(options map[string]any, args []string, stderr io.Writer) error {
 		jsonKey := key
 		if key == "compact" {
 			jsonKey = "compact_mode"
-		}
-		if key == "nerd-fonts" {
-			jsonKey = "nerd_fonts"
 		}
 		ui[jsonKey] = parsed
 	case "diff":
@@ -256,6 +313,15 @@ func optionUI(options map[string]any, args []string, stderr io.Writer) error {
 			return usage(stderr, fmt.Sprintf("option ui scrollbar expects default, always, or never, got %q", value))
 		}
 		ui["scrollbar"] = value
+	case "working-dir-format":
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return usage(stderr, "option ui working-dir-format requires a value, e.g. {user}@{host}:{cwd} ({cwd}, {user}, {host} placeholders)")
+		}
+		if !strings.Contains(value, "{cwd}") && !strings.Contains(value, "{user}") && !strings.Contains(value, "{host}") {
+			return usage(stderr, fmt.Sprintf("option ui working-dir-format expects at least one of {cwd}, {user}, {host}, got %q", value))
+		}
+		ui["working_dir_format"] = value
 	case "exit-banner":
 		if value != "default" && value != "compact" && value != "none" {
 			return usage(stderr, fmt.Sprintf("option ui exit-banner expects default, compact, or none, got %q", value))
@@ -279,11 +345,156 @@ func optionUI(options map[string]any, args []string, stderr io.Writer) error {
 	return nil
 }
 
+// todoDispatchKind is the value type of a todo-*/dispatch-* option key.
+type todoDispatchKind int
+
+const (
+	todoDispatchBool todoDispatchKind = iota
+	todoDispatchCount
+	todoDispatchDuration
+)
+
+// todoDispatchOption describes one todo-*/dispatch-* key: the field it
+// writes under options.todo_enforcement and how its value is parsed.
+type todoDispatchOption struct {
+	jsonKey string
+	kind    todoDispatchKind
+	// min is the smallest accepted count; a value below it is a load
+	// error. todo-nudge-threshold requires at least 1 because 0 would
+	// silently disable nudging; kill-after-nudges accepts 0 as "off".
+	min int
+}
+
+// todoDispatchOptions maps the todo-*/dispatch-* keys to their field under
+// options.todo_enforcement (#403). It is the single source of truth for
+// these keys, handled as a special case in handleOption because they write
+// a nested block rather than a top-level option.
+var todoDispatchOptions = map[string]todoDispatchOption{
+	"todo-nudge":             {jsonKey: "enabled", kind: todoDispatchBool},
+	"todo-nudge-threshold":   {jsonKey: "nudge_threshold", kind: todoDispatchCount, min: 1},
+	"todo-hard-gate":         {jsonKey: "hard_gate", kind: todoDispatchBool},
+	"todo-kill-after-nudges": {jsonKey: "kill_after_nudges", kind: todoDispatchCount, min: 0},
+	"dispatch-stall":         {jsonKey: "stall_window", kind: todoDispatchDuration},
+	"dispatch-timeout":       {jsonKey: "hard_timeout", kind: todoDispatchDuration},
+}
+
+// handleTodoDispatchOption implements the todo-*/dispatch-* family. Every
+// key writes into options.todo_enforcement. Durations accept a Go duration
+// ("5m") or bare integer seconds; counts and durations both accept "off"
+// for zero. Values are stored as whole seconds or integers, the forms the
+// config's Duration and IntOrOff fields decode.
+func handleTodoDispatchOption(key, val string, options map[string]any, stderr io.Writer) error {
+	spec, ok := todoDispatchOptions[key]
+	if !ok {
+		return usage(stderr, fmt.Sprintf("option: unknown key %q", key))
+	}
+	target := childMap(options, "todo_enforcement")
+
+	switch spec.kind {
+	case todoDispatchBool:
+		// Boolean shortcuts match the flat boolean keys: omitting the
+		// value sets the field to true.
+		bv := true
+		if val != "" {
+			parsed, err := parseBool(val)
+			if err != nil {
+				return usage(stderr, fmt.Sprintf("option: %s expects true, false, on, or off, got %q", key, val))
+			}
+			bv = parsed
+		}
+		target[spec.jsonKey] = bv
+		slog.Info("Option set in shell config", "key", key, "value", bv)
+		return nil
+
+	case todoDispatchCount:
+		if val == "" {
+			return usage(stderr, fmt.Sprintf("option: %s requires a value", key))
+		}
+		n, err := parseCountOrOff(val)
+		if err != nil {
+			return usage(stderr, fmt.Sprintf("option: %s: %v", key, err))
+		}
+		if n < spec.min {
+			return usage(stderr, fmt.Sprintf("option: %s must be at least %d, got %d", key, spec.min, n))
+		}
+		target[spec.jsonKey] = n
+		slog.Info("Option set in shell config", "key", key, "value", n)
+		return nil
+
+	default: // todoDispatchDuration
+		if val == "" {
+			return usage(stderr, fmt.Sprintf("option: %s requires a value", key))
+		}
+		duration, err := parseSecondsOrOff(val)
+		if err != nil {
+			return usage(stderr, fmt.Sprintf("option: %s: %v", key, err))
+		}
+		target[spec.jsonKey] = durationJSONValue(duration)
+		slog.Info("Option set in shell config", "key", key, "value", duration.String())
+		return nil
+	}
+}
+
+// parseCountOrOff parses a count option value: the string "off" is zero,
+// anything else must be a non-negative integer.
+func parseCountOrOff(val string) (int, error) {
+	if strings.EqualFold(val, "off") {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil {
+		return 0, fmt.Errorf("expects an integer or off, got %q", val)
+	}
+	if n < 0 {
+		return 0, fmt.Errorf("expects a non-negative integer or off, got %d", n)
+	}
+	return n, nil
+}
+
+// durationJSONValue renders a parsed duration the way the config's
+// Duration knob round-trips a JSON value: whole seconds as the bare
+// legacy number, anything finer as a Go duration string, which loses
+// nothing. Storing the same form a crush.json value takes keeps a
+// crushrc option and its JSON equivalent decoding identically, down to
+// sub-second values, which would otherwise truncate to zero and
+// silently disable the knob.
+func durationJSONValue(d time.Duration) any {
+	if d == 0 {
+		return 0
+	}
+	if d%time.Second == 0 {
+		return int(d / time.Second)
+	}
+	return d.String()
+}
+
+// parseSecondsOrOff parses a duration option value: the string "off" is
+// zero, a bare integer is seconds, anything else is a Go duration string.
+func parseSecondsOrOff(val string) (time.Duration, error) {
+	if strings.EqualFold(val, "off") {
+		return 0, nil
+	}
+	if n, err := strconv.Atoi(val); err == nil {
+		if n < 0 {
+			return 0, fmt.Errorf("expects a non-negative number of seconds or off, got %d", n)
+		}
+		return time.Duration(n) * time.Second, nil
+	}
+	d, err := time.ParseDuration(val)
+	if err != nil {
+		return 0, fmt.Errorf("expects a duration (5m), a number of seconds (300), or off, got %q", val)
+	}
+	if d < 0 {
+		return 0, fmt.Errorf("expects a non-negative duration, got %q", val)
+	}
+	return d, nil
+}
+
 func parseBool(s string) (bool, error) {
 	switch strings.ToLower(s) {
-	case "true", "1", "yes":
+	case "true", "1", "yes", "on":
 		return true, nil
-	case "false", "0", "no":
+	case "false", "0", "no", "off":
 		return false, nil
 	default:
 		return false, fmt.Errorf("invalid boolean %q", s)

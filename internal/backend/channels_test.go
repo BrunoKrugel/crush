@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/compaction"
 	"github.com/charmbracelet/crush/internal/config"
+	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/scheduler"
 	"github.com/charmbracelet/crush/internal/session"
@@ -167,7 +168,10 @@ func (c *recordingCoordinator) IsSessionBusy(string) bool                       
 func (c *recordingCoordinator) QueuedPrompts(string) int                        { return 0 }
 func (c *recordingCoordinator) QueuedPromptsList(string) []string               { return nil }
 func (c *recordingCoordinator) ClearQueue(string)                               {}
+func (c *recordingCoordinator) SetMainAgent(string) error                       { return nil }
+func (c *recordingCoordinator) ListCronTasks(string) []scheduler.Task           { return nil }
 func (c *recordingCoordinator) Summarize(context.Context, string, string) error { return nil }
+
 func (c *recordingCoordinator) SummarizePreview(context.Context, string, string) (compaction.Preview, error) {
 	return compaction.Preview{}, nil
 }
@@ -180,14 +184,10 @@ func (c *recordingCoordinator) DiscardSummarize(context.Context, string, string)
 
 func (c *recordingCoordinator) RestoreSummarize(context.Context, string) error { return nil }
 
-func (c *recordingCoordinator) Model() agent.Model { return agent.Model{} }
-
+func (c *recordingCoordinator) Model() agent.Model                            { return agent.Model{} }
 func (c *recordingCoordinator) UpdateModels(context.Context) error            { return nil }
+func (c *recordingCoordinator) SetInteractive(context.Context, bool) error    { return nil }
 func (c *recordingCoordinator) GenerateTitle(context.Context, string, string) {}
-
-func (c *recordingCoordinator) SetMainAgent(string) error { return nil }
-
-func (c *recordingCoordinator) ListCronTasks(string) []scheduler.Task { return nil }
 
 // fullFakeSessions adapts fakeChannelSessions to the full session.Service
 // interface by embedding it; only the channelSessionStore subset is
@@ -355,4 +355,12 @@ func TestRouteChannelMessage_ConfigEnabled(t *testing.T) {
 		t.Fatal("expected the config-enabled workspace to receive the channel push")
 	}
 	ws.runWG.Wait()
+}
+
+func (c *recordingCoordinator) DeliverAgentMessage(ctx context.Context, msg agent.AgentMessage) error {
+	return errors.New("not implemented")
+}
+
+func (c *recordingCoordinator) DispatchLive(sessionID string) []dispatch.TodoSnapshot {
+	return nil
 }

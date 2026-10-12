@@ -108,6 +108,7 @@ type Service interface {
 	// already been resolved or is unknown.
 	Deny(permission PermissionRequest) bool
 	Request(ctx context.Context, opts CreatePermissionRequest) (bool, error)
+	AutoApproveSession(sessionID string)
 	SetSkipRequests(skip bool)
 	SkipRequests() bool
 	SubscribeNotifications(ctx context.Context) <-chan pubsub.Event[PermissionNotification]
@@ -122,6 +123,8 @@ type PermissionKey struct {
 }
 
 type permissionService struct {
+	autoApproveSessionsMu sync.RWMutex
+	autoApproveSessions   map[string]bool
 	*pubsub.Broker[PermissionRequest]
 
 	notificationBroker *pubsub.Broker[PermissionNotification]
@@ -135,6 +138,10 @@ type permissionService struct {
 	requestMu       sync.Mutex
 	activeRequest   *PermissionRequest
 	activeRequestMu sync.Mutex
+	// skipFn is consulted on every Request; a scoped service delegates.
+	skipFn      func() bool
+	parent      Service
+	requestSlot chan struct{}
 }
 
 // resolve atomically removes the pending request entry for the given
@@ -299,6 +306,12 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 	}
 }
 
+func (s *permissionService) AutoApproveSession(sessionID string) {
+	s.autoApproveSessionsMu.Lock()
+	s.autoApproveSessions[sessionID] = true
+	s.autoApproveSessionsMu.Unlock()
+}
+
 func (s *permissionService) SubscribeNotifications(ctx context.Context) <-chan pubsub.Event[PermissionNotification] {
 	return s.notificationBroker.Subscribe(ctx)
 }
@@ -319,7 +332,46 @@ func NewPermissionService(workingDir string, skip bool, allowedTools []string) S
 		sessionPermissions: csync.NewMap[PermissionKey, bool](),
 		allowedTools:       allowedTools,
 		pendingRequests:    csync.NewMap[string, chan bool](),
+
+		autoApproveSessions: make(map[string]bool),
 	}
 	svc.skip.Store(skip)
 	return svc
+}
+
+// scopedPermissionService is a permission service rooted at a dispatch
+// workspace that follows another service's live skip state. Everything
+// else (grants, session permissions, subscriptions) stays scoped to the
+// dispatch; only skip approval is delegated, so the parent's yolo
+// toggle applies to dispatched agents at request time.
+type scopedPermissionService struct {
+	*permissionService
+}
+
+func (s *scopedPermissionService) SkipRequests() bool {
+	return s.parent.SkipRequests()
+}
+
+func (s *scopedPermissionService) SetSkipRequests(skip bool) {
+	s.parent.SetSkipRequests(skip)
+}
+
+// NewScopedPermissionService returns a service whose Request checks
+// parent.SkipRequests at request time instead of a startup snapshot, so
+// toggling the parent's yolo at runtime reaches dispatched agents in
+// both directions. parent must be non-nil.
+func NewScopedPermissionService(parent Service, workingDir string, allowedTools []string) Service {
+	svc := &permissionService{
+		requestSlot:         make(chan struct{}, 1),
+		Broker:              pubsub.NewBroker[PermissionRequest](),
+		notificationBroker:  pubsub.NewBroker[PermissionNotification](),
+		workingDir:          workingDir,
+		sessionPermissions:  csync.NewMap[PermissionKey, bool](),
+		autoApproveSessions: make(map[string]bool),
+		parent:              parent,
+		allowedTools:        allowedTools,
+		pendingRequests:     csync.NewMap[string, chan bool](),
+	}
+	svc.skipFn = parent.SkipRequests
+	return &scopedPermissionService{permissionService: svc}
 }

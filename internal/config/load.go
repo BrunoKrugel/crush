@@ -85,6 +85,34 @@ func Load(workingDir, dataDir string, debug bool) (*ConfigStore, error) {
 		return nil, fmt.Errorf("invalid hook configuration: %w", err)
 	}
 
+	// Validate the todo enforcement knobs with the same rule: 0 or
+	// "off" disables a knob, a positive value configures it, and a
+	// negative value is a load error that names its path.
+	if err := cfg.Options.TodoEnforcement.Validate("options.todo_enforcement"); err != nil {
+		return nil, fmt.Errorf("invalid todo enforcement configuration: %w", err)
+	}
+
+	// Validate the dispatch concurrency cap with the same rule: a
+	// positive value configures it, a value below 1 is a load error
+	// that names its path (#390).
+	if err := cfg.Options.Dispatch.Validate("options.dispatch"); err != nil {
+		return nil, fmt.Errorf("invalid dispatch configuration: %w", err)
+	}
+
+	// Validate the A2A TCP listener (#358): a listen address without
+	// both TLS files is refused — plain TCP is not supported — and the
+	// certificate, key and client CA must load, so the host never finds
+	// out at bind time.
+	if err := cfg.Options.A2A.Validate("options.a2a"); err != nil {
+		return nil, fmt.Errorf("invalid a2a configuration: %w", err)
+	}
+
+	// Validate the agent definitions structurally after all merging, so
+	// a bad agents block fails the load the same way a bad hook does.
+	if err := cfg.ValidateAgents(workingDir); err != nil {
+		return nil, fmt.Errorf("invalid agent definitions: %w", err)
+	}
+
 	if !isInsideWorktree() {
 		const depth = 2
 		const items = 100
@@ -147,6 +175,8 @@ func Load(workingDir, dataDir string, debug bool) (*ConfigStore, error) {
 	// like AWS_PROFILE are visible to the AWS SDK credential chain.
 	cfg.applyEnv(valueResolver)
 
+	cfg.resolveEmbeddings(valueResolver)
+
 	if err := cfg.configureProviders(context.Background(), store, env, valueResolver, store.knownProviders); err != nil {
 		return nil, fmt.Errorf("failed to configure providers: %w", err)
 	}
@@ -156,8 +186,45 @@ func Load(workingDir, dataDir string, debug bool) (*ConfigStore, error) {
 		return store, nil
 	}
 
-	cfg.applySelectedModels(resolveSelectedModels(cfg, store.knownProviders))
+	resolved, err := resolveSelectedModels(cfg, store.knownProviders)
+	if err != nil {
+		return nil, fmt.Errorf("failed to configure selected models: %w", err)
+	}
+	cfg.Models[SelectedModelTypeLarge] = resolved.Large
+	cfg.Models[SelectedModelTypeSmall] = resolved.Small
+
+	// Persist any fallback corrections while we still hold writeMu.
+	if resolved.LargeFallback {
+		if err := store.updateLocked(ScopeGlobal, func(c *Config) map[string]any {
+			return store.updatePreferredModelFields(c, SelectedModelTypeLarge, resolved.Large)
+		}); err != nil {
+			return nil, fmt.Errorf("failed to update preferred large model: %w", err)
+		}
+	}
+	if resolved.SmallFallback {
+		if err := store.updateLocked(ScopeGlobal, func(c *Config) map[string]any {
+			return store.updatePreferredModelFields(c, SelectedModelTypeSmall, resolved.Small)
+		}); err != nil {
+			return nil, fmt.Errorf("failed to update preferred small model: %w", err)
+		}
+	}
+	// Model pins are validated once the catalog is known, just before
+	// the agents are resolved from their definitions.
+	if err := store.Config().ValidateAgentModelRefs(); err != nil {
+		return nil, fmt.Errorf("invalid agent definitions: %w", err)
+	}
 	store.SetupAgents()
+
+	// The default dispatch agent names a resolved agent (#433): checked
+	// once the agents exist, so an unknown, non-dispatch, or disabled
+	// id fails the load like a bad agent definition does. An enabled
+	// agent that resolves to no tools fails here too.
+	if err := store.Config().ValidateDispatchDefaultAgent(); err != nil {
+		return nil, fmt.Errorf("invalid dispatch configuration: %w", err)
+	}
+	if err := store.Config().ValidateAgentToolsets(); err != nil {
+		return nil, fmt.Errorf("invalid agent definitions: %w", err)
+	}
 
 	// Capture initial staleness snapshot
 	// Capture initial staleness snapshot. Track every discovered config path,
@@ -207,20 +274,21 @@ func PushPopCrushEnv() func() {
 }
 
 func (c *Config) configureProviders(ctx context.Context, store *ConfigStore, env env.Env, resolver VariableResolver, knownProviders []catwalk.Provider) error {
-	knownProviderNames := make(map[string]bool)
 	restore := PushPopCrushEnv()
 	defer restore()
 
 	// When disable_default_providers is enabled, skip all default/embedded
 	// providers entirely. Users must fully specify any providers they want.
 	// We skip to the custom provider validation loop which handles all
-	// user-configured providers uniformly.
+	// user-configured providers uniformly. knownProviderNameSet mirrors
+	// this policy so the interactive discovery reload agrees with load on
+	// which providers count as custom.
+	knownProviderNames := knownProviderNameSet(knownProviders, c.Options.DisableDefaultProviders)
 	if c.Options.DisableDefaultProviders {
 		knownProviders = nil
 	}
 
 	for _, p := range knownProviders {
-		knownProviderNames[string(p.ID)] = true
 		config, configExists := c.Providers.Get(string(p.ID))
 		// if the user configured a known provider we need to allow it to override a couple of parameters
 		if configExists {
@@ -384,51 +452,26 @@ func (c *Config) configureProviders(ctx context.Context, store *ConfigStore, env
 	// Discover models concurrently for custom providers that need it.
 	// A provider needs discovery when discover_models is explicitly true,
 	// or when the models list is empty (auto-trigger, unless opted out).
-	type discoveryResult struct {
-		models []catwalk.Model
-		err    error
-	}
-
-	discoveryResults := make(map[string]discoveryResult)
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-
-	discoverCtx, discoverCancel := context.WithTimeout(ctx, 3*time.Second)
-	for id, pc := range c.Providers.Seq2() {
+	// The same helper backs the interactive reload; see discovery.go.
+	//
+	// Record each custom provider's user-configured models first, before
+	// discovery merges endpoint models into the live config: the reload
+	// seeds re-discovery from this set so endpoint-removed models get
+	// pruned while user-specified ones survive.
+	store.userConfiguredModels = make(map[string][]catwalk.Model)
+	store.failedDiscoveryProviders = make(map[string]ProviderConfig)
+	candidates := maps.Collect(c.Providers.Seq2())
+	for id, pc := range candidates {
 		if knownProviderNames[id] {
 			continue
 		}
-		if pc.Disable || pc.BaseURL == "" {
-			continue
-		}
-		wantsDiscovery := pc.AutoDiscoverModels != nil && *pc.AutoDiscoverModels
-		autoTrigger := len(pc.Models) == 0 && (pc.AutoDiscoverModels == nil || *pc.AutoDiscoverModels)
-		if !wantsDiscovery && !autoTrigger {
-			continue
-		}
-		providerID := cmp.Or(pc.ID, id)
-		cfg := discover.Config{
-			ID:             providerID,
-			BaseURL:        pc.BaseURL,
-			APIKey:         pc.APIKey,
-			ExtraHeaders:   pc.ExtraHeaders,
-			ExistingModels: pc.Models,
-		}
-		providerType := cmp.Or(pc.Type, catwalk.TypeOpenAICompat)
-		wg.Go(func() {
-			models, err := discover.DiscoverModels(discoverCtx, cfg, resolver)
-			if err == nil && len(models) > 0 {
-				if enricher := discover.GetEnricher(string(providerType)); enricher != nil {
-					models, _ = enricher.EnrichModels(discoverCtx, cfg, resolver, models)
-				}
-			}
-			mu.Lock()
-			discoveryResults[id] = discoveryResult{models: models, err: err}
-			mu.Unlock()
-		})
+		store.userConfiguredModels[id] = slices.Clone(pc.Models)
 	}
-	wg.Wait()
-	discoverCancel()
+
+	// Per-provider errors are logged by the helper; providers that fail
+	// with no user models to fall back on are recorded below so the
+	// interactive reload can retry them.
+	discoveryResults, discoveryErrs := discoverProviderModels(ctx, candidates, knownProviderNames, resolver, loadModelDiscoveryTimeout)
 
 	// Validate the custom providers.
 	for id, providerConfig := range c.Providers.Seq2() {
@@ -465,22 +508,25 @@ func (c *Config) configureProviders(ctx context.Context, store *ConfigStore, env
 			continue
 		}
 
-		// Apply discovery results if available.
-		if result, ok := discoveryResults[id]; ok {
-			if result.err != nil {
-				slog.Warn("Model discovery failed", "provider", id, "error", result.err)
-				if len(providerConfig.Models) == 0 {
-					slog.Warn("Skipping provider with no models after failed discovery", "provider", id)
-					c.Providers.Del(id)
-					continue
-				}
-			} else if len(result.models) > 0 {
-				providerConfig.Models = result.models
-				slog.Info("Discovered models for provider", "provider", id, "count", len(result.models))
-			}
+		// Apply discovery results if available. A failed discovery logs a
+		// warning; both failures and empty results fall through to the
+		// no-models check below, which drops the provider when it has no
+		// user-specified models to fall back on.
+		if models, ok := discoveryResults[id]; ok && len(models) > 0 {
+			providerConfig.Models = models
+			slog.Info("Discovered models for provider", "provider", id, "count", len(models))
+		}
+		if err, ok := discoveryErrs[id]; ok && err != nil {
+			slog.Warn("Model discovery failed", "provider", id, "error", err)
 		}
 
 		if len(providerConfig.Models) == 0 {
+			// Remember discovery-eligible providers dropped here so an
+			// interactive reload can resurrect them once their endpoint
+			// comes up (e.g. Crush started before Ollama was running).
+			if providerWantsDiscovery(providerConfig, store.userConfiguredModels[id]) {
+				store.failedDiscoveryProviders[id] = providerConfig
+			}
 			slog.Warn("Skipping custom provider because the provider has no models", "provider", id)
 			c.Providers.Del(id)
 			continue
@@ -529,6 +575,49 @@ func (c *Config) applyEnv(resolver VariableResolver) {
 	}
 }
 
+// resolveEmbeddings shell-expands the credential-bearing embedding fields
+// in place so $VAR and $(command) templates in api_key and base_url behave
+// like every other credential field in the config.
+//
+// A field that fails to resolve is cleared rather than left holding its
+// unexpanded template: keeping it would send the literal "$EMB_KEY" as the
+// bearer token (or as the base URL) to the embeddings endpoint, which fails
+// far away from the config mistake that caused it. Clearing lets
+// ResolvedEmbeddings reapply the documented defaults instead.
+//
+// @joestump-agent 08/25/2026 - Initial implementation.
+//
+// @joestump 08/25/2026 - Stopped logging the resolution error for api_key.
+// resolveError renders the pre-expansion template, which is the secret
+// itself when the user wrote a literal key, so the failure path wrote the
+// key to the crush log in clear text (CodeQL go/clear-text-logging, high).
+// The error is still logged for base_url, matching how configureProviders
+// treats API keys versus endpoints. Also clear failed fields, see above.
+func (c *Config) resolveEmbeddings(resolver VariableResolver) {
+	if c.Embeddings == nil {
+		return
+	}
+
+	if v := c.Embeddings.APIKey; v != "" {
+		resolved, err := resolver.ResolveValue(v)
+		if err != nil {
+			// No "error" attribute: it embeds the unresolved template.
+			slog.Warn("Ignoring embeddings API key that failed to resolve.")
+			resolved = ""
+		}
+		c.Embeddings.APIKey = resolved
+	}
+
+	if v := c.Embeddings.BaseURL; v != "" {
+		resolved, err := resolver.ResolveValue(v)
+		if err != nil {
+			slog.Warn("Ignoring embeddings base URL that failed to resolve.", "error", err)
+			resolved = ""
+		}
+		c.Embeddings.BaseURL = resolved
+	}
+}
+
 // NormalizeOptions allocates Options and Options.TUI and fills in the option
 // defaults the UI relies on, so readers can dereference them without guarding.
 // Configs loaded from disk get this via setDefaults; configs arriving over the
@@ -573,6 +662,9 @@ func (c *Config) setDefaults(workingDir, dataDir string) {
 		}
 	}
 	c.Options.DataDirectory = filepath.Clean(filepathext.SmartJoin(workingDir, c.Options.DataDirectory))
+	// The A2A listener's TLS files expand a leading ~ (#358). They are
+	// never joined to the working directory: load refuses a relative one.
+	c.Options.A2A.expandPaths()
 	if c.Providers == nil {
 		c.Providers = csync.NewMap[string, ProviderConfig]()
 	}
@@ -706,92 +798,214 @@ func (c *Config) applyLSPDefaults() {
 	}
 }
 
+func (c *Config) defaultModelSelection(knownProviders []catwalk.Provider) (largeModel SelectedModel, smallModel SelectedModel, err error) {
+	if len(knownProviders) == 0 && c.Providers.Len() == 0 {
+		err = fmt.Errorf("no providers configured, please configure at least one provider")
+		return largeModel, smallModel, err
+	}
+
+	// Use the first provider enabled based on the known providers order
+	// if no provider found that is known use the first provider configured
+	for _, p := range knownProviders {
+		providerConfig, ok := c.Providers.Get(string(p.ID))
+		if !ok || providerConfig.Disable {
+			continue
+		}
+		defaultLargeModel := c.GetModel(string(p.ID), p.DefaultLargeModelID)
+		if defaultLargeModel == nil {
+			slog.Warn("Default large model %s not found for provider %s", p.DefaultLargeModelID, p.ID)
+			if len(providerConfig.Models) == 0 {
+				return largeModel, smallModel, fmt.Errorf("default large model %s not found for provider %s", p.DefaultLargeModelID, p.ID)
+			}
+			defaultLargeModel = &providerConfig.Models[0]
+		}
+		largeModel = SelectedModel{
+			Provider:        string(p.ID),
+			Model:           defaultLargeModel.ID,
+			MaxTokens:       defaultLargeModel.DefaultMaxTokens,
+			ReasoningEffort: defaultLargeModel.DefaultReasoningEffort,
+		}
+
+		defaultSmallModel := c.GetModel(string(p.ID), p.DefaultSmallModelID)
+		if defaultSmallModel == nil {
+			slog.Warn("Default small model %s not found for provider %s", p.DefaultSmallModelID, p.ID)
+			if len(providerConfig.Models) == 0 {
+				return largeModel, smallModel, fmt.Errorf("default small model %s not found for provider %s", p.DefaultSmallModelID, p.ID)
+			}
+			defaultSmallModel = &providerConfig.Models[0]
+		}
+		smallModel = SelectedModel{
+			Provider:        string(p.ID),
+			Model:           defaultSmallModel.ID,
+			MaxTokens:       defaultSmallModel.DefaultMaxTokens,
+			ReasoningEffort: defaultSmallModel.DefaultReasoningEffort,
+		}
+		return largeModel, smallModel, err
+	}
+
+	enabledProviders := c.EnabledProviders()
+	slices.SortFunc(enabledProviders, func(a, b ProviderConfig) int {
+		return strings.Compare(a.ID, b.ID)
+	})
+
+	if len(enabledProviders) == 0 {
+		err = fmt.Errorf("no providers configured, please configure at least one provider")
+		return largeModel, smallModel, err
+	}
+
+	providerConfig := enabledProviders[0]
+	if len(providerConfig.Models) == 0 {
+		err = fmt.Errorf("provider %s has no models configured", providerConfig.ID)
+		return largeModel, smallModel, err
+	}
+	defaultLargeModel := c.GetModel(providerConfig.ID, providerConfig.Models[0].ID)
+	largeModel = SelectedModel{
+		Provider:  providerConfig.ID,
+		Model:     defaultLargeModel.ID,
+		MaxTokens: defaultLargeModel.DefaultMaxTokens,
+	}
+	defaultSmallModel := c.GetModel(providerConfig.ID, providerConfig.Models[0].ID)
+	smallModel = SelectedModel{
+		Provider:  providerConfig.ID,
+		Model:     defaultSmallModel.ID,
+		MaxTokens: defaultSmallModel.DefaultMaxTokens,
+	}
+	return largeModel, smallModel, err
+}
+
 // resolvedModels holds the result of resolving user-configured model
 // selections against the provider catalog.
 type resolvedModels struct {
-	Large    SelectedModel
-	Small    SelectedModel
-	HasLarge bool
-	HasSmall bool
+	Large         SelectedModel
+	Small         SelectedModel
+	LargeFallback bool // true if Large was corrected to a default
+	SmallFallback bool // true if Small was corrected to a default
 }
 
 // resolveSelectedModels validates the user's configured model selections
-// against the provider catalog. Selections that are missing or no longer
-// resolvable are dropped rather than replaced with a guess: Crush never
-// picks a provider on the user's behalf just because credentials for it
-// happen to be present in the environment. When only the large model is
-// configured, the small model is derived from the same provider.
-//
-// It is pure resolution logic: it does not mutate the store or touch disk.
-func resolveSelectedModels(cfg *Config, knownProviders []catwalk.Provider) resolvedModels {
+// against the provider catalog, falling back to defaults when a model ID is
+// invalid. It is pure resolution logic: it does not mutate the store or
+// touch disk. The caller assigns the results to c.Models and persists any
+// fallback corrections as appropriate.
+func resolveSelectedModels(cfg *Config, knownProviders []catwalk.Provider) (resolvedModels, error) {
 	var result resolvedModels
-	result.Large, result.HasLarge = resolveSelectedModel(cfg, knownProviders, cfg.Models[SelectedModelTypeLarge])
-	result.Small, result.HasSmall = resolveSelectedModel(cfg, knownProviders, cfg.Models[SelectedModelTypeSmall])
-
-	if result.HasLarge && !result.HasSmall {
-		result.Small, result.HasSmall = deriveSmallModel(cfg, knownProviders, result.Large)
+	defaultLarge, defaultSmall, err := cfg.defaultModelSelection(knownProviders)
+	if err != nil {
+		return result, fmt.Errorf("failed to select default models: %w", err)
 	}
-	return result
-}
+	large, small := defaultLarge, defaultSmall
 
-// resolveSelectedModel validates a single model selection against the
-// provider catalog, filling in catalog defaults for unset fields. A
-// selection that names a model but no provider is matched to the first
-// provider offering that model. It returns false when the selection is
-// empty or the provider or model no longer exists, in which case the caller
-// must drop the selection.
-func resolveSelectedModel(cfg *Config, knownProviders []catwalk.Provider, selected SelectedModel) (SelectedModel, bool) {
-	if selected.Model == "" {
-		return SelectedModel{}, false
-	}
-	if selected.Provider == "" {
-		provider, ok := cfg.providerForModel(knownProviders, selected.Model)
-		if !ok {
-			return SelectedModel{}, false
+	largeModelSelected, largeModelConfigured := cfg.Models[SelectedModelTypeLarge]
+	if largeModelConfigured {
+		if largeModelSelected.Model != "" {
+			large.Model = largeModelSelected.Model
 		}
-		selected.Provider = provider
-	}
-	providerConfig, ok := cfg.Providers.Get(selected.Provider)
-	if !ok || providerConfig.Disable {
-		return SelectedModel{}, false
-	}
-	model := cfg.GetModel(selected.Provider, selected.Model)
-	if model == nil {
-		return SelectedModel{}, false
-	}
-	resolved := selected
-	resolved.ProviderOptions = maps.Clone(selected.ProviderOptions)
-	if resolved.MaxTokens <= 0 {
-		resolved.MaxTokens = model.DefaultMaxTokens
-	}
-	if resolved.ReasoningEffort == "" {
-		resolved.ReasoningEffort = model.DefaultReasoningEffort
-	}
-	return resolved, true
-}
-
-// deriveSmallModel picks the small model for a large model selection whose
-// small counterpart isn't configured. Providers outside the catalog reuse
-// the large model, which keeps local and OpenAI-compatible setups from
-// requesting two different models concurrently.
-func deriveSmallModel(cfg *Config, knownProviders []catwalk.Provider, large SelectedModel) (SelectedModel, bool) {
-	for _, p := range knownProviders {
-		if string(p.ID) != large.Provider {
-			continue
+		if largeModelSelected.Provider != "" {
+			large.Provider = largeModelSelected.Provider
 		}
-		model := cfg.GetModel(large.Provider, p.DefaultSmallModelID)
+		model := cfg.GetModel(large.Provider, large.Model)
 		if model == nil {
-			break
+			large = defaultLarge
+			result.LargeFallback = true
+		} else {
+			if largeModelSelected.MaxTokens > 0 {
+				large.MaxTokens = largeModelSelected.MaxTokens
+			} else {
+				large.MaxTokens = model.DefaultMaxTokens
+			}
+			if largeModelSelected.ReasoningEffort != "" {
+				large.ReasoningEffort = largeModelSelected.ReasoningEffort
+			} else {
+				large.ReasoningEffort = model.DefaultReasoningEffort
+			}
+			large.Think = largeModelSelected.Think
+			if largeModelSelected.Temperature != nil {
+				large.Temperature = largeModelSelected.Temperature
+			}
+			if largeModelSelected.TopP != nil {
+				large.TopP = largeModelSelected.TopP
+			}
+			if largeModelSelected.TopK != nil {
+				large.TopK = largeModelSelected.TopK
+			}
+			if largeModelSelected.FrequencyPenalty != nil {
+				large.FrequencyPenalty = largeModelSelected.FrequencyPenalty
+			}
+			if largeModelSelected.PresencePenalty != nil {
+				large.PresencePenalty = largeModelSelected.PresencePenalty
+			}
+			if largeModelSelected.ProviderOptions != nil {
+				large.ProviderOptions = maps.Clone(largeModelSelected.ProviderOptions)
+			}
 		}
-		return SelectedModel{
-			Provider:        large.Provider,
-			Model:           p.DefaultSmallModelID,
-			MaxTokens:       model.DefaultMaxTokens,
-			ReasoningEffort: model.DefaultReasoningEffort,
-		}, true
 	}
-	slog.Warn("Using large model as small model", "provider", large.Provider, "model", large.Model)
-	return large, true
+	smallModelSelected, smallModelConfigured := cfg.Models[SelectedModelTypeSmall]
+	if smallModelConfigured {
+		if smallModelSelected.Model != "" {
+			small.Model = smallModelSelected.Model
+		}
+		if smallModelSelected.Provider != "" {
+			small.Provider = smallModelSelected.Provider
+		}
+
+		model := cfg.GetModel(small.Provider, small.Model)
+		if model == nil {
+			small = defaultSmall
+			result.SmallFallback = true
+		} else {
+			if smallModelSelected.MaxTokens > 0 {
+				small.MaxTokens = smallModelSelected.MaxTokens
+			} else {
+				small.MaxTokens = model.DefaultMaxTokens
+			}
+			if smallModelSelected.ReasoningEffort != "" {
+				small.ReasoningEffort = smallModelSelected.ReasoningEffort
+			} else {
+				small.ReasoningEffort = model.DefaultReasoningEffort
+			}
+			if smallModelSelected.Temperature != nil {
+				small.Temperature = smallModelSelected.Temperature
+			}
+			if smallModelSelected.TopP != nil {
+				small.TopP = smallModelSelected.TopP
+			}
+			if smallModelSelected.TopK != nil {
+				small.TopK = smallModelSelected.TopK
+			}
+			if smallModelSelected.FrequencyPenalty != nil {
+				small.FrequencyPenalty = smallModelSelected.FrequencyPenalty
+			}
+			if smallModelSelected.PresencePenalty != nil {
+				small.PresencePenalty = smallModelSelected.PresencePenalty
+			}
+			if smallModelSelected.ProviderOptions != nil {
+				small.ProviderOptions = maps.Clone(smallModelSelected.ProviderOptions)
+			}
+			small.Think = smallModelSelected.Think
+		}
+	}
+
+	// When small isn't explicitly configured and the provider isn't a
+	// known built-in, use the large model as the small model. This
+	// prevents two different models from being requested concurrently
+	// for local/openai-compat providers.
+	if !smallModelConfigured {
+		isKnownProvider := false
+		for _, kp := range knownProviders {
+			if string(kp.ID) == small.Provider {
+				isKnownProvider = true
+				break
+			}
+		}
+		if !isKnownProvider {
+			slog.Warn("Using large model as small model for unknown provider", "provider", large.Provider, "model", large.Model)
+			small = large
+		}
+	}
+
+	result.Large = large
+	result.Small = small
+	return result, nil
 }
 
 // lookupConfigs searches config files starting at cwd and walking up
@@ -931,7 +1145,7 @@ func loadFromBytes(configs [][]byte) (*Config, error) {
 		return &Config{}, nil
 	}
 
-	data, err := jsons.Merge(configs)
+	data, err := jsons.Merge(bindAgentAuthToCard(configs))
 	if err != nil {
 		return nil, err
 	}
@@ -940,6 +1154,41 @@ func loadFromBytes(configs [][]byte) (*Config, error) {
 		return nil, err
 	}
 	return &config, nil
+}
+
+// bindAgentAuthToCard ties an agent's auth to the config layer that set
+// its card (#434). The layers merge key by key, so a project config that
+// repoints agents.<id>.card would otherwise inherit the global
+// agents.<id>.auth and send that token to the project's origin. A layer
+// that sets a card therefore drops the auth every earlier layer gave the
+// agent, whole: only its own auth, if any, and later layers' apply. To
+// keep a credential, the layer that moves the card sets it again.
+// configs is ordered lowest precedence first and is not modified.
+func bindAgentAuthToCard(configs [][]byte) [][]byte {
+	out := slices.Clone(configs)
+	for i, layer := range out {
+		agents := gjson.GetBytes(layer, "agents")
+		if !agents.IsObject() {
+			continue
+		}
+		agents.ForEach(func(id, def gjson.Result) bool {
+			card := def.Get("card")
+			if !card.Exists() || card.Type == gjson.Null {
+				return true
+			}
+			path := "agents." + gjson.Escape(id.String()) + ".auth"
+			for j := range i {
+				if !gjson.GetBytes(out[j], path).Exists() {
+					continue
+				}
+				if stripped, err := sjson.DeleteBytes(out[j], path); err == nil {
+					out[j] = stripped
+				}
+			}
+			return true
+		})
+	}
+	return out
 }
 
 func hasAWSCredentials(env env.Env) bool {
@@ -1037,7 +1286,7 @@ func migrateDisableNotifications() {
 			if !gjson.Get(string(data), "options.notifications").Exists() {
 				updated, err := sjson.Set(string(data), "options.notifications", migratedValue)
 				if err == nil {
-					if err := atomicWriteFile(dataConfig, []byte(updated), 0o600); err != nil {
+					if err := AtomicWriteFile(dataConfig, []byte(updated), 0o600); err != nil {
 						slog.Warn("Failed to migrate to notifications field", "error", err)
 					} else {
 						slog.Info("Migrated notification settings to notifications field", "value", migratedValue)
@@ -1059,7 +1308,7 @@ func migrateDisableNotifications() {
 		if updated == string(data) {
 			continue
 		}
-		if err := atomicWriteFile(path, []byte(updated), 0o600); err != nil {
+		if err := AtomicWriteFile(path, []byte(updated), 0o600); err != nil {
 			slog.Warn("Failed to write migrated config", "path", path, "error", err)
 		}
 	}
@@ -1291,10 +1540,6 @@ func normalizeHookEvent(name string) string {
 	switch strings.ToLower(strings.ReplaceAll(name, "_", "")) {
 	case "pretooluse":
 		return "PreToolUse"
-	case "precompact":
-		return "PreCompact"
-	case "postcompact":
-		return "PostCompact"
 	default:
 		return name
 	}

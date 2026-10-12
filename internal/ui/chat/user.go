@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/list"
 	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // skillInvocation represents the XML structure for a loaded skill.
@@ -19,6 +20,17 @@ type skillInvocation struct {
 	Description  string `xml:"description"`
 	Location     string `xml:"location"`
 	Instructions string `xml:"instructions"`
+}
+
+// channelMessage represents the XML structure for a channel-originated
+// message pushed by an MCP channel server.
+type channelMessage struct {
+	XMLName    xml.Name `xml:"channel"`
+	Source     string   `xml:"source,attr"`
+	Sender     string   `xml:"sender,attr"`
+	SenderName string   `xml:"sender_name,attr"`
+	Time       string   `xml:"time,attr"`
+	Content    string   `xml:",chardata"`
 }
 
 // UserMessageItem represents a user message in the chat UI.
@@ -31,6 +43,18 @@ type UserMessageItem struct {
 	attachments *attachments.Renderer
 	message     *message.Message
 	sty         *styles.Styles
+
+	// hyperlinks holds the OSC 8 hyperlink spans found in the last
+	// rendered content, so a plain click on a link opens it in the
+	// browser (terminals defer link clicks to the app under mouse
+	// reporting; see parseHyperlinkSpans).
+	hyperlinks []hyperlinkSpan
+
+	// Click-to-copy icon geometry, recorded during RawRender so
+	// HandleMouseClickCmd can hit-test without re-deriving the layout.
+	copyIconRow      int
+	copyIconColStart int
+	copyIconColEnd   int
 }
 
 // NewUserMessageItem creates a new UserMessageItem.
@@ -58,45 +82,84 @@ func (m *UserMessageItem) RawRender(width int) string {
 	cappedWidth := cappedMessageWidth(width)
 
 	content, height, ok := m.getCachedRender(cappedWidth)
-	// cache hit
-	if ok {
-		return m.renderHighlighted(content, cappedWidth, height)
-	}
+	if !ok {
+		msgContent := strings.TrimSpace(m.message.Content().Text)
 
-	msgContent := strings.TrimSpace(m.message.Content().Text)
+		// Check if this is a skill invocation (loaded_skill XML)
+		if strings.HasPrefix(msgContent, "<loaded_skill>") {
+			content = m.renderSkillInvocation(msgContent, cappedWidth)
+		} else if strings.HasPrefix(msgContent, "<channel") {
+			// Check if this is a channel-originated message.
+			content = m.renderChannelMessage(msgContent, cappedWidth)
+		} else {
+			renderer := common.UserMarkdownRenderer(m.sty, cappedWidth)
+			mu := common.LockMarkdownRenderer(renderer)
 
-	// Check if this is a skill invocation (loaded_skill XML)
-	if strings.HasPrefix(msgContent, "<loaded_skill>") {
-		content = m.renderSkillInvocation(msgContent, cappedWidth)
+			mu.Lock()
+			result, err := renderer.Render(msgContent)
+			mu.Unlock()
+
+			if err != nil {
+				content = msgContent
+			} else {
+				content = strings.TrimSuffix(result, "\n")
+			}
+
+			// Carry the prompt editor's @file / /skill colours into the
+			// posted message, so a token does not lose its highlight the
+			// moment it leaves the editor.
+			content = highlightPromptTokens(content, m.sty)
+
+			if len(m.message.BinaryContent()) > 0 {
+				attachmentsStr := m.renderAttachments(cappedWidth)
+				if content == "" {
+					content = attachmentsStr
+				} else {
+					content = strings.Join([]string{content, "", attachmentsStr}, "\n")
+				}
+			}
+		}
+
 		height = lipgloss.Height(content)
 		m.setCachedRender(content, cappedWidth, height)
-		return m.renderHighlighted(content, cappedWidth, height)
 	}
 
-	renderer := common.UserMarkdownRenderer(m.sty, cappedWidth)
-	mu := common.LockMarkdownRenderer(renderer)
-
-	mu.Lock()
-	result, err := renderer.Render(msgContent)
-	mu.Unlock()
-
-	if err != nil {
-		content = msgContent
-	} else {
-		content = strings.TrimSuffix(result, "\n")
-	}
-
-	if len(m.message.BinaryContent()) > 0 {
-		attachmentsStr := m.renderAttachments(cappedWidth)
-		if content == "" {
-			content = attachmentsStr
-		} else {
-			content = strings.Join([]string{content, "", attachmentsStr}, "\n")
+	// Click-to-copy icon: right-aligned ⎘ appended to the last content
+	// line, shown only while the message item is focused (selected).
+	// The icon copies the raw Markdown source via HandleMouseClickCmd.
+	m.copyIconRow = -1
+	msgText := strings.TrimSpace(m.message.Content().Text)
+	if msgText != "" && m.focused {
+		icon := m.sty.Messages.AssistantCopyIcon.Render(assistantCopyIcon)
+		iconWidth := lipgloss.Width(icon)
+		m.copyIconRow = height - 1
+		head := ""
+		lastLine := content
+		if idx := strings.LastIndex(content, "\n"); idx >= 0 {
+			head = content[:idx+1]
+			lastLine = content[idx+1:]
 		}
+		// The icon hugs the right edge of the item: pad (or truncate)
+		// the last line so the icon's rightmost cell lands on the item
+		// width, keeping the line within width so the compositor does
+		// not clip it and a chat-relative mouse x can reach it.
+		iconCol := max(cappedWidth-iconWidth, 0)
+		if w := lipgloss.Width(lastLine); w > iconCol {
+			lastLine = ansi.Truncate(lastLine, iconCol, "")
+		} else {
+			lastLine += strings.Repeat(" ", iconCol-w)
+		}
+		m.copyIconColStart = iconCol
+		m.copyIconColEnd = iconCol + iconWidth
+		content = head + lastLine + icon
+		height = lipgloss.Height(content)
 	}
 
-	height = lipgloss.Height(content)
-	m.setCachedRender(content, cappedWidth, height)
+	// Index hyperlink spans for click-to-open. Parsing after the copy
+	// icon is appended keeps span rows/cols aligned with the on-screen
+	// content (the icon overwrites trailing padding on the last line,
+	// which never intersects a link span).
+	m.hyperlinks = parseHyperlinkSpans(content)
 	return m.renderHighlighted(content, cappedWidth, height)
 }
 
@@ -105,7 +168,7 @@ func (m *UserMessageItem) renderSkillInvocation(content string, width int) strin
 	var skill skillInvocation
 	if err := xml.Unmarshal([]byte(content), &skill); err != nil {
 		// If parsing fails, just render as markdown
-		renderer := common.UserMarkdownRenderer(m.sty, width)
+		renderer := common.MarkdownRenderer(m.sty, width)
 		mu := common.LockMarkdownRenderer(renderer)
 
 		mu.Lock()
@@ -119,6 +182,46 @@ func (m *UserMessageItem) renderSkillInvocation(content string, width int) strin
 	}
 
 	return toolOutputSkillContent(m.sty, skill.Name, skill.Description)
+}
+
+// renderChannelMessage parses a <channel source="..." ...>body</channel>
+// element and renders only the body as markdown. The metadata
+// (sender, channel source, timestamp) is rendered separately by
+// ChannelInfoItem so it appears outside the message body, mirroring
+// the assistant info line.
+func (m *UserMessageItem) renderChannelMessage(raw string, width int) string {
+	var ch channelMessage
+	if err := xml.Unmarshal([]byte(raw), &ch); err != nil {
+		return m.fallbackRender(raw, width)
+	}
+
+	body := strings.TrimSpace(ch.Content)
+	if body == "" {
+		return ""
+	}
+
+	renderer := common.MarkdownRenderer(m.sty, width)
+	mu := common.LockMarkdownRenderer(renderer)
+	mu.Lock()
+	result, err := renderer.Render(body)
+	mu.Unlock()
+	if err != nil {
+		return body
+	}
+	return strings.TrimSuffix(result, "\n")
+}
+
+// fallbackRender renders text as plain markdown when XML parsing fails.
+func (m *UserMessageItem) fallbackRender(content string, width int) string {
+	renderer := common.MarkdownRenderer(m.sty, width)
+	mu := common.LockMarkdownRenderer(renderer)
+	mu.Lock()
+	result, err := renderer.Render(content)
+	mu.Unlock()
+	if err != nil {
+		return content
+	}
+	return strings.TrimSuffix(result, "\n")
 }
 
 // Render implements MessageItem.
@@ -164,13 +267,45 @@ func (m *UserMessageItem) renderAttachments(width int) string {
 	var attachments []message.Attachment
 	for _, at := range m.message.BinaryContent() {
 		attachments = append(attachments, message.Attachment{
-			FileName: at.Path,
-			MimeType: at.MIMEType,
+			FileName:       at.Path,
+			MimeType:       at.MIMEType,
+			Kind:           at.Kind,
+			PromptArgCount: at.PromptArgCount,
 		})
 	}
 	// This message is already posted, so the attachment can't be removed;
 	// don't render the remove button.
 	return m.attachments.Render(attachments, false, false, width)
+}
+
+// HandleMouseClick implements [list.MouseClickable]. Defers to
+// HandleMouseClickCmd; the command return is discarded because the
+// generic click dispatcher only checks the handled flag on this path.
+func (m *UserMessageItem) HandleMouseClick(btn ansi.MouseButton, x, y int) bool {
+	handled, _ := m.HandleMouseClickCmd(btn, x, y)
+	return handled
+}
+
+// HandleMouseClickCmd implements [list.MouseClickCommandable]. The
+// click-to-copy icon wins over every other region: it is a discrete
+// action, not an expansion target, so the copy command suppresses the
+// generic expansion toggle in the chat click dispatcher. A plain click
+// on a hyperlink span opens the URL in the system browser (terminals
+// defer link clicks to the app under mouse reporting; see
+// parseHyperlinkSpans). All other clicks fall through unhandled.
+func (m *UserMessageItem) HandleMouseClickCmd(btn ansi.MouseButton, x, y int) (bool, tea.Cmd) {
+	if btn != ansi.MouseLeft {
+		return false, nil
+	}
+	if m.copyIconRow >= 0 && y == m.copyIconRow &&
+		x >= m.copyIconColStart+MessageLeftPaddingTotal && x < m.copyIconColEnd+MessageLeftPaddingTotal {
+		text := m.message.Content().Text
+		return true, common.CopyToClipboard(text, "Message copied to clipboard")
+	}
+	if url := spanAt(m.hyperlinks, y, x-MessageLeftPaddingTotal); url != "" {
+		return true, openURL(url)
+	}
+	return false, nil
 }
 
 // HandleKeyEvent implements KeyEventHandler.

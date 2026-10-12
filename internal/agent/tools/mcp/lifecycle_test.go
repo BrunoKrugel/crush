@@ -24,6 +24,19 @@ import (
 func liveSession(t *testing.T, toolName string) (*ClientSession, context.Context) {
 	t.Helper()
 
+	sess, ctx, serverSession, err := connectLiveSession(toolName)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = serverSession.Close() })
+	return sess, ctx
+}
+
+// connectLiveSession is liveSession without the *testing.T: it returns errors
+// instead of failing the test and hands the server half back for the caller
+// to close. Stubs that run on a goroutine other than the test's own must use
+// this. require there calls FailNow off the test goroutine, and a t.Cleanup
+// registered while the test is already tearing down runs next, LIFO, so it
+// can close the server before its client has finished connecting.
+func connectLiveSession(toolName string) (*ClientSession, context.Context, *mcp.ServerSession, error) {
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	server := mcp.NewServer(&mcp.Implementation{Name: "srv"}, nil)
 	mcp.AddTool(
@@ -34,15 +47,20 @@ func liveSession(t *testing.T, toolName string) (*ClientSession, context.Context
 		},
 	)
 	serverSession, err := server.Connect(context.Background(), serverTransport, nil)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = serverSession.Close() })
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	client := mcp.NewClient(&mcp.Implementation{Name: "crush-test"}, nil)
 	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	require.NoError(t, err)
+	if err != nil {
+		cancel()
+		_ = serverSession.Close()
+		return nil, nil, nil, err
+	}
 
-	return &ClientSession{ClientSession: clientSession, cancel: cancel}, ctx
+	return &ClientSession{ClientSession: clientSession, cancel: cancel}, ctx, serverSession, nil
 }
 
 // liveSessionWithCapabilities is like liveSession but the server also exposes a
@@ -522,10 +540,108 @@ func TestMaybeStdioErr_UnwrapsEveryWrapper(t *testing.T) {
 	var transport mcp.Transport = &mcp.CommandTransport{Command: cmd}
 	transport = &channelTransport{inner: transport, name: "t", gate: newChannelGate()}
 	transport = &testTransportWrapper{inner: transport}
-
 	got := maybeStdioErr(io.EOF, transport)
 	require.ErrorContains(t, got, "boom-diagnostic",
 		"stdio diagnostics must survive every transport decorator")
+}
+
+// TestNameLock_ConcurrentFirstUseReturnsOneMutex pins that the per-name
+// lifecycle lock is minted atomically: racing first-use callers must all
+// receive the same mutex, or the serialization the whole lifecycle relies
+// on silently degrades to per-caller locks.
+func TestNameLock_ConcurrentFirstUseReturnsOneMutex(t *testing.T) {
+	const name = "test-name-lock-race"
+	t.Cleanup(func() { delete(renewMus, name) })
+
+	const n = 32
+	locks := make([]*sync.Mutex, n)
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			locks[i] = renewLock(name)
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	for i := 1; i < n; i++ {
+		require.Same(t, locks[0], locks[i], "all callers must share one lifecycle mutex")
+	}
+}
+
+// TestUpdateState_ErrorClearsResources pins that both StateError teardown
+// branches clear the resources and resource-template registries alongside
+// tools and prompts — a dead server must not keep advertising resources
+// (or templates) it can no longer serve.
+func TestUpdateState_ErrorClearsResources(t *testing.T) {
+	const name = "test-error-clears-resources"
+	t.Cleanup(func() {
+		sessions.Del(name)
+		allTools.Del(name)
+		allResources.Del(name)
+		allResourceTemplates.Del(name)
+		states.Del(name)
+	})
+
+	sess, _ := liveSession(t, "res_tool")
+	sessions.Set(name, sess)
+	allResources.Set(name, []*Resource{{Name: "doc"}})
+	allResourceTemplates.Set(name, []*ResourceTemplate{{Name: "tmpl"}})
+
+	updateState(name, StateError, errors.New("listing broke"), sess, Counts{})
+	_, ok := allResources.Get(name)
+	require.False(t, ok, "current-session error must clear the resources registry")
+	_, ok = allResourceTemplates.Get(name)
+	require.False(t, ok, "current-session error must clear the resource-template registry")
+
+	sess2, _ := liveSession(t, "res_tool2")
+	sessions.Set(name, sess2)
+	allResources.Set(name, []*Resource{{Name: "doc2"}})
+	allResourceTemplates.Set(name, []*ResourceTemplate{{Name: "tmpl2"}})
+
+	updateState(name, StateError, errors.New("connect broke"), nil, Counts{})
+	_, ok = allResources.Get(name)
+	require.False(t, ok, "no-session error must clear the resources registry")
+	_, ok = allResourceTemplates.Get(name)
+	require.False(t, ok, "no-session error must clear the resource-template registry")
+}
+
+// TestDisableSingle_ClearsResourceTemplates pins that disabling a server
+// removes its resource templates (alongside tools, prompts, and resources)
+// from the registries — a disabled server's templates must stop appearing
+// as @-completions.
+func TestDisableSingle_ClearsResourceTemplates(t *testing.T) {
+	const name = "test-disable-clears-templates"
+	t.Cleanup(func() {
+		sessions.Del(name)
+		allTools.Del(name)
+		allResources.Del(name)
+		allResourceTemplates.Del(name)
+		states.Del(name)
+	})
+
+	cfg := config.NewTestStore(&config.Config{MCP: config.MCPs{name: {Type: config.MCPStdio}}})
+
+	sess, sessCtx := liveSession(t, "tmpl_tool")
+	sessions.Set(name, sess)
+	allResources.Set(name, []*Resource{{Name: "doc"}})
+	allResourceTemplates.Set(name, []*ResourceTemplate{{Name: "tmpl", URITemplate: "x://{id}"}})
+
+	require.NoError(t, DisableSingle(cfg, name))
+
+	require.ErrorIs(t, sessCtx.Err(), context.Canceled, "disable must close the session")
+	_, ok := allResources.Get(name)
+	require.False(t, ok, "disable must clear the resources registry")
+	_, ok = allResourceTemplates.Get(name)
+	require.False(t, ok, "disable must clear the resource-template registry")
+
+	info, ok := GetState(name)
+	require.True(t, ok)
+	require.Equal(t, StateDisabled, info.State)
 }
 
 // TestStdioCheck_DoesNotDuplicateArgv0 pins the argv0 handling in the

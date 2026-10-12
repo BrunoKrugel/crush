@@ -711,6 +711,7 @@ func TestMCPConfigEqual(t *testing.T) {
 		},
 		{"disabled vs enabled", base, func() config.MCPConfig { m := base; m.Disabled = true; return m }(), false},
 		{"oauth flag", base, func() config.MCPConfig { m := base; m.OAuth = true; return m }(), false},
+		{"channel opt-in", base, func() config.MCPConfig { m := base; m.ChannelEnabled = true; return m }(), false},
 	}
 
 	for _, tc := range tests {
@@ -731,11 +732,11 @@ func TestMCPConfigEqualExhaustive(t *testing.T) {
 
 	// Fields intentionally excluded from the comparison.
 	excluded := map[string]bool{
-		"OAuthToken":   true, // internally managed, refreshed out-of-band.
-		"ChannelReply": true, // read live from config at reply time, not baked into the session.
-		// Lazy decides which tools reach the model, not how the server is
-		// reached, so toggling it must never tear the connection down.
-		"Lazy": true,
+		"OAuthToken": true, // internally managed, refreshed out-of-band.
+		// Reply routing is read from live config on every turn
+		// (sendChannelReply looks it up per turn), so a change takes effect
+		// without rebuilding the session.
+		"ChannelReply": true,
 	}
 
 	typ := reflect.TypeOf(config.MCPConfig{})
@@ -907,14 +908,14 @@ func TestCreateSession_Sessionless(t *testing.T) {
 		require.Zero(t, listenTotal.Load(), "no subscriptions/listen stream should be opened when disabled")
 	})
 
-	t.Run("default does not eagerly open a listen stream (go-sdk v1.8.0)", func(t *testing.T) {
+	t.Run("default opens listen stream and breaks sessionless server", func(t *testing.T) {
 		srv, listenTotal := newStub(t)
 		const name = "sessionless-default"
 		states.Del(name)
 		t.Cleanup(func() { states.Del(name) })
-		// Connect itself succeeds. Since go-sdk v1.8.0 a failing listen
-		// stream no longer poisons the connection: the 404 is tolerated
-		// and tools/list keeps working.
+
+		// Connect itself succeeds; the listen stream fails asynchronously
+		// and poisons the connection, so the subsequent tools/list fails.
 		cfg := config.MCPConfig{Type: config.MCPHttp, URL: srv.URL, Timeout: 15}
 		sess, err := createSession(t.Context(), nil, name, cfg, resolver, false)
 		require.NoError(t, err)
@@ -922,7 +923,8 @@ func TestCreateSession_Sessionless(t *testing.T) {
 		t.Cleanup(func() { sess.Close() })
 
 		_, err = sess.ListTools(t.Context(), &mcp.ListToolsParams{})
-		require.NoError(t, err, "a sessionless server 404ing the listen stream no longer breaks tools/list")
-		require.Zero(t, listenTotal.Load(), "v1.8.0 no longer opens the listen stream eagerly for default handlers")
+		require.Error(t, err, "default handlers open a listen stream that the sessionless server 404s")
+		require.Contains(t, err.Error(), "session not found")
+		require.GreaterOrEqual(t, listenTotal.Load(), int64(1), "expected the listen stream attempt")
 	})
 }

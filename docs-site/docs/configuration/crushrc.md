@@ -144,14 +144,14 @@ delete. Booleans accept `true/false/1/0/yes/no/on/off` in any case.
 | `hook` | [Hooks](/features/hooks) |
 | `permissions` | [Tool permissions](/configuration/permissions) |
 | `option` | General behaviour, paths, attribution, and the TUI |
-| `agent` | [Agent definitions](/fork) |
+| `agent` | [Agent definitions](/agents/configuration#agent-definitions) |
 
 Every flag for every one of them is in the
 **[config command reference](/configuration/command-reference)**.
 
 ## Todo enforcement and dispatch
 
-`option` also sets the [multi-agent todo ladder](/fork) —
+`option` also sets the [multi-agent todo ladder](/agents/todo-enforcement) —
 the nudging, the hard gate, and the dispatched-run timeouts (the JSON form
 keeps them under `options.todo_enforcement`) — and the two dispatch settings
 under `options.dispatch`. Durations accept a Go duration (`5m`) or a bare
@@ -160,7 +160,7 @@ one fails the load, naming the key.
 
 ## Agent definitions
 
-The `agent` builtin defines and overrides [agents](/fork)
+The `agent` builtin defines and overrides [agents](/agents/configuration#agent-definitions)
 the same way `crush.json`'s `agents` block does; the two resolve
 identically.
 
@@ -199,7 +199,7 @@ option dispatch-default-agent worker
 ## A2A TCP listener
 
 The `a2a-*` keys add an opt-in, TLS-only TCP listener to the process's
-[A2A host](/fork), beside its unix socket. The
+[A2A host](/agents/a2a-protocol#tcp-listener), beside its unix socket. The
 JSON form keeps them under `options.a2a`.
 
 ```bash

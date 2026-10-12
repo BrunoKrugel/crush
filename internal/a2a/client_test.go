@@ -1,0 +1,1459 @@
+package a2a
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net"
+	"net/http"
+	"slices"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
+	"github.com/a2aproject/a2a-go/v2/a2aclient"
+	"github.com/stretchr/testify/require"
+
+	"github.com/charmbracelet/crush/internal/agent"
+	"github.com/charmbracelet/crush/internal/agent/tools"
+	"github.com/charmbracelet/crush/internal/config"
+	"github.com/charmbracelet/crush/internal/dispatch"
+	"github.com/charmbracelet/crush/internal/permission"
+	"github.com/charmbracelet/crush/internal/question"
+	"github.com/charmbracelet/crush/internal/session"
+)
+
+// fakeTodoSource emits one snapshot per subscription (#174 stand-in).
+type fakeTodoSource struct {
+	snapshot dispatch.TodoSnapshot
+}
+
+func (f *fakeTodoSource) SubscribeSessionTodos(ctx context.Context, sessionID string) <-chan dispatch.TodoSnapshot {
+	ch := make(chan dispatch.TodoSnapshot, 1)
+	ch <- f.snapshot
+	return ch
+}
+
+// The client half of the protocol boundary (#71): StreamDispatch drives a
+// served dispatch over the unix-socket wire — prompt out, SSE events
+// back — and returns the terminal outcome with the agent's text, the
+// artifact diff, and the observed Working progress count. The same
+// factory instance serves and dials (#346): the socket path lives on it.
+// The paced runner holds the run open while exactly one todo snapshot
+// crosses the wire, so the count is the initial Working plus that one
+// todo event, and a bare Working status with the todo bridge broken
+// cannot pass (#425).
+func TestStreamDispatchCompletedWithArtifactAndProgress(t *testing.T) {
+	factory := NewServerFactory(t.TempDir())
+	runner := newPacedRunner("done, two files changed")
+	source := newPipeTodoSource()
+	server, err := factory.StartServer(t.Context(), ServerParams{
+		DispatchID: "dispatch-1",
+		Runner:     runner,
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+		Diff: func(ctx context.Context) (string, error) {
+			return "--- a/x\n+++ b/x\n@@\n+changed", nil
+		},
+		Todos: source,
+		Call:  agent.SessionAgentCall{NonInteractive: true, MaxOutputTokens: 512},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+
+	var outcome agent.DispatchTransportOutcome
+	streamErr := make(chan error, 1)
+	go func() {
+		var err error
+		outcome, err = factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+			Endpoint:  server.Endpoint,
+			Card:      server.Card,
+			Prompt:    "fix the bug",
+			ContextID: "dispatch-session",
+		})
+		streamErr <- err
+	}()
+
+	// The subscription exists once the run has started, and the send is
+	// unbuffered: it returns only when the executor has taken the
+	// snapshot and yielded the todo Working event.
+	<-runner.started
+	source.ch <- todoSnapshot(runTodos(
+		session.Todo{Content: "wiring form validation", Status: session.TodoStatusInProgress, ActiveForm: "wiring form validation"},
+	))
+	close(runner.release)
+	require.NoError(t, <-streamErr)
+
+	// The call template flowed through the wire (#71): the served turn
+	// carries the dispatch's shaping, not a minimal test call.
+	require.True(t, runner.gotCall.NonInteractive)
+	require.Equal(t, int64(512), runner.gotCall.MaxOutputTokens)
+	require.Equal(t, "dispatch-session", runner.gotCall.SessionID)
+	require.Equal(t, "fix the bug", runner.gotCall.Prompt)
+	require.Equal(t, DispatchStatusCompleted, outcome.Status)
+	require.Equal(t, "done, two files changed", outcome.Text)
+	require.Contains(t, outcome.Diff, "+++ b/x")
+	require.Equal(t, 2, outcome.WorkingEvents, "the SSE stream carried the initial Working plus exactly one todo progress event")
+
+	// The typed todo progress (#359) rode the wire under the declared
+	// todos/v1 extension and decoded onto the outcome.
+	require.NotNil(t, outcome.TodoProgress)
+	require.Equal(t, "wiring form validation", outcome.TodoProgress.Current)
+	require.Equal(t, 1, outcome.TodoProgress.Total)
+	require.Len(t, outcome.TodoProgress.Todos, 1)
+	require.Equal(t, "wiring form validation", outcome.TodoProgress.Todos[0].Content)
+}
+
+// A dispatch with no todo source carries exactly the executor's initial
+// Working status across the wire, nothing more: the control half of
+// #425's count.
+func TestStreamDispatchWithoutTodosSingleWorking(t *testing.T) {
+	factory := NewServerFactory(t.TempDir())
+	server, err := factory.StartServer(t.Context(), ServerParams{
+		DispatchID: "dispatch-1",
+		Runner:     &fakeRunner{result: textResult("done")},
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+
+	outcome, err := factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "fix the bug",
+		ContextID: "dispatch-session",
+	})
+	require.NoError(t, err)
+	require.Equal(t, DispatchStatusCompleted, outcome.Status)
+	require.Equal(t, 1, outcome.WorkingEvents, "only the initial Working status crosses the wire without a todo source")
+}
+
+// The todo progress event survives the wire as the client receives it
+// (#425): exactly one Working TaskStatusUpdateEvent carries the typed
+// progress under the declared todos/v1 extension's URI, its message is
+// the in-progress todo's active form, and the metadata decodes onto the
+// outcome.
+func TestStreamDispatchTodoEventOnWire(t *testing.T) {
+	runner := newPacedRunner("done")
+	source := newPipeTodoSource()
+	factory := NewServerFactory(t.TempDir())
+	server, err := factory.StartServer(t.Context(), ServerParams{
+		DispatchID: "dispatch-1",
+		Runner:     runner,
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+		Todos:      source,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+
+	// The raw wire under the factory's unix transport (#346): the
+	// default transport cannot dial the per-process host's fake URL
+	// host, so the client dials exactly the way production does — the
+	// auth interceptor (#357) and its session id included, since the
+	// host rejects calls without the bearer token.
+	client, err := a2aclient.NewFromCard(t.Context(), server.Card,
+		a2aclient.WithJSONRPCTransport(factory.dispatchHTTPClient()),
+		a2aclient.WithCallInterceptors(&a2aclient.AuthInterceptor{Service: factory.creds}))
+	require.NoError(t, err)
+	ctx := factory.dispatchAuthContext(t.Context(), server.Endpoint)
+
+	req := &a2aspec.SendMessageRequest{
+		Message: a2aspec.NewMessage(a2aspec.MessageRoleUser, a2aspec.NewTextPart("fix the bug")),
+	}
+	req.Message.ContextID = "dispatch-session"
+	evsCh := make(chan []a2aspec.Event, 1)
+	go func() {
+		var evs []a2aspec.Event
+		for ev, err := range client.SendStreamingMessage(ctx, req) {
+			require.NoError(t, err, "unexpected error from the dispatch stream")
+			evs = append(evs, ev)
+		}
+		evsCh <- evs
+	}()
+
+	// One snapshot while the run is in flight, then the terminal
+	// outcome: the same pacing as the StreamDispatch test.
+	<-runner.started
+	source.ch <- todoSnapshot(runTodos(
+		session.Todo{Content: "wiring form validation", Status: session.TodoStatusInProgress, ActiveForm: "wiring form validation"},
+	))
+	close(runner.release)
+
+	var evs []a2aspec.Event
+	select {
+	case evs = <-evsCh:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for the stream to end")
+	}
+
+	var todoUpdates []*a2aspec.TaskStatusUpdateEvent
+	var terminal a2aspec.TaskState
+	for _, ev := range evs {
+		switch e := ev.(type) {
+		case *a2aspec.TaskStatusUpdateEvent:
+			terminal = e.Status.State
+			if e.Status.State == a2aspec.TaskStateWorking && e.Meta()[TodoExt.URI] != nil {
+				todoUpdates = append(todoUpdates, e)
+			}
+		case *a2aspec.Task:
+			terminal = e.Status.State
+		}
+	}
+	require.Equal(t, a2aspec.TaskStateCompleted, terminal)
+	require.Len(t, todoUpdates, 1, "exactly one Working event carries the typed todo progress")
+	todo := todoUpdates[0]
+	require.Equal(t, "wiring form validation", statusMessageText(t, todo))
+	// The typed payload decodes onto the outcome through the same path
+	// the client takes.
+	decoder := newMetadataDecoder(server.Card)
+	var outcome agent.DispatchTransportOutcome
+	decoder.apply(&outcome, todo)
+	require.NotNil(t, outcome.TodoProgress)
+	require.Equal(t, "wiring form validation", outcome.TodoProgress.Current)
+	require.Equal(t, 1, outcome.TodoProgress.Total)
+	require.Len(t, outcome.TodoProgress.Todos, 1)
+	require.Equal(t, "wiring form validation", outcome.TodoProgress.Todos[0].Content)
+}
+
+// The stream-side metadata decoder (#359): registered and declared keys
+// decode; unknown keys, and declared keys whose value does not fit the
+// extension's type, are logged and dropped without failing the stream.
+func TestMetadataDecoderDropsUndecodable(t *testing.T) {
+	t.Parallel()
+
+	card := BuildAgentCard(CardParams{
+		Agent:    config.Agent{Name: "worker"},
+		Endpoint: "http://127.0.0.1:9000",
+	})
+	decoder := newMetadataDecoder(card)
+
+	outcome := agent.DispatchTransportOutcome{}
+	// An unknown metadata key (the pre-extension "todos" shape) is dropped.
+	decoder.apply(&outcome, &a2aspec.TaskStatusUpdateEvent{
+		Status:   a2aspec.TaskStatus{State: a2aspec.TaskStateWorking},
+		Metadata: map[string]any{"todos": []any{map[string]any{"content": "old shape"}}},
+	})
+	// A declared key with a malformed value is dropped.
+	decoder.apply(&outcome, &a2aspec.TaskStatusUpdateEvent{
+		Status:   a2aspec.TaskStatus{State: a2aspec.TaskStateWorking},
+		Metadata: map[string]any{TodoExtensionURI: []any{"garbage"}},
+	})
+	require.Nil(t, outcome.TodoProgress)
+
+	// A well-formed value decodes onto the outcome.
+	encoded, err := Encode(TodoExt, agent.TodoProgress{Current: "wiring", Total: 1})
+	require.NoError(t, err)
+	decoder.apply(&outcome, &a2aspec.TaskStatusUpdateEvent{
+		Status:   a2aspec.TaskStatus{State: a2aspec.TaskStateWorking},
+		Metadata: map[string]any{TodoExtensionURI: encoded},
+	})
+	require.NotNil(t, outcome.TodoProgress)
+	require.Equal(t, "wiring", outcome.TodoProgress.Current)
+}
+
+// The activation request covers exactly the card-declared extensions this
+// process has registered.
+func TestMetadataDecoderActivatedURIs(t *testing.T) {
+	t.Parallel()
+
+	decoder := newMetadataDecoder(&a2aspec.AgentCard{
+		Capabilities: a2aspec.AgentCapabilities{
+			Extensions: []a2aspec.AgentExtension{
+				{URI: TodoExtensionURI},
+				{URI: "https://crush.charm.land/ext/unknown-to-us/v1"},
+			},
+		},
+	})
+	require.Equal(t, []string{TodoExtensionURI}, decoder.activatedURIs())
+}
+
+// A failed run maps to the failed outcome with the failure text from the
+// terminal status message.
+func TestStreamDispatchFailedRun(t *testing.T) {
+	factory := NewServerFactory(t.TempDir())
+	server, err := factory.StartServer(t.Context(), ServerParams{
+		DispatchID: "dispatch-1",
+		Runner:     &fakeRunner{err: errors.New("provider exploded")},
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+
+	outcome, err := factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "fix the bug",
+		ContextID: "dispatch-session",
+	})
+	require.NoError(t, err)
+	require.Equal(t, DispatchStatusFailed, outcome.Status)
+	require.Contains(t, outcome.Text, "provider exploded")
+}
+
+// A panic in the dispatched runner must surface as a failed outcome
+// across the wire, not crash the server process (#345).
+func TestStreamDispatchRunnerPanicFails(t *testing.T) {
+	factory := NewServerFactory(t.TempDir())
+	server, err := factory.StartServer(t.Context(), ServerParams{
+		DispatchID: "dispatch-1",
+		Runner:     &fakeRunner{panicValue: errors.New("adapter blew up")},
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+
+	outcome, err := factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "fix the bug",
+		ContextID: "dispatch-session",
+	})
+	require.NoError(t, err)
+	require.Equal(t, DispatchStatusFailed, outcome.Status)
+	require.Contains(t, outcome.Text, "panicked")
+}
+
+// An out-of-band kill — the ladder or watchdog canceling the agent
+// directly, no A2A CancelTask, live server context — must end the SSE
+// stream quickly with the canceled outcome and the kill reason, never at
+// the caller's deadline (#342).
+func TestStreamDispatchOutOfBandCancelEnds(t *testing.T) {
+	factory := NewServerFactory(t.TempDir())
+	runner := &blockingCancelRunner{started: make(chan struct{}), kill: make(chan struct{})}
+	server, err := factory.StartServer(t.Context(), ServerParams{
+		DispatchID: "dispatch-1",
+		Runner:     runner,
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+		CancelReason: func() string {
+			return "wander kill: hard timeout"
+		},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+
+	go func() {
+		<-runner.started
+		close(runner.kill)
+	}()
+
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	outcome, err := factory.StreamDispatch(ctx, agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "fix the bug",
+		ContextID: "dispatch-session",
+	})
+	require.NoError(t, err)
+	require.Less(t, time.Since(start), 5*time.Second, "the stream must end well before the caller's deadline")
+	require.Equal(t, DispatchStatusCanceled, outcome.Status)
+	require.Equal(t, "wander kill: hard timeout", outcome.Text)
+}
+
+// CancelDispatch routes the kill through the protocol's tasks/cancel
+// (#348): the reason rides the request metadata, the blocked stream ends
+// canceled carrying it, and exactly one cancel call is needed.
+func TestCancelDispatchEndsStream(t *testing.T) {
+	runner := &blockingCancelRunner{started: make(chan struct{}), kill: make(chan struct{})}
+	factory := NewServerFactory(t.TempDir())
+	server, err := factory.StartServer(t.Context(), ServerParams{
+		DispatchID: "dispatch-cancel",
+		Runner:     runner,
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	taskIDCh := make(chan string, 1)
+	outcomeCh := make(chan agent.DispatchTransportOutcome, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		outcome, err := factory.StreamDispatch(ctx, agent.DispatchTransportParams{
+			Endpoint:  server.Endpoint,
+			Card:      server.Card,
+			Prompt:    "fix the bug",
+			ContextID: "dispatch-session",
+			OnTask:    func(taskID string) { taskIDCh <- taskID },
+		})
+		outcomeCh <- outcome
+		errCh <- err
+	}()
+
+	<-runner.started
+	var taskID string
+	select {
+	case taskID = <-taskIDCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the stream never named the task")
+	}
+	require.NotEmpty(t, taskID)
+	require.NoError(t, factory.CancelDispatch(ctx, agent.DispatchCancelParams{
+		Endpoint: server.Endpoint,
+		Card:     server.Card,
+		TaskID:   taskID,
+		Reason:   "hard timeout",
+	}))
+
+	var outcome agent.DispatchTransportOutcome
+	select {
+	case outcome = <-outcomeCh:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the stream never ended after the cancel")
+	}
+	require.NoError(t, <-errCh)
+	require.Equal(t, DispatchStatusCanceled, outcome.Status)
+	require.Equal(t, "hard timeout", outcome.Text)
+}
+
+// startAskingServer serves a dispatched agent that asks one question
+// through its scoped question service (#352), on a fresh host.
+func startAskingServer(t *testing.T) (*ServerFactory, *Server, *askingRunner) {
+	t.Helper()
+	svc := question.NewService()
+	runner := newAskingRunner(svc)
+	factory := NewServerFactory(t.TempDir())
+	server, err := factory.StartServer(t.Context(), ServerParams{
+		DispatchID: "dispatch-asks",
+		Runner:     runner,
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+		Questions:  svc,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+	return factory, server, runner
+}
+
+// The input-required round trip over the wire (#352): the agent's
+// question reaches the client as input-required with the typed payload,
+// OnInputRequired answers it while the run stays parked, the answer goes
+// back as a typed message on the same task, and the terminal state
+// arrives on the second stream — from the same run, never a second turn.
+func TestStreamDispatchInputRequiredRoundTrip(t *testing.T) {
+	factory, server, runner := startAskingServer(t)
+
+	var asked []agent.QuestionRequest
+	var taskIDs []string
+	outcome, err := factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "set up the schema",
+		ContextID: "dispatch-session",
+		OnTask:    func(taskID string) { taskIDs = append(taskIDs, taskID) },
+		OnInputRequired: func(_ context.Context, req agent.QuestionRequest) (agent.QuestionAnswer, error) {
+			asked = append(asked, req)
+			select {
+			case resp := <-runner.toolResp:
+				t.Errorf("the run must stay parked while the question is open, got %+v", resp)
+			default:
+			}
+			return agent.QuestionAnswer{Answers: []question.Answer{
+				{QuestionID: req.Questions[0].ID, FillInText: "use postgres"},
+			}}, nil
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, DispatchStatusCompleted, outcome.Status)
+	require.Contains(t, outcome.Text, "User provided: use postgres")
+
+	require.Len(t, asked, 1, "one question, asked once")
+	require.Len(t, asked[0].Questions, 1)
+	require.Equal(t, question.TypeFreeText, asked[0].Questions[0].Type)
+	require.Equal(t, "Which database?", asked[0].Questions[0].Text)
+	require.Equal(t, "The schema differs per engine.", asked[0].Questions[0].Description)
+
+	require.False(t, (<-runner.toolResp).IsError)
+	require.EqualValues(t, 1, runner.runs.Load(), "the answer resumes the same run")
+	require.Len(t, taskIDs, 1, "both streams belong to one task")
+
+	// The answer went back on that task: its history holds the typed
+	// answers/v1 message after the prompt.
+	client, err := newDispatchClient(t.Context(), server.Card, factory.dispatchHTTPClient(), factory)
+	require.NoError(t, err)
+	authCtx := factory.dispatchAuthContext(t.Context(), server.Endpoint)
+	task, err := client.GetTask(authCtx, &a2aspec.GetTaskRequest{ID: a2aspec.TaskID(taskIDs[0])})
+	require.NoError(t, err)
+	require.Equal(t, a2aspec.TaskStateCompleted, task.Status.State)
+	answered := slices.ContainsFunc(task.History, func(msg *a2aspec.Message) bool {
+		return msg.Role == a2aspec.MessageRoleUser && slices.Contains(msg.Extensions, AnswerExtensionURI)
+	})
+	require.True(t, answered, "the answer is a user message on the same task")
+}
+
+// startRequestingServer serves a dispatched agent whose tool requests
+// permission through its scoped permission service (#353).
+func startRequestingServer(t *testing.T, calls ...string) (*ServerFactory, *Server, *requestingRunner) {
+	t.Helper()
+	svc := permission.NewPermissionService(t.TempDir(), false, nil)
+	runner := newRequestingRunner(svc, calls...)
+	factory := NewServerFactory(t.TempDir())
+	server, err := factory.StartServer(t.Context(), ServerParams{
+		DispatchID:  "dispatch-requests",
+		Runner:      runner,
+		SessionID:   "dispatch-session",
+		ContextID:   "dispatch-session",
+		Permissions: svc,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+	return factory, server, runner
+}
+
+// The permission round trip over the wire (#353): each request reaches
+// OnPermissionRequired with the tool's typed params, the decision goes
+// back on the same task, and the run's tool calls get those verdicts —
+// here allow, then deny, for two parallel calls parked in turn.
+func TestStreamDispatchPermissionRoundTrip(t *testing.T) {
+	factory, server, runner := startRequestingServer(t, "make test", "make lint")
+
+	var asked []agent.PermissionPrompt
+	var taskIDs []string
+	outcome, err := factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "check everything",
+		ContextID: "dispatch-session",
+		OnTask:    func(taskID string) { taskIDs = append(taskIDs, taskID) },
+		OnPermissionRequired: func(_ context.Context, req agent.PermissionPrompt) (bool, error) {
+			asked = append(asked, req)
+			return len(asked) == 1, nil
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, DispatchStatusCompleted, outcome.Status)
+
+	require.Len(t, asked, 2, "two requests, decided in turn")
+	verdicts := map[string]bool{}
+	for range 2 {
+		v := <-runner.verdicts
+		require.NoError(t, v.err)
+		verdicts[v.call] = v.granted
+	}
+	require.Equal(t, map[string]bool{asked[0].ToolCallID: true, asked[1].ToolCallID: false}, verdicts)
+	for _, req := range asked {
+		require.Equal(t, tools.BashToolName, req.ToolName)
+		params, ok := req.Params.(tools.BashPermissionsParams)
+		require.True(t, ok, "params decode as the tool's own type, got %T", req.Params)
+		require.Equal(t, req.ToolCallID, params.Command)
+	}
+	require.EqualValues(t, 1, runner.runs.Load(), "decisions resume the same run")
+	require.Len(t, taskIDs, 1, "every stream belongs to one task")
+}
+
+// Without a handler, a permission request is denied rather than left
+// waiting (#353).
+func TestStreamDispatchPermissionWithoutHandlerDenies(t *testing.T) {
+	factory, server, runner := startRequestingServer(t, "make test")
+
+	outcome, err := factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "run the tests",
+		ContextID: "dispatch-session",
+	})
+	require.NoError(t, err)
+	require.Equal(t, DispatchStatusCompleted, outcome.Status)
+	v := <-runner.verdicts
+	require.NoError(t, v.err)
+	require.False(t, v.granted)
+}
+
+// A permission request no decision is coming for — the handler failed,
+// as it does when a kill ends the parent's wait — cancels the parked task
+// with the error's text as the reason, and the tool call is not granted
+// (#353).
+func TestStreamDispatchUndecidedPermissionCancels(t *testing.T) {
+	factory, server, runner := startRequestingServer(t, "make test")
+
+	outcome, err := factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "run the tests",
+		ContextID: "dispatch-session",
+		OnPermissionRequired: func(context.Context, agent.PermissionPrompt) (bool, error) {
+			return false, errors.New("wander kill: hard timeout")
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, DispatchStatusCanceled, outcome.Status)
+	require.Equal(t, "wander kill: hard timeout", outcome.Text)
+	require.False(t, (<-runner.verdicts).granted)
+}
+
+// startSteeringServer serves a run that holds its turn until released
+// (#398).
+func startSteeringServer(t *testing.T, runner *steeringRunner) (*ServerFactory, *Server) {
+	t.Helper()
+	factory := NewServerFactory(t.TempDir())
+	server, err := factory.StartServer(t.Context(), ServerParams{
+		DispatchID: "dispatch-steered",
+		Runner:     runner,
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+	return factory, server
+}
+
+// Over the wire (#398): a steer the run accepted but never read, because
+// the run failed, reaches the dispatch's outcome as UndeliveredSteers.
+func TestStreamDispatchReportsUndeliveredSteers(t *testing.T) {
+	runner := newSteeringRunner(nil, errors.New("provider exploded"), true)
+	factory, server := startSteeringServer(t, runner)
+
+	type result struct {
+		outcome agent.DispatchTransportOutcome
+		err     error
+	}
+	done := make(chan result, 1)
+	go func() {
+		outcome, err := factory.StreamDispatch(context.Background(), agent.DispatchTransportParams{
+			Endpoint:  server.Endpoint,
+			Card:      server.Card,
+			Prompt:    "do the work",
+			ContextID: "dispatch-session",
+		})
+		done <- result{outcome, err}
+	}()
+	<-runner.started
+
+	steer, err := factory.SteerDispatch(t.Context(), agent.DispatchSteerParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		ContextID: "dispatch-session",
+		Text:      "also update the docs",
+	})
+	require.NoError(t, err)
+	require.Equal(t, SteerStatusWorking, steer.Status, "the steer was accepted into the queue")
+
+	close(runner.release)
+	got := <-done
+	require.NoError(t, got.err)
+	require.Equal(t, DispatchStatusFailed, got.outcome.Status)
+	require.Equal(t, []string{"also update the docs"}, got.outcome.UndeliveredSteers)
+}
+
+// A steer refused while the run is live carries the not-ready reason to
+// the caller (#398).
+func TestSteerDispatchNotReadyReason(t *testing.T) {
+	runner := newSteeringRunner(textResult("done"), nil, false)
+	factory, server := startSteeringServer(t, runner)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = factory.StreamDispatch(context.Background(), agent.DispatchTransportParams{
+			Endpoint:  server.Endpoint,
+			Card:      server.Card,
+			Prompt:    "do the work",
+			ContextID: "dispatch-session",
+		})
+	}()
+	<-runner.started
+
+	steer, err := factory.SteerDispatch(t.Context(), agent.DispatchSteerParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		ContextID: "dispatch-session",
+		Text:      "too early",
+	})
+	require.NoError(t, err)
+	require.Equal(t, SteerStatusRejected, steer.Status)
+	require.Equal(t, agent.SteerRefusalNotReady, steer.Reason)
+
+	close(runner.release)
+	<-done
+}
+
+// A question no answer is coming for (#352) — OnInputRequired failed,
+// as it does when a kill ends the parent's wait — cancels the parked
+// task with the error's text as the reason: the stream's outcome is
+// Canceled with it, and the parked tool call returns an error.
+func TestStreamDispatchUnansweredQuestionCancels(t *testing.T) {
+	factory, server, runner := startAskingServer(t)
+
+	outcome, err := factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "set up the schema",
+		ContextID: "dispatch-session",
+		OnInputRequired: func(context.Context, agent.QuestionRequest) (agent.QuestionAnswer, error) {
+			return agent.QuestionAnswer{}, errors.New("wander kill: hard timeout")
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, DispatchStatusCanceled, outcome.Status)
+	require.Equal(t, "wander kill: hard timeout", outcome.Text)
+
+	resp := <-runner.toolResp
+	require.True(t, resp.IsError, "the parked tool call must return an error")
+	require.EqualValues(t, 1, runner.runs.Load())
+}
+
+// cancelGateRunner is an asking runner that holds the first tasks/cancel
+// inside the executor (#352): the executor's Cancel calls the runner's
+// Cancel before it yields Canceled, so the first call closes entered and
+// waits on resume. Later calls pass straight through.
+type cancelGateRunner struct {
+	*askingRunner
+	entered chan struct{}
+	resume  chan struct{}
+	once    sync.Once
+}
+
+func (r *cancelGateRunner) Cancel(string) {
+	first := false
+	r.once.Do(func() { first = true })
+	if first {
+		close(r.entered)
+		<-r.resume
+	}
+}
+
+// parkedCancelRace is one served asking agent whose execution the test
+// can hold at the points where a parked task's cancel races it (#352).
+type parkedCancelRace struct {
+	factory *ServerFactory
+	server  *Server
+	runner  *cancelGateRunner
+	// release lets the parked execution's producer return; until then
+	// the SDK keeps the execution registered and its event pipe open.
+	release chan struct{}
+	// canceled is closed once the first Cancel has yielded its Canceled.
+	canceled chan struct{}
+	// named is closed once the stream named the task; id holds it.
+	named chan struct{}
+	id    string
+	// releaseProducer and resumeCancel close release and the runner's
+	// resume, once.
+	releaseProducer func()
+	resumeCancel    func()
+}
+
+// task waits for the stream to name the task and returns its ID.
+func (r *parkedCancelRace) task() a2aspec.TaskID {
+	<-r.named
+	return a2aspec.TaskID(r.id)
+}
+
+// onTask is the stream's OnTask: it records the task the stream named.
+func (r *parkedCancelRace) onTask(taskID string) {
+	r.id = taskID
+	close(r.named)
+}
+
+// startParkedCancelRace serves an asking agent with the executor's
+// parked and canceled seams installed. Everything the test holds is let
+// go on cleanup, so a failed assertion never wedges the host's shutdown.
+func startParkedCancelRace(t *testing.T) *parkedCancelRace {
+	t.Helper()
+	svc := question.NewService()
+	race := &parkedCancelRace{
+		runner: &cancelGateRunner{
+			askingRunner: newAskingRunner(svc),
+			entered:      make(chan struct{}),
+			resume:       make(chan struct{}),
+		},
+		release:  make(chan struct{}),
+		canceled: make(chan struct{}),
+		named:    make(chan struct{}),
+	}
+	var canceledOnce sync.Once
+	race.factory = NewServerFactory(t.TempDir())
+	server, err := race.factory.StartServer(t.Context(), ServerParams{
+		DispatchID: "dispatch-race",
+		Runner:     race.runner,
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+		Questions:  svc,
+		hooks: executorHooks{
+			parked:   func() { <-race.release },
+			canceled: func() { canceledOnce.Do(func() { close(race.canceled) }) },
+		},
+	})
+	require.NoError(t, err)
+	race.server = server
+	t.Cleanup(func() { _ = race.factory.Close(context.Background()) })
+	var releaseOnce, resumeOnce sync.Once
+	t.Cleanup(func() {
+		releaseOnce.Do(func() { close(race.release) })
+		resumeOnce.Do(func() { close(race.runner.resume) })
+	})
+	race.releaseProducer = func() { releaseOnce.Do(func() { close(race.release) }) }
+	race.resumeCancel = func() { resumeOnce.Do(func() { close(race.runner.resume) }) }
+	return race
+}
+
+// The race a parked task's cancel walks into (#352), forced in both of
+// its SDK outcomes. The client cancels as soon as it reads
+// input-required, and the SDK unregisters the execution that parked the
+// task only after delivering that event, so the cancel can find the
+// execution still registered. The SDK then routes it into that
+// execution's event pipe, where the executor's Canceled is never
+// processed: the executor drops the parked run, yet the task stays
+// input-required. Either the pipe was still open and the cancel resolves
+// to the execution's input-required result (TaskNotCancelable), or the
+// execution closed its pipe first and the write fails (queue closed —
+// the outcome CI hit). The parked seam holds the execution's producer,
+// so the execution stays registered for exactly as long as each case
+// needs. In both, the client re-issues the cancel once, it lands on the
+// no-execution path, and the task ends Canceled with the reason.
+func TestStreamDispatchParkedCancelRace(t *testing.T) {
+	tests := []struct {
+		name string
+		// interleave runs once the stream started; it lets the parked
+		// execution go at the point that forces the case.
+		interleave func(t *testing.T, race *parkedCancelRace)
+	}{
+		{
+			name: "cancel resolves to the parked state",
+			interleave: func(_ *testing.T, race *parkedCancelRace) {
+				race.resumeCancel()
+				// The first cancel's Canceled is in the still-open pipe
+				// of the parked execution, whose consumer has stopped.
+				<-race.canceled
+				race.releaseProducer()
+			},
+		},
+		{
+			name: "cancel finds the pipe closed",
+			interleave: func(t *testing.T, race *parkedCancelRace) {
+				// The first cancel has reached the executor; its
+				// Canceled is not written yet.
+				<-race.runner.entered
+				race.releaseProducer()
+				// A message naming the task is held by the SDK until the
+				// parked execution has unregistered — and so closed its
+				// pipe — then refused, because the cancel is still in
+				// progress. That refusal is the proof the execution is
+				// gone before the Canceled is written.
+				client, err := newDispatchClient(t.Context(), race.server.Card, race.factory.dispatchHTTPClient(), race.factory)
+				require.NoError(t, err)
+				msg := a2aspec.NewMessage(a2aspec.MessageRoleUser, a2aspec.NewTextPart("barrier"))
+				msg.TaskID = race.task()
+				msg.ContextID = "dispatch-session"
+				_, err = client.SendMessage(race.factory.dispatchAuthContext(t.Context(), race.server.Endpoint), &a2aspec.SendMessageRequest{Message: msg})
+				require.ErrorContains(t, err, "task cancelation is in progress")
+				race.resumeCancel()
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			race := startParkedCancelRace(t)
+
+			type result struct {
+				outcome agent.DispatchTransportOutcome
+				err     error
+			}
+			done := make(chan result, 1)
+			go func() {
+				outcome, err := race.factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+					Endpoint:  race.server.Endpoint,
+					Card:      race.server.Card,
+					Prompt:    "set up the schema",
+					ContextID: "dispatch-session",
+					OnTask:    race.onTask,
+					OnInputRequired: func(context.Context, agent.QuestionRequest) (agent.QuestionAnswer, error) {
+						return agent.QuestionAnswer{}, errors.New("wander kill: hard timeout")
+					},
+				})
+				done <- result{outcome, err}
+			}()
+
+			tt.interleave(t, race)
+			res := <-done
+			require.NoError(t, res.err)
+			require.Equal(t, DispatchStatusCanceled, res.outcome.Status)
+			require.Equal(t, "wander kill: hard timeout", res.outcome.Text)
+
+			resp := <-race.runner.toolResp
+			require.True(t, resp.IsError, "the parked tool call must return an error")
+			require.EqualValues(t, 1, race.runner.runs.Load())
+
+			// The server's own record agrees: the task ended Canceled.
+			client, err := newDispatchClient(t.Context(), race.server.Card, race.factory.dispatchHTTPClient(), race.factory)
+			require.NoError(t, err)
+			authCtx := race.factory.dispatchAuthContext(t.Context(), race.server.Endpoint)
+			task, err := client.GetTask(authCtx, &a2aspec.GetTaskRequest{ID: race.task()})
+			require.NoError(t, err)
+			require.Equal(t, a2aspec.TaskStateCanceled, task.Status.State)
+		})
+	}
+}
+
+// CancelDispatch without a resolvable card or task ID is an error, not
+// a silent success — the caller's fallback depends on it.
+func TestCancelDispatchRejectsUnusableParams(t *testing.T) {
+	require.Error(t, NewServerFactory(t.TempDir()).CancelDispatch(t.Context(), agent.DispatchCancelParams{
+		Endpoint: "http://127.0.0.1:1",
+		Card:     "not-a-card",
+		TaskID:   "task-1",
+		Reason:   "hard timeout",
+	}))
+	require.Error(t, NewServerFactory(t.TempDir()).CancelDispatch(t.Context(), agent.DispatchCancelParams{
+		Endpoint: "http://127.0.0.1:1",
+		Card:     &a2aspec.AgentCard{},
+		TaskID:   "",
+		Reason:   "hard timeout",
+	}))
+}
+
+// An unreachable or bogus endpoint is a transport error before any
+// terminal state, never a silent success.
+func TestStreamDispatchTransportErrors(t *testing.T) {
+	factory := NewServerFactory(t.TempDir())
+
+	// No card to build a client from.
+	_, err := factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  "http://127.0.0.1:1",
+		Card:      "not a card",
+		Prompt:    "x",
+		ContextID: "dispatch-session",
+	})
+	require.ErrorContains(t, err, "no resolvable agent card")
+
+	// A card advertising an endpoint nothing serves.
+	dead := BuildAgentCard(CardParams{Agent: config.Agent{Name: "dead-agent"}, Endpoint: "http://127.0.0.1:1", Transport: a2aspec.TransportProtocolJSONRPC})
+	_, err = factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  "http://127.0.0.1:1",
+		Card:      dead,
+		Prompt:    "x",
+		ContextID: "dispatch-session",
+	})
+	require.Error(t, err)
+
+	// An empty prompt never leaves the client.
+	_, err = factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint: "http://127.0.0.1:1",
+		Card:     dead,
+	})
+	require.ErrorContains(t, err, "prompt is empty")
+}
+
+// An 11 MB diff survives the wire end to end (#361): the executor's
+// chunks each stay under the SDK's SSE line cap, and the client
+// reassembles them byte for byte onto the outcome.
+func TestStreamDispatchLargeDiffRoundTrips(t *testing.T) {
+	line := strings.Repeat("-", 4096) + "\n"
+	var b strings.Builder
+	for len(b.String()) < 11*1024*1024 {
+		b.WriteString(line)
+	}
+	diff := b.String()
+
+	runner := &fakeRunner{result: textResult("big change")}
+	factory := NewServerFactory(t.TempDir())
+	server, err := factory.StartServer(t.Context(), ServerParams{
+		DispatchID: "dispatch-1",
+		Runner:     runner,
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+		Diff: func(ctx context.Context) (string, error) {
+			return diff, nil
+		},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+
+	outcome, err := factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "change everything",
+		ContextID: "dispatch-session",
+	})
+	require.NoError(t, err)
+	require.Equal(t, DispatchStatusCompleted, outcome.Status)
+	require.Len(t, outcome.Diff, len(diff))
+	require.Equal(t, diff, outcome.Diff, "the reassembled diff matches byte for byte")
+	require.False(t, outcome.DiffTruncated)
+	require.Empty(t, outcome.DiffError)
+}
+
+// A diff-capture error crosses the wire on the dispatch-result artifact:
+// the run still completes, and the outcome carries the error instead of
+// a diff (#361).
+func TestStreamDispatchDiffErrorStillCompletes(t *testing.T) {
+	runner := &fakeRunner{result: textResult("done, but the diff blew up")}
+	factory := NewServerFactory(t.TempDir())
+	server, err := factory.StartServer(t.Context(), ServerParams{
+		DispatchID: "dispatch-1",
+		Runner:     runner,
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+		Diff: func(ctx context.Context) (string, error) {
+			return "", errors.New("not a git repo")
+		},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+
+	outcome, err := factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "fix the bug",
+		ContextID: "dispatch-session",
+	})
+	require.NoError(t, err)
+	require.Equal(t, DispatchStatusCompleted, outcome.Status)
+	require.Equal(t, "not a git repo", outcome.DiffError)
+	require.Empty(t, outcome.Diff)
+}
+
+// The production dispatch client carries no total Timeout (#344): the
+// SDK's default three-minute http.Client.Timeout bounds the whole
+// exchange including the SSE body, killing every served dispatch that
+// runs longer. The per-phase bounds stay, so a dead server still fails
+// fast.
+func TestDispatchClientHasNoTotalTimeout(t *testing.T) {
+	client := NewServerFactory(t.TempDir()).dispatchHTTPClient()
+	require.Zero(t, client.Timeout, "a total Timeout would re-create the three-minute kill")
+
+	transport, ok := client.Transport.(*http.Transport)
+	require.True(t, ok)
+	require.Greater(t, transport.ResponseHeaderTimeout, time.Duration(0))
+	require.Greater(t, transport.TLSHandshakeTimeout, time.Duration(0))
+}
+
+// A served run outlives a short injected client deadline (#344): the
+// response headers arrive inside the deadline, the SSE body streams
+// past it, and the terminal outcome still lands.
+func TestStreamDispatchOutlivesShortClientDeadline(t *testing.T) {
+	runner := &fakeRunner{result: textResult("eventually done"), delay: time.Second}
+	factory := NewServerFactory(t.TempDir())
+	server, err := factory.StartServer(t.Context(), ServerParams{
+		DispatchID: "dispatch-1",
+		Runner:     runner,
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+		Todos:      &fakeTodoSource{},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+
+	factory.httpClient = &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				var dialer net.Dialer
+				return dialer.DialContext(ctx, "unix", factory.socketPath())
+			},
+			ResponseHeaderTimeout: 200 * time.Millisecond,
+		},
+	}
+	outcome, err := factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "fix the bug",
+		ContextID: "dispatch-session",
+	})
+	require.NoError(t, err)
+	require.Equal(t, DispatchStatusCompleted, outcome.Status)
+	require.Equal(t, "eventually done", outcome.Text)
+}
+
+// steppedTodoSource emits each snapshot after its delay from the
+// subscription's start (#349), so a test can place todo Working events
+// deterministically before or after a mid-run stream cut.
+type steppedTodoSource struct {
+	delays    []time.Duration
+	snapshots []dispatch.TodoSnapshot
+}
+
+func (s *steppedTodoSource) SubscribeSessionTodos(ctx context.Context, _ string) <-chan dispatch.TodoSnapshot {
+	ch := make(chan dispatch.TodoSnapshot, len(s.snapshots))
+	go func() {
+		defer close(ch)
+		for i, snap := range s.snapshots {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(s.delays[i]):
+			}
+			select {
+			case ch <- snap:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return ch
+}
+
+// cuttingTransport wraps the loopback transport for the resume tests
+// (#349): the first SendStreamingMessage response body is cut after its
+// first SSE event, and with failAfterCut every later request is severed
+// before dialing — the give-up case. The JSON-RPC method of each
+// request is sniffed to tell the stream from the resubscribe and
+// tasks/get calls that follow it.
+type cuttingTransport struct {
+	base         http.RoundTripper
+	failAfterCut bool
+
+	mu  sync.Mutex
+	cut bool
+}
+
+func (c *cuttingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	c.mu.Lock()
+	if c.cut && c.failAfterCut {
+		c.mu.Unlock()
+		return nil, errors.New("transport severed after the stream cut")
+	}
+	c.mu.Unlock()
+
+	method := jsonrpcRequestMethod(req)
+
+	c.mu.Lock()
+	firstStream := method == "SendStreamingMessage" && !c.cut
+	if firstStream {
+		c.cut = true
+	}
+	c.mu.Unlock()
+
+	resp, err := c.base.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+	if firstStream {
+		resp.Body = &cutAfterFirstEventBody{ReadCloser: resp.Body}
+	}
+	return resp, nil
+}
+
+// jsonrpcRequestMethod reads a JSON-RPC request's method field and puts
+// the body back for the real transport.
+func jsonrpcRequestMethod(req *http.Request) string {
+	if req.Body == nil {
+		return ""
+	}
+	body, err := io.ReadAll(req.Body)
+	_ = req.Body.Close()
+	if err != nil {
+		return ""
+	}
+	var envelope struct {
+		Method string `json:"method"`
+	}
+	_ = json.Unmarshal(body, &envelope)
+	req.Body = io.NopCloser(bytes.NewReader(body))
+	req.ContentLength = int64(len(body))
+	return envelope.Method
+}
+
+// cutAfterFirstEventBody is an SSE response body that delivers exactly
+// the stream's first event and then dies with io.ErrUnexpectedEOF —
+// the dropped connection a resume recovers from (#349). Bytes past the
+// first event boundary are lost with the connection.
+type cutAfterFirstEventBody struct {
+	io.ReadCloser
+
+	primed bool
+	buf    []byte
+}
+
+func (b *cutAfterFirstEventBody) Read(p []byte) (int, error) {
+	if !b.primed {
+		b.primed = true
+		var collected []byte
+		chunk := make([]byte, 4096)
+		for {
+			n, err := b.ReadCloser.Read(chunk)
+			collected = append(collected, chunk[:n]...)
+			if i := bytes.Index(collected, []byte("\n\n")); i >= 0 {
+				b.buf = collected[:i+2]
+				_ = b.Close()
+				break
+			}
+			if err != nil {
+				b.buf = collected
+				break
+			}
+		}
+	}
+	if len(b.buf) == 0 {
+		return 0, io.ErrUnexpectedEOF
+	}
+	n := copy(p, b.buf)
+	b.buf = b.buf[n:]
+	return n, nil
+}
+
+// resumeTestParams builds one dispatch server's params: a two-second
+// run carrying a diff, with two todo snapshots at 500ms and 1s — both
+// after the first resume backoff (250ms), so the replayed stream
+// carries both Working events and only the pre-cut initial one is lost
+// with the connection.
+func resumeTestParams() ServerParams {
+	return ServerParams{
+		DispatchID: "resume-task",
+		Runner:     &fakeRunner{result: textResult("resumed to the end"), delay: 2 * time.Second},
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+		Diff: func(ctx context.Context) (string, error) {
+			return "--- a/x\n+++ b/x\n@@\n+changed", nil
+		},
+		Todos: &steppedTodoSource{
+			delays: []time.Duration{500 * time.Millisecond, time.Second},
+			snapshots: []dispatch.TodoSnapshot{
+				{CurrentTodo: "wiring the retry loop", Todos: []session.Todo{
+					{Content: "wiring the retry loop", Status: session.TodoStatusInProgress},
+				}},
+				{CurrentTodo: "folding the replay", Todos: []session.Todo{
+					{Content: "wiring the retry loop", Status: session.TodoStatusCompleted},
+					{Content: "folding the replay", Status: session.TodoStatusInProgress},
+				}},
+			},
+		},
+	}
+}
+
+// A stream cut mid-run does not fail the dispatch (#349): the client
+// resumes through tasks/resubscribe, folds the replayed snapshot plus
+// the live events, and lands the same terminal outcome an uncut run
+// reaches — text, diff, and a Working count that loses only the events
+// the connection dropped and never counts one twice. The first event's
+// task ID reaches OnTask exactly once, and tasks/get answers that ID
+// with the stored task afterwards.
+func TestStreamDispatchResumesAfterDrop(t *testing.T) {
+	factory := NewServerFactory(t.TempDir())
+	server, err := factory.StartServer(t.Context(), resumeTestParams())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+	controlFactory := NewServerFactory(t.TempDir())
+	control, err := controlFactory.StartServer(t.Context(), resumeTestParams())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = controlFactory.Close(context.Background()) })
+
+	// The cut transport wraps the host's own dialer and is injected
+	// after start (same package): one factory serves and dispatches, so
+	// the dispatch authenticates with the host's token (#357).
+	onTask := make(chan string, 2)
+	factory.httpClient = &http.Client{
+		Transport: &cuttingTransport{base: unixDialClient(factory).Transport},
+	}
+	outcome, err := factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "fix the bug",
+		ContextID: "dispatch-session",
+		OnTask:    func(taskID string) { onTask <- taskID },
+	})
+	require.NoError(t, err)
+	require.Equal(t, DispatchStatusCompleted, outcome.Status)
+	require.Equal(t, "resumed to the end", outcome.Text)
+	require.Equal(t, "--- a/x\n+++ b/x\n@@\n+changed", outcome.Diff)
+	require.Empty(t, outcome.DiffError)
+	require.False(t, outcome.DiffTruncated)
+	require.Equal(t, 2, outcome.WorkingEvents,
+		"the resumed run counts exactly the two post-cut todo Working events")
+
+	controlOutcome, err := controlFactory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  control.Endpoint,
+		Card:      control.Card,
+		Prompt:    "fix the bug",
+		ContextID: "dispatch-session",
+	})
+	require.NoError(t, err)
+	if controlOutcome.Status != DispatchStatusCompleted {
+		t.Logf("control run outcome: status=%q text=%q diff_err=%q",
+			controlOutcome.Status, controlOutcome.Text, controlOutcome.DiffError)
+	}
+	require.Equal(t, DispatchStatusCompleted, controlOutcome.Status)
+	require.Equal(t, 3, controlOutcome.WorkingEvents,
+		"the uncut run counts the initial Working plus both todo snapshots")
+	require.LessOrEqual(t, outcome.WorkingEvents, controlOutcome.WorkingEvents,
+		"the resume must never double-count a Working event")
+
+	require.Len(t, onTask, 1)
+	taskID := <-onTask
+	require.NotEmpty(t, taskID)
+
+	status, err := factory.GetDispatchTask(t.Context(), agent.GetDispatchTaskParams{
+		Endpoint: server.Endpoint,
+		Card:     server.Card,
+		TaskID:   taskID,
+	})
+	require.NoError(t, err)
+	require.Equal(t, DispatchStatusCompleted, status.Status)
+	require.Equal(t, "resumed to the end", status.Text)
+}
+
+// A stream cut before the run parks on a permission request (#353) ends
+// there all the same: the resume finds the task in input-required — the
+// replay or tasks/get carries the request — and the client decides it on
+// the same task instead of resubscribing until its attempts run out.
+func TestStreamDispatchResumesIntoPermissionPause(t *testing.T) {
+	factory, server, runner := startRequestingServer(t, "make test")
+	factory.httpClient = &http.Client{
+		Transport: &cuttingTransport{base: unixDialClient(factory).Transport},
+	}
+
+	var asked int
+	outcome, err := factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "run the tests",
+		ContextID: "dispatch-session",
+		OnPermissionRequired: func(context.Context, agent.PermissionPrompt) (bool, error) {
+			asked++
+			return true, nil
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, DispatchStatusCompleted, outcome.Status)
+	require.Equal(t, 1, asked, "the request is decided once")
+	v := <-runner.verdicts
+	require.NoError(t, v.err)
+	require.True(t, v.granted)
+}
+
+// A run that finishes before the first resume attempt — the stream cut
+// at the task's first event, the execution ended within the 250ms
+// backoff — finds no active execution to resubscribe: the wrapped
+// ErrTaskNotFound forks to tasks/get, whose stored task folds the
+// terminal status, the text, and the artifacts into the outcome.
+func TestStreamDispatchRecoversViaGetTask(t *testing.T) {
+	runner := &fakeRunner{result: textResult("finished while cut"), delay: 100 * time.Millisecond}
+	factory := NewServerFactory(t.TempDir())
+	server, err := factory.StartServer(t.Context(), ServerParams{
+		DispatchID: "gettask-task",
+		Runner:     runner,
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+		Diff: func(ctx context.Context) (string, error) {
+			return "--- a/y\n+++ b/y\n@@\n+late", nil
+		},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+
+	// The cut transport wraps the host's own dialer and is injected
+	// after start (same package): one factory serves and dispatches, so
+	// the dispatch authenticates with the host's token (#357).
+	onTask := make(chan string, 2)
+	factory.httpClient = &http.Client{
+		Transport: &cuttingTransport{base: unixDialClient(factory).Transport},
+	}
+	outcome, err := factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "fix the bug",
+		ContextID: "dispatch-session",
+		OnTask:    func(taskID string) { onTask <- taskID },
+	})
+	require.NoError(t, err)
+	require.Equal(t, DispatchStatusCompleted, outcome.Status)
+	require.Equal(t, "finished while cut", outcome.Text)
+	require.Equal(t, "--- a/y\n+++ b/y\n@@\n+late", outcome.Diff)
+	require.Len(t, onTask, 1)
+	require.NotEmpty(t, <-onTask)
+}
+
+// When every resume attempt is severed — a wedged network after the
+// stream dropped — the dispatch fails with the original stream error
+// plus the exhaustion reason, after the full backoff ladder ran. The
+// coordinator's cancel-before-teardown (#344) reaps the run from there.
+func TestStreamDispatchGivesUpAfterRetries(t *testing.T) {
+	factory := NewServerFactory(t.TempDir())
+	server, err := factory.StartServer(t.Context(), ServerParams{
+		DispatchID: "retry-task",
+		Runner:     &fakeRunner{result: textResult("never seen"), delay: 2 * time.Second},
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+
+	// The severed transport wraps the host's own dialer and is injected
+	// after start (same package): one factory serves and dispatches, so
+	// the dispatch authenticates with the host's token (#357).
+	onTask := make(chan string, 2)
+	start := time.Now()
+	factory.httpClient = &http.Client{
+		Transport: &cuttingTransport{base: unixDialClient(factory).Transport, failAfterCut: true},
+	}
+	_, err = factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "fix the bug",
+		ContextID: "dispatch-session",
+		OnTask:    func(taskID string) { onTask <- taskID },
+	})
+	require.Error(t, err)
+	require.ErrorContains(t, err, "a2a: dispatch stream")
+	require.ErrorContains(t, err, "resume attempts exhausted")
+	elapsed := time.Since(start)
+	require.GreaterOrEqual(t, elapsed, 5*time.Second,
+		"the 250ms, 1s, 4s backoff ladder must run before giving up")
+	require.Less(t, elapsed, 15*time.Second, "the give-up must not hang past the ladder")
+	require.Len(t, onTask, 1, "the task ID was still reported before the resume began")
+}
+
+// capturingTransport records the Authorization headers every request
+// carries, then dials through the wrapped transport.
+type capturingTransport struct {
+	inner http.RoundTripper
+
+	mu   sync.Mutex
+	auth [][]string
+}
+
+func (c *capturingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	c.mu.Lock()
+	c.auth = append(c.auth, req.Header.Values(bearerAuthorizationHeader))
+	c.mu.Unlock()
+	return c.inner.RoundTrip(req)
+}
+
+// StreamDispatch authenticates its calls (#357): every request the
+// dispatch client sends carries the host's bearer token — observed on
+// the raw wire, not inferred from the run succeeding.
+func TestStreamDispatchAttachesBearerToken(t *testing.T) {
+	runner := &fakeRunner{result: textResult("done")}
+	factory := NewServerFactory(t.TempDir())
+	server, err := factory.StartServer(t.Context(), ServerParams{
+		DispatchID: "dispatch-1",
+		Runner:     runner,
+		SessionID:  "dispatch-session",
+		ContextID:  "dispatch-session",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = factory.Close(context.Background()) })
+
+	// The injection seam is set after start (same package): the capture
+	// wraps the transport the production client would use, dialing the
+	// now-bound socket.
+	captured := &capturingTransport{inner: unixDialClient(factory).Transport}
+	factory.httpClient = &http.Client{Transport: captured}
+
+	outcome, err := factory.StreamDispatch(t.Context(), agent.DispatchTransportParams{
+		Endpoint:  server.Endpoint,
+		Card:      server.Card,
+		Prompt:    "fix the bug",
+		ContextID: "dispatch-session",
+	})
+	require.NoError(t, err)
+	require.Equal(t, DispatchStatusCompleted, outcome.Status)
+
+	captured.mu.Lock()
+	defer captured.mu.Unlock()
+	require.NotEmpty(t, captured.auth, "the dispatch stream must have sent requests")
+	for _, auth := range captured.auth {
+		require.Equal(t, []string{"Bearer " + factory.authToken()}, auth,
+			"every dispatched call must carry exactly the host's token")
+	}
+}

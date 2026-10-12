@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/fsext"
 	"github.com/charmbracelet/crush/internal/ui/list"
+	"github.com/charmbracelet/crush/internal/ui/styles"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/ordered"
 )
@@ -44,6 +45,19 @@ type CompletionItemsLoadedMsg struct {
 	Resources []ResourceCompletionValue
 }
 
+// Trigger identifies which trigger character opened the completions popup.
+type Trigger rune
+
+const (
+	// TriggerNone means the completions popup is closed.
+	TriggerNone Trigger = 0
+	// TriggerFile is the '@' file-mention trigger.
+	TriggerFile Trigger = '@'
+	// TriggerSkill is the '/' skill trigger (mid-prompt only; at the start
+	// of an empty prompt '/' opens the commands dialog instead).
+	TriggerSkill Trigger = '/'
+)
+
 // Completions represents the completions popup component.
 type Completions struct {
 	// Popup dimensions
@@ -64,6 +78,7 @@ type Completions struct {
 	normalStyle  lipgloss.Style
 	focusedStyle lipgloss.Style
 	matchStyle   lipgloss.Style
+	agentStyle   lipgloss.Style
 
 	allItems []list.FilterableItem
 	filtered []list.FilterableItem
@@ -96,7 +111,7 @@ var namePriorityRules = []namePriorityRule{
 }
 
 // New creates a new completions component.
-func New(normalStyle, focusedStyle, matchStyle lipgloss.Style) *Completions {
+func New(normalStyle, focusedStyle, matchStyle, agentStyle lipgloss.Style) *Completions {
 	l := list.NewFilterableList()
 	l.SetGap(0)
 	l.SetReverse(true)
@@ -107,16 +122,18 @@ func New(normalStyle, focusedStyle, matchStyle lipgloss.Style) *Completions {
 		normalStyle:  normalStyle,
 		focusedStyle: focusedStyle,
 		matchStyle:   matchStyle,
+		agentStyle:   agentStyle,
 	}
 }
 
 // SetStyles updates the styles used when rendering completion items.
 // Existing items are not restyled; subsequent SetItems calls pick up the
 // new styles.
-func (c *Completions) SetStyles(normalStyle, focusedStyle, matchStyle lipgloss.Style) {
+func (c *Completions) SetStyles(normalStyle, focusedStyle, matchStyle, agentStyle lipgloss.Style) {
 	c.normalStyle = normalStyle
 	c.focusedStyle = focusedStyle
 	c.matchStyle = matchStyle
+	c.agentStyle = agentStyle
 }
 
 // IsOpen returns whether the completions popup is open.
@@ -156,11 +173,34 @@ func (c *Completions) Open(depth, limit int) tea.Cmd {
 	}
 }
 
-// SetItems sets the files and MCP resources and rebuilds the merged list.
-func (c *Completions) SetItems(files []FileCompletionValue, resources []ResourceCompletionValue) {
-	items := make([]list.FilterableItem, 0, len(files)+len(resources))
+// SetItems sets the files, MCP resources, and live dispatched agents
+// (#313) and rebuilds the merged list.
+func (c *Completions) SetItems(files []FileCompletionValue, resources []ResourceCompletionValue, agents []AgentCompletionValue) {
+	items := make([]list.FilterableItem, 0, len(files)+len(resources)+len(agents))
 
-	// Add files first.
+	// Live agents lead: an @handle routes a message, so it outranks a
+	// file path when both match what the user typed. The row carries the
+	// robot glyph and the agent style so agents read as actors, not
+	// paths; the sort key stays the bare "@handle" so name-priority
+	// tiering still matches what the user typed after the @.
+	for _, agent := range agents {
+		name := "@" + agent.Handle
+		display := styles.AgentIcon + " " + name
+		text := display
+		detailStart := -1
+		if detail := flattenSkillDescription(agent.Detail); detail != "" {
+			budget := maxWidth - 2 - ansi.StringWidth(display) - len(skillDetailSeparator)
+			if budget >= minSkillDetailWidth {
+				detailStart = len(display)
+				text = display + skillDetailSeparator + ansi.Truncate(detail, budget, "…")
+			}
+		}
+		item := NewCompletionItem(text, agent, c.agentStyle, c.focusedStyle, c.matchStyle)
+		item = item.withDetail(detailStart, name)
+		items = append(items, item)
+	}
+
+	// Add files.
 	for _, file := range files {
 		item := NewCompletionItem(
 			file.Path,
@@ -199,6 +239,75 @@ func (c *Completions) SetItems(files []FileCompletionValue, resources []Resource
 	c.list.ScrollToSelected()
 
 	c.updateSize()
+}
+
+// skillDetailSeparator sits between a skill's name and its description in
+// the popup row.
+const skillDetailSeparator = " - "
+
+// minSkillDetailWidth is the smallest description tail worth showing. Below
+// it the row is all ellipsis and the description only costs width, so long
+// skill names simply render bare.
+const minSkillDetailWidth = 12
+
+// SetSkillItems sets skill items and opens the popup. Unlike files, skills
+// are already in memory, so no async load is needed.
+//
+// Each row reads "/name - description", with the description truncated to
+// whatever width the name leaves behind. The description is part of the
+// item's text, so the fuzzy filter matches it too: typing "/pdf" finds a
+// skill described as "extract text from PDFs" even if it is named
+// "document-tools".
+func (c *Completions) SetSkillItems(skills []SkillCompletionValue, prompts []PromptCompletionValue) {
+	items := make([]list.FilterableItem, 0, len(skills)+len(prompts))
+	// Prompts lead: they are server-qualified, so they cannot collide with a
+	// skill name, and a user who typed "/gitea:" wants them first.
+	for _, prompt := range prompts {
+		items = append(items, c.completionRow("/"+prompt.Name, prompt.Description, prompt))
+	}
+	for _, skill := range skills {
+		items = append(items, c.completionRow("/"+skill.Name, skill.Description, skill))
+	}
+
+	c.open = true
+	c.query = ""
+	c.allItems = items
+	c.filtered = append([]list.FilterableItem(nil), items...)
+	c.list.SetItems(c.filtered...)
+	c.list.SetFilter("")
+	c.list.Focus()
+
+	c.width = maxWidth
+	c.height = ordered.Clamp(len(items), int(minHeight), int(maxHeight))
+	c.list.SetSize(c.width, c.height)
+	c.list.SelectFirst()
+	c.list.ScrollToSelected()
+
+	c.updateSize()
+}
+
+// completionRow builds one "/name - description" row. The description is
+// part of the item's text so the fuzzy filter matches it too: typing "/pdf"
+// finds a skill described as "extract text from PDFs" even if it is named
+// "document-tools", and the same holds for an MCP prompt's description.
+func (c *Completions) completionRow(name, description string, value any) list.FilterableItem {
+	text := name
+	detailStart := -1
+	if desc := flattenSkillDescription(description); desc != "" {
+		// maxWidth is the popup's hard cap and renderItem reserves a cell of
+		// padding on each side, so that is the real budget the name and
+		// description share.
+		budget := maxWidth - 2 - ansi.StringWidth(name) - len(skillDetailSeparator)
+		if budget >= minSkillDetailWidth {
+			detailStart = len(name)
+			text = name + skillDetailSeparator + ansi.Truncate(desc, budget, "…")
+		}
+	}
+	item := NewCompletionItem(text, value, c.normalStyle, c.focusedStyle, c.matchStyle)
+	if detailStart >= 0 {
+		item = item.withDetail(detailStart, name)
+	}
+	return item
 }
 
 // Close closes the completions popup.
@@ -243,10 +352,28 @@ func (c *Completions) applyNamePriorityFilter(query string) {
 
 	queryLower := strings.ToLower(strings.TrimSpace(query))
 	slices.SortStableFunc(filtered, func(a, b list.FilterableItem) int {
-		return namePriorityTier(a.Filter(), queryLower) - namePriorityTier(b.Filter(), queryLower)
+		return namePriorityTier(tierKey(a), queryLower) - namePriorityTier(tierKey(b), queryLower)
 	})
 	c.filtered = filtered
 	c.list.SetItems(c.filtered...)
+}
+
+// tierKey returns the string namePriorityTier should rank an item on. Items
+// whose display text carries a trailing detail (skills, which append their
+// description) expose the bare name via SortKey; everything else ranks on
+// its filter text, which is the path.
+func tierKey(item list.FilterableItem) string {
+	if s, ok := item.(interface{ SortKey() string }); ok {
+		return s.SortKey()
+	}
+	return item.Filter()
+}
+
+// flattenSkillDescription collapses a SKILL.md description onto one line.
+// Frontmatter descriptions are frequently wrapped across several lines, and
+// a popup row is exactly one.
+func flattenSkillDescription(desc string) string {
+	return strings.Join(strings.Fields(desc), " ")
 }
 
 func namePriorityTier(path, queryLower string) int {
@@ -370,24 +497,44 @@ func (c *Completions) selectCurrent(keepOpen bool) tea.Msg {
 		return nil
 	}
 
-	if !keepOpen {
-		c.open = false
-	}
-
+	var msg tea.Msg
 	switch item := item.Value().(type) {
+	case SkillCompletionValue:
+		msg = SelectionMsg[SkillCompletionValue]{
+			Value:    item,
+			KeepOpen: keepOpen,
+		}
 	case ResourceCompletionValue:
-		return SelectionMsg[ResourceCompletionValue]{
+		msg = SelectionMsg[ResourceCompletionValue]{
 			Value:    item,
 			KeepOpen: keepOpen,
 		}
 	case FileCompletionValue:
-		return SelectionMsg[FileCompletionValue]{
+		msg = SelectionMsg[FileCompletionValue]{
+			Value:    item,
+			KeepOpen: keepOpen,
+		}
+	case PromptCompletionValue:
+		msg = SelectionMsg[PromptCompletionValue]{
+			Value:    item,
+			KeepOpen: keepOpen,
+		}
+	case AgentCompletionValue:
+		msg = SelectionMsg[AgentCompletionValue]{
 			Value:    item,
 			KeepOpen: keepOpen,
 		}
 	default:
+		// An unknown value type leaves the popup fully open. Closing
+		// here would half-close it — the component stops rendering
+		// while the model still believes it is open, and an empty
+		// popup rect blanks the chat beneath until the next keypress.
 		return nil
 	}
+	if !keepOpen {
+		c.open = false
+	}
+	return msg
 }
 
 // Render renders the completions popup.
@@ -425,6 +572,16 @@ func loadMCPResources() []ResourceCompletionValue {
 				URI:      r.URI,
 				Title:    r.Name,
 				MIMEType: r.MIMEType,
+			})
+		}
+	}
+	for mcpName, mcpTemplates := range mcp.ResourceTemplates() {
+		for _, t := range mcpTemplates {
+			resources = append(resources, ResourceCompletionValue{
+				MCPName:  mcpName,
+				URI:      t.URITemplate,
+				Title:    t.Name,
+				MIMEType: t.MIMEType,
 			})
 		}
 	}

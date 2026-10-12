@@ -1,9 +1,15 @@
 package session
 
 import (
+	"context"
+	"database/sql"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/crush/internal/db"
+	"github.com/charmbracelet/crush/internal/message"
+	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,6 +52,45 @@ func TestEstimatedUsageStateSurvivesFetchModifySave(t *testing.T) {
 	refetched, err := sessions.Get(t.Context(), created.ID)
 	require.NoError(t, err)
 	require.True(t, refetched.EstimatedUsage)
+}
+
+func TestAddCostIncrementsAndPublishesUpdate(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Cleanup(func() {
+		require.NoError(t, db.Release(dataDir))
+	})
+
+	conn, err := db.Connect(t.Context(), dataDir)
+	require.NoError(t, err)
+	sessions := NewService(db.New(conn), conn)
+	ctx := t.Context()
+
+	created, err := sessions.Create(ctx, "cost")
+	require.NoError(t, err)
+
+	events := sessions.Subscribe(ctx)
+
+	require.NoError(t, sessions.AddCost(ctx, created.ID, 0.10))
+	require.NoError(t, sessions.AddCost(ctx, created.ID, 0.05))
+
+	fetched, err := sessions.Get(ctx, created.ID)
+	require.NoError(t, err)
+	require.InDelta(t, 0.15, fetched.Cost, 1e-9)
+	require.Equal(t, "cost", fetched.Title)
+
+	var updatedCost float64
+	require.Eventually(t, func() bool {
+		select {
+		case ev := <-events:
+			if ev.Type == pubsub.UpdatedEvent && ev.Payload.Cost > 0.14 {
+				updatedCost = ev.Payload.Cost
+				return true
+			}
+		default:
+		}
+		return false
+	}, time.Second, time.Millisecond)
+	require.InDelta(t, 0.15, updatedCost, 1e-9)
 }
 
 func TestSessionChannelPersists(t *testing.T) {
@@ -144,39 +189,343 @@ func TestEstimatedUsageStateCanBeClearedByExplicitSave(t *testing.T) {
 	require.False(t, refetched.EstimatedUsage)
 }
 
-func TestSkillDisabledRoundTrip(t *testing.T) {
+func TestListAllChildrenGroupsEveryParent(t *testing.T) {
+	// Not parallel: this test and the other pool tests share the global
+	// db pool, and ResetPool in one test's cleanup would close another
+	// running test's database. Release only this test's entry.
 	dataDir := t.TempDir()
 	t.Cleanup(func() {
 		require.NoError(t, db.Release(dataDir))
-		db.ResetPool()
 	})
 
 	conn, err := db.Connect(t.Context(), dataDir)
 	require.NoError(t, err)
-
 	sessions := NewService(db.New(conn), conn)
+	ctx := t.Context()
 
-	disabled, err := sessions.SkillsDisabled(t.Context())
+	parentA, err := sessions.Create(ctx, "parent A")
 	require.NoError(t, err)
-	require.Empty(t, disabled, "a new repository must default to the config")
-
-	require.NoError(t, sessions.SetSkillDisabled(t.Context(), "charmtone", true))
-	require.NoError(t, sessions.SetSkillDisabled(t.Context(), "pair", true))
-	require.NoError(t, sessions.SetSkillDisabled(t.Context(), "charmtone", true), "disabling twice must be idempotent")
-
-	disabled, err = sessions.SkillsDisabled(t.Context())
+	parentB, err := sessions.Create(ctx, "parent B")
 	require.NoError(t, err)
-	require.Equal(t, []string{"charmtone", "pair"}, disabled)
 
-	// Re-enabling records an enabled override so a config-disabled skill
-	// stays enabled across restarts; disabling removes it again.
-	require.NoError(t, sessions.SetSkillDisabled(t.Context(), "charmtone", false))
-	enabled, err := sessions.SkillsEnabled(t.Context())
+	taskA1, err := sessions.CreateTaskSession(ctx, "call-a1", parentA.ID, "task A1")
 	require.NoError(t, err)
-	require.Equal(t, []string{"charmtone"}, enabled)
+	taskA2, err := sessions.CreateTaskSession(ctx, "call-a2", parentA.ID, "task A2")
+	require.NoError(t, err)
+	taskB1, err := sessions.CreateTaskSession(ctx, "call-b1", parentB.ID, "task B1")
+	require.NoError(t, err)
+	titleB, err := sessions.CreateTitleSession(ctx, parentB.ID)
+	require.NoError(t, err)
 
-	require.NoError(t, sessions.SetSkillDisabled(t.Context(), "charmtone", true))
-	enabled, err = sessions.SkillsEnabled(t.Context())
+	// CreateTaskSession and CreateTitleSession stamp created_at with
+	// the wall clock, which is too coarse to pin the ordering, so
+	// backdate the children through raw SQL. updated_at is rewritten
+	// by the AFTER UPDATE trigger, but the child listing is ordered
+	// by created_at, parent_session_id.
+	for _, c := range []struct {
+		id        string
+		createdAt int64
+	}{
+		{taskA1.ID, 2000},
+		{taskA2.ID, 1000},
+		{titleB.ID, 8000},
+		{taskB1.ID, 9000},
+	} {
+		_, err := conn.ExecContext(ctx, "UPDATE sessions SET created_at = ? WHERE id = ?", c.createdAt, c.id)
+		require.NoError(t, err)
+	}
+
+	kids, err := sessions.ListAllChildren(ctx)
 	require.NoError(t, err)
-	require.Empty(t, enabled)
+	require.Len(t, kids, 4, "every child of every parent, no top-level sessions")
+	for _, k := range kids {
+		require.NotEqual(t, parentA.ID, k.ID, "top-level sessions are not children")
+		require.NotEqual(t, parentB.ID, k.ID, "top-level sessions are not children")
+	}
+
+	groups := map[string][]string{}
+	sequence := []string{}
+	for _, k := range kids {
+		parent := k.ParentSessionID
+		require.NotEmpty(t, parent)
+		if len(sequence) == 0 || sequence[len(sequence)-1] != parent {
+			sequence = append(sequence, parent)
+		}
+		groups[parent] = append(groups[parent], k.ID)
+	}
+	require.Len(t, sequence, 2, "each parent's children must be grouped together")
+
+	require.Equal(t, []string{taskA2.ID, taskA1.ID}, groups[parentA.ID],
+		"oldest-created first within the parent")
+	require.Equal(t, []string{titleB.ID, taskB1.ID}, groups[parentB.ID],
+		"oldest-created first within the parent, title sessions included")
+}
+
+// TestGetLastIgnoresChildSessions pins #413: a background dispatch keeps
+// updating its task session, so the most recently updated session of any
+// kind is usually a child. GetLast must return the most recently
+// updated top-level session, or nothing at all.
+//
+// Not parallel: the other pool tests share the global db pool; Release
+// only this test's entry.
+func TestGetLastIgnoresChildSessions(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Cleanup(func() {
+		require.NoError(t, db.Release(dataDir))
+	})
+
+	conn, err := db.Connect(t.Context(), dataDir)
+	require.NoError(t, err)
+	sessions := NewService(db.New(conn), conn)
+	ctx := t.Context()
+
+	// Insert rows with explicit updated_at through raw SQL: the
+	// AFTER UPDATE trigger rewrites updated_at on UPDATE, so an
+	// UPDATE cannot pin the ordering.
+	insert := func(id string, parent any, updatedAt int64) {
+		t.Helper()
+		_, err := conn.ExecContext(ctx,
+			`INSERT INTO sessions (id, parent_session_id, title, updated_at, created_at)
+			 VALUES (?, ?, 'pinned', ?, ?)`, id, parent, updatedAt, updatedAt-100)
+		require.NoError(t, err)
+	}
+
+	// A parent, then a task session under it updated later.
+	insert("parent-1", nil, 1000)
+	insert("msg-1$$call-1", "parent-1", 2000)
+
+	last, err := sessions.GetLast(ctx)
+	require.NoError(t, err)
+	require.Equal(t, "parent-1", last.ID,
+		"the newest top-level session wins over a newer child")
+}
+
+func TestGetLastWithOnlyChildrenReportsNone(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Cleanup(func() {
+		require.NoError(t, db.Release(dataDir))
+	})
+
+	conn, err := db.Connect(t.Context(), dataDir)
+	require.NoError(t, err)
+	sessions := NewService(db.New(conn), conn)
+	ctx := t.Context()
+
+	_, err = conn.ExecContext(ctx,
+		`INSERT INTO sessions (id, parent_session_id, title, updated_at, created_at)
+		 VALUES ('msg-1$$call-1', 'parent-1', 'task', 2000, 1900)`)
+	require.NoError(t, err)
+	_, err = conn.ExecContext(ctx,
+		`INSERT INTO sessions (id, parent_session_id, title, updated_at, created_at)
+		 VALUES ('title-parent-1', 'parent-1', 'title', 3000, 2900)`)
+	require.NoError(t, err)
+
+	_, err = sessions.GetLast(ctx)
+	require.Error(t, err, "children alone must not be continuable")
+}
+
+// newDeleteTestStore builds a session service over a fresh temporary
+// database plus a message service on the same handle, with one message
+// per session in the given tree.
+func newDeleteTestStore(t *testing.T) (conn *sql.DB, sessions Service, messages message.Service, ctx context.Context) {
+	t.Helper()
+	dataDir := t.TempDir()
+	t.Cleanup(func() {
+		require.NoError(t, db.Release(dataDir))
+	})
+
+	var err error
+	conn, err = db.Connect(t.Context(), dataDir)
+	require.NoError(t, err)
+	sessions = NewService(db.New(conn), conn)
+	messages = message.NewService(db.New(conn))
+	ctx = t.Context()
+	return conn, sessions, messages, ctx
+}
+
+func addDeleteTestMessage(t *testing.T, messages message.Service, ctx context.Context, sessionID string) {
+	t.Helper()
+	_, err := messages.Create(ctx, sessionID, message.CreateMessageParams{
+		Role:  message.User,
+		Parts: []message.ContentPart{message.TextContent{Text: "hello"}},
+	})
+	require.NoError(t, err)
+}
+
+func countDeleteTestMessages(t *testing.T, conn *sql.DB, ctx context.Context, sessionID string) int {
+	t.Helper()
+	var count int
+	require.NoError(t, conn.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM messages WHERE session_id = ?", sessionID).Scan(&count))
+	return count
+}
+
+func TestDeleteCascadesToChildSessions(t *testing.T) {
+	conn, sessions, messages, ctx := newDeleteTestStore(t)
+
+	parent, err := sessions.Create(ctx, "parent")
+	require.NoError(t, err)
+	task1, err := sessions.CreateTaskSession(ctx, "call-1", parent.ID, "task 1")
+	require.NoError(t, err)
+	task2, err := sessions.CreateTaskSession(ctx, "call-2", parent.ID, "task 2")
+	require.NoError(t, err)
+	title, err := sessions.CreateTitleSession(ctx, parent.ID)
+	require.NoError(t, err)
+	grand, err := sessions.CreateTaskSession(ctx, "call-3", task2.ID, "grandchild")
+	require.NoError(t, err)
+
+	tree := []string{parent.ID, task1.ID, task2.ID, title.ID, grand.ID}
+	for _, id := range tree {
+		addDeleteTestMessage(t, messages, ctx, id)
+	}
+
+	events := sessions.Subscribe(ctx)
+
+	require.NoError(t, sessions.Delete(ctx, parent.ID))
+
+	// Every session in the tree is gone, with no children left behind.
+	for _, id := range tree {
+		_, err := sessions.Get(ctx, id)
+		require.ErrorIs(t, err, sql.ErrNoRows, "session %s deleted", id)
+		require.Zero(t, countDeleteTestMessages(t, conn, ctx, id), "messages for %s deleted", id)
+	}
+	kids, err := sessions.ListChildren(ctx, parent.ID)
+	require.NoError(t, err)
+	require.Empty(t, kids)
+
+	// A DeletedEvent arrived for every deleted session.
+	deleted := map[string]bool{}
+	deadline := time.Now().Add(3 * time.Second)
+	for len(deleted) < len(tree) && time.Now().Before(deadline) {
+		select {
+		case ev := <-events:
+			if ev.Type == pubsub.DeletedEvent {
+				deleted[ev.Payload.ID] = true
+			}
+		case <-time.After(time.Millisecond):
+		}
+	}
+	for _, id := range tree {
+		require.True(t, deleted[id], "DeletedEvent for %s", id)
+	}
+}
+
+func TestDeleteRollsBackWholeTreeOnMidTreeFailure(t *testing.T) {
+	conn, sessions, messages, ctx := newDeleteTestStore(t)
+
+	parent, err := sessions.Create(ctx, "parent")
+	require.NoError(t, err)
+	task1, err := sessions.CreateTaskSession(ctx, "call-1", parent.ID, "task 1")
+	require.NoError(t, err)
+	task2, err := sessions.CreateTaskSession(ctx, "call-2", parent.ID, "task 2")
+	require.NoError(t, err)
+	grand, err := sessions.CreateTaskSession(ctx, "call-3", task2.ID, "grandchild")
+	require.NoError(t, err)
+
+	tree := []string{parent.ID, task1.ID, task2.ID, grand.ID}
+	for _, id := range tree {
+		addDeleteTestMessage(t, messages, ctx, id)
+	}
+
+	// Fail the delete partway through the tree: the grandchild is
+	// deleted first (deepest first), so the failure proves the earlier
+	// deletes rolled back as well.
+	_, err = conn.ExecContext(ctx, fmt.Sprintf(
+		`CREATE TRIGGER block_task1_delete BEFORE DELETE ON sessions
+		 WHEN OLD.id = '%s'
+		 BEGIN SELECT RAISE(ABORT, 'blocked by test'); END`, task1.ID))
+	require.NoError(t, err)
+
+	require.Error(t, sessions.Delete(ctx, parent.ID))
+
+	for _, id := range tree {
+		_, err := sessions.Get(ctx, id)
+		require.NoError(t, err, "session %s survived the failed delete", id)
+		require.Equal(t, 1, countDeleteTestMessages(t, conn, ctx, id),
+			"messages for %s survived the failed delete", id)
+	}
+	kids, err := sessions.ListChildren(ctx, parent.ID)
+	require.NoError(t, err)
+	require.Len(t, kids, 2)
+}
+
+func TestDeleteSessionWithoutChildren(t *testing.T) {
+	_, sessions, _, ctx := newDeleteTestStore(t)
+
+	created, err := sessions.Create(ctx, "lonely")
+	require.NoError(t, err)
+
+	events := sessions.Subscribe(ctx)
+
+	require.NoError(t, sessions.Delete(ctx, created.ID))
+
+	_, err = sessions.Get(ctx, created.ID)
+	require.ErrorIs(t, err, sql.ErrNoRows)
+
+	select {
+	case ev := <-events:
+		require.Equal(t, pubsub.DeletedEvent, ev.Type)
+		require.Equal(t, created.ID, ev.Payload.ID)
+	case <-time.After(time.Second):
+		t.Fatal("no DeletedEvent published for a childless session")
+	}
+}
+
+// TestListChildrenOrdersByCreation pins #417: children of the same parent
+// are listed in creation (insertion) order, not by updated_at — a
+// whole-seconds timestamp that shifts whenever a working agent is saved
+// or gets a new message.
+//
+// Not parallel: the other pool tests share the global db pool; Release
+// only this test's entry.
+func TestListChildrenOrdersByCreation(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Cleanup(func() {
+		require.NoError(t, db.Release(dataDir))
+	})
+
+	conn, err := db.Connect(t.Context(), dataDir)
+	require.NoError(t, err)
+	sessions := NewService(db.New(conn), conn)
+	ctx := t.Context()
+
+	parent, err := sessions.Create(ctx, "parent")
+	require.NoError(t, err)
+
+	// Insert three children with the same created_at through raw SQL,
+	// in an order whose IDs sort differently: m$$c, m$$a, m$$b. rowid
+	// is insertion order, so the expected listing is c, a, b — not the
+	// lexical a, b, c.
+	for _, id := range []string{"m$$c", "m$$a", "m$$b"} {
+		_, err := conn.ExecContext(ctx,
+			`INSERT INTO sessions (id, parent_session_id, title, updated_at, created_at)
+			 VALUES (?, ?, 'child', 2000, 2000)`, id, parent.ID)
+		require.NoError(t, err)
+	}
+
+	listed, err := sessions.ListChildren(ctx, parent.ID)
+	require.NoError(t, err)
+	require.Equal(t, []string{"m$$c", "m$$a", "m$$b"}, ids(listed),
+		"same created_at must come back in insertion order")
+
+	// Saving the first child bumps its updated_at through the AFTER
+	// UPDATE trigger; its position must not move.
+	first := listed[0]
+	first.Title = "touched"
+	saved, err := sessions.Save(ctx, first)
+	require.NoError(t, err)
+	require.Equal(t, "m$$c", saved.ID)
+
+	refetched, err := sessions.ListChildren(ctx, parent.ID)
+	require.NoError(t, err)
+	require.Equal(t, []string{"m$$c", "m$$a", "m$$b"}, ids(refetched),
+		"updating a child must not change its position")
+}
+
+func ids(sessions []Session) []string {
+	out := make([]string, 0, len(sessions))
+	for _, s := range sessions {
+		out = append(out, s.ID)
+	}
+	return out
 }

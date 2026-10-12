@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/compaction"
+	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/scheduler"
@@ -48,6 +49,7 @@ func (c *errorCoordinator) QueuedPromptsList(string) []string                 { 
 func (c *errorCoordinator) ClearQueue(string)                                 {}
 func (c *errorCoordinator) ListCronTasks(string) []scheduler.Task             { return nil }
 func (c *errorCoordinator) Summarize(context.Context, string, string) error   { return nil }
+
 func (c *errorCoordinator) SummarizePreview(context.Context, string, string) (compaction.Preview, error) {
 	return compaction.Preview{}, nil
 }
@@ -55,12 +57,15 @@ func (c *errorCoordinator) SummarizePreview(context.Context, string, string) (co
 func (c *errorCoordinator) ConfirmSummarize(context.Context, string, compaction.Preview) error {
 	return nil
 }
+
 func (c *errorCoordinator) DiscardSummarize(context.Context, string, string) error { return nil }
-func (c *errorCoordinator) RestoreSummarize(context.Context, string) error         { return nil }
-func (c *errorCoordinator) Model() agent.Model                                     { return agent.Model{} }
-func (c *errorCoordinator) UpdateModels(context.Context) error                     { return nil }
-func (c *errorCoordinator) SetMainAgent(string) error                              { return nil }
-func (c *errorCoordinator) GenerateTitle(context.Context, string, string)          {}
+
+func (c *errorCoordinator) RestoreSummarize(context.Context, string) error { return nil }
+func (c *errorCoordinator) Model() agent.Model                             { return agent.Model{} }
+func (c *errorCoordinator) UpdateModels(context.Context) error             { return nil }
+func (c *errorCoordinator) SetInteractive(context.Context, bool) error     { return nil }
+func (c *errorCoordinator) SetMainAgent(string) error                      { return nil }
+func (c *errorCoordinator) GenerateTitle(context.Context, string, string)  {}
 
 // insertRunCompleteWorkspace installs a workspace backed by a real
 // app.App (so the runCompletions broker exists) with the given
@@ -88,7 +93,7 @@ func insertRunCompleteWorkspace(t *testing.T, b *Backend, base context.Context, 
 
 // TestRunAgent_PreRunErrorPublishesTerminalRunComplete proves that an
 // error returned from RunAccepted before the coordinator could publish
-// its own terminal event (e.g. a readyWg or UpdateModels failure,
+// its own terminal event (e.g. an agent-readiness or UpdateModels failure,
 // modeled here by a stub coordinator) still yields a reliable terminal
 // RunComplete for the run's RunID. Without it, a `crush run` caller
 // blocking on that RunID would hang because the lossy TypeAgentError
@@ -173,4 +178,12 @@ func TestRunAgent_CancellationPublishesNoErrorTerminal(t *testing.T) {
 		t.Fatalf("cancellation must not publish a terminal RunComplete: %+v", ev.Payload)
 	case <-time.After(200 * time.Millisecond):
 	}
+}
+
+func (c *errorCoordinator) DeliverAgentMessage(ctx context.Context, msg agent.AgentMessage) error {
+	return errors.New("not implemented")
+}
+
+func (c *errorCoordinator) DispatchLive(sessionID string) []dispatch.TodoSnapshot {
+	return nil
 }

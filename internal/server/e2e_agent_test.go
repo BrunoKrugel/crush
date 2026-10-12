@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/backend"
 	"github.com/charmbracelet/crush/internal/compaction"
+	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/pubsub"
@@ -221,6 +223,7 @@ func (c *scriptedCoordinator) QueuedPromptsList(string) []string               {
 func (c *scriptedCoordinator) ClearQueue(string)                               {}
 func (c *scriptedCoordinator) ListCronTasks(string) []scheduler.Task           { return nil }
 func (c *scriptedCoordinator) Summarize(context.Context, string, string) error { return nil }
+
 func (c *scriptedCoordinator) SummarizePreview(context.Context, string, string) (compaction.Preview, error) {
 	return compaction.Preview{}, nil
 }
@@ -228,12 +231,15 @@ func (c *scriptedCoordinator) SummarizePreview(context.Context, string, string) 
 func (c *scriptedCoordinator) ConfirmSummarize(context.Context, string, compaction.Preview) error {
 	return nil
 }
+
 func (c *scriptedCoordinator) DiscardSummarize(context.Context, string, string) error { return nil }
-func (c *scriptedCoordinator) RestoreSummarize(context.Context, string) error         { return nil }
-func (c *scriptedCoordinator) Model() agent.Model                                     { return agent.Model{} }
-func (c *scriptedCoordinator) UpdateModels(context.Context) error                     { return nil }
-func (c *scriptedCoordinator) SetMainAgent(string) error                              { return nil }
-func (c *scriptedCoordinator) GenerateTitle(context.Context, string, string)          {}
+
+func (c *scriptedCoordinator) RestoreSummarize(context.Context, string) error { return nil }
+func (c *scriptedCoordinator) Model() agent.Model                             { return agent.Model{} }
+func (c *scriptedCoordinator) UpdateModels(context.Context) error             { return nil }
+func (c *scriptedCoordinator) SetInteractive(context.Context, bool) error     { return nil }
+func (c *scriptedCoordinator) SetMainAgent(string) error                      { return nil }
+func (c *scriptedCoordinator) GenerateTitle(context.Context, string, string)  {}
 
 // agentE2EHarness extends the SSE harness with a scripted coordinator
 // wired into the workspace's embedded app.App, so POST /agent drives a
@@ -756,4 +762,12 @@ func TestE2E_CancelOfActiveRunAlsoCancelsAcceptedFollowUp(t *testing.T) {
 		return e.Payload.SessionID == sid && e.Payload.Role == proto.Assistant && has && r == proto.FinishReasonEndTurn
 	})
 	require.False(t, gotEnd, "the accepted follow-up must not stream model output after the cancel")
+}
+
+func (c *scriptedCoordinator) DeliverAgentMessage(ctx context.Context, msg agent.AgentMessage) error {
+	return errors.New("not implemented")
+}
+
+func (c *scriptedCoordinator) DispatchLive(sessionID string) []dispatch.TodoSnapshot {
+	return nil
 }

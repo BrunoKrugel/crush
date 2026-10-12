@@ -186,7 +186,14 @@ func TestSendMessage_PreparationFailureCompletion(t *testing.T) {
 				completions := ws.RunCompletions().Subscribe(ctx)
 				notifications := ws.AgentNotifications().Subscribe(ctx)
 				if promoted && stage == "session" {
+					// The hook fires once per failing read; the assertion
+					// is about the first one, which is the promoted turn's
+					// own preparation inside the queue handoff.
+					var gateFired atomic.Bool
 					sessions.beforeFailure = func() {
+						if !gateFired.CompareAndSwap(false, true) {
+							return
+						}
 						if len(completions) != 0 {
 							t.Error("initial completion was published before synchronous queue execution finished")
 						}

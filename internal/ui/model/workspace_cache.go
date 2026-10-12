@@ -10,8 +10,9 @@ package model
 // yolo and ready/model caches synchronously so the first frame has values to
 // render; Init then refreshes them off-thread.)
 //
-//   - Reads (isAgentBusy, yoloModeCached, promptQueue, selectedLargeModel,
-//     lspInfo) always return the memoized value, stale or not.
+//   - Reads (isAgentBusy, isCurrentSessionBusy, yoloModeCached, promptQueue,
+//     selectedLargeModel, lspInfo) always return the memoized value, stale or
+//     not.
 //   - State edges (message created, agent finished/errored, prompt
 //     submitted, cancel, session switch, yolo toggle, model change, LSP
 //     events) invalidate or write through the caches and dispatch an
@@ -33,7 +34,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/charmbracelet/crush/internal/agent/notify"
-	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/workspace"
 )
 
@@ -45,10 +45,14 @@ var busyCacheTTL = 500 * time.Millisecond
 // state; the queue is otherwise refreshed on event edges.
 var promptQueueTTL = 2 * time.Second
 
-// ttlCache memoizes one boolean workspace probe result.
+// ttlCache memoizes one boolean workspace probe result. It unifies what used
+// to be three hand-rolled val/checkedAt field pairs so invalidation cannot
+// drift apart between them.
 type ttlCache struct {
 	val bool
 	at  time.Time
+	// session scopes the value to a session ID; empty for global probes.
+	session string
 }
 
 // fresh reports whether the cached value is within its TTL.
@@ -56,10 +60,24 @@ func (c *ttlCache) fresh(ttl time.Duration) bool {
 	return !c.at.IsZero() && time.Since(c.at) < ttl
 }
 
-// set writes a known-good value through the cache.
+// freshFor is fresh scoped to a session: a value cached for another session
+// is never fresh.
+func (c *ttlCache) freshFor(ttl time.Duration, session string) bool {
+	return c.session == session && c.fresh(ttl)
+}
+
+// set writes a known-good global value through the cache.
 func (c *ttlCache) set(val bool) {
 	c.val = val
 	c.at = time.Now()
+	c.session = ""
+}
+
+// setForSession writes a known-good session-scoped value through the cache.
+func (c *ttlCache) setForSession(val bool, session string) {
+	c.val = val
+	c.at = time.Now()
+	c.session = session
 }
 
 // invalidate marks the value stale so the next Update-tail backstop
@@ -70,15 +88,19 @@ func (c *ttlCache) invalidate() {
 
 // busyStateMsg delivers the result of an off-thread busy/permission probe.
 type busyStateMsg struct {
+	// forSession is the session the probe was scoped to; a result that
+	// raced a session switch is discarded and re-fetched.
+	forSession string
 	// gen is the busy generation captured when the probe was dispatched.
 	// A result whose generation no longer matches m.busyFetchGen started
 	// before a newer state transition (optimistic send, invalidation,
 	// session switch, ...) and is discarded, then re-fetched, so the
 	// authoritative refresh is never lost to an older in-flight request.
-	gen       uint64
-	ready     bool
-	agentBusy bool
-	yolo      bool
+	gen         uint64
+	ready       bool
+	agentBusy   bool
+	sessionBusy bool
+	yolo        bool
 	// model is the coordinator's selected model, fetched by the same probe
 	// so the sidebar/landing model info renders from memoized state. Zero
 	// (and ignored) when ready is false.
@@ -106,80 +128,6 @@ type agentRunSubmittedMsg struct {
 	err       error
 }
 
-// summaryFinishedMsg releases the optimistic busy state even on failure.
-type summaryFinishedMsg struct {
-	sessionID string
-	gen       uint64
-	err       error
-}
-
-// completionCheckedMsg carries a session-scoped idle probe for a successful
-// completion. Its generation prevents newer observed work being overwritten.
-type completionCheckedMsg struct {
-	busyGen      uint64
-	busy         bool
-	notification *notify.Notification
-}
-
-// sessionActivity retains only submissions and completion checks still pending.
-type sessionActivity struct {
-	pending    int
-	gen        uint64
-	completion *notify.Notification
-}
-
-func (m *UI) activityFor(sessionID string) *sessionActivity {
-	if m.sessionActivities == nil {
-		m.sessionActivities = make(map[string]*sessionActivity)
-	}
-	if activity := m.sessionActivities[sessionID]; activity != nil {
-		return activity
-	}
-	activity := &sessionActivity{}
-	m.sessionActivities[sessionID] = activity
-	return activity
-}
-
-func (m *UI) pruneActivity(sessionID string) {
-	if activity := m.sessionActivities[sessionID]; activity != nil && activity.pending == 0 && activity.completion == nil {
-		delete(m.sessionActivities, sessionID)
-	}
-}
-
-func (m *UI) submissionFinished(sessionID string, gen uint64, err error, summary bool) tea.Cmd {
-	activity := m.activityFor(sessionID)
-	defer m.pruneActivity(sessionID)
-	if activity.pending > 0 {
-		activity.pending--
-	}
-	if m.pendingSubmissions > 0 {
-		m.pendingSubmissions--
-	}
-	if gen == activity.gen && err != nil {
-		activity.completion = nil
-		if sessionID == m.currentSessionID() && !errors.Is(err, context.Canceled) {
-			m.turnOutcome = tea.ProgramStateError
-		}
-	}
-	if gen == m.submissionGen && (err != nil || summary) {
-		m.turnStopPending = true
-	}
-	m.invalidateBusyCaches()
-	m.invalidatePromptQueue()
-	var completion tea.Cmd
-	if activity.pending == 0 && activity.completion != nil {
-		completion = m.dispatchCompletionCheck(activity.completion)
-	}
-	return tea.Batch(completion, m.dispatchBusyRefresh(), m.dispatchPromptQueueRefresh())
-}
-
-func (m *UI) dispatchCompletionCheck(n *notify.Notification) tea.Cmd {
-	busyGen, ws := m.busyFetchGen, m.com.Workspace
-	return func() tea.Msg {
-		return completionCheckedMsg{busyGen: busyGen, busy: ws.AgentIsSessionBusy(n.SessionID), notification: n}
-	}
-}
-
 // agentModelChangedMsg reports that the coordinator's model was updated
 // (model selection, thinking toggle, reasoning effort), so the memoized
 // ready/model state should be re-fetched without waiting for the TTL.
@@ -205,6 +153,7 @@ func (m *UI) currentSessionID() string {
 // state.
 func (m *UI) invalidateBusyCaches() {
 	m.agentBusyCache.invalidate()
+	m.sessionBusyCache.invalidate()
 	m.yoloCache.invalidate()
 	m.busyFetchGen++
 }
@@ -227,12 +176,16 @@ func (m *UI) dispatchBusyRefresh() tea.Cmd {
 	}
 	m.busyFetchInFlight = true
 	ws := m.com.Workspace
+	sessionID := m.currentSessionID()
 	gen := m.busyFetchGen
 	return func() tea.Msg {
-		st := busyStateMsg{gen: gen}
+		st := busyStateMsg{forSession: sessionID, gen: gen}
 		if ws.AgentIsReady() {
 			st.ready = true
 			st.agentBusy = ws.AgentIsBusy()
+			if sessionID != "" {
+				st.sessionBusy = ws.AgentIsSessionBusy(sessionID)
+			}
 			st.model = ws.AgentModel()
 		}
 		st.yolo = ws.PermissionSkipRequests()
@@ -254,20 +207,22 @@ func (m *UI) updateAgentModelCmd(pre tea.Cmd) tea.Cmd {
 // edges (todo spinner, pills). Runs on the Update goroutine.
 func (m *UI) applyBusyState(msg busyStateMsg) []tea.Cmd {
 	m.busyFetchInFlight = false
-	if msg.gen != m.busyFetchGen {
-		// This probe started before a newer state transition (optimistic
-		// send, invalidation, session switch, ...). Discard its result and
-		// re-dispatch so the required authoritative refresh is not lost
-		// merely because this older request was in flight.
+	// Discard a probe that is stale on either axis: its generation predates a
+	// newer state transition (optimistic send, invalidation, ...), or it was
+	// scoped to a session that is no longer current. An empty forSession is a
+	// global probe and matches any current session. Re-dispatch so the
+	// required authoritative refresh is not lost to this older in-flight
+	// request.
+	if msg.gen != m.busyFetchGen || (msg.forSession != "" && msg.forSession != m.currentSessionID()) {
 		if cmd := m.dispatchBusyRefresh(); cmd != nil {
 			return []tea.Cmd{cmd}
 		}
 		return nil
 	}
-	prevBusy := m.isAgentBusy()
+	prevBusy := m.isCurrentSessionBusy()
 	prevYolo := m.yoloModeCached()
-	msg.agentBusy = msg.agentBusy || m.pendingSubmissions > 0
 	m.agentBusyCache.set(msg.agentBusy)
+	m.sessionBusyCache.setForSession(msg.sessionBusy, msg.forSession)
 	m.yoloCache.set(msg.yolo)
 	m.agentReady = msg.ready
 	m.agentModel = msg.model
@@ -280,17 +235,17 @@ func (m *UI) applyBusyState(msg busyStateMsg) []tea.Cmd {
 	}
 
 	var cmds []tea.Cmd
-	busy := m.isAgentBusy()
-	if !busy && m.turnStopPending {
-		common.StopTurn()
-		m.turnStopPending = false
-	}
-	if busy {
+	busy := m.isCurrentSessionBusy()
+	if m.isAgentBusy() {
 		// A session reload that raced an unpopulated busy cache (the
 		// zero-value read at boot) froze the animation clock even though
 		// the agent is working. The authoritative probe re-enables it so
 		// freshly rendered spinners tick. When the probe reports idle the
 		// reload gate stands, keeping ghost spinners still.
+		//
+		// Deliberately the global probe, not `busy` above: the animation
+		// clock is process-wide, so a run in any session must keep it
+		// ticking, while `busy` is scoped to the session being viewed.
 		m.chat.SetAnimationsAllowed(true)
 	}
 	if m.hasSession() && hasInProgressTodo(m.session.Todos) && busy && !m.todoIsSpinning {
@@ -376,7 +331,10 @@ func (m *UI) staleWorkspaceRefreshCmds() []tea.Cmd {
 		return nil
 	}
 	var cmds []tea.Cmd
-	if !m.agentBusyCache.fresh(busyCacheTTL) || !m.yoloCache.fresh(busyCacheTTL) {
+	busyStale := !m.agentBusyCache.fresh(busyCacheTTL) ||
+		!m.yoloCache.fresh(busyCacheTTL) ||
+		(m.hasSession() && !m.sessionBusyCache.freshFor(busyCacheTTL, m.session.ID))
+	if busyStale {
 		if cmd := m.dispatchBusyRefresh(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
@@ -425,4 +383,82 @@ func (m *UI) toggleYoloMode() bool {
 // otherwise.
 func (m *UI) yoloModeCached() bool {
 	return m.yoloCache.val
+}
+
+func (m *UI) activityFor(sessionID string) *sessionActivity {
+	if m.sessionActivities == nil {
+		m.sessionActivities = make(map[string]*sessionActivity)
+	}
+	if activity := m.sessionActivities[sessionID]; activity != nil {
+		return activity
+	}
+	activity := &sessionActivity{}
+	m.sessionActivities[sessionID] = activity
+	return activity
+}
+
+// sessionActivity retains only submissions and completion checks still pending.
+type sessionActivity struct {
+	pending    int
+	gen        uint64
+	completion *notify.Notification
+}
+
+func (m *UI) submissionFinished(sessionID string, gen uint64, err error, summary bool) tea.Cmd {
+	activity := m.activityFor(sessionID)
+	defer m.pruneActivity(sessionID)
+	if activity.pending > 0 {
+		activity.pending--
+	}
+	if m.pendingSubmissions > 0 {
+		m.pendingSubmissions--
+	}
+	if gen == activity.gen && err != nil {
+		activity.completion = nil
+		if sessionID == m.currentSessionID() {
+			if errors.Is(err, context.Canceled) {
+				// A canceled submission ends idle, not failed.
+				m.turnOutcome = tea.ProgramStateIdle
+			} else {
+				m.turnOutcome = tea.ProgramStateError
+			}
+		}
+	}
+	if gen == m.submissionGen && (err != nil || summary) {
+		m.turnStopPending = true
+	}
+	m.invalidateBusyCaches()
+	m.invalidatePromptQueue()
+	var completion tea.Cmd
+	if activity.pending == 0 && activity.completion != nil {
+		// The completion check reports the authoritative finish state; the
+		// turn stays "working" until it lands, unless the submission itself
+		// failed.
+		if !(gen == activity.gen && err != nil) {
+			m.turnOutcome = tea.ProgramStateWorking
+		}
+		completion = m.dispatchCompletionCheck(activity.completion)
+	}
+	return tea.Batch(completion, m.dispatchBusyRefresh(), m.dispatchPromptQueueRefresh())
+}
+
+func (m *UI) pruneActivity(sessionID string) {
+	if activity := m.sessionActivities[sessionID]; activity != nil && activity.pending == 0 && activity.completion == nil {
+		delete(m.sessionActivities, sessionID)
+	}
+}
+
+func (m *UI) dispatchCompletionCheck(n *notify.Notification) tea.Cmd {
+	busyGen, ws := m.busyFetchGen, m.com.Workspace
+	return func() tea.Msg {
+		return completionCheckedMsg{busyGen: busyGen, busy: ws.AgentIsSessionBusy(n.SessionID), notification: n}
+	}
+}
+
+// completionCheckedMsg carries a session-scoped idle probe for a successful
+// completion. Its generation prevents newer observed work being overwritten.
+type completionCheckedMsg struct {
+	busyGen      uint64
+	busy         bool
+	notification *notify.Notification
 }

@@ -69,7 +69,7 @@ example `ssh`, `curl`, `systemctl`, and various package managers.
 The blocklist itself is upstream. Selectively re-allowing commands —
 `allowed_commands`, `allow_all_commands`, `--allow-commands`,
 `--allow-all-commands`, `CRUSH_ALLOW_COMMANDS`, and `CRUSH_ALLOW_ALL_COMMANDS`
-— is an addition in the `brunokrugel/crush` fork. Upstream the blocklist is
+— is an addition in the `joestump-agent/crush` fork. Upstream the blocklist is
 all-or-nothing.
 :::
 
@@ -137,8 +137,8 @@ approved by hand:
 ## Dispatched agents
 
 :::info[Fork feature]
-[Multi-agent dispatch](/fork) is an addition in the
-`brunokrugel/crush` fork.
+[Multi-agent dispatch](/agents/overview) is an addition in the
+`joestump-agent/crush` fork.
 :::
 
 A dispatched agent's permission requests surface in the same prompt as the
@@ -164,7 +164,7 @@ agent set worker --disabled true
 A dispatched agent follows your **live** yolo setting — the <kbd>ctrl+y</kbd>
 toggle applies to its next request — and its own tool calls run through your
 `PreToolUse` [hooks](/features/hooks#pretooluse), so a hook policy covers it.
-See [Permissions and yolo](/fork).
+See [Permissions and yolo](/agents/configuration#permissions-and-yolo).
 
 ## Disabling skills
 

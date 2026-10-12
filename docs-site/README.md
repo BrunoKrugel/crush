@@ -1,8 +1,8 @@
 # Crush docs site
 
 The Docusaurus source for the Crush documentation site, published to GitHub
-Pages for the [`joestump-agent/crush`](https://github.com/brunokrugel/crush)
-fork at <https://brunokrugel.github.io/crush/>.
+Pages for the [`joestump-agent/crush`](https://github.com/joestump-agent/crush)
+fork at <https://joestump-agent.github.io/crush/>.
 
 ## Running it
 

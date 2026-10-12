@@ -213,7 +213,7 @@ Usage:
 
 ## agent
 
-See [Multi-agent configuration](/fork) for what the
+See [Multi-agent configuration](/agents/configuration) for what the
 `agents` block does and how definitions resolve.
 
 ```text
@@ -304,7 +304,7 @@ file must exist (relative to the working directory), and a `--mcp` entry
 must name a configured server. Unknown tools, role changes on built-ins, and
 other semantic errors are reported when the config loads, not here. A new
 agent that omits `--tools` is allowed every tool; see
-[Adding a dispatch agent](/fork).
+[Adding a dispatch agent](/agents/configuration#adding-a-dispatch-agent).
 
 ### `agent set`
 
@@ -524,7 +524,7 @@ option dispatch-timeout 1h
 
 These keys configure the `dispatch_agent` tool itself, under
 `options.dispatch` in the JSON form. See
-[Multi-agent configuration](/fork).
+[Multi-agent configuration](/agents/configuration).
 
 | Key | JSON | Effect |
 | --- | --- | --- |
@@ -545,7 +545,7 @@ These keys configure the A2A host's optional TCP listener, which lives under
 Each `PATH` must be absolute or start with `~/`; a relative path fails the
 load. Without `a2a-client-ca` only this process's own bearer token is
 accepted, so no remote client can authenticate. See
-[TCP listener](/fork) for how it serves and
+[TCP listener](/agents/a2a-protocol#tcp-listener) for how it serves and
 authenticates.
 
 | Key | JSON | Effect |

@@ -168,7 +168,7 @@ func hasChannelCapability(res *mcp.InitializeResult) bool {
 func ChannelEnabled(enabled []string, name string) bool {
 	for _, e := range enabled {
 		e = strings.TrimSpace(e)
-		if e == name {
+		if strings.EqualFold(e, name) {
 			return true
 		}
 		if strings.EqualFold(e, "server:"+name) {
@@ -203,6 +203,11 @@ func publishChannelMessage(ctx context.Context, name string, raw json.RawMessage
 		Type:           EventChannelMessage,
 		Name:           name,
 		ChannelMessage: renderChannel(name, p),
+		// ChannelMeta carries the payload's meta attributes so workspace-side
+		// channel routing (reply routing, sender/group targeting) can act on
+		// them. Upstream drops the meta; our reply-routing feature depends on
+		// it, so it is preserved here.
+		ChannelMeta: p.Meta,
 	})
 }
 
@@ -297,11 +302,19 @@ type channelTransport struct {
 	gate  *channelGate
 }
 
-// Connect implements mcp.Transport.
 // unwrapTransport implements [transportWrapper].
 func (t *channelTransport) unwrapTransport() mcp.Transport { return t.inner }
 
+// Connect implements mcp.Transport. Streamable-HTTP transports get the
+// notification filter at the HTTP layer instead: the go-sdk only starts the
+// standalone SSE stream by type-asserting the connection it receives to its
+// internal client connection type, so a wrapped connection silently defeats
+// that check and the doorbell stream is never opened. See channel_sse.go.
 func (t *channelTransport) Connect(ctx context.Context) (mcp.Connection, error) {
+	if inner, ok := t.inner.(*mcp.StreamableClientTransport); ok {
+		installChannelSSEFilter(inner, t.name, t.gate)
+		return inner.Connect(ctx)
+	}
 	conn, err := t.inner.Connect(ctx)
 	if err != nil {
 		return nil, err

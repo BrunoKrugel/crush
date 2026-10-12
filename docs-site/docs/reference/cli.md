@@ -192,10 +192,10 @@ Show usage statistics — tokens, cost, and activity patterns.
 ## `dispatch`
 
 :::info[Fork feature]
-See [Dispatched agents](/fork).
+See [Dispatched agents](/agents/overview).
 :::
 
-Inspect and clean up [dispatched agent](/fork) workspaces from
+Inspect and clean up [dispatched agent](/agents/overview) workspaces from
 outside a session. Both subcommands take the global `--cwd` and `--data-dir`
 flags and resolve the same worktrees directory the TUI uses,
 `<data dir>/worktrees/<repo-key>/`; run them inside the repository.

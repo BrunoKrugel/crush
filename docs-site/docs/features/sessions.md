@@ -25,12 +25,12 @@ enough to title.
 
 :::info[Fork feature]
 The sub-agent tree in the session picker is an addition in the
-`brunokrugel/crush` fork, part of
-[multi-agent dispatch](/fork).
+`joestump-agent/crush` fork, part of
+[multi-agent dispatch](/agents/overview).
 :::
 
 Every sub-agent run — `agent`, `agentic_fetch`, and
-[dispatched agents](/fork) — records its work in a **task
+[dispatched agents](/agents/overview) — records its work in a **task
 session**, a child of the session that started it. The picker lists only
 top-level sessions; one that started sub-agents shows a `▸N` count before its
 timestamp.
@@ -44,7 +44,7 @@ timestamp.
 Rename and delete are off inside the sub-agent list.
 
 Picking a sub-agent opens it read-only in
-[inspect mode](/fork): its transcript fills the chat, but
+[inspect mode](/agents/handles-and-inspect): its transcript fills the chat, but
 its parent stays the active session — Crush loads the parent first if it is
 not already on screen — so anything you type goes to the parent.
 <kbd>ctrl+[</kbd> returns to the parent's chat.

@@ -77,9 +77,26 @@ type Service interface {
 	Get(ctx context.Context, id string) (Session, error)
 	GetLast(ctx context.Context) (Session, error)
 	List(ctx context.Context) ([]Session, error)
+	// ListChildren returns the sessions whose ParentSessionID is the
+	// given session, oldest first (creation order) — the inverse of List's
+	// parent-only filter (#314). Includes every child kind (task
+	// sessions and title sessions); callers filter by kind.
+	ListChildren(ctx context.Context, parentID string) ([]Session, error)
+	// ListAllChildren returns every child session of every parent in
+	// one grouped query (#408), grouped by parent and oldest-created
+	// first. Includes every child kind; callers filter by kind.
+	// Never contains a top-level session.
+	ListAllChildren(ctx context.Context) ([]Session, error)
 	Save(ctx context.Context, session Session) (Session, error)
 	SetChannel(ctx context.Context, sessionID, channel string) (Session, error)
 	UpdateTitleAndUsage(ctx context.Context, sessionID, title string, promptTokens, completionTokens int64, cost float64) error
+	// AddCost atomically adds delta to the session's cost without writing
+	// any other column, so concurrent full-row saves cannot clobber it.
+	AddCost(ctx context.Context, sessionID string, delta float64) error
+	// AddSessionUsage atomically adds a dispatched agent's usage — token
+	// totals and cost — to the session without writing any other column,
+	// so concurrent full-row saves cannot clobber the increment (#364).
+	AddSessionUsage(ctx context.Context, sessionID string, promptTokens, completionTokens int64, cost float64) error
 	Rename(ctx context.Context, id string, title string) error
 	Delete(ctx context.Context, id string) error
 	MCPDisabledServers(ctx context.Context) ([]string, error)
@@ -162,23 +179,84 @@ func (s *service) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	if err = qtx.DeleteSessionMessages(ctx, dbSession.ID); err != nil {
-		return fmt.Errorf("deleting session messages: %w", err)
+
+	// Descendants breadth-first, level by level, so the cascade handles
+	// any depth of delegation, not just one (#418). The visited set
+	// guards against a parent cycle.
+	visited := map[string]bool{id: true}
+	var levels [][]db.Session
+	queue, err := qtx.ListChildSessions(ctx, sql.NullString{String: id, Valid: true})
+	if err != nil {
+		return fmt.Errorf("listing child sessions: %w", err)
 	}
-	if err = qtx.DeleteSessionFiles(ctx, dbSession.ID); err != nil {
-		return fmt.Errorf("deleting session files: %w", err)
+	for len(queue) > 0 {
+		level := make([]db.Session, 0, len(queue))
+		for _, child := range queue {
+			if !visited[child.ID] {
+				visited[child.ID] = true
+				level = append(level, child)
+			}
+		}
+		if len(level) == 0 {
+			break
+		}
+		levels = append(levels, level)
+		var next []db.Session
+		for _, child := range level {
+			kids, err := qtx.ListChildSessions(ctx, sql.NullString{String: child.ID, Valid: true})
+			if err != nil {
+				return fmt.Errorf("listing child sessions: %w", err)
+			}
+			next = append(next, kids...)
+		}
+		queue = next
 	}
-	if err = qtx.DeleteSession(ctx, dbSession.ID); err != nil {
-		return fmt.Errorf("deleting session: %w", err)
+
+	// Deepest level first, then the parent; a failure anywhere rolls
+	// back the whole transaction, so no half-deleted tree survives
+	// (#418).
+	for i := len(levels) - 1; i >= 0; i-- {
+		for _, child := range levels[i] {
+			if err := s.deleteSessionRows(ctx, qtx, child.ID); err != nil {
+				return err
+			}
+		}
+	}
+	if err := s.deleteSessionRows(ctx, qtx, dbSession.ID); err != nil {
+		return err
 	}
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("committing transaction: %w", err)
 	}
 
-	session := s.fromDBItem(dbSession)
-	s.clearEstimatedUsageState(dbSession.ID)
-	s.Publish(pubsub.DeletedEvent, session)
+	deleted := make([]Session, 0, len(visited))
+	for i := len(levels) - 1; i >= 0; i-- {
+		for _, child := range levels[i] {
+			deleted = append(deleted, s.fromDBItem(child))
+		}
+	}
+	deleted = append(deleted, s.fromDBItem(dbSession))
+	for _, session := range deleted {
+		s.clearEstimatedUsageState(session.ID)
+		s.Publish(pubsub.DeletedEvent, session)
+	}
 	event.SessionDeleted()
+	return nil
+}
+
+// deleteSessionRows removes one session's messages, files and row; every
+// session in a cascading Delete (#418) goes through the same three
+// statements.
+func (s *service) deleteSessionRows(ctx context.Context, q *db.Queries, sessionID string) error {
+	if err := q.DeleteSessionMessages(ctx, sessionID); err != nil {
+		return fmt.Errorf("deleting session messages: %w", err)
+	}
+	if err := q.DeleteSessionFiles(ctx, sessionID); err != nil {
+		return fmt.Errorf("deleting session files: %w", err)
+	}
+	if err := q.DeleteSession(ctx, sessionID); err != nil {
+		return fmt.Errorf("deleting session: %w", err)
+	}
 	return nil
 }
 
@@ -275,6 +353,37 @@ func (s *service) UpdateTitleAndUsage(ctx context.Context, sessionID, title stri
 	return nil
 }
 
+// AddCost atomically adds delta to the session's cost. Only the cost column
+// is written, so a parent's own full-row saves during its turn cannot
+// clobber the increment.
+func (s *service) AddCost(ctx context.Context, sessionID string, delta float64) error {
+	if err := s.q.AddSessionCost(ctx, db.AddSessionCostParams{
+		Cost: delta,
+		ID:   sessionID,
+	}); err != nil {
+		return err
+	}
+	s.publishSessionUpdate(ctx, sessionID)
+	return nil
+}
+
+// AddSessionUsage atomically adds a dispatched agent's usage — token
+// totals and cost — to the session. Only the usage columns are written,
+// so a parent's own full-row saves during its turn cannot clobber the
+// increment (#364).
+func (s *service) AddSessionUsage(ctx context.Context, sessionID string, promptTokens, completionTokens int64, cost float64) error {
+	if err := s.q.AddSessionUsage(ctx, db.AddSessionUsageParams{
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		Cost:             cost,
+		ID:               sessionID,
+	}); err != nil {
+		return err
+	}
+	s.publishSessionUpdate(ctx, sessionID)
+	return nil
+}
+
 // Rename updates only the title of a session without touching updated_at or
 // usage fields.
 func (s *service) Rename(ctx context.Context, id string, title string) error {
@@ -290,6 +399,37 @@ func (s *service) Rename(ctx context.Context, id string, title string) error {
 
 func (s *service) List(ctx context.Context) ([]Session, error) {
 	dbSessions, err := s.q.ListSessions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]Session, len(dbSessions))
+	for i, dbSession := range dbSessions {
+		sessions[i] = s.fromDBItem(dbSession)
+		s.applyEstimatedUsageState(&sessions[i])
+	}
+	return sessions, nil
+}
+
+func (s *service) ListChildren(ctx context.Context, parentID string) ([]Session, error) {
+	dbSessions, err := s.q.ListChildSessions(ctx, sql.NullString{
+		String: parentID,
+		Valid:  parentID != "",
+	})
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]Session, len(dbSessions))
+	for i, dbSession := range dbSessions {
+		sessions[i] = s.fromDBItem(dbSession)
+		s.applyEstimatedUsageState(&sessions[i])
+	}
+	return sessions, nil
+}
+
+// ListAllChildren lists every child session of every parent in one
+// grouped query (#408) instead of one query per parent.
+func (s *service) ListAllChildren(ctx context.Context) ([]Session, error) {
+	dbSessions, err := s.q.ListAllChildSessions(ctx)
 	if err != nil {
 		return nil, err
 	}

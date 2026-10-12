@@ -36,14 +36,6 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Tags("system").
 			Handle(c.handleGetConfig),
 
-		apigen.Delete("/v1/workspaces/{id}/agent/sessions/{sid}/summarize").
-			Summary("Undo a session compaction").
-			Tags("agent").
-			PathParam("id", "Workspace ID").
-			PathParam("sid", "Session ID").
-			Description("Restores the messages the session's latest checkpoint replaced and discards the checkpoint. A session with nothing to undo reports an error.").
-			Fails(400, 404, 500).
-			Handle(c.handleDeleteWorkspaceAgentSessionSummarize),
 		apigen.Delete("/v1/clients/{client_id}").
 			Summary("Retire a client").
 			Description("Releases every claim the client holds.").
@@ -145,6 +137,28 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Responds(proto.Session{}).
 			Fails(404, 500).
 			Handle(c.handleGetWorkspaceSession),
+
+		apigen.Get("/v1/workspaces/{id}/sessions/{sid}/children").
+			Summary("List child sessions").
+			Description("Lists the sessions whose parent is the given session, "+
+				"oldest first (creation order): the sub-agent task sessions (#314).").
+			Tags("sessions").
+			PathParam("id", "Workspace ID").
+			PathParam("sid", "Session ID").
+			Responds([]proto.Session{}).
+			Fails(404, 500).
+			Handle(c.handleGetWorkspaceSessionChildren),
+
+		apigen.Get("/v1/workspaces/{id}/child-sessions").
+			Summary("List all child sessions").
+			Description("Lists every child session of every session in the workspace in "+
+				"one query, grouped by parent and oldest-created first (#408). "+
+				"Includes every child kind; callers filter.").
+			Tags("sessions").
+			PathParam("id", "Workspace ID").
+			Responds([]proto.Session{}).
+			Fails(404, 500).
+			Handle(c.handleGetWorkspaceChildSessions),
 
 		apigen.Put("/v1/workspaces/{id}/sessions/{sid}").
 			Summary("Update session").
@@ -309,12 +323,7 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Summary("Send message to agent").
 			Description("Validates and accepts the prompt, then dispatches the run "+
 				"detached from the requesting HTTP connection: the run survives client "+
-				"disconnects and is only ended by the explicit cancel endpoint. "+
-				"permission_policy may be omitted or empty for normal permission handling, "+
-				"or auto_approve to approve this turn and its descendants. "+
-				"operator_steering allows input without run_id or channel to join an active "+
-				"turn under its existing permission policy. If idle, permission_policy "+
-				"applies to the new turn as usual.").
+				"disconnects and is only ended by the explicit cancel endpoint.").
 			Tags("agent").
 			PathParam("id", "Workspace ID").
 			Accepts(proto.AgentMessage{}).
@@ -346,6 +355,30 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Accepts(proto.AgentSetMainRequest{}).
 			Fails(400, 404, 409, 500).
 			Handle(c.handlePostWorkspaceAgentMain),
+
+		apigen.Get("/v1/workspaces/{id}/a2a/agents").
+			Summary("Read the workspace's agent index").
+			Description("Proxies the workspace A2A host's agent index: a JSON array of "+
+				"dispatched-agent descriptors, or, with Accept: text/event-stream, an SSE "+
+				"stream of a snapshot followed by one upsert per change. The server "+
+				"authenticates to the host itself. A stream waits for the host to start; "+
+				"a snapshot answers 503 until it has.").
+			Tags("agent").
+			PathParam("id", "Workspace ID").
+			Fails(403, 404, 409, 502, 503).
+			Handle(c.handleGetWorkspaceA2AAgents),
+
+		apigen.Post("/v1/workspaces/{id}/a2a/agents/{agent}").
+			Summary("Call a dispatched agent over A2A").
+			Description("Proxies one A2A JSON-RPC 2.0 request to a dispatched agent on the "+
+				"workspace's A2A host, streaming the answer as SSE when the method streams. "+
+				"The host's own checks apply to the request as sent; the server adds the "+
+				"host's credential.").
+			Tags("agent").
+			PathParam("id", "Workspace ID").
+			PathParam("agent", "Dispatch ID").
+			Fails(400, 403, 404, 409, 415, 502, 503).
+			Handle(c.handlePostWorkspaceA2AAgent),
 
 		apigen.Get("/v1/workspaces/{id}/agent/sessions/{sid}").
 			Summary("Get agent session").
@@ -393,13 +426,10 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 
 		apigen.Post("/v1/workspaces/{id}/agent/sessions/{sid}/summarize").
 			Summary("Summarize session").
-			Description("Returns HTTP 409 with {\"cancelled\": true} if summarization is canceled.").
 			Tags("agent").
 			PathParam("id", "Workspace ID").
 			PathParam("sid", "Session ID").
-			Description("The request body is optional, and so is its emphasis. A body left empty, or an instructions field left empty, keeps the default summarization.").
-			Accepts(proto.SessionSummarizeRequest{}).
-			Fails(400, 404, 409, 500).
+			Fails(404, 500).
 			Handle(c.handlePostWorkspaceAgentSessionSummarize),
 
 		apigen.Post("/v1/workspaces/{id}/agent/sessions/{sid}/shell").
@@ -478,6 +508,16 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Fails(400, 404, 500).
 			Handle(c.handlePostWorkspaceConfigRefreshOAuth),
 
+		apigen.Post("/v1/workspaces/{id}/config/reload-discovery").
+			Summary("Reload model discovery").
+			Description("Re-probes custom providers whose models were not discovered at "+
+				"startup, where the load-time pass is deadline-bounded.").
+			Tags("config").
+			PathParam("id", "Workspace ID").
+			Responds(proto.ReloadModelDiscoveryResponse{}).
+			Fails(404, 500).
+			Handle(c.handlePostWorkspaceConfigReloadDiscovery),
+
 		apigen.Get("/v1/workspaces/{id}/project/needs-init").
 			Summary("Check if project needs initialization").
 			Tags("project").
@@ -525,6 +565,13 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Responds(proto.ReadSkillResponse{}).
 			Fails(400, 404, 500).
 			Handle(c.handlePostWorkspaceSkillRead),
+
+		apigen.Post("/v1/workspaces/{id}/skills/reload").
+			Summary("Reload skills").
+			Tags("skills").
+			PathParam("id", "Workspace ID").
+			Fails(404, 500).
+			Handle(c.handlePostWorkspaceSkillsReload),
 
 		apigen.Post("/v1/workspaces/{id}/mcp/refresh-tools").
 			Summary("Refresh MCP tools").
@@ -661,13 +708,23 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Fails(400, 404, 500).
 			Handle(c.handlePostWorkspaceMCPSetServerConfigDisabled),
 
-		apigen.Post("/v1/workspaces/{id}/mcp/lazy").
-			Summary("Set MCP lazy loading").
+		apigen.Post("/v1/workspaces/{id}/mcp/call-tool").
+			Summary("Call an MCP tool").
+			Description("Restricted to the A2UI round-trip tools; any other tool name is "+
+				"rejected with 403.").
 			Tags("mcp").
 			PathParam("id", "Workspace ID").
-			Accepts(proto.MCPSetLazyRequest{}).
+			Accepts(proto.MCPCallToolRequest{}).
+			Fails(400, 403, 404, 500).
+			Handle(c.handlePostWorkspaceMCPCallTool),
+
+		apigen.Post("/v1/workspaces/{id}/mcp/reconnect").
+			Summary("Reconnect an MCP server").
+			Tags("mcp").
+			PathParam("id", "Workspace ID").
+			Accepts(proto.MCPNameRequest{}).
 			Fails(400, 404, 500).
-			Handle(c.handlePostWorkspaceMCPSetLazy),
+			Handle(c.handlePostWorkspaceMCPReconnect),
 
 		apigen.Post("/v1/workspaces/{id}/mcp/start").
 			Summary("Start an MCP server").
@@ -676,37 +733,5 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Accepts(proto.MCPNameRequest{}).
 			Fails(400, 404, 500).
 			Handle(c.handlePostWorkspaceMCPStartServer),
-
-		apigen.Get("/v1/workspaces/{id}/skills/disabled").
-			Summary("List disabled skills").
-			Tags("skills").
-			PathParam("id", "Workspace ID").
-			Responds([]string{}).
-			Fails(404, 500).
-			Handle(c.handleGetWorkspaceSkillsDisabled),
-
-		apigen.Post("/v1/workspaces/{id}/skills/disabled").
-			Summary("Toggle a skill for the repository").
-			Tags("skills").
-			PathParam("id", "Workspace ID").
-			Accepts(proto.SkillSetDisabledRequest{}).
-			Fails(400, 404, 500).
-			Handle(c.handlePostWorkspaceSetSkillDisabled),
-
-		apigen.Get("/v1/workspaces/{id}/skills/enabled").
-			Summary("List enabled-override skills").
-			Tags("skills").
-			PathParam("id", "Workspace ID").
-			Responds([]string{}).
-			Fails(404, 500).
-			Handle(c.handleGetWorkspaceSkillsEnabled),
-
-		apigen.Post("/v1/workspaces/{id}/skills/config-disabled").
-			Summary("Toggle a skill in the config").
-			Tags("skills").
-			PathParam("id", "Workspace ID").
-			Accepts(proto.SkillSetDisabledRequest{}).
-			Fails(400, 404, 500).
-			Handle(c.handlePostWorkspaceSetSkillConfigDisabled),
 	}
 }

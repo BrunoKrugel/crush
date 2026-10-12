@@ -1,0 +1,640 @@
+package chat
+
+import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/tree"
+	"github.com/charmbracelet/crush/internal/agent"
+	"github.com/charmbracelet/crush/internal/dispatch"
+	"github.com/charmbracelet/crush/internal/message"
+	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/charmbracelet/crush/internal/workspace"
+	"github.com/charmbracelet/x/ansi"
+)
+
+// -----------------------------------------------------------------------------
+// Dispatch Agent Tool
+// -----------------------------------------------------------------------------
+
+// AgentTaskSetter is implemented by the dispatch agent block; the UI
+// model feeds it the dispatched agent's live state from the workspace's
+// agent surface (#65, #421).
+type AgentTaskSetter interface {
+	SetAgentTask(task workspace.AgentTask)
+}
+
+// DispatchToolMessageItem is the agent block for a dispatch_agent tool
+// call (#65): a live status card, not a static tool-call record. While
+// the dispatched agent runs it shows the dispatch state, elapsed time,
+// tokens, and the agent's current todo as the one-line activity, with
+// the child session's tool activity nested underneath. On completion it
+// becomes the durable record — the terminal DispatchResult's findings
+// and diff stat — and never clears or collapses.
+type DispatchToolMessageItem struct {
+	*baseToolMessageItem
+
+	nestedTools []ToolMessageItem
+	// task is the dispatched agent's latest live state from the agent
+	// surface (#421); nil until one arrives.
+	task *workspace.AgentTask
+	// fallback is the dispatch state parsed from the persisted tool
+	// result: the running handle, or the terminal result the run stamps
+	// on it when it ends (#410). With no live state — a dispatch from an
+	// earlier process — the running handle is static by definition; a
+	// terminal result is the durable record either way.
+	fallback *dispatch.DispatchResult
+	// steers records the mid-run messages injected into the running
+	// agent (#312) and the agent's latest reply to each, as observed on
+	// the child session's message events. The initial dispatch prompt is
+	// not a steer and is never recorded. In-memory only: a reloaded
+	// session loses the live steer log; the durable record remains the
+	// terminal result's findings.
+	steers []dispatchSteer
+	// now supplies the wall clock for a running dispatch's elapsed time;
+	// nil means time.Now. Tests pin it so elapsed assertions stay
+	// deterministic (#428).
+	now func() time.Time
+}
+
+// dispatchSteer is one injected message and the agent's answer so far.
+// ResponseMessageID ties the answer to the assistant message currently
+// streaming on the child session; Response is its text snapshot, updated
+// as the message grows.
+type dispatchSteer struct {
+	Text              string
+	ResponseMessageID string
+	Response          string
+}
+
+var (
+	_ ToolMessageItem     = (*DispatchToolMessageItem)(nil)
+	_ NestedToolContainer = (*DispatchToolMessageItem)(nil)
+	_ AgentTaskSetter     = (*DispatchToolMessageItem)(nil)
+)
+
+// NewDispatchToolMessageItem creates a new [DispatchToolMessageItem].
+func NewDispatchToolMessageItem(
+	sty *styles.Styles,
+	toolCall message.ToolCall,
+	result *message.ToolResult,
+	canceled bool,
+) *DispatchToolMessageItem {
+	d := &DispatchToolMessageItem{}
+	d.baseToolMessageItem = newBaseToolMessageItem(sty, toolCall, result, &DispatchToolRenderContext{dispatch: d}, canceled)
+	d.fallback = parseDispatchResult(result)
+	// The dispatch_agent tool call returns as soon as the run is
+	// backgrounded, so the card's spinner keys off the dispatch
+	// lifecycle, not the tool call: it spins while the dispatched agent
+	// works and stops on the terminal states.
+	d.spinningFunc = func(state SpinningState) bool {
+		if state.IsCanceled() {
+			return false
+		}
+		status, live := d.dispatchStatus()
+		if isTerminalDispatchStatus(status) {
+			return false
+		}
+		// A stale running state never spins: nothing will advance the
+		// card again, so a spinner would freeze mid-frame.
+		return live || !state.HasResult()
+	}
+	return d
+}
+
+// SetResult overrides the base to re-parse the dispatch handle, so a
+// result arriving live updates the fallback state.
+func (d *DispatchToolMessageItem) SetResult(res *message.ToolResult) {
+	d.baseToolMessageItem.SetResult(res)
+	d.fallback = parseDispatchResult(res)
+}
+
+// SetAgentTask stores the dispatched agent's latest live state (#65,
+// #421) and bumps the item so the card re-renders.
+func (d *DispatchToolMessageItem) SetAgentTask(task workspace.AgentTask) {
+	d.task = &task
+	d.clearCache()
+	d.Bump()
+}
+
+// DispatchSessionID returns the dispatched agent's task session ID —
+// live from the agent surface, else from the persisted handle — which
+// the UI uses to seed the card on session load.
+func (d *DispatchToolMessageItem) DispatchSessionID() string {
+	if d.task != nil {
+		return d.task.SessionID
+	}
+	if d.fallback != nil {
+		return d.fallback.SessionID
+	}
+	return ""
+}
+
+// Advance implements [Animatable].
+//
+// Advances the card's own spinner and every spinning nested tool in one
+// frame, bumping the parent's list-cache version, exactly like the
+// agent tool item: nested tools are not list entries of their own, so
+// only the parent's version gates the list cache. Unlike the agent
+// tool, the card keeps animating after its tool result arrives — the
+// result is the running handle and the dispatch is still working.
+func (d *DispatchToolMessageItem) Advance() bool {
+	if !d.isSpinning() {
+		return false
+	}
+	changed := d.anim.Advance()
+	changed = advanceNested(d.nestedTools) || changed
+	if changed {
+		d.Bump()
+	}
+	return changed
+}
+
+// NestedTools returns the nested tools.
+func (d *DispatchToolMessageItem) NestedTools() []ToolMessageItem {
+	return d.nestedTools
+}
+
+// SetNestedTools sets the nested tools.
+//
+// SetNestedTools always bumps the version, for the same reason as the
+// agent tool item: the live update path in internal/ui/model/ui.go
+// mutates existing children in place and calls this with the same
+// slice, so pointer-equality dedupe would leave a stale parent entry in
+// the list cache.
+func (d *DispatchToolMessageItem) SetNestedTools(tools []ToolMessageItem) {
+	d.nestedTools = tools
+	d.clearCache()
+	d.Bump()
+}
+
+// AddNestedTool adds a nested tool.
+func (d *DispatchToolMessageItem) AddNestedTool(tool ToolMessageItem) {
+	// Mark nested tools as simple (compact) rendering.
+	if s, ok := tool.(Compactable); ok {
+		s.SetCompact(true)
+	}
+	d.nestedTools = append(d.nestedTools, tool)
+	d.clearCache()
+	d.Bump()
+}
+
+// dispatchStatus resolves the dispatch lifecycle state to render: the
+// terminal result stamped on the persisted tool result, which is final;
+// else the live state from the agent surface; else the state recorded in
+// the persisted running handle; else queued while the tool call is still
+// open. live reports whether the state can still change.
+func (d *DispatchToolMessageItem) dispatchStatus() (dispatch.Status, bool) {
+	if d.fallback != nil && isTerminalDispatchStatus(d.fallback.Status) {
+		return d.fallback.Status, false
+	}
+	if d.task != nil {
+		return d.task.Status, !d.task.Terminal()
+	}
+	if d.fallback != nil {
+		return d.fallback.Status, false
+	}
+	return dispatch.StatusProvisioned, true
+}
+
+// IsLive reports whether the dispatched agent is believed to be running
+// right now, judged from in-memory state only so the UI can enumerate
+// live agents without probing the workspace (#314): live state that has
+// not reached a terminal state, or a tool call that has not returned its
+// running handle yet. A card seeded only from its persisted handle is
+// static by definition and never reports live: the run may have ended.
+func (d *DispatchToolMessageItem) IsLive() bool {
+	status, live := d.dispatchStatus()
+	if !live {
+		return false
+	}
+	return !isTerminalDispatchStatus(status)
+}
+
+// TerminalResult returns the terminal DispatchResult to render as the
+// durable record: the one the run stamps on the persisted tool result
+// when it ends (#410). Nil until it lands, even when the live state has
+// already gone terminal.
+func (d *DispatchToolMessageItem) TerminalResult() *dispatch.DispatchResult {
+	if d.fallback != nil && isTerminalDispatchStatus(d.fallback.Status) {
+		return d.fallback
+	}
+	return nil
+}
+
+// AddSteer records one message injected into the running agent (#312),
+// as observed on the child session's message events, and bumps the card
+// so the steer renders immediately.
+func (d *DispatchToolMessageItem) AddSteer(text string) {
+	d.steers = append(d.steers, dispatchSteer{Text: text})
+	d.clearCache()
+	d.Bump()
+}
+
+// UpdateSteerAnswer records the assistant message currently answering the
+// latest steer: the message ID is retargeted whenever a later assistant
+// message streams text, so the answer shown is always the agent's most
+// recent reply on the child session. Reports whether anything changed.
+func (d *DispatchToolMessageItem) UpdateSteerAnswer(messageID, text string) bool {
+	if len(d.steers) == 0 {
+		return false
+	}
+	steer := &d.steers[len(d.steers)-1]
+	if steer.ResponseMessageID == messageID && steer.Response == text {
+		return false
+	}
+	steer.ResponseMessageID = messageID
+	steer.Response = text
+	d.clearCache()
+	d.Bump()
+	return true
+}
+
+// Steers returns the recorded steers — the injected messages and the
+// agent's answers so far.
+func (d *DispatchToolMessageItem) Steers() []dispatchSteer {
+	return d.steers
+}
+
+// RebuildSteers rebuilds the steer log from the child session's
+// persisted messages (#410), replacing whatever was recorded live:
+// every Steer-marked user message becomes a steer, and each assistant
+// message's text becomes the latest steer's answer — the same pairing
+// the live path produces, where only the most recent steer's answer
+// advances. The dispatch's initial prompt and todo nudges are not
+// Steer-marked, so a rebuild can never mistake either for a steer.
+func (d *DispatchToolMessageItem) RebuildSteers(msgs []message.Message) {
+	steers := make([]dispatchSteer, 0, len(d.steers))
+	latest := -1
+	for _, msg := range msgs {
+		switch msg.Role {
+		case message.User:
+			content := msg.Content()
+			if !content.Steer || content.Text == "" {
+				continue
+			}
+			steers = append(steers, dispatchSteer{Text: content.Text})
+			latest = len(steers) - 1
+		case message.Assistant:
+			text := msg.Content().Text
+			if text == "" || latest < 0 {
+				continue
+			}
+			steers[latest].ResponseMessageID = msg.ID
+			steers[latest].Response = text
+		}
+	}
+	d.steers = steers
+	d.clearCache()
+	d.Bump()
+}
+
+// elapsed returns the dispatch's run time: FinishedAt - StartedAt once
+// terminal, time since start while running. Timestamps come with the
+// live state, so a stale fallback state has none.
+func (d *DispatchToolMessageItem) elapsed() (time.Duration, bool) {
+	if d.task == nil {
+		return 0, false
+	}
+	start, end := d.task.StartedAt, d.task.FinishedAt
+	if start.IsZero() {
+		return 0, false
+	}
+	if end.IsZero() {
+		// An agent that ended with no finish time — its route went down
+		// before its task did — has no end to measure to: show none
+		// rather than a clock that keeps running.
+		if status, _ := d.dispatchStatus(); isTerminalDispatchStatus(status) {
+			return 0, false
+		}
+		now := d.now
+		if now == nil {
+			now = time.Now
+		}
+		end = now()
+	}
+	return end.Sub(start), true
+}
+
+// parseDispatchResult extracts the dispatch state from a tool result.
+// A terminal DispatchResult in Metadata — stamped by the run on
+// completion (#410) — wins over the running handle in Content, so a
+// restarted or client/server card renders the durable record instead of
+// a stale "working".
+func parseDispatchResult(result *message.ToolResult) *dispatch.DispatchResult {
+	if result == nil {
+		return nil
+	}
+	if result.Metadata != "" {
+		var terminal dispatch.DispatchResult
+		if err := json.Unmarshal([]byte(result.Metadata), &terminal); err == nil && isTerminalDispatchStatus(terminal.Status) {
+			return &terminal
+		}
+	}
+	if result.Content == "" {
+		return nil
+	}
+	var handle dispatch.DispatchResult
+	if err := json.Unmarshal([]byte(result.Content), &handle); err != nil {
+		return nil
+	}
+	return &handle
+}
+
+// isTerminalDispatchStatus reports whether status ends the dispatch.
+func isTerminalDispatchStatus(status dispatch.Status) bool {
+	switch status {
+	case dispatch.StatusCompleted, dispatch.StatusFailed, dispatch.StatusKilled:
+		return true
+	default:
+		return false
+	}
+}
+
+// dispatchStateLabel maps a registry status to its card label. The
+// card's vocabulary is the interaction model's (queued / working /
+// complete / failed / killed / canceled); "canceled" marks a killed run
+// whose reason is the user cancel (#373), "killed" the other kills.
+func dispatchStateLabel(status dispatch.Status, killedReason string) string {
+	switch status {
+	case dispatch.StatusProvisioned:
+		return "queued"
+	case dispatch.StatusRunning:
+		return "working"
+	case dispatch.StatusCompleted:
+		return "complete"
+	case dispatch.StatusFailed:
+		return "failed"
+	case dispatch.StatusKilled:
+		if killedReason == dispatch.ReasonCanceled {
+			return "canceled"
+		}
+		return "killed"
+	default:
+		return string(status)
+	}
+}
+
+// dispatchToolStatus maps the dispatch state onto the tool icon status
+// the header renders.
+func dispatchToolStatus(status dispatch.Status, canceled bool) ToolStatus {
+	if canceled {
+		return ToolStatusCanceled
+	}
+	switch status {
+	case dispatch.StatusCompleted:
+		return ToolStatusSuccess
+	case dispatch.StatusFailed:
+		return ToolStatusError
+	case dispatch.StatusKilled:
+		return ToolStatusCanceled
+	default:
+		return ToolStatusRunning
+	}
+}
+
+// formatDispatchElapsed renders a run duration compactly: 42s, 2m14s,
+// 1h04m.
+func formatDispatchElapsed(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
+	default:
+		return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
+	}
+}
+
+// formatDispatchTokens renders a token count with K/M units, matching
+// the assistant info line's formatting.
+func formatDispatchTokens(n int64) string {
+	var s string
+	switch {
+	case n >= 1_000_000:
+		s = fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+	case n >= 1_000:
+		s = fmt.Sprintf("%.1fK", float64(n)/1_000)
+	default:
+		return strconv.FormatInt(n, 10)
+	}
+	s = strings.Replace(s, ".0K", "K", 1)
+	s = strings.Replace(s, ".0M", "M", 1)
+	return s
+}
+
+// DispatchToolRenderContext renders dispatch agent blocks.
+type DispatchToolRenderContext struct {
+	dispatch *DispatchToolMessageItem
+}
+
+// RenderTool implements the [ToolRenderer] interface.
+func (r *DispatchToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *ToolRenderOpts) string {
+	cappedWidth := cappedMessageWidth(width)
+	d := r.dispatch
+	if opts.IsPending() && d.task == nil {
+		return pendingTool(sty, "Dispatch", opts.Anim, opts.Compact)
+	}
+
+	var params agent.DispatchAgentParams
+	_ = json.Unmarshal([]byte(opts.ToolCall.Input), &params)
+	prompt := params.Prompt
+	if !opts.ExpandedContent {
+		prompt = strings.ReplaceAll(prompt, "\n", " ")
+	}
+
+	status, _ := d.dispatchStatus()
+	header := toolHeader(sty, dispatchToolStatus(status, opts.IsCanceled()), "Dispatch", cappedWidth, opts, d.statusParams()...)
+	if opts.Compact {
+		return header
+	}
+
+	// Build the task tag and prompt, mirroring the agent tool block so
+	// the two sub-agent surfaces read identically.
+	taskTag := sty.Tool.AgentTaskTag.Render("Task")
+	taskTagWidth := lipgloss.Width(taskTag)
+	remainingWidth := min(cappedWidth-taskTagWidth-3, maxTextWidth-taskTagWidth-3)
+	promptText := sty.Tool.AgentPrompt.Width(remainingWidth).Render(prompt)
+
+	header = lipgloss.JoinVertical(
+		lipgloss.Left,
+		header,
+		"",
+		lipgloss.JoinHorizontal(
+			lipgloss.Left,
+			taskTag,
+			" ",
+			promptText,
+		),
+	)
+	if activity := d.activityLine(sty, remainingWidth); activity != "" {
+		header = lipgloss.JoinVertical(lipgloss.Left, header, activity)
+	}
+	if convo := d.renderSteers(sty, remainingWidth, opts.ExpandedContent); convo != "" {
+		header = lipgloss.JoinVertical(lipgloss.Left, header, convo)
+	}
+
+	// Build tree with nested tool calls.
+	childTools := tree.Root(header)
+	for _, nestedTool := range d.nestedTools {
+		childView := nestedTool.Render(remainingWidth)
+		childTools.Child(childView)
+	}
+
+	var parts []string
+	parts = append(parts, childTools.Enumerator(roundedEnumerator(2, taskTagWidth-5)).String())
+
+	// Show animation while the dispatched agent works.
+	if opts.IsSpinning {
+		parts = append(parts, "", opts.Anim.Render())
+	}
+
+	result := lipgloss.JoinVertical(lipgloss.Left, parts...)
+
+	// Durable completion (#65): the block stays, carrying the terminal
+	// result's findings and diff stat. It never clears or collapses;
+	// drill-in is #314's job, so the body expands with the item's
+	// existing expand toggle.
+	if terminal := d.TerminalResult(); terminal != nil {
+		body := renderDispatchTerminal(sty, terminal, cappedWidth-toolBodyLeftPaddingTotal, opts.ExpandedContent)
+		return joinToolParts(result, body)
+	}
+
+	return result
+}
+
+// statusParams builds the header's status segment: state, handle,
+// elapsed, tokens, and todo ratio, joined with middots. Empty when no
+// dispatch state is known.
+func (d *DispatchToolMessageItem) statusParams() []string {
+	status, _ := d.dispatchStatus()
+	if d.task == nil && d.fallback == nil {
+		return nil
+	}
+	var parts []string
+	if handle := d.handleLabel(); handle != "" {
+		parts = append(parts, handle)
+	}
+	// The kill reason is the stamped record's; until it lands, a live
+	// state that ended killed carries the reason as its status text, so
+	// a user cancel reads "canceled" at once (#373, #421).
+	killedReason := ""
+	if terminal := d.TerminalResult(); terminal != nil {
+		killedReason = terminal.KilledReason
+	} else if d.task != nil && d.task.Status == dispatch.StatusKilled {
+		killedReason = d.task.StatusText
+	}
+	parts = append(parts, dispatchStateLabel(status, killedReason))
+	if elapsed, ok := d.elapsed(); ok {
+		parts = append(parts, formatDispatchElapsed(elapsed))
+	}
+	if tokens := d.totalTokens(); tokens > 0 {
+		parts = append(parts, formatDispatchTokens(tokens)+" tokens")
+	}
+	if d.task != nil && d.task.TodoTotal > 0 {
+		parts = append(parts, fmt.Sprintf("%d/%d todos", d.task.TodoCompleted, d.task.TodoTotal))
+	}
+	return []string{strings.Join(parts, " · ")}
+}
+
+// handleLabel returns the dispatch's @handle for the status line;
+// handles are assigned at dispatch (#313). The live state is
+// authoritative; a reloaded session falls back to the persisted handle.
+func (d *DispatchToolMessageItem) handleLabel() string {
+	if d.task != nil && d.task.Handle != "" {
+		return d.task.Handle
+	}
+	if d.fallback != nil {
+		return d.fallback.Handle
+	}
+	return ""
+}
+
+// totalTokens returns the dispatched session's token usage so far.
+func (d *DispatchToolMessageItem) totalTokens() int64 {
+	if d.task == nil {
+		return 0
+	}
+	return d.task.PromptTokens + d.task.CompletionTokens
+}
+
+// activityLine renders the dispatched agent's current todo as the
+// one-line activity, using the todo list's idiom. Only a live
+// non-terminal dispatch has a meaningful current todo.
+func (d *DispatchToolMessageItem) activityLine(sty *styles.Styles, width int) string {
+	if d.task == nil || d.task.CurrentTodo == "" || d.task.Terminal() {
+		return ""
+	}
+	text := ansi.Truncate(d.task.CurrentTodo, width-2, "…")
+	return sty.Tool.TodoInProgressIcon.Render(styles.ArrowRightIcon+" ") +
+		sty.Tool.TodoJustStarted.Render(text)
+}
+
+// renderSteers renders the mid-run injection conversation (#312): each
+// injected message with the agent's answer so far beneath it. Plain text,
+// not markdown — the answer streams token by token and a glamour
+// re-render per delta would cost more than the line is worth; the full
+// reply is in the terminal record's findings once the run completes.
+// The steer text wraps to the available width with continuation lines
+// indented under the text, so a long steer stays inside the card (#411);
+// a collapsed item folds newlines into spaces, the same way the Task
+// prompt line does.
+func (d *DispatchToolMessageItem) renderSteers(sty *styles.Styles, width int, expanded bool) string {
+	if len(d.steers) == 0 {
+		return ""
+	}
+	prefix := sty.Tool.TodoInProgressIcon.Render(styles.ArrowRightIcon + " ")
+	indent := strings.Repeat(" ", lipgloss.Width(prefix))
+	available := max(width-lipgloss.Width(prefix), 1)
+	var sections []string
+	for _, steer := range d.steers {
+		text := steer.Text
+		if !expanded {
+			text = strings.ReplaceAll(text, "\n", " ")
+		}
+		wrapped := ansi.Hardwrap(ansi.Wordwrap(text, available, ""), available, true)
+		lines := strings.Split(wrapped, "\n")
+		for i := 1; i < len(lines); i++ {
+			lines[i] = indent + lines[i]
+		}
+		sections = append(sections, prefix+sty.Tool.TodoJustStarted.Render(strings.Join(lines, "\n")))
+		if steer.Response != "" {
+			sections = append(sections, toolOutputPlainContent(sty, steer.Response, width, true))
+		}
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+// renderDispatchTerminal renders the completed block's durable record:
+// the failure reason on failed runs, the kill reason on killed runs
+// (#316), the key findings, and the diff stat. Collapsed output is
+// line-capped like any tool body; expanded shows everything.
+func renderDispatchTerminal(sty *styles.Styles, res *dispatch.DispatchResult, width int, expanded bool) string {
+	var sections []string
+	if res.KilledReason != "" {
+		note := sty.Tool.TodoStatusNote.Render("Killed")
+		sections = append(sections, lipgloss.JoinHorizontal(lipgloss.Left, note, " "+sty.Tool.ErrorMessage.Render(res.KilledReason)))
+	}
+	if res.Error != "" {
+		note := sty.Tool.TodoStatusNote.Render("Error")
+		sections = append(sections, lipgloss.JoinHorizontal(lipgloss.Left, note, " "+sty.Tool.ErrorMessage.Render(res.Error)))
+	}
+	if res.KeyFindings != "" {
+		note := sty.Tool.TodoStatusNote.Render("Findings")
+		body := toolOutputMarkdownContent(sty, res.KeyFindings, width, expanded)
+		sections = append(sections, lipgloss.JoinVertical(lipgloss.Left, note, body))
+	}
+	if res.DiffSummary != "" {
+		note := sty.Tool.TodoStatusNote.Render("Diff")
+		body := toolOutputPlainContent(sty, res.DiffSummary, width, expanded)
+		sections = append(sections, lipgloss.JoinVertical(lipgloss.Left, note, body))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}

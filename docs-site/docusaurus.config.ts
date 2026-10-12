@@ -2,7 +2,7 @@
  * Docusaurus Configuration
  *
  * Builds the Crush documentation site for GitHub Pages on the
- * brunokrugel/crush fork. Docs are served from the site root
+ * joestump-agent/crush fork. Docs are served from the site root
  * (`routeBasePath: '/'`) with a hand-written React landing page at `/`, so
  * every docs URL is `/<section>/<page>` with no `/docs` prefix.
  *
@@ -10,14 +10,14 @@
  * can ship to a different host without editing this file; the defaults are the
  * fork's GitHub Pages address.
  *
- * @brunokrugel 08/25/2026 - Initial config for the MVP docs site.
+ * @joestump-agent 08/25/2026 - Initial config for the MVP docs site.
  */
 
 import type * as Preset from '@docusaurus/preset-classic';
 import type {Config} from '@docusaurus/types';
 import {themes as prismThemes} from 'prism-react-renderer';
 
-const ORG = 'brunokrugel';
+const ORG = 'joestump-agent';
 const REPO = 'crush';
 const GITHUB_URL = `https://github.com/${ORG}/${REPO}`;
 const UPSTREAM_URL = 'https://github.com/charmbracelet/crush';
@@ -121,6 +121,7 @@ const config: Config = {
           items: [
             {label: 'MCP', to: '/features/mcp'},
             {label: 'Channels', to: '/features/channels'},
+            {label: 'A2UI', to: '/features/a2ui'},
             {label: 'Skills', to: '/features/skills'},
           ],
         },

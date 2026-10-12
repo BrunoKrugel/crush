@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -16,6 +17,7 @@ import (
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/backend"
 	"github.com/charmbracelet/crush/internal/compaction"
+	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/scheduler"
@@ -88,8 +90,10 @@ func (s *runCoordinator) QueuedPrompts(string) int              { return 0 }
 func (s *runCoordinator) QueuedPromptsList(string) []string     { return nil }
 func (s *runCoordinator) ClearQueue(string)                     {}
 func (s *runCoordinator) ListCronTasks(string) []scheduler.Task { return nil }
+func (s *runCoordinator) Summarize(context.Context, string, string) error {
+	return s.summarizeErr
+}
 
-func (s *runCoordinator) DiscardSummarize(context.Context, string, string) error { return nil }
 func (s *runCoordinator) SummarizePreview(context.Context, string, string) (compaction.Preview, error) {
 	return compaction.Preview{}, nil
 }
@@ -98,17 +102,13 @@ func (s *runCoordinator) ConfirmSummarize(context.Context, string, compaction.Pr
 	return nil
 }
 
+func (s *runCoordinator) DiscardSummarize(context.Context, string, string) error { return nil }
+
 func (s *runCoordinator) RestoreSummarize(context.Context, string) error { return nil }
-
-func (s *runCoordinator) Summarize(context.Context, string, string) error {
-	return s.summarizeErr
-}
-
-func (s *runCoordinator) Model() agent.Model { return agent.Model{} }
-
-func (s *runCoordinator) UpdateModels(context.Context) error { return nil }
-
-func (s *runCoordinator) GenerateTitle(context.Context, string, string) {}
+func (s *runCoordinator) Model() agent.Model                             { return agent.Model{} }
+func (s *runCoordinator) UpdateModels(context.Context) error             { return nil }
+func (s *runCoordinator) SetInteractive(context.Context, bool) error     { return nil }
+func (s *runCoordinator) GenerateTitle(context.Context, string, string)  {}
 
 func (s *runCoordinator) SetMainAgent(agentName string) error {
 	s.lastMainAgentSet.Store(agentName)
@@ -287,4 +287,12 @@ func TestPostAgent_DetachesRequestContext(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return coord.ranCount.Load() == 1
 	}, 2*time.Second, 10*time.Millisecond)
+}
+
+func (s *runCoordinator) DeliverAgentMessage(ctx context.Context, msg agent.AgentMessage) error {
+	return errors.New("not implemented")
+}
+
+func (s *runCoordinator) DispatchLive(sessionID string) []dispatch.TodoSnapshot {
+	return nil
 }

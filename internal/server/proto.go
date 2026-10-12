@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/crush/internal/backend"
 	"github.com/charmbracelet/crush/internal/proto"
@@ -85,12 +87,71 @@ func (c *controllerV1) handlePostWorkspaces(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	_, result, err := c.backend.CreateWorkspace(args)
+	req, err := sanitizedWorkspaceRequest(args)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	_, result, err := c.backend.CreateWorkspace(req)
 	if err != nil {
 		c.handleError(w, r, err)
 		return
 	}
 	jsonEncode(w, result)
+}
+
+// sanitizedWorkspaceRequest rebuilds a decoded create-workspace request
+// with its directory fields cleaned. The workspace path and data dir
+// name directories this server reads and writes under (config, the
+// SQLite data dir, git metadata), so a ".." segment that survives
+// cleaning is refused rather than resolved: the caller spells the
+// directory out and the server does not navigate for it. The request is
+// rebuilt field by field rather than copied so the backend only ever
+// sees the cleaned paths; TestSanitizedWorkspaceRequestCopiesEveryField
+// fails when proto.Workspace gains a field this does not carry.
+func sanitizedWorkspaceRequest(args proto.Workspace) (proto.Workspace, error) {
+	path, err := cleanWorkspacePath("path", args.Path)
+	if err != nil {
+		return proto.Workspace{}, err
+	}
+	dataDir := ""
+	if args.DataDir != "" {
+		if dataDir, err = cleanWorkspacePath("data_dir", args.DataDir); err != nil {
+			return proto.Workspace{}, err
+		}
+	}
+	return proto.Workspace{
+		ID:               args.ID,
+		Path:             path,
+		YOLO:             args.YOLO,
+		Debug:            args.Debug,
+		DataDir:          dataDir,
+		Version:          args.Version,
+		ClientID:         args.ClientID,
+		Config:           args.Config,
+		Env:              args.Env,
+		Channels:         args.Channels,
+		AllowAllCommands: args.AllowAllCommands,
+		AllowedCommands:  args.AllowedCommands,
+		Skills:           args.Skills,
+	}, nil
+}
+
+// cleanWorkspacePath returns the cleaned form of a caller-supplied
+// directory path. It refuses an empty path and one that still contains
+// ".." after filepath.Clean: "a/../b" cleans to "b" and is accepted,
+// while a path that cannot be normalized away from a parent reference
+// is not. field names the request field in the error.
+func cleanWorkspacePath(field, raw string) (string, error) {
+	if raw == "" {
+		return "", fmt.Errorf("%s is required", field)
+	}
+	cleaned := filepath.Clean(raw)
+	if strings.Contains(cleaned, "..") {
+		return "", fmt.Errorf("%s must not contain \"..\"", field)
+	}
+	return cleaned, nil
 }
 
 // requireClientID reads the client_id query parameter and validates it
@@ -321,6 +382,45 @@ func (c *controllerV1) handleGetWorkspaceSession(w http.ResponseWriter, r *http.
 	out.IsBusy = isSessionBusy(ws, sess.ID)
 	out.AttachedClients = attachedClients(ws, sess.ID)
 	jsonEncode(w, out)
+}
+
+// handleGetWorkspaceSessionChildren lists the child sessions of a
+// session (#314).
+func (c *controllerV1) handleGetWorkspaceSessionChildren(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	sid := r.PathValue("sid")
+	sessions, err := c.backend.ListChildSessions(r.Context(), id, sid)
+	if err != nil {
+		c.handleError(w, r, err)
+		return
+	}
+	ws, _ := c.backend.GetWorkspace(id)
+	result := make([]proto.Session, len(sessions))
+	for i, s := range sessions {
+		result[i] = sessionToProto(s)
+		result[i].IsBusy = isSessionBusy(ws, s.ID)
+		result[i].AttachedClients = attachedClients(ws, s.ID)
+	}
+	jsonEncode(w, result)
+}
+
+// handleGetWorkspaceChildSessions lists every child session of every
+// parent in the workspace in one grouped query (#408).
+func (c *controllerV1) handleGetWorkspaceChildSessions(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	sessions, err := c.backend.ListAllChildSessions(r.Context(), id)
+	if err != nil {
+		c.handleError(w, r, err)
+		return
+	}
+	ws, _ := c.backend.GetWorkspace(id)
+	result := make([]proto.Session, len(sessions))
+	for i, s := range sessions {
+		result[i] = sessionToProto(s)
+		result[i].IsBusy = isSessionBusy(ws, s.ID)
+		result[i].AttachedClients = attachedClients(ws, s.ID)
+	}
+	jsonEncode(w, result)
 }
 
 // handleGetWorkspaceSessionHistory returns the history for a session.
@@ -811,6 +911,10 @@ func (c *controllerV1) handleError(w http.ResponseWriter, r *http.Request, err e
 		errors.Is(err, backend.ErrServerNotIdle),
 		errors.Is(err, backend.ErrClientRetired):
 		status = http.StatusConflict
+	case errors.Is(err, backend.ErrA2AHostNotRunning):
+		// 503: nothing has been dispatched in the workspace yet, so its
+		// agent host has not started. A later call can succeed.
+		status = http.StatusServiceUnavailable
 	case errors.Is(err, backend.ErrServerShuttingDown):
 		// 503, not 409: the request is not wrong, this process is just
 		// leaving. Clients retry against its replacement.

@@ -250,39 +250,30 @@ func TestUpdateAvailableMsgToProto_RoundTrip(t *testing.T) {
 	require.False(t, decoded.Payload.IsDevelopment)
 }
 
-// TestMCPStateChangedEventForwardsCounts verifies that the SSE envelope
-// carries prompt and resource counts, not only tool counts. The client TUI
-// renders all three, so dropping the other two made client/server mode
-// under-report what a connected server offers.
-func TestMCPStateChangedEventForwardsCounts(t *testing.T) {
+// TestMCPChannelMessageWrappedAsChannelEvent verifies that an
+// EventChannelMessage is wrapped as an SSE mcp_event carrying the rendered
+// channel body (fork: server-side channel routing). Upstream drops these
+// (no proto representation yet); this fork wires the channel_message proto
+// type and routes channel pushes to clients, so they must be forwarded.
+func TestMCPChannelMessageWrappedAsChannelEvent(t *testing.T) {
 	t.Parallel()
 
 	src := pubsub.Event[mcp.Event]{
-		Type: pubsub.UpdatedEvent,
+		Type: pubsub.CreatedEvent,
 		Payload: mcp.Event{
-			Type:  mcp.EventStateChanged,
-			Name:  "ctx",
-			State: mcp.StateConnected,
-			Counts: mcp.Counts{
-				Tools:     4,
-				Prompts:   2,
-				Resources: 3,
-			},
+			Type:           mcp.EventChannelMessage,
+			Name:           "webhook",
+			ChannelMessage: `<channel source="webhook">build failed</channel>`,
 		},
 	}
 
 	env := wrapEvent(src)
-	require.NotNil(t, env)
+	require.NotNil(t, env, "EventChannelMessage must be forwarded as an SSE event (fork: channel routing)")
 	require.Equal(t, pubsub.PayloadTypeMCPEvent, env.Type)
-
-	var decoded pubsub.Event[proto.MCPEvent]
-	require.NoError(t, json.Unmarshal(env.Payload, &decoded))
-	require.Equal(t, proto.MCPEventStateChanged, decoded.Payload.Type)
-	require.Equal(t, "ctx", decoded.Payload.Name)
-	require.Equal(t, proto.MCPStateConnected, decoded.Payload.State)
-	require.Equal(t, 4, decoded.Payload.ToolCount)
-	require.Equal(t, 2, decoded.Payload.PromptCount)
-	require.Equal(t, 3, decoded.Payload.ResourceCount)
+	var pe pubsub.Event[proto.MCPEvent]
+	require.NoError(t, json.Unmarshal(env.Payload, &pe))
+	require.Equal(t, proto.MCPEventChannelMessage, pe.Payload.Type)
+	require.Equal(t, `<channel source="webhook">build failed</channel>`, pe.Payload.ChannelMessage)
 }
 
 // TestMCPUnknownEventTypeNotMappedToStateChange verifies that any
@@ -327,3 +318,38 @@ func TestMessageToProtoPrismModel(t *testing.T) {
 }
 
 func ptrFloat(v float64) *float64 { return &v }
+
+// TestMCPStateChangedEventForwardsCounts verifies that the SSE envelope
+// carries prompt and resource counts, not only tool counts. The client TUI
+// renders all three, so dropping the other two made client/server mode
+// under-report what a connected server offers.
+func TestMCPStateChangedEventForwardsCounts(t *testing.T) {
+	t.Parallel()
+
+	src := pubsub.Event[mcp.Event]{
+		Type: pubsub.UpdatedEvent,
+		Payload: mcp.Event{
+			Type:  mcp.EventStateChanged,
+			Name:  "ctx",
+			State: mcp.StateConnected,
+			Counts: mcp.Counts{
+				Tools:     4,
+				Prompts:   2,
+				Resources: 3,
+			},
+		},
+	}
+
+	env := wrapEvent(src)
+	require.NotNil(t, env)
+	require.Equal(t, pubsub.PayloadTypeMCPEvent, env.Type)
+
+	var decoded pubsub.Event[proto.MCPEvent]
+	require.NoError(t, json.Unmarshal(env.Payload, &decoded))
+	require.Equal(t, proto.MCPEventStateChanged, decoded.Payload.Type)
+	require.Equal(t, "ctx", decoded.Payload.Name)
+	require.Equal(t, proto.MCPStateConnected, decoded.Payload.State)
+	require.Equal(t, 4, decoded.Payload.ToolCount)
+	require.Equal(t, 2, decoded.Payload.PromptCount)
+	require.Equal(t, 3, decoded.Payload.ResourceCount)
+}

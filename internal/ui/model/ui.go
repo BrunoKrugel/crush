@@ -23,11 +23,11 @@ import (
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
-	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/lipgloss/v2"
 	"charm.land/x/nerdfont"
+	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/agent/hyper"
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	agenttools "github.com/charmbracelet/crush/internal/agent/tools"
@@ -39,7 +39,6 @@ import (
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/event"
 	"github.com/charmbracelet/crush/internal/fsext"
-	"github.com/charmbracelet/crush/internal/herdr"
 	"github.com/charmbracelet/crush/internal/history"
 	"github.com/charmbracelet/crush/internal/home"
 	"github.com/charmbracelet/crush/internal/lsp"
@@ -60,6 +59,7 @@ import (
 	"github.com/charmbracelet/crush/internal/ui/logo"
 	"github.com/charmbracelet/crush/internal/ui/notification"
 	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/charmbracelet/crush/internal/ui/textarea"
 	"github.com/charmbracelet/crush/internal/ui/util"
 	"github.com/charmbracelet/crush/internal/version"
 	"github.com/charmbracelet/crush/internal/workspace"
@@ -68,6 +68,7 @@ import (
 	"github.com/charmbracelet/ultraviolet/screen"
 	"github.com/charmbracelet/x/editor"
 	xstrings "github.com/charmbracelet/x/exp/strings"
+	a2uievent "github.com/joestump-agent/a2tea/event"
 )
 
 // Compact mode breakpoints.
@@ -157,9 +158,12 @@ type shellStreamMsg struct {
 type (
 	// cancelTimerExpiredMsg is sent when the cancel timer expires.
 	cancelTimerExpiredMsg struct{}
-	// userCommandsLoadedMsg is sent when user commands are loaded.
+	// userCommandsLoadedMsg is sent when user commands are loaded. It also
+	// carries the skill catalog the command list was built from, so the
+	// '/' completions popup gets descriptions off the same single load.
 	userCommandsLoadedMsg struct {
-		Commands []commands.CustomCommand
+		Commands     []commands.CustomCommand
+		SkillEntries []skills.CatalogEntry
 	}
 	// mcpPromptsLoadedMsg is sent when mcp prompts are loaded.
 	mcpPromptsLoadedMsg struct {
@@ -169,6 +173,16 @@ type (
 	mcpStateChangedMsg struct {
 		states map[string]mcp.ClientInfo
 	}
+	// mcpRefreshTickMsg periodically re-seeds MCP client states, so servers
+	// that connected (and published their one and only EventStateChanged)
+	// eventually show up in the sidebar without any further event.
+	mcpRefreshTickMsg    struct{}
+	previewCheckpointMsg struct {
+		preview compaction.Preview
+	}
+
+	discardPreviewMsg struct{}
+
 	// skillsOverridesLoadedMsg carries the repository-scoped skill toggle
 	// sets after a workspace fetch so the sidebar and the toggles dialog
 	// can filter without blocking on workspace calls during render.
@@ -176,11 +190,6 @@ type (
 		disabled map[string]bool
 		enabled  map[string]bool
 	}
-	// mcpRefreshTickMsg periodically re-seeds MCP client states, so servers
-	// that connected (and published their one and only EventStateChanged)
-	// before the TUI's event subscription went live still appear in the
-	// sidebar instead of being stuck on "None" for the rest of the session.
-	mcpRefreshTickMsg struct{}
 	// sendMessageMsg is sent to send a message.
 	// currently only used for mcp prompts.
 	sendMessageMsg struct {
@@ -190,6 +199,12 @@ type (
 
 	// closeDialogMsg is sent to close the current dialog.
 	closeDialogMsg struct{}
+
+	// skillsRefreshedMsg is sent after a skill reload or toggle finishes so
+	// the skills dialog (if open) can refresh in place.
+	skillsRefreshedMsg struct {
+		info string
+	}
 
 	// hyperRefreshDoneMsg is sent after a silent Hyper OAuth refresh
 	// finishes. It carries the original model-selection action so the
@@ -213,6 +228,14 @@ type (
 		credits *int
 	}
 
+	// modelsDiscoveryReloadedMsg is sent after a model-discovery reload
+	// triggered from the /models dialog completes. It carries the number of
+	// newly discovered models (or an error) so the dialog can refresh its
+	// list and the user can be told what happened.
+	modelsDiscoveryReloadedMsg struct {
+		added int
+		err   error
+	}
 	// hyperCreditsPollMsg is sent by the Hyper credits poll timer.
 	hyperCreditsPollMsg struct{}
 
@@ -232,10 +255,6 @@ type UI struct {
 	com          *common.Common
 	session      *session.Session
 	sessionFiles []SessionFile
-
-	// wheelRemainder carries the fractional part of scaled wheel deltas so
-	// scroll speeds below 1 still accumulate into whole lines over time.
-	wheelRemainder float64
 
 	// keeps track of read files while we don't have a session id
 	sessionFileReads []string
@@ -302,16 +321,6 @@ type UI struct {
 
 	// isCanceling tracks whether the user has pressed escape once to cancel.
 	isCanceling bool
-	// summarizingNote is the in-flight status of a compaction, surfaced
-	// through the editor placeholder, and summarizingNoteSession is the
-	// session it belongs to. The pair rather than a bare string because a
-	// compaction keeps running when the user switches away, and its status
-	// must not follow them to the next session.
-	summarizingNote string
-	// pendingPreview is a checkpoint the user has been shown but has not yet
-	// accepted. The session still has its full history while it is set.
-	pendingPreview         *compaction.Preview
-	summarizingNoteSession string
 
 	// bangMode tracks whether the editor is in bang (!) shell mode.
 	bangMode     bool
@@ -347,11 +356,6 @@ type UI struct {
 	// Editor components
 	textarea textarea.Model
 
-	// textareaMouseSelecting tracks whether a mouse selection gesture is
-	// currently in progress within the textarea (left button held after a
-	// click inside the textarea region).
-	textareaMouseSelecting bool
-
 	// Active inline editor replaces the textarea when non-nil.
 	activeInline dialog.InlineEditor
 	// inlineCursor stores the cursor from the last inline editor
@@ -367,12 +371,83 @@ type UI struct {
 	// Completions state
 	completions              *completions.Completions
 	completionsOpen          bool
+	completionsTrigger       completions.Trigger
 	completionsStartIndex    int
 	completionsQuery         string
-	completionsPositionStart image.Point // x,y where user typed '@'
+	completionsPositionStart image.Point // x,y where user typed the trigger
+
+	// lastCompletionEnd tracks the end index of the most recently
+	// inserted completion text so that a single backspace can delete
+	// the entire inserted path/name at once instead of one character.
+	// lastCompletionText is the exact run that was inserted; the range
+	// is only honoured while the textarea still holds it, so a whole-value
+	// replacement (history recall, paste) cannot make a stale range point
+	// at unrelated text that happens to be the same length.
+	lastCompletionStart    int
+	lastCompletionEnd      int
+	lastCompletionText     string
+	lastCompletionFilePath string // non-empty when the last completion attached a file
+	// mentionAttachments maps a token in the prompt to the attachments it
+	// owns, so deleting the token can take the attachment with it. The
+	// value is a list because the same token text can appear more than
+	// once: two insertions of "/server:prompt" differ only in their
+	// resolved bodies, so each gets its own entry here and a backspace
+	// pops exactly one. Only tokens put entries here, so a pasted image
+	// or a dropped file — which has no token — is never touched.
+	mentionAttachments map[string][]string
+	// discardedMentions holds attachment keys whose token was deleted before
+	// the (asynchronous) read that produces the attachment came back. The
+	// attachment is dropped on arrival rather than landing as an orphan chip
+	// with nothing in the prompt referring to it.
+	discardedMentions map[string]bool
+	// promptAttachSeq makes each MCP prompt attachment's key unique, so
+	// inserting one prompt twice yields two independently removable chips.
+	promptAttachSeq int
+	// pendingPromptTrigger is the "/query" text still sitting in the editor
+	// while the arguments dialog is open. Cancelling the dialog takes it
+	// back out; without that the query lingers and — since prompt names
+	// validate "/" tokens — renders as a perfectly good prompt token with
+	// no body behind it.
+	pendingPromptTrigger struct {
+		start int
+		text  string
+	}
+
+	// promptHighlighter styles @file and /skill tokens inline as the user
+	// types. Installed on the textarea via SetHighlighter.
+	promptHighlighter *promptHighlighter
 
 	// Chat components
 	chat *Chat
+
+	// Inspect mode (#314): viewing a sub-agent's session read-only in
+	// the chat while the parent stays the active session. inspecting is
+	// nil when not inspecting. The scroll pair and follow flag are the
+	// parent chat state captured on entry and restored on exit.
+	// inspectRing enumerates the live agent blocks (in transcript order)
+	// at the moment inspect mode was entered; ctrl+] cycles it.
+	// inspectDispatchTargets marks which ring members are dispatch blocks
+	// (vs plain agent tools), so ctrl+x only offers a cancel for them.
+	// inspectSeq numbers inspect transitions so a child load that lands
+	// after a later one is dropped. inspectWindow holds the transition
+	// whose snapshot is in flight: its target session and the message
+	// events buffered for it until the snapshot lands (#406).
+	// inspectPending is a task session picked from the sessions dialog,
+	// waiting for its parent to load. inspectTask caches the viewed
+	// agent's workspace task (handle, role, status, current todo),
+	// resolved once per inspect load and refreshed by handleAgentTask —
+	// never per frame, which would be a workspace round-trip in
+	// client/server mode.
+	inspecting             *session.Session
+	inspectTask            *workspace.AgentTask
+	inspectScroll          [2]int
+	inspectFollow          bool
+	inspectRing            []string
+	inspectRingPos         int
+	inspectDispatchTargets map[string]bool
+	inspectSeq             int
+	inspectWindow          *inspectWindow
+	inspectPending         *session.Session
 
 	// onboarding state
 	onboarding struct {
@@ -417,21 +492,40 @@ type UI struct {
 	// skillsEnabledOverrides mirrors the repository-scoped enabled set
 	// (config-disabled skills re-enabled for this repository).
 	skillsEnabledOverrides map[string]bool
+	// pendingPreview holds a checkpoint the user has not accepted or
+	// discarded yet.
+	pendingPreview *compaction.Preview
+
+	// summarizingNote is the progress note publishedSummarizing last set,
+	// cleared when the compaction ends.
+	summarizingNote string
+
+	// summarizingNoteSession is the session the note belongs to, so another
+	// session's compaction never bleeds into this status line.
+	summarizingNoteSession string
+
+	// submissionGen/pendingSubmissions track in-flight submissions so the
+	// status bar can show work that is queued behind the current turn.
+	submissionGen      uint64
+	pendingSubmissions int
+	// sessionActivities tracks per-session optimistic busy state.
+	sessionActivities map[string]*sessionActivity
+	// turnStopPending waits for a stop request to land before the next submit.
+	turnStopPending bool
+
+	// wheelRemainder accumulates sub-line wheel scrolls so fractional speeds
+	// still scroll over successive events.
+	wheelRemainder float64
+
+	// skillCatalog is the effective visible skill set (post-override,
+	// post-disable) with frontmatter descriptions, refreshed alongside the
+	// custom commands. It backs the '/' completions popup.
+	skillCatalog []skills.CatalogEntry
 
 	// sidebarLogo keeps a cached version of the sidebar sidebarLogo.
 	sidebarLogo string
 
-	// Sidebar scroll state for virtual scrolling.
-	sidebarOffset           int  // current scroll offset in lines
-	sidebarScrollable       bool // true when sidebar content exceeds available height
-	sidebarScrollbarVisible bool
-	sidebarScrollbarSeq     int    // sequence number for auto-hide timer
-	sidebarMaxOffsetVal     int    // max scroll offset, computed in updateSidebarScrollState
-	sidebarContent          string // cached rendered sidebar content
-	sidebarTotalLines       int    // total lines in sidebarContent
-	sidebarContentHeight    int    // available height for sidebar content
-	sidebarContentWidth     int    // available width for sidebar content
-	sidebarDrawLogo         string // logo to render (may differ from sidebarLogo for short heights)
+	sidebarDrawLogo string // logo to render (may differ from sidebarLogo for short heights)
 
 	// Notification state
 	notifyBackend       notification.Backend
@@ -451,9 +545,8 @@ type UI struct {
 	detailsOpen bool
 
 	// pills state
-	pillsExpanded      bool
-	pillsAutoExpanded  bool
-	focusedPillSection pillSection
+	pillsExpanded     bool
+	pillsAutoExpanded bool
 	// promptQueue / promptQueueItems mirror the session's queued prompts.
 	// They are event-driven with a TTL backstop, fetched off-thread by
 	// dispatchPromptQueueRefresh (see workspace_cache.go); promptQueue is
@@ -462,13 +555,11 @@ type UI struct {
 	promptQueueItems     []string
 	promptQueueCheckedAt time.Time
 	promptQueueInFlight  bool
-	// promptQueueGen is bumped by every queue state transition; an
-	// in-flight fetch captures it at dispatch and its result is discarded
-	// if the generation has moved on (see workspace_cache.go).
-	promptQueueGen uint64
-	// agentBusyCache / yoloCache memoize the workspace busy and permission
-	// probes (synchronous HTTP round-trips in client/server mode). Reads
-	// never probe; refreshes happen off-thread (see workspace_cache.go).
+	// sessionBusyCache / agentBusyCache / yoloCache memoize the workspace
+	// busy and permission probes (synchronous HTTP round-trips in
+	// client/server mode). Reads never probe; refreshes happen off-thread
+	// (see workspace_cache.go).
+	sessionBusyCache  ttlCache
 	agentBusyCache    ttlCache
 	yoloCache         ttlCache
 	busyFetchInFlight bool
@@ -483,13 +574,17 @@ type UI struct {
 	// like promptQueueGen it lets a stale in-flight probe result be
 	// discarded and re-fetched instead of clobbering newer state.
 	busyFetchGen uint64
-	pillsView    string
-	// Keep optimistic busy state until local submissions reach the agent.
-	pendingSubmissions int
-	sessionActivities  map[string]*sessionActivity
-	// Cache refreshes do not supersede a completion or prove a turn ended.
-	submissionGen   uint64
-	turnStopPending bool
+	// promptQueueGen is bumped by every queue state transition; an
+	// in-flight fetch captures it at dispatch and its result is discarded
+	// if the generation has moved on (see workspace_cache.go).
+	promptQueueGen uint64
+	// sessionsChildrenGen is bumped every time the sessions picker is
+	// opened; the child-session batch fetched for it (#409) captures the
+	// generation at dispatch and is dropped if the picker was closed or
+	// reopened before the batch landed.
+	sessionsChildrenGen uint64
+	sidebarScroll       int
+	pillsView           string
 
 	// cronTasks holds the scheduled tasks for the current session,
 	// refreshed on session load and after cron tool results.
@@ -538,23 +633,19 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 	ta.DynamicHeight = true
 	ta.MinHeight = TextareaMinHeight
 	ta.MaxHeight = TextareaMaxHeight
-	// Keep "ctrl+a" for line-start (the textarea default); bind select-all
-	// to "ctrl+shift+a" instead (line-start is also available via "home").
-	ta.KeyMap.LineStart = key.NewBinding(
-		key.WithKeys("home", "ctrl+a"),
-		key.WithHelp("home", "line start"),
-	)
-	ta.KeyMap.SelectAll = key.NewBinding(
-		key.WithKeys("ctrl+shift+a"),
-		key.WithHelp("ctrl+shift+a", "select all"),
-	)
-	// Copying is handled by crush's keymap (Editor.CopySelection) so it can
-	// use crush's clipboard backend and user feedback; disable the
-	// textarea's built-in copy binding.
-	ta.KeyMap.CopySelection = key.NewBinding()
 	ta.Focus()
 
-	ch := NewChat(com, com.Config().Options.TUI.Scrollbar)
+	promptHL := newPromptHighlighter(
+		com.Styles.Editor.TokenFile,
+		com.Styles.Editor.TokenSkill,
+	)
+	ta.SetHighlighter(promptHL)
+
+	scrollbarMode := config.ScrollbarDefault
+	if cfg := com.Config(); cfg.Options.TUI != nil && cfg.Options.TUI.Scrollbar != "" {
+		scrollbarMode = cfg.Options.TUI.Scrollbar
+	}
+	ch := NewChat(com, scrollbarMode)
 
 	keyMap := DefaultKeyMap()
 
@@ -563,6 +654,7 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 		com.Styles.Completions.Normal,
 		com.Styles.Completions.Focused,
 		com.Styles.Completions.Match,
+		com.Styles.Completions.Agent,
 	)
 
 	todoSpinner := spinner.New(
@@ -592,6 +684,7 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 		completions:         comp,
 		attachments:         attachments,
 		todoSpinner:         todoSpinner,
+		promptHighlighter:   promptHL,
 		frames:              newFrameCache(frameCacheTTL, frameCacheMaxEntries),
 		lspStates:           make(map[string]workspace.LSPClientInfo),
 		mcpStates:           make(map[string]mcp.ClientInfo),
@@ -601,6 +694,7 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 		continueLastSession: continueLast,
 		skillStates:         skills.GetLatestStates(),
 	}
+	ui.refreshSkillNames()
 
 	status := NewStatus(com, ui)
 
@@ -638,10 +732,7 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 
 	desiredState := uiLanding
 	desiredFocus := uiFocusEditor
-	if !com.Config().IsConfigured() || !com.Config().HasSelectedModel(config.SelectedModelTypeLarge) {
-		// No provider, or providers are available but the user has never
-		// picked a model. Either way the model picker is the only thing
-		// standing between them and a usable session.
+	if !com.Config().IsConfigured() {
 		desiredState = uiOnboarding
 	} else if n, _ := com.Workspace.ProjectNeedsInitialization(); n {
 		desiredState = uiInitialize
@@ -658,26 +749,14 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 	ui.isTransparent = opts.TUI.IsTransparent()
 	// enable mouse support (default on)
 	ui.mouseEnabled = opts.TUI.Mouse == nil || *opts.TUI.Mouse
-	// apply the Nerd Font override before anything probes the terminal
-	applyNerdFontsOption(opts)
 
 	return ui
-}
-
-// applyNerdFontsOption wires the tui.nerd_fonts option into Nerd Font
-// detection: nil keeps automatic detection, and true or false force glyphs
-// on and off.
-func applyNerdFontsOption(opts *config.Options) {
-	if opts == nil || opts.TUI == nil || opts.TUI.NerdFonts == nil {
-		nerdfont.ClearOverride()
-		return
-	}
-	nerdfont.SetOverride(*opts.TUI.NerdFonts)
 }
 
 // Init initializes the UI model.
 func (m *UI) Init() tea.Cmd {
 	var cmds []tea.Cmd
+	cmds = append(cmds, mcpRefreshTick())
 	if m.state == uiOnboarding {
 		if cmd := m.openModelsDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -685,6 +764,14 @@ func (m *UI) Init() tea.Cmd {
 	}
 	// load the user commands async
 	cmds = append(cmds, m.loadCustomCommands())
+	// Load MCP prompts async. Without this they are only ever picked up
+	// from an mcp.EventStateChanged, which servers publish as they connect
+	// — normally before this model is subscribed to the bus. The event is
+	// then missed and m.mcpPrompts stays nil for the whole session, so the
+	// commands dialog hides its MCP Prompts category outright
+	// (commandsRadioView renders nothing when there are no user commands
+	// and no prompts) and every server's prompts are unreachable.
+	cmds = append(cmds, m.loadMCPrompts)
 	// Prime the memoized LSP state off-thread.
 	if cmd := m.requestLSPRefresh(); cmd != nil {
 		cmds = append(cmds, cmd)
@@ -719,7 +806,21 @@ func (m *UI) Init() tea.Cmd {
 	if m.com.IsHyper() {
 		cmds = append(cmds, m.fetchHyperCredits())
 	}
-	cmds = append(cmds, mcpRefreshTick())
+	// The branch is shown from the first frame on, so read it now and keep
+	// polling for checkouts made outside Crush.
+	cmds = append(cmds, m.fetchGitBranch(), m.gitBranchTicker())
+	cmds = append(cmds, m.hyperCreditsTicker())
+	// Prime the memoized MCP state off-thread. There is deliberately no
+	// wait for server-side MCP initialization: the init gate is
+	// process-local and only armed where mcp.Initialize runs (the server),
+	// so waiting here is a no-op in client/server mode. The retry loop and
+	// TTL backstop in mcp.go converge on the settled states instead.
+	if cmd := m.requestMCPRefresh(); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	// Tell the user about any agent definition the config load could
+	// not honor (#560); the load ran before anything could show it.
+	cmds = append(cmds, m.loadDiagnosticsNotice)
 	return tea.Batch(cmds...)
 }
 
@@ -730,7 +831,17 @@ func (m *UI) loadInitialSession() tea.Cmd {
 		// Only load if we're in landing state (i.e., fully configured)
 		return nil
 	case m.initialSessionID != "":
-		return m.loadSession(m.initialSessionID)
+		return func() tea.Msg {
+			sess, err := m.com.Workspace.GetSession(context.Background(), m.initialSessionID)
+			if err != nil {
+				return util.ReportError(err)
+			}
+			// Route through the picker handler (#413): a task session
+			// loads its parent as the active session and opens in the
+			// read-only inspect view; a top-level session loads as
+			// active, as before.
+			return m.handleSelectSession(sess)()
+		}
 	case m.continueLastSession:
 		return func() tea.Msg {
 			sessions, err := m.com.Workspace.ListSessions(context.Background())
@@ -774,13 +885,6 @@ func selectNotificationBackend(caps common.Capabilities, cfg *config.Config) not
 		case "bell":
 			slog.Debug("Using bell backend (user preference)")
 			return notification.NewBellBackend()
-		case "herdr":
-			if client := herdr.Init(); client != nil {
-				slog.Debug("Using herdr backend (user preference)")
-				return notification.NewHerdrBackend(client)
-			}
-			slog.Debug("Herdr backend unavailable outside a herdr pane; using OSC backend", "osc99_supported", caps.OSC99Notifications)
-			return notification.NewOSCBackend(notification.Icon, caps.OSC99Notifications)
 		case "disabled":
 			slog.Debug("Notifications disabled (user preference)")
 			return notification.NoopBackend{}
@@ -862,22 +966,8 @@ func (m *UI) loadCustomCommands() tea.Cmd {
 			slog.Error("Failed to load skill commands", "error", err)
 		}
 		customCommands = append(customCommands, commands.FromSkillCatalog(skillEntries)...)
-		return userCommandsLoadedMsg{Commands: customCommands}
+		return userCommandsLoadedMsg{Commands: customCommands, SkillEntries: skillEntries}
 	}
-}
-
-// scaledWheelLines converts a coalesced wheel delta into whole scroll lines
-// using the configured scroll speed multiplier. Fractional results below one
-// line are accumulated so sub-1 speeds still scroll over successive events.
-func (m *UI) scaledWheelLines(delta float64) int {
-	speed := config.DefaultScrollSpeed
-	if cfg := m.com.Config(); cfg != nil && cfg.Options != nil {
-		speed = cfg.Options.TUI.ScrollSpeedValue()
-	}
-	scaled := delta*speed + m.wheelRemainder
-	lines := int(scaled)
-	m.wheelRemainder = scaled - float64(lines)
-	return lines
 }
 
 // applyChatScroll scrolls the chat by lines and, if the selection is then
@@ -961,12 +1051,25 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil && !errors.Is(msg.err, context.Canceled) {
 			cmds = append(cmds, util.ReportError(msg.err))
 		}
-	case summaryFinishedMsg:
-		cmds = append(cmds, m.submissionFinished(msg.sessionID, msg.gen, msg.err, true))
-		if errors.Is(msg.err, context.Canceled) {
-			cmds = append(cmds, util.ReportInfo("Summary cancelled"))
-		} else if msg.err != nil {
-			cmds = append(cmds, util.ReportError(msg.err))
+		if msg.err == nil && msg.sessionID == m.currentSessionID() {
+			// A fresh submission resets the outcome display so a stale
+			// done/error from the previous turn does not linger.
+			m.turnOutcome = ""
+		}
+		// A prompt was just accepted (run started or enqueued): fetch the
+		// authoritative busy/queue state to confirm the optimistic values
+		// sendMessage wrote.
+		m.invalidateBusyCaches()
+		m.invalidatePromptQueue()
+		if cmd := m.dispatchBusyRefresh(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		if cmd := m.dispatchPromptQueueRefresh(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	case sessionChildrenLoadedMsg:
+		if cmd := m.applySessionChildren(msg); cmd != nil {
+			cmds = append(cmds, cmd)
 		}
 	case completionCheckedMsg:
 		activity := m.sessionActivities[msg.notification.SessionID]
@@ -988,23 +1091,55 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			activity.completion = nil
 			m.pruneActivity(msg.notification.SessionID)
 		}
+	case previewCheckpointMsg:
+		// Hold the staged checkpoint and ask about it in the foreground: the
+		// inline prompt waits for an answer instead of leaving the decision
+		// to be remembered.
+		m.pendingPreview = &msg.preview
+		cmds = append(cmds, util.ReportInfo(fmt.Sprintf(
+			"Checkpoint previewed: %d messages would be replaced, %d kept verbatim.",
+			msg.preview.Replaced, msg.preview.Kept,
+		)))
+		m.openCheckpointHandoff()
+	case discardPreviewMsg:
+		m.pendingPreview = nil
+		// Every decision - keep, discard, whatever the path - lands here, so
+		// the reload does too: the feed then reflects the session as it is,
+		// not as it was while a staged checkpoint was still a row.
+		if m.session != nil {
+			cmds = append(cmds, m.loadSession(m.session.ID))
+		}
+	case skillsOverridesLoadedMsg:
+		m.skillsDisabledOverrides = msg.disabled
+		m.skillsEnabledOverrides = msg.enabled
+		if dia := m.dialog.Dialog(dialog.SkillsTogglesID); dia != nil {
+			if toggles, ok := dia.(*dialog.SkillToggles); ok {
+				toggles.SetItems(m.skillsTogglesList())
+			}
+		}
 	case loadSessionMsg:
+		m.turnOutcome = ""
 		if m.forceCompactMode {
 			m.isCompact = true
 		}
+		// The active session is changing: any inspect view belonged to
+		// the previous transcript and must not survive the switch (#314).
+		// A task session picked under this parent opens once it is on
+		// screen.
+		m.clearInspectState()
+		inspectPending := m.takeInspectPending(msg.session.ID)
 		// Plan mode is scoped to the session it was enabled in: switching
 		// to another session falls back to code mode and drops any pending
 		// plan handoff. (Loading the session that was just created for the
 		// first plan-mode prompt is not a switch; the IDs match then.)
 		if m.session == nil || m.session.ID != msg.session.ID {
-			m.turnOutcome = ""
 			if cmd := m.resetPlanModeState(); cmd != nil {
 				cmds = append(cmds, cmd)
 			}
 		}
 		m.setState(uiChat, m.focus)
 		m.session = msg.session
-		m.sidebarOffset = 0
+		m.sidebarScroll = 0
 		m.sessionFiles = msg.files
 		// Session switch: the memoized busy state and queued prompts
 		// belong to the previous session. Drop them and re-fetch
@@ -1052,6 +1187,9 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.loadPromptHistory())
 		m.refreshCronTasks()
 		m.updateLayoutAndSize()
+		if inspectPending != nil {
+			cmds = append(cmds, m.enterInspect(agentBlockRef{sessionID: inspectPending.ID}))
+		}
 
 	case sessionFilesUpdatesMsg:
 		m.sessionFiles = msg.sessionFiles
@@ -1061,6 +1199,25 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, m.startLSPs(paths))
 
+	case inspectSessionLoadedMsg:
+		// Inspect mode (#314): the child transcript fetch came back.
+		if cmd := m.handleInspectLoaded(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
+	case inspectRestoreMsg:
+		// Inspect mode exit (#314): the parent transcript came back.
+		if cmd := m.handleInspectRestore(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
+	case inspectFetchFailedMsg:
+		// Inspect transition fetch failed (#406): close the pending
+		// window so later events apply normally.
+		if cmd := m.handleInspectFetchFailed(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
 	case modeSwitchedMsg:
 		m.modeSwitching = false
 		cmds = append(cmds, m.applyModeSwitch(msg)...)
@@ -1068,8 +1225,25 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sendMessageMsg:
 		cmds = append(cmds, m.sendMessage(msg.Content, msg.Attachments...))
 
+	case a2uievent.ButtonClicked:
+		// A button on a live A2UI surface was activated (#45): retire the
+		// surface and, unless the button reads as a cancel, turn the
+		// submission into a new agent turn.
+		if cmd := m.handleA2UIButtonClicked(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
+	case a2uiActionResultMsg:
+		// An a2ui_action round-trip returned: update the originating
+		// surface in place (or land plain text) without an agent turn.
+		if cmd := m.handleA2UIActionResult(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
 	case userCommandsLoadedMsg:
 		m.customCommands = msg.Commands
+		m.skillCatalog = msg.SkillEntries
+		m.refreshSkillNames()
 		dia := m.dialog.Dialog(dialog.CommandsID)
 		if dia == nil {
 			break
@@ -1081,7 +1255,6 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case mcpStateChangedMsg:
-		cmds = append(cmds, m.applyMCPStates(msg)...)
 		if dia := m.dialog.Dialog(dialog.MCPTogglesID); dia != nil {
 			if toggles, ok := dia.(*dialog.MCPToggles); ok {
 				for name, info := range msg.states {
@@ -1089,14 +1262,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-	case skillsOverridesLoadedMsg:
-		m.skillsDisabledOverrides = msg.disabled
-		m.skillsEnabledOverrides = msg.enabled
-		if dia := m.dialog.Dialog(dialog.SkillsTogglesID); dia != nil {
-			if toggles, ok := dia.(*dialog.SkillToggles); ok {
-				toggles.SetItems(m.skillsTogglesList())
-			}
-		}
+		cmds = append(cmds, m.applyMCPStates(msg)...)
 	case mcpStartingRetryMsg:
 		// A server was still connecting when the last fetch landed; re-probe
 		// so "starting..." converges without depending on state_changed
@@ -1104,10 +1270,17 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cmd := m.requestMCPRefresh(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
-	case mcpRefreshTickMsg:
-		return m, tea.Batch(m.refreshMCPStates(), mcpRefreshTick())
+	case promptResolveFailedMsg:
+		m.removePromptToken(msg.start, msg.text)
+		if msg.err != nil {
+			cmds = append(cmds, util.ReportError(fmt.Errorf(
+				"could not resolve /%s: %w", msg.name, msg.err)))
+		}
 	case mcpPromptsLoadedMsg:
 		m.mcpPrompts = msg.Prompts
+		// Prompt names validate "/" tokens in the editor just as skill names
+		// do, so the known-name set has to move when the prompts do.
+		m.refreshSkillNames()
 		dia := m.dialog.Dialog(dialog.CommandsID)
 		if dia == nil {
 			break
@@ -1126,6 +1299,14 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case closeDialogMsg:
 		m.dialog.CloseFrontDialog()
 
+	case skillsRefreshedMsg:
+		// Refresh the skills dialog in place (if it is still open) so the
+		// toggled/reloaded state shows up without slamming the dialog shut.
+		if skillsDialog, ok := m.dialog.Dialog(dialog.SkillsID).(*dialog.Skills); ok {
+			skillsDialog.Refresh()
+		}
+		return m, util.ReportInfo(msg.info)
+
 	case pubsub.Event[session.Session]:
 		if msg.Type == pubsub.DeletedEvent {
 			if m.session != nil && m.session.ID == msg.Payload.ID {
@@ -1138,6 +1319,10 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.session != nil && msg.Payload.ID == m.session.ID {
 			prevHasInProgress := hasInProgressTodo(m.session.Todos)
 			prevPillsHeight := m.pillsAreaHeight()
+			// Session rows update constantly during a run (token
+			// accounting, title, todos); deliberately no busy/queue
+			// refresh here — run boundaries are signaled by message
+			// CreatedEvents and agent-finished notifications.
 			m.updateHyperCredits()
 			m.session = &msg.Payload
 			if !prevHasInProgress && hasInProgressTodo(m.session.Todos) {
@@ -1163,10 +1348,72 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.session == nil {
 			break
 		}
+		if m.inspectWindow != nil && msg.Payload.SessionID == m.inspectWindow.sessionID {
+			// An inspect transition's snapshot is in flight (#406):
+			// buffer the target's events and replay them when it lands,
+			// so nothing races the transcript swap. Each kind keeps its
+			// usual live feed while the window is open.
+			switch {
+			case msg.Payload.SessionID == m.session.ID:
+				// Exit window: the chat still shows the child, so parent
+				// events stay off screen until the restore lands. Busy
+				// and queue state still refresh.
+				if msg.Type == pubsub.CreatedEvent {
+					m.invalidateBusyCaches()
+					m.invalidatePromptQueue()
+					if cmd := m.dispatchBusyRefresh(); cmd != nil {
+						cmds = append(cmds, cmd)
+					}
+					if cmd := m.dispatchPromptQueueRefresh(); cmd != nil {
+						cmds = append(cmds, cmd)
+					}
+				}
+			case m.isInspecting() && msg.Payload.SessionID == m.inspectingSessionID():
+				// Reloading the viewed child (a wrap in the cycle):
+				// keep painting live.
+				if cmd := m.handleInspectChildMessage(msg); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			default:
+				// Entering, or cycling to another child: the chat shows
+				// the parent or the previous child; the target's events
+				// feed the parent's agent blocks as usual.
+				if cmd := m.handleChildSessionMessage(msg); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+			m.inspectWindow.events = append(m.inspectWindow.events, msg)
+			break
+		}
 		if msg.Payload.SessionID != m.session.ID {
+			// While inspecting, the viewed child's own messages feed the
+			// chat (live follow, #314) instead of only nesting into the
+			// parent's block.
+			if m.isInspecting() && msg.Payload.SessionID == m.inspectingSessionID() {
+				if cmd := m.handleInspectChildMessage(msg); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				break
+			}
 			// This might be a child session message from an agent tool.
 			if cmd := m.handleChildSessionMessage(msg); cmd != nil {
 				cmds = append(cmds, cmd)
+			}
+			break
+		}
+		if m.isInspecting() {
+			// Parent activity while inspecting: keep busy/queue state
+			// fresh, but leave the chat alone. It shows the inspected
+			// child; the parent transcript is rebuilt on exit.
+			if msg.Type == pubsub.CreatedEvent {
+				m.invalidateBusyCaches()
+				m.invalidatePromptQueue()
+				if cmd := m.dispatchBusyRefresh(); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				if cmd := m.dispatchPromptQueueRefresh(); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
 			}
 			break
 		}
@@ -1191,21 +1438,25 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.updateSessionMessage(msg.Payload))
 		case pubsub.DeletedEvent:
 			m.chat.RemoveMessage(msg.Payload.ID)
-			m.chat.RemoveMessage(chat.AssistantInfoID(msg.Payload.ID))
 		}
 		// start the spinner if there is a new message
-		if hasInProgressTodo(m.session.Todos) && m.isAgentBusy() && !m.todoIsSpinning {
+		if hasInProgressTodo(m.session.Todos) && m.isCurrentSessionBusy() && !m.todoIsSpinning {
 			m.todoIsSpinning = true
 			cmds = append(cmds, m.todoSpinner.Tick)
 		}
 		// stop the spinner if the agent is not busy anymore
-		if m.todoIsSpinning && !m.isAgentBusy() {
+		if m.todoIsSpinning && !m.isCurrentSessionBusy() {
 			m.todoIsSpinning = false
 		}
 		// there is a number of things that could change the pills here so we want to re-render
 		m.renderPills()
 	case pubsub.Event[history.File]:
 		cmds = append(cmds, m.handleFileEvent(msg.Payload))
+	case pubsub.Event[workspace.AgentTask]:
+		// A dispatched agent's live state from the agent surface (#65,
+		// #421): it updates the dispatch agent block wherever it renders,
+		// not only for the loaded session.
+		m.handleAgentTask(msg.Payload)
 	case pubsub.Event[app.LSPEvent]:
 		// Refresh the memoized LSP state off-thread: LSPGetStates is a
 		// synchronous HTTP round-trip in client/server mode and diagnostics
@@ -1219,6 +1470,12 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case pubsub.Event[skills.Event]:
 		m.skillStates = msg.Payload.States
+		m.refreshSkillNames()
+		// Discovery states carry no descriptions and no override/disable
+		// resolution, so re-read the catalog too: a ctrl+r reload in the
+		// skills dialog must move both the command palette and the '/'
+		// completions popup.
+		cmds = append(cmds, m.loadCustomCommands())
 	case pubsub.Event[mcp.Event]:
 		switch msg.Payload.Type {
 		case mcp.EventStateChanged:
@@ -1264,27 +1521,6 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.sendProgressBar = xstrings.ContainsAnyOf(termVersion, "ghostty", "iterm2", "rio")
 		}
 		return m, nil
-	case previewCheckpointMsg:
-		// Hold the staged checkpoint and ask about it in the foreground. A
-		// banner that expired left the decision to be remembered, and a staged
-		// checkpoint rendered in the transcript looked exactly like an applied
-		// one; the inline prompt waits for an answer instead.
-		m.pendingPreview = &msg.preview
-		cmds = append(cmds, util.ReportInfo(fmt.Sprintf(
-			"Checkpoint previewed: %d messages would be replaced, %d kept verbatim.",
-			msg.preview.Replaced, msg.preview.Kept,
-		)))
-		m.openCheckpointHandoff()
-	case discardPreviewMsg:
-		m.pendingPreview = nil
-		// Every decision - keep, discard, whatever the path - lands here, so
-		// the reload does too: the feed then reflects the session as it is,
-		// not as it was while a staged checkpoint was still a row. Skipping
-		// this left the viewport scrolled past content that had just been
-		// deleted, which read as an empty page.
-		if m.session != nil {
-			cmds = append(cmds, m.loadSession(m.session.ID))
-		}
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		// Suppress the chat's full-height scan during the resize so a drag
@@ -1306,8 +1542,10 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case copyChatHighlightMsg:
 		cmds = append(cmds, m.copyChatHighlight())
 	case DelayedClickMsg:
-		// Handle delayed single-click action (e.g., expansion).
-		m.chat.HandleDelayedClick(msg)
+		// Handle delayed single-click action (e.g., expansion, copy).
+		if _, cmd := m.chat.HandleDelayedClick(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	case tea.MouseClickMsg:
 		// Pass mouse events to dialogs first if any are open.
 		if m.dialog.HasDialogs() {
@@ -1355,15 +1593,6 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Forward clicks within the textarea region to the textarea so it
-		// can position the cursor and start a selection.
-		if m.activeInline == nil {
-			if handled, cmd := m.forwardMouseToTextarea(msg); handled {
-				cmds = append(cmds, cmd)
-				return m, tea.Batch(cmds...)
-			}
-		}
-
 		switch m.state {
 		case uiChat:
 			x, y := msg.X, msg.Y
@@ -1400,15 +1629,6 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					clickable.SetHover(msg.X, msg.Y)
 				}
 			}
-		}
-
-		// While a mouse selection is in progress in the textarea, forward
-		// motion events to it and skip chat drag handling.
-		if m.activeInline == nil && m.textareaMouseSelecting {
-			if handled, cmd := m.forwardMouseToTextarea(msg); handled {
-				cmds = append(cmds, cmd)
-			}
-			return m, tea.Batch(cmds...)
 		}
 
 		switch m.state {
@@ -1457,15 +1677,6 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// End any in-progress textarea mouse selection.
-		if m.activeInline == nil && m.textareaMouseSelecting {
-			m.textareaMouseSelecting = false
-			if handled, cmd := m.forwardMouseToTextarea(msg); handled {
-				cmds = append(cmds, cmd)
-			}
-			return m, tea.Batch(cmds...)
-		}
-
 		switch m.state {
 		case uiChat:
 			x, y := msg.X, msg.Y
@@ -1498,27 +1709,20 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 
-		// Otherwise handle mouse wheel for chat. The coalesced delta is
-		// scaled by the configured scroll speed before being used as the line
-		// count. Terminals like Ghostty send DeltaY=3 per physical wheel tick
-		// (matching their native scrollback), while others send DeltaY=1.
+		// Otherwise handle mouse wheel for chat. Use the coalesced delta
+		// directly as the line count. Terminals like Ghostty send DeltaY=3
+		// per physical wheel tick (matching their native scrollback), while
+		// others send DeltaY=1.
 		switch m.state {
 		case uiChat:
-			// When sidebar is focused, route wheel events to sidebar scrolling.
-			if m.focus == uiFocusSidebar {
-				lines := m.scaledWheelLines(msg.DeltaY)
-				if lines != 0 {
-					m.sidebarOffset = max(0, min(m.sidebarOffset+lines, m.sidebarMaxOffsetVal))
-					m.sidebarScrollbarSeq++
-					m.sidebarScrollbarVisible = true
-					cmds = append(cmds, sidebarScrollbarHideCmd(m.sidebarScrollbarSeq))
-				}
+			// Route wheel events to the sidebar if the cursor is over it.
+			if m.scrollSidebarOnWheel(msg) {
 				break
 			}
 			if msg.DeltaX != 0 {
 				m.chat.ScrollSelectedShellHorizontal(int(msg.DeltaX))
 			}
-			lines := m.scaledWheelLines(msg.DeltaY)
+			lines := int(msg.DeltaY)
 			if lines == 0 {
 				break
 			}
@@ -1548,10 +1752,6 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateLayoutAndSize()
 			}
 		}
-	case sidebarScrollbarHideMsg:
-		if msg.seq == m.sidebarScrollbarSeq && m.focus != uiFocusSidebar {
-			m.sidebarScrollbarVisible = false
-		}
 	case spinner.TickMsg:
 		if m.dialog.HasDialogs() {
 			// route to dialog
@@ -1580,6 +1780,11 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, tea.Batch(cmds...)
 			}
+		}
+		// The editor is read-only while inspecting (#415): pasted text
+		// would land in the hidden parent's draft.
+		if m.isInspecting() {
+			return m, tea.Batch(cmds...)
 		}
 		if cmd := m.handlePasteMsg(msg); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -1638,6 +1843,32 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case creditsUpdatedMsg:
 		m.hyperCredits = msg.credits
+	case modelsDiscoveryReloadedMsg:
+		if msg.err != nil {
+			cmds = append(cmds, util.ReportError(msg.err))
+			break
+		}
+		if msg.added == 0 {
+			// Nothing was added, so skip the list rebuild. (Enrichment
+			// could in theory tweak metadata on existing models, but that
+			// is not worth resetting the dialog's list state for.)
+			cmds = append(cmds, util.ReportInfo("No new models found"))
+			break
+		}
+		// Refresh the models dialog in place if it's still open.
+		if d := m.dialog.Dialog(dialog.ModelsID); d != nil {
+			if md, ok := d.(*dialog.Models); ok {
+				if err := md.ReloadItems(); err != nil {
+					cmds = append(cmds, util.ReportError(err))
+					break
+				}
+			}
+		}
+		label := "models"
+		if msg.added == 1 {
+			label = "model"
+		}
+		cmds = append(cmds, util.ReportInfo(fmt.Sprintf("Discovered %d new %s", msg.added, label)))
 	case hyperCreditsPollMsg:
 		// While a session runs every response refreshes the balance, so
 		// the poll only has to cover idle time. Re-arm it either way: the
@@ -1677,8 +1908,10 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case util.ClearStatusMsg:
 		m.status.ClearInfoMsg()
 	case completions.CompletionItemsLoadedMsg:
-		if m.completionsOpen {
-			m.completions.SetItems(msg.Files, msg.Resources)
+		// Guard against a stale async file load landing after the popup
+		// switched to (or was reopened in) skill mode.
+		if m.completionsOpen && m.completionsTrigger == completions.TriggerFile {
+			m.completions.SetItems(msg.Files, msg.Resources, m.agentCompletionValues())
 		}
 	case uv.KittyGraphicsEvent:
 		if !bytes.HasPrefix(msg.Payload, []byte("OK")) {
@@ -1717,7 +1950,14 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.bangMode {
 			m.textarea.Placeholder = "Run a shell command"
 		} else if m.compactionVisible() {
+			// A running compaction owns the placeholder so its progress
+			// shows instead of the generic working text.
 			m.textarea.Placeholder = m.summarizingNote
+		} else if m.isInspecting() {
+			// Inspecting a sub-agent (#314): the editor is read-only
+			// (#415), so the placeholder names the viewed agent and the
+			// way back.
+			m.textarea.Placeholder = m.inspectPlaceholder()
 		} else if m.isAgentBusy() {
 			m.textarea.Placeholder = m.workingPlaceholder
 		} else if m.mode == uiInputModePlan {
@@ -1725,7 +1965,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.textarea.Placeholder = m.readyPlaceholder
 		}
-		if m.summarizingNote == "" && !m.bangMode && m.mode != uiInputModePlan && m.yoloModeCached() {
+		if !m.bangMode && m.mode != uiInputModePlan && m.yoloModeCached() {
 			m.textarea.Placeholder = "Go crazy"
 		}
 	}
@@ -1740,6 +1980,14 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// at this point this can only handle [message.Attachment] message, and we
 	// should return all cmds anyway.
+	//
+	// A read that finishes after its mention was deleted is dropped: the
+	// chip would otherwise appear with nothing in the prompt referring to
+	// it, and no later edit could remove it.
+	if att, ok := msg.(message.Attachment); ok && m.discardedMentions[att.FilePath] {
+		delete(m.discardedMentions, att.FilePath)
+		return m, tea.Batch(cmds...)
+	}
 	if m.attachments.Update(msg) {
 		m.invalidateFrames()
 	}
@@ -1809,10 +2057,12 @@ func (m *UI) setSessionMessages(msgs []message.Message) tea.Cmd {
 			items = append(items, chat.ExtractMessageItems(m.com.Styles, msg, toolResultMap, m.com.Workspace.WorkingDir())...)
 		}
 	}
+	m.stampInspectAgentLabels(items...)
 
 	// Load nested tool calls for agent/agentic_fetch tools.
 	m.loadNestedToolCalls(items)
 	m.setMessagePlanFlags(items)
+	m.seedAgentTasks(items)
 
 	// If the user switches between sessions while the agent is working we
 	// want to make sure the animations are shown. Gate on the agent actually
@@ -1902,6 +2152,14 @@ func (m *UI) loadNestedToolCalls(items []chat.MessageItem) {
 		}
 		nestedToolResultMap := chat.BuildToolResultMap(nestedMsgPtrs)
 
+		// A dispatch block rebuilds its steer log from the persisted
+		// child transcript (#410): Steer-marked user messages are steers,
+		// so the record survives reloads, session switches, and inspect
+		// round-trips.
+		if dispatchBlock, ok := nestedContainer.(*chat.DispatchToolMessageItem); ok {
+			dispatchBlock.RebuildSteers(nestedMsgs)
+		}
+
 		// Extract nested tool items.
 		var nestedTools []chat.ToolMessageItem
 		for _, nestedMsg := range nestedMsgPtrs {
@@ -1987,6 +2245,7 @@ func (m *UI) appendSessionMessage(msg message.Message) tea.Cmd {
 		}
 		if chat.ShouldShowAssistantInfo(&msg) {
 			infoItem := chat.NewAssistantInfoItem(m.com.Styles, &msg, m.com.Config(), time.Unix(m.lastUserMessageTime, 0))
+			m.stampInspectAgentLabels(infoItem)
 			m.chat.AppendMessages(infoItem)
 			if m.chat.Follow() {
 				m.chat.ScrollToBottom()
@@ -2007,7 +2266,7 @@ func (m *UI) appendSessionMessage(msg message.Message) tea.Cmd {
 				// Refresh cron tasks after a cron tool result so the
 				// pill stays current.
 				toolName := toolMsgItem.ToolCall().Name
-				if toolName == agenttools.CronCreateToolName || toolName == agenttools.CronListToolName || toolName == agenttools.CronDeleteToolName {
+				if toolName == "CronCreate" || toolName == "CronList" || toolName == "CronDelete" {
 					m.refreshCronTasks()
 				}
 			}
@@ -2020,10 +2279,8 @@ func (m *UI) handleClickFocus(msg tea.MouseClickMsg) (cmd tea.Cmd) {
 	switch {
 	case m.state != uiChat:
 		return nil
-	case m.focus != uiFocusSidebar && image.Pt(msg.X, msg.Y).In(m.layout.sidebar) && m.sidebarScrollable:
-		m.focus = uiFocusSidebar
-		m.textarea.Blur()
-		m.chat.Blur()
+	case image.Pt(msg.X, msg.Y).In(m.layout.sidebar):
+		m.focusSidebar()
 		return nil
 	case m.focus != uiFocusEditor && image.Pt(msg.X, msg.Y).In(m.layout.editor):
 		if m.activeInline != nil {
@@ -2033,7 +2290,7 @@ func (m *UI) handleClickFocus(msg tea.MouseClickMsg) (cmd tea.Cmd) {
 			cmd = m.textarea.Focus()
 			m.chat.Blur()
 		}
-		m.sidebarScrollbarVisible = false
+		m.chat.Blur()
 	case m.focus != uiFocusMain && image.Pt(msg.X, msg.Y).In(m.layout.main):
 		if m.activeInline != nil {
 			m.focusActiveInline(uiFocusMain)
@@ -2042,7 +2299,6 @@ func (m *UI) handleClickFocus(msg tea.MouseClickMsg) (cmd tea.Cmd) {
 			m.textarea.Blur()
 			m.chat.Focus()
 		}
-		m.sidebarScrollbarVisible = false
 	}
 	return cmd
 }
@@ -2107,6 +2363,7 @@ func (m *UI) updateSessionMessage(msg message.Message) tea.Cmd {
 	if infoItem := m.chat.MessageItem(chat.AssistantInfoID(msg.ID)); chat.ShouldShowAssistantInfo(&msg) {
 		if infoItem == nil {
 			newInfoItem := chat.NewAssistantInfoItem(m.com.Styles, &msg, m.com.Config(), time.Unix(m.lastUserMessageTime, 0))
+			m.stampInspectAgentLabels(newInfoItem)
 			m.chat.AppendMessages(newInfoItem)
 		}
 	} else if infoItem != nil {
@@ -2129,6 +2386,16 @@ func (m *UI) updateSessionMessage(msg message.Message) tea.Cmd {
 		}
 	}
 
+	// A Tool-role update can carry results the card has never seen —
+	// the dispatch terminal record stamped after the fact (#410) — so
+	// apply them like the created path does, or a client/server card
+	// would spin forever on a finished dispatch.
+	for _, tr := range msg.ToolResults() {
+		if toolItem, ok := m.chat.MessageItem(tr.ToolCallID).(chat.ToolMessageItem); ok && toolItem != nil {
+			toolItem.SetResult(&tr)
+		}
+	}
+
 	m.chat.AppendMessages(items...)
 	if m.chat.Follow() {
 		m.chat.ScrollToBottom()
@@ -2142,17 +2409,30 @@ func (m *UI) updateSessionMessage(msg message.Message) tea.Cmd {
 func (m *UI) handleChildSessionMessage(event pubsub.Event[message.Message]) tea.Cmd {
 	var cmds []tea.Cmd
 
-	// Only process messages with tool calls or results.
-	if len(event.Payload.ToolCalls()) == 0 && len(event.Payload.ToolResults()) == 0 {
-		return nil
-	}
-
 	// Check if this is an agent tool session and parse it.
 	childSessionID := event.Payload.SessionID
 	_, toolCallID, ok := m.com.Workspace.ParseAgentToolSessionID(childSessionID)
 	if !ok {
 		return nil
 	}
+	// Nested tool activity means the agent is running; the animation clock
+	// may have been frozen by a non-busy session reload.
+	m.chat.SetAnimationsAllowed(true)
+
+	// Child sessions created by dispatch_agent also carry conversation —
+	// injected steers and the running agent's replies (#312) — which the
+	// dispatch block records alongside its nested tool activity.
+	if item := m.chat.MessageItem(toolCallID); item != nil {
+		if block, ok := item.(*chat.DispatchToolMessageItem); ok {
+			m.feedDispatchConversation(block, event)
+		}
+	}
+
+	// Only the tool-call machinery below needs tool calls or results.
+	if len(event.Payload.ToolCalls()) == 0 && len(event.Payload.ToolResults()) == 0 {
+		return nil
+	}
+
 	// Nested tool activity means the agent is running; the animation clock
 	// may have been frozen by a non-busy session reload.
 	m.chat.SetAnimationsAllowed(true)
@@ -2227,6 +2507,107 @@ func (m *UI) handleChildSessionMessage(event pubsub.Event[message.Message]) tea.
 	return tea.Sequence(cmds...)
 }
 
+// feedDispatchConversation feeds child-session conversation events into
+// the dispatch block (#312): a user message that is not the initial
+// dispatch prompt is a steer — a message injected into the running agent
+// — and each assistant message's text is the running agent's latest
+// answer, streaming as the message grows. The steer and its answer are
+// what "the response streams back to the parent chat" renders: the block
+// is the only sub-agent surface.
+func (m *UI) feedDispatchConversation(block *chat.DispatchToolMessageItem, event pubsub.Event[message.Message]) {
+	msg := event.Payload
+	switch msg.Role {
+	case message.User:
+		// Only Steer-marked messages are steers (#410): the dispatch's
+		// initial prompt and persisted todo nudges are plain user
+		// messages and must never appear on the card.
+		content := msg.Content()
+		if !content.Steer || content.Text == "" {
+			return
+		}
+		block.AddSteer(content.Text)
+	case message.Assistant:
+		text := msg.Content().Text
+		if text == "" {
+			return
+		}
+		if !block.UpdateSteerAnswer(msg.ID, text) {
+			return
+		}
+	default:
+		return
+	}
+	// Live dispatch activity means the animation clock must run even when
+	// the loaded session is idle.
+	m.chat.SetAnimationsAllowed(true)
+	if m.chat.Follow() {
+		m.chat.ScrollToBottom()
+		m.chat.SelectLast()
+	}
+}
+
+// handleAgentTask feeds one dispatched agent's live state (#65, #421)
+// into the matching agent block. The task's session ID is the child task
+// session the dispatch_agent tool call created, and it parses back to
+// that tool call's ID — the block's list ID. The block lives in the
+// parent session's transcript, so the state is applied even when the
+// loaded session is not the parent.
+func (m *UI) handleAgentTask(task workspace.AgentTask) {
+	if m.session == nil || task.SessionID == "" {
+		return
+	}
+	// Keep the inspect view's cached task fresh (#415): the placeholder,
+	// the sidebar banner and new metadata lines name the viewed agent's
+	// live state.
+	if m.isInspecting() && task.SessionID == m.inspecting.ID {
+		fresh := task
+		m.inspectTask = &fresh
+	}
+	_, toolCallID, ok := m.com.Workspace.ParseAgentToolSessionID(task.SessionID)
+	if !ok {
+		return
+	}
+	item := m.chat.MessageItem(toolCallID)
+	if item == nil {
+		return
+	}
+	setter, ok := item.(chat.AgentTaskSetter)
+	if !ok {
+		return
+	}
+	// Live dispatch activity means the animation clock must run even
+	// when the loaded session is idle — a reloaded parent session keeps
+	// its dispatch blocks animating.
+	m.chat.SetAnimationsAllowed(true)
+	setter.SetAgentTask(task)
+	if m.chat.Follow() {
+		m.chat.ScrollToBottom()
+		m.chat.SelectLast()
+	}
+}
+
+// seedAgentTasks attaches live state to dispatch blocks built from
+// persisted messages (#65, #421): a reloaded session's stored
+// dispatch_agent result is the running handle, so without this the block
+// would render its provisioning-time state forever. Dispatches the agent
+// surface does not know — from an earlier process — keep their persisted
+// state.
+func (m *UI) seedAgentTasks(items []chat.MessageItem) {
+	for _, item := range items {
+		block, ok := item.(*chat.DispatchToolMessageItem)
+		if !ok {
+			continue
+		}
+		sessionID := block.DispatchSessionID()
+		if sessionID == "" {
+			continue
+		}
+		if task, ok := m.com.Workspace.AgentTask(sessionID); ok {
+			block.SetAgentTask(task)
+		}
+	}
+}
+
 func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
 	action := m.dialog.Update(msg)
@@ -2248,6 +2629,14 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		}
 
 		m.dialog.CloseFrontDialog()
+
+		// A cancelled prompt-arguments dialog leaves the "/query" the user
+		// typed behind. Nothing was attached, so take it back out rather
+		// than leave a token that looks resolved.
+		if m.pendingPromptTrigger.text != "" {
+			m.removePromptToken(m.pendingPromptTrigger.start, m.pendingPromptTrigger.text)
+			m.pendingPromptTrigger.text = ""
+		}
 
 		if isOnboarding {
 			if cmd := m.openModelsDialog(); cmd != nil {
@@ -2289,7 +2678,7 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	// Session dialog messages.
 	case dialog.ActionSelectSession:
 		m.dialog.CloseDialog(dialog.SessionsID)
-		cmds = append(cmds, m.loadSession(msg.Session.ID))
+		cmds = append(cmds, m.handleSelectSession(msg.Session))
 
 	// Open dialog message.
 	case dialog.ActionOpenDialog:
@@ -2357,59 +2746,7 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 			}
 			return nil
 		})
-		// Whatever is on top is what the user submitted: from the palette
-		// that is the command list, from the arguments dialog it is that
-		// dialog, and closing the wrong one leaves the box hanging over a
-		// compaction that is already running.
 		m.dialog.CloseFrontDialog()
-	case dialog.ActionPreviewSummarize:
-		// The palette collects emphasis first, exactly as compact does; the
-		// action handed back carries Args and runs straight through.
-		if len(msg.Arguments) > 0 && msg.Args == nil {
-			m.dialog.CloseFrontDialog()
-			m.dialog.OpenDialog(dialog.NewArguments(
-				m.com,
-				"Compact (Preview First)",
-				"Optional: tell the checkpoint what to emphasize. The result is written for reading, and only applied if you keep it.",
-				msg.Arguments,
-				msg,
-			))
-			break
-		}
-		if m.isAgentBusy() {
-			cmds = append(cmds, util.ReportWarn("Agent is busy, please wait before previewing a checkpoint..."))
-			break
-		}
-		cmds = append(cmds, func() tea.Msg {
-			preview, err := m.com.Workspace.AgentSummarizePreview(context.Background(), msg.SessionID, msg.Instructions)
-			if err != nil {
-				return util.ReportError(err)()
-			}
-			return previewCheckpointMsg{preview: preview}
-		})
-		m.dialog.CloseFrontDialog()
-	case dialog.ActionAcceptPreview:
-		if cmd := m.acceptCheckpoint(msg.Preview); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		m.dialog.CloseDialog(dialog.CommandsID)
-	case dialog.ActionDiscardPreview:
-		if cmd := m.discardCheckpoint(msg.CheckpointID); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		m.dialog.CloseDialog(dialog.CommandsID)
-	case dialog.ActionRestoreSummarize:
-		if m.isAgentBusy() {
-			cmds = append(cmds, util.ReportWarn("Agent is busy, please wait before restoring the checkpoint..."))
-			break
-		}
-		cmds = append(cmds, func() tea.Msg {
-			if err := m.com.Workspace.AgentRestoreSummarize(context.Background(), msg.SessionID); err != nil {
-				return util.ReportError(err)()
-			}
-			return nil
-		}, m.loadSession(msg.SessionID))
-		m.dialog.CloseDialog(dialog.CommandsID)
 	case dialog.ActionToggleHelp:
 		m.status.ToggleHelp()
 		m.dialog.CloseDialog(dialog.CommandsID)
@@ -2464,7 +2801,7 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 				return util.ReportError(errors.New("configuration not found"))()
 			}
 
-			isTransparent := cfg.Options != nil && cfg.Options.TUI.IsTransparent()
+			isTransparent := cfg.Options != nil && cfg.Options.TUI.Transparent != nil && *cfg.Options.TUI.Transparent
 			newValue := !isTransparent
 			if err := m.com.Workspace.SetConfigField(config.ScopeGlobal, "options.tui.transparent", newValue); err != nil {
 				return util.ReportError(err)()
@@ -2708,16 +3045,34 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	case dialog.ActionDisableDockerMCP:
 		m.dialog.CloseDialog(dialog.CommandsID)
 		cmds = append(cmds, m.disableDockerMCP)
-	case dialog.ActionToggleSkill:
-		// Sequence apply then refresh: the refresh must read the
-		// overrides after the toggle commits, or the dialog shows stale
-		// state.
-		cmds = append(cmds, tea.Sequence(m.applySkillToggle(msg), m.refreshSkillOverrides()))
-	case dialog.ActionSetMCPServerSetting:
-		cmds = append(cmds, m.applyMCPServerSetting(msg))
-	case dialog.ActionToggleLazyMCP:
-		m.dialog.CloseDialog(dialog.CommandsID)
-		cmds = append(cmds, m.applyLazyMCPGlobal())
+	case dialog.ActionMCPReconnect:
+		m.dialog.CloseDialog(dialog.MCPServersID)
+		m.dialog.CloseDialog(dialog.ChannelsID)
+		cmds = append(cmds, func() tea.Msg {
+			ctx := context.Background()
+			if err := m.com.Workspace.MCPReconnect(ctx, msg.ServerName); err != nil {
+				return util.ReportError(err)()
+			}
+			return util.NewInfoMsg(fmt.Sprintf("MCP server %q reconnected", msg.ServerName))
+		})
+	case dialog.ActionMCPRefreshTools:
+		m.dialog.CloseDialog(dialog.MCPServersID)
+		cmds = append(cmds, func() tea.Msg {
+			m.com.Workspace.RefreshMCPTools(context.Background(), msg.ServerName)
+			return util.NewInfoMsg(fmt.Sprintf("Refreshed tools for MCP server %q", msg.ServerName))
+		})
+	case dialog.ActionMCPRefreshPrompts:
+		m.dialog.CloseDialog(dialog.MCPServersID)
+		cmds = append(cmds, func() tea.Msg {
+			m.com.Workspace.MCPRefreshPrompts(context.Background(), msg.ServerName)
+			return util.NewInfoMsg(fmt.Sprintf("Refreshed prompts for MCP server %q", msg.ServerName))
+		})
+	case dialog.ActionMCPRefreshResources:
+		m.dialog.CloseDialog(dialog.MCPServersID)
+		cmds = append(cmds, func() tea.Msg {
+			m.com.Workspace.MCPRefreshResources(context.Background(), msg.ServerName)
+			return util.NewInfoMsg(fmt.Sprintf("Refreshed resources for MCP server %q", msg.ServerName))
+		})
 	case dialog.ActionInitializeProject:
 		if m.isAgentBusy() {
 			cmds = append(cmds, util.ReportWarn("Agent is busy, please wait before summarizing session..."))
@@ -2725,6 +3080,20 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		}
 		cmds = append(cmds, m.initializeProject())
 		m.dialog.CloseDialog(dialog.CommandsID)
+	case dialog.ActionSkillsReload:
+		cmds = append(cmds, func() tea.Msg {
+			if err := m.com.Workspace.ReloadSkills(); err != nil {
+				return util.ReportError(err)()
+			}
+			return skillsRefreshedMsg{info: "Skills reloaded"}
+		})
+	case dialog.ActionSkillToggle:
+		cmds = append(cmds, m.toggleSkill(msg.SkillName))
+	case dialog.ActionReloadModelDiscovery:
+		// Keep the dialog open; run discovery in the background and refresh
+		// the list when the result arrives (modelsDiscoveryReloadedMsg).
+		cmds = append(cmds, util.ReportInfo("Reloading models…"))
+		cmds = append(cmds, m.reloadModelDiscovery)
 
 	case dialog.ActionSelectModel:
 		if cmd := m.handleSelectModel(msg); cmd != nil {
@@ -2810,6 +3179,13 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	case dialog.ActionAttachSkill:
 		m.dialog.CloseFrontDialog()
 		cmds = append(cmds, m.attachSkill(msg.ID, msg.Name))
+	case dialog.ActionInsertMCPPrompt:
+		m.dialog.CloseFrontDialog()
+		// Restore the splice point the popup was closed with; the insertion
+		// replaces the trigger text, so it is no longer pending.
+		m.completionsStartIndex = msg.StartIndex
+		m.pendingPromptTrigger.text = ""
+		cmds = append(cmds, m.attachMCPPrompt(msg.Name, msg.MCPName, msg.PromptID, msg.Args))
 	case dialog.ActionRunMCPPrompt:
 		if len(msg.Arguments) > 0 && msg.Args == nil {
 			m.dialog.CloseFrontDialog()
@@ -2855,6 +3231,14 @@ func (m *UI) refreshHyperAndRetrySelect(msg dialog.ActionSelectModel) tea.Cmd {
 		}
 		return hyperRefreshDoneMsg{action: msg}
 	}
+}
+
+// reloadModelDiscovery re-runs provider model discovery and reports the
+// outcome back to the update loop as a modelsDiscoveryReloadedMsg. It is
+// used as a tea.Cmd.
+func (m *UI) reloadModelDiscovery() tea.Msg {
+	added, err := m.com.Workspace.ReloadModelDiscovery(context.Background())
+	return modelsDiscoveryReloadedMsg{added: added, err: err}
 }
 
 // updateHyperCredits refreshes the displayed Hyper balance from the most
@@ -2927,16 +3311,6 @@ func (m *UI) hyperCreditsTicker() tea.Cmd {
 // path. A failed read keeps whatever the last poll reported.
 func (m *UI) fetchGitBranch() tea.Cmd {
 	return func() tea.Msg {
-		// Warm the Nerd Font probe here rather than on the render path:
-		// the first probe may shell out to fc-list or read font
-		// directories, and [UI.gitBranchLabel] needs the answer for every
-		// frame that shows a branch.
-		slog.Debug(
-			"Nerd font support",
-			"supported", nerdfont.Supported(),
-			"reason", nerdfont.Reason(),
-		)
-
 		ctx, cancel := context.WithTimeout(context.Background(), gitBranchFetchTimeout)
 		defer cancel()
 		branch, err := m.com.Workspace.GitBranch(ctx)
@@ -2946,19 +3320,6 @@ func (m *UI) fetchGitBranch() tea.Cmd {
 		}
 		return gitBranchUpdatedMsg{branch: branch}
 	}
-}
-
-// gitBranchLabel renders the polled branch with the git branch glyph when
-// the terminal is expected to render Nerd Font glyphs. Without Nerd Font
-// support it is the bare branch name, as it has always been.
-func (m *UI) gitBranchLabel() string {
-	if m.gitBranch == "" {
-		return ""
-	}
-	if glyph := nerdfont.Glyph(styles.GitBranchIcon, ""); glyph != "" {
-		return glyph + " " + m.gitBranch
-	}
-	return m.gitBranch
 }
 
 // gitBranchTicker schedules the next git branch poll.
@@ -3275,17 +3636,27 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 	var cmds []tea.Cmd
 
 	handleGlobalKeys := func(msg tea.KeyPressMsg) bool {
+		// Commands, models, and help/more are not meaningful from the sidebar,
+		// so they are hidden from its help (see ShortHelp/FullHelp, #114) and
+		// gated off here. The sidebar case in the focus switch below does not
+		// currently route through this handler, so today this only matters as a
+		// guarantee: when the interactive secondary-agent sidebar lands and
+		// starts routing unhandled keys through handleGlobalKeys (like the
+		// editor/main cases already do), these three stay inert unless the help
+		// is deliberately updated to advertise them. Keep this in lockstep with
+		// the sidebar help and TestSidebarSuppressesGlobalKeys.
+		notSidebar := m.focus != uiFocusSidebar
 		switch {
-		case key.Matches(msg, m.keyMap.Help):
+		case notSidebar && key.Matches(msg, m.keyMap.Help):
 			m.status.ToggleHelp()
 			m.updateLayoutAndSize()
 			return true
-		case key.Matches(msg, m.keyMap.Commands):
+		case notSidebar && key.Matches(msg, m.keyMap.Commands):
 			if cmd := m.openCommandsDialog(); cmd != nil {
 				cmds = append(cmds, cmd)
 			}
 			return true
-		case key.Matches(msg, m.keyMap.Models):
+		case notSidebar && key.Matches(msg, m.keyMap.Models):
 			if cmd := m.openModelsDialog(); cmd != nil {
 				cmds = append(cmds, cmd)
 			}
@@ -3314,20 +3685,6 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 		case key.Matches(msg, m.keyMap.Chat.TogglePills):
 			if m.state == uiChat && m.hasSession() {
 				if cmd := m.togglePillsExpanded(); cmd != nil {
-					cmds = append(cmds, cmd)
-				}
-				return true
-			}
-		case key.Matches(msg, m.keyMap.Chat.PillLeft):
-			if m.state == uiChat && m.hasSession() && m.pillsExpanded && m.focus != uiFocusEditor {
-				if cmd := m.switchPillSection(-1); cmd != nil {
-					cmds = append(cmds, cmd)
-				}
-				return true
-			}
-		case key.Matches(msg, m.keyMap.Chat.PillRight):
-			if m.state == uiChat && m.hasSession() && m.pillsExpanded && m.focus != uiFocusEditor {
-				if cmd := m.switchPillSection(1); cmd != nil {
 					cmds = append(cmds, cmd)
 				}
 				return true
@@ -3373,6 +3730,15 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 		return m.handleDialogMsg(msg)
 	}
 
+	// Inspect mode navigation (#314): bound globally so it works from
+	// both editor and chat focus, but never underneath a dialog.
+	if handled, cmd := m.handleInspectKeys(msg); handled {
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return tea.Batch(cmds...)
+	}
+
 	// Tab always toggles focus between editor and chat, even when
 	// an inline editor is active. This lets users collapse the
 	// question form to view chat.
@@ -3411,7 +3777,7 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 	}
 
 	// Handle cancel key when agent is busy.
-	if key.Matches(msg, m.keyMap.Chat.Cancel) {
+	if key.Matches(msg, m.keyMap.Chat.Cancel) && !m.isInspecting() {
 		if m.isAgentBusy() {
 			if cmd := m.cancelAgent(); cmd != nil {
 				cmds = append(cmds, cmd)
@@ -3429,12 +3795,39 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 	case uiChat, uiLanding:
 		switch m.focus {
 		case uiFocusEditor:
+			// The editor is read-only while inspecting a sub-agent
+			// (#415): the transcript on screen is the child's, and a
+			// prompt typed here would land in the parent the user
+			// cannot see. Inspect keys (esc, ctrl+], ctrl+x) were
+			// routed earlier by handleInspectKeys; everything else —
+			// typing, paste, submit, @ and / triggers — is swallowed,
+			// except Tab: moving focus to the chat is the only keyboard
+			// way to scroll the transcript.
+			if m.isInspecting() && !key.Matches(msg, m.keyMap.Tab) {
+				return tea.Batch(cmds...)
+			}
+
 			// Handle completions if open.
 			if m.completionsOpen {
 				if msg, ok := m.completions.Update(msg); ok {
 					switch msg := msg.(type) {
+					case completions.SelectionMsg[completions.SkillCompletionValue]:
+						cmds = append(cmds, m.insertSkillCompletion(msg.Value))
+						if !msg.KeepOpen {
+							m.closeCompletions()
+						}
+					case completions.SelectionMsg[completions.PromptCompletionValue]:
+						cmds = append(cmds, m.insertMCPPromptCompletion(msg.Value))
+						if !msg.KeepOpen {
+							m.closeCompletions()
+						}
 					case completions.SelectionMsg[completions.FileCompletionValue]:
 						cmds = append(cmds, m.insertFileCompletion(msg.Value.Path))
+						if !msg.KeepOpen {
+							m.closeCompletions()
+						}
+					case completions.SelectionMsg[completions.AgentCompletionValue]:
+						cmds = append(cmds, m.insertAgentCompletion(msg.Value.Handle))
 						if !msg.KeepOpen {
 							m.closeCompletions()
 						}
@@ -3445,6 +3838,7 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 						}
 					case completions.ClosedMsg:
 						m.completionsOpen = false
+						m.completionsTrigger = completions.TriggerNone
 					}
 					return tea.Batch(cmds...)
 				}
@@ -3460,20 +3854,16 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					cmds = append(cmds, cmd)
 				}
 			case key.Matches(msg, m.keyMap.Editor.AddImage):
-				if !m.currentModelSupportsImages() {
-					break
-				}
 				if cmd := m.openFilesDialog(); cmd != nil {
 					cmds = append(cmds, cmd)
 				}
 
 			case key.Matches(msg, m.keyMap.Editor.PasteImage):
 				if !m.currentModelSupportsImages() {
+					cmds = append(cmds, util.ReportWarn(fmt.Sprintf("%s doesn't support images", m.currentModelName())))
 					break
 				}
 				cmds = append(cmds, m.pasteImageFromClipboard)
-			case key.Matches(msg, m.keyMap.Editor.PasteText):
-				cmds = append(cmds, m.pasteTextFromClipboard)
 
 			case key.Matches(msg, m.keyMap.Editor.SendMessage):
 				if m.modeSwitching {
@@ -3491,7 +3881,10 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					break
 				}
 
-				// Otherwise, send the message
+				// Otherwise, send the message. Keep the raw editor value
+				// around: a leading @handle that is refused or fails to
+				// deliver restores the pre-submit state (#414).
+				savedValue := value
 				m.textarea.Reset()
 				if cmd := m.handleTextareaHeightChange(prevHeight); cmd != nil {
 					cmds = append(cmds, cmd)
@@ -3502,6 +3895,9 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					return m.openQuitDialog()
 				}
 
+				// Bang mode wins over slash commands: a shell command that
+				// happens to start with "/clear" or "/compact" must run in
+				// the shell, not be hijacked as a slash command.
 				if m.bangMode && value != "" {
 					m.bangMode = false
 					m.setEditorPrompt(m.yoloModeCached())
@@ -3510,8 +3906,15 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					return tea.Batch(m.runShellCommand(value))
 				}
 
+				if cmd, ok := m.handleSlashCommand(value); ok {
+					return cmd
+				}
+
 				attachments := m.attachments.List()
+				savedMentionAttachments := m.mentionAttachments
+				savedDiscardedMentions := m.discardedMentions
 				m.attachments.Reset()
+				m.resetMentionTracking()
 				if len(value) == 0 && !message.ContainsTextAttachment(attachments) {
 					// Enter on an empty editor while a ready plan is pending
 					// reopens the dismissed handoff prompt.
@@ -3524,12 +3927,37 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 				m.randomizePlaceholders()
 				m.historyReset()
 
+				// A prompt that opens with a live agent's @handle routes to
+				// that agent's injection queue instead of starting a parent
+				// turn (#313), the editor's attachments included (#414). A
+				// steer that is refused or fails to deliver restores the
+				// editor's pre-submit state: the typed text, the chips and
+				// the mention tracking, with the warning or error still
+				// shown.
+				if cmd, handled, delivered := m.routeLeadingAgentHandle(value, attachments); handled {
+					if !delivered {
+						restoredHeight := m.textarea.Height()
+						m.textarea.SetValue(savedValue)
+						if cmd := m.handleTextareaHeightChange(restoredHeight); cmd != nil {
+							cmds = append(cmds, cmd)
+						}
+						m.attachments.Set(attachments)
+						m.mentionAttachments = savedMentionAttachments
+						m.discardedMentions = savedDiscardedMentions
+					}
+					return tea.Batch(cmd, m.loadPromptHistory())
+				}
+
+				// Mid-sentence @handle mentions stay a normal parent turn —
+				// verbatim text, plus an agent card per mentioned dispatch.
+				attachments = append(attachments, m.agentMentionAttachments(value)...)
+
 				return tea.Batch(m.sendMessage(value, attachments...), m.loadPromptHistory())
 			case key.Matches(msg, m.keyMap.Chat.NewSession):
 				if !m.hasSession() {
 					break
 				}
-				if m.isAgentBusy() {
+				if m.isCurrentSessionBusy() {
 					cmds = append(cmds, util.ReportWarn("Agent is busy, please wait before starting a new session..."))
 					break
 				}
@@ -3558,24 +3986,6 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 				m.textarea.InsertRune('\n')
 				m.closeCompletions()
 				cmds = append(cmds, m.updateTextareaWithPrevHeight(msg, prevHeight))
-			case key.Matches(msg, m.keyMap.Editor.CopySelection):
-				if m.textarea.HasSelection() {
-					cmds = append(cmds, common.CopyToClipboardWithCallback(
-						m.textarea.SelectedText(),
-						"Selection copied to clipboard",
-						nil,
-					))
-					m.textarea.ClearSelection()
-				}
-			case key.Matches(msg, m.keyMap.Editor.CutSelection):
-				if m.textarea.HasSelection() {
-					cmds = append(cmds, common.CopyToClipboardWithCallback(
-						m.textarea.SelectedText(),
-						"Selection cut to clipboard",
-						nil,
-					))
-					m.textarea.DeleteSelection()
-				}
 			case key.Matches(msg, m.keyMap.Editor.HistoryPrev):
 				cmd := m.handleHistoryUp(msg)
 				if cmd != nil {
@@ -3609,20 +4019,134 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					break
 				}
 
-				// Check for @ trigger before passing to textarea.
+				// Token backspace: a token the editor draws as one
+				// highlighted unit deletes as one unit whenever the cursor
+				// sits at its end. This is deliberately independent of the
+				// insertion record below, which is armed by a completion and
+				// disarmed by the next keystroke — so without this, coming
+				// back to a mention after typing anything else deleted it a
+				// character at a time despite still rendering as one chip.
+				// Not while the completions popup is open: there the "token"
+				// is the query the user is still typing, and eating the whole
+				// thing on one backspace — plus closing the popup — makes a
+				// single typo cost the entire mention, with no undo to get it
+				// back.
+				if msg.Code == tea.KeyBackspace && !m.bangMode && !m.completionsOpen {
+					if start, ok := m.tokenEndingAtCursor(); ok {
+						deleted := m.tokenTextAt(start)
+						prevHeight := m.textarea.Height()
+						val := m.textarea.Value()
+						cur := m.textarea.ByteOffset()
+						m.textarea.SetValue(val[:start] + val[cur:])
+						m.textarea.SetCursorByteOffset(start)
+						m.clearCompletionRange()
+						m.dropMentionAttachment(deleted)
+						if cmd := m.handleTextareaHeightChange(prevHeight); cmd != nil {
+							cmds = append(cmds, cmd)
+						}
+						m.updateHistoryDraft(val)
+						if m.completionsOpen {
+							m.closeCompletions()
+						}
+						return tea.Batch(cmds...)
+					}
+				}
+
+				// Atomic backspace: delete the entire last-inserted
+				// completion text (file path, resource name) in one go
+				// instead of character by character. Only fires when
+				// backspace is pressed immediately after insertion with
+				// no intervening edits.
+				if msg.Code == tea.KeyBackspace && m.lastCompletionEnd > 0 {
+					val := m.textarea.Value()
+					// Require the recorded run to still be sitting where it
+					// was inserted. Length alone would let a same-length
+					// value from history recall or a paste be treated as the
+					// completion and get its middle cut out.
+					if len(val) == m.lastCompletionEnd &&
+						val[m.lastCompletionStart:m.lastCompletionEnd] == m.lastCompletionText {
+						prevHeight := m.textarea.Height()
+						m.textarea.SetValue(val[:m.lastCompletionStart])
+						m.textarea.MoveToEnd()
+						// Remove the attachment that was added alongside
+						// this @file mention, so the chip disappears with
+						// the text.
+						m.dropCompletionAttachment(val[:m.lastCompletionStart])
+						m.clearCompletionRange()
+						// Deleting a wrapped completion changes the editor's
+						// height, and the deletion is a draft edit like any
+						// other; skipping either left the layout stale until
+						// the next keystroke.
+						if cmd := m.handleTextareaHeightChange(prevHeight); cmd != nil {
+							cmds = append(cmds, cmd)
+						}
+						m.updateHistoryDraft(val)
+						// A keep-open insert (up/down-insert) leaves the popup
+						// up; its query no longer matches anything now.
+						if m.completionsOpen {
+							m.closeCompletions()
+						}
+						return tea.Batch(cmds...)
+					}
+					// Text changed since insertion; invalidate.
+					m.clearCompletionRange()
+				}
+
+				// Any non-backspace key clears the atomic-delete range.
+				if msg.Code != tea.KeyBackspace {
+					m.clearCompletionRange()
+				}
+
+				// Check for completion triggers before passing to textarea.
 				curValue := m.textarea.Value()
 				curIdx := len(curValue)
 
-				// Trigger completions on @.
-				if msg.String() == "@" && !m.completionsOpen {
+				// Trigger file completions on @.
+				//
+				// Bang mode is excluded for the same reason the '/' trigger
+				// and the highlighter exclude it: the line is a shell
+				// command, and a mention inserts a literal '@' the shell
+				// would pass through to the program (`cat @main.go`).
+				//
+				// The cursor must also be at the end of the value, because
+				// curIdx above is the value length rather than the cursor and
+				// insertCompletionText splices at completionsStartIndex then
+				// MoveToEnd()s — opening the popup with the cursor elsewhere
+				// strands the typed '@' and appends the mention at the end.
+				// Same guard the '/' trigger uses below.
+				if msg.String() == "@" && !m.completionsOpen && !m.bangMode &&
+					m.textarea.ByteOffset() == curIdx {
 					// Only show if beginning of prompt or after whitespace.
 					if curIdx == 0 || (curIdx > 0 && isWhitespace(curValue[curIdx-1])) {
 						m.completionsOpen = true
+						m.completionsTrigger = completions.TriggerFile
 						m.completionsQuery = ""
 						m.completionsStartIndex = curIdx
 						m.completionsPositionStart = m.completionsPosition()
 						depth, limit := m.com.Config().Options.TUI.Completions.Limits()
 						cmds = append(cmds, m.completions.Open(depth, limit))
+					}
+				}
+
+				// Trigger skill completions on / mid-prompt. At the start of
+				// an empty prompt the commands dialog handles '/' instead
+				// (see the Editor.Commands binding above), so here we only
+				// fire when the textarea already has content and '/' begins
+				// a new word.
+				//
+				// curIdx is the length of the value, not the cursor, and
+				// insertCompletionText splices at completionsStartIndex and
+				// then MoveToEnd()s — so opening the popup with the cursor
+				// anywhere but the end would append the chosen skill to the
+				// end of the prompt and strand the '/' the user typed where
+				// the cursor actually was. Requiring the two to agree keeps
+				// the index honest; the '@' trigger above has the same
+				// end-of-value assumption, and #250's atomic backspace
+				// depends on it as well.
+				if msg.String() == "/" && !m.completionsOpen && !m.bangMode &&
+					m.textarea.ByteOffset() == curIdx {
+					if curIdx > 0 && isWhitespace(curValue[curIdx-1]) {
+						m.openSkillCompletions(curIdx)
 					}
 				}
 
@@ -3666,8 +4190,9 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 				m.updateHistoryDraft(curValue)
 
 				// After updating textarea, check if we need to filter completions.
-				// Skip filtering on the initial @ keystroke since items are loading async.
-				if m.completionsOpen && msg.String() != "@" {
+				// Skip filtering on the initial trigger keystroke since items
+				// are loading async.
+				if m.completionsOpen && msg.String() != string(m.completionsTrigger) {
 					newValue := m.textarea.Value()
 					newIdx := len(newValue)
 
@@ -3680,14 +4205,64 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					} else {
 						// Extract current word and filter.
 						word := m.textareaWord()
-						if strings.HasPrefix(word, "@") {
+						switch {
+						case !strings.HasPrefix(word, string(m.completionsTrigger)):
+							m.closeCompletions()
+						case m.completionsTrigger == completions.TriggerSkill &&
+							!wordCanBeSkillToken(word):
+							// '/' also begins every absolute path, and the
+							// trigger cannot tell the two apart from the
+							// slash alone. A second separator settles it:
+							// skill names never contain one, so the user is
+							// typing a path and the popup must get out of
+							// the way.
+							m.closeCompletions()
+						default:
 							m.completionsQuery = word[1:]
 							m.completions.Filter(m.completionsQuery)
-						} else if m.completionsOpen {
-							m.closeCompletions()
+							// An open popup with nothing in it still swallows
+							// enter and the arrow keys — the prompt cannot be
+							// submitted until the user finds escape. Nothing
+							// is drawn in that state either, so there is no
+							// hint as to what is eating the key.
+							//
+							// Only the skill popup is closed on an empty
+							// filter: its items are installed synchronously
+							// by SetSkillItems, so empty really means "no
+							// match". The file popup loads asynchronously and
+							// is legitimately empty until the walk returns.
+							if m.completionsTrigger == completions.TriggerSkill &&
+								!m.completions.HasItems() {
+								m.closeCompletions()
+							}
 						}
 					}
 				}
+			}
+		case uiFocusSidebar:
+			// The sidebar is currently a read-only status panel, so it only
+			// handles focus/scroll keys and intentionally does NOT fall through
+			// to handleGlobalKeys — every other key is inert while it's focused.
+			// When the interactive secondary-agent sidebar lands, route its keys
+			// here (and add `default: handleGlobalKeys(msg)` to keep global keys
+			// working, mirroring the editor/main cases). handleGlobalKeys already
+			// gates commands/models/help for sidebar focus, so those stay inert
+			// unless you also un-hide them from the sidebar help (#114).
+			switch {
+			case key.Matches(msg, m.keyMap.Tab), key.Matches(msg, m.keyMap.Editor.Escape):
+				m.focus = uiFocusEditor
+				cmds = append(cmds, m.textarea.Focus())
+			case key.Matches(msg, m.keyMap.Chat.ToggleSidebar):
+				// Hiding the sidebar is the one global key that belongs
+				// here: toggleCompactMode hands focus back to the editor
+				// itself, so nothing is left inert.
+				if m.canToggleSidebar() {
+					cmds = append(cmds, m.toggleCompactMode())
+				}
+			case key.Matches(msg, m.keyMap.Chat.Up):
+				m.sidebarScroll = max(0, m.sidebarScroll-1)
+			case key.Matches(msg, m.keyMap.Chat.Down):
+				m.sidebarScroll++
 			}
 		case uiFocusMain:
 			switch {
@@ -3696,20 +4271,25 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					cmds = append(cmds, cmd)
 				}
 			case key.Matches(msg, m.keyMap.Tab):
-				m.focus = uiFocusEditor
-				m.sidebarScrollbarVisible = false
-				cmds = append(cmds, m.textarea.Focus())
-				m.chat.Blur()
-			case key.Matches(msg, m.keyMap.Chat.FocusSidebar):
-				if m.state == uiChat && !m.isCompact && m.hasSession() && m.sidebarScrollable {
-					m.focus = uiFocusSidebar
+				// A selected live A2UI surface consumes Tab for its own
+				// focus ring (#44); pane switching applies only when no
+				// item claims the key.
+				if ok, cmd := m.chat.HandleKeyMsg(msg); ok {
+					cmds = append(cmds, cmd)
+					break
+				}
+				if m.isCompact {
+					m.focus = uiFocusEditor
+					cmds = append(cmds, m.textarea.Focus())
 					m.chat.Blur()
+				} else {
+					m.focusSidebar()
 				}
 			case key.Matches(msg, m.keyMap.Chat.NewSession):
 				if !m.hasSession() {
 					break
 				}
-				if m.isAgentBusy() {
+				if m.isCurrentSessionBusy() {
 					cmds = append(cmds, util.ReportWarn("Agent is busy, please wait before starting a new session..."))
 					break
 				}
@@ -3767,38 +4347,6 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					handleGlobalKeys(msg)
 				}
 			}
-		case uiFocusSidebar:
-			if m.state != uiChat || m.isCompact || !m.hasSession() {
-				break
-			}
-			switch {
-			case key.Matches(msg, m.keyMap.Chat.Up):
-				m.sidebarOffset = max(0, m.sidebarOffset-4)
-				m.sidebarScrollbarSeq++
-			case key.Matches(msg, m.keyMap.Chat.Down):
-				maxOffset := m.sidebarMaxOffsetVal
-				if m.sidebarOffset < maxOffset {
-					m.sidebarOffset = min(m.sidebarOffset+4, maxOffset)
-					m.sidebarScrollbarSeq++
-				}
-			case key.Matches(msg, m.keyMap.Chat.Home):
-				m.sidebarOffset = 0
-				m.sidebarScrollbarSeq++
-			case key.Matches(msg, m.keyMap.Chat.End):
-				m.sidebarOffset = m.sidebarMaxOffsetVal
-				m.sidebarScrollbarSeq++
-			case key.Matches(msg, m.keyMap.Chat.FocusChat):
-				m.focus = uiFocusMain
-				m.sidebarScrollbarVisible = false
-				m.chat.Focus()
-			case key.Matches(msg, m.keyMap.Tab):
-				m.focus = uiFocusEditor
-				m.sidebarScrollbarVisible = false
-				cmds = append(cmds, m.textarea.Focus())
-				m.chat.Blur()
-			default:
-				handleGlobalKeys(msg)
-			}
 		default:
 			handleGlobalKeys(msg)
 		}
@@ -3820,7 +4368,7 @@ func (m *UI) drawHeader(scr uv.Screen, area uv.Rectangle) {
 		area.Dx(),
 		m.lspErrorCount(),
 		m.hyperCredits,
-		m.gitBranchLabel(),
+		m.gitBranch,
 	)
 }
 
@@ -3838,10 +4386,6 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		// renderPills, but only when the layout actually differs;
 		// this catches the steady-state case.
 		m.renderPills()
-	}
-
-	if m.state == uiChat && m.hasSession() && !m.isCompact {
-		m.updateSidebarScrollState()
 	}
 
 	// Clear the screen first
@@ -3874,7 +4418,7 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 				m.inlineCursor = m.activeInline.Draw(scr, layout.editor)
 			}
 		} else {
-			editor := uv.NewStyledString(m.renderEditorView(scr.Bounds().Dx()))
+			editor := uv.NewStyledString(m.renderEditorView(layout.editor.Dx()))
 			editor.Draw(scr, layout.editor)
 			m.inlineCursor = nil
 		}
@@ -3891,6 +4435,8 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 			uv.NewStyledString(m.pillsView).Draw(scr, layout.pills)
 		}
 
+		// Render at the draw rect's width so the attachment row's
+		// overflow and hit-test bounds match what ends up on screen.
 		if m.activeInline != nil {
 			m.activeInline.SetFocused(m.focus == uiFocusEditor)
 			if collapsed, ok := m.collapsedInlineEditor(); ok {
@@ -3900,11 +4446,7 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 				m.inlineCursor = m.activeInline.Draw(scr, layout.editor)
 			}
 		} else {
-			editorWidth := scr.Bounds().Dx()
-			if !m.isCompact {
-				editorWidth -= layout.sidebar.Dx()
-			}
-			editor := uv.NewStyledString(m.renderEditorView(editorWidth))
+			editor := uv.NewStyledString(m.renderEditorView(layout.editor.Dx()))
 			editor.Draw(scr, layout.editor)
 			m.inlineCursor = nil
 		}
@@ -4090,7 +4632,7 @@ func (m *UI) ShortHelp() []key.Binding {
 		binds = append(binds, k.Quit)
 	case uiChat:
 		// Show cancel binding if agent is busy.
-		if m.isAgentBusy() {
+		if m.isAgentBusy() && !m.isInspecting() {
 			cancelBinding := k.Chat.Cancel
 			if m.isCanceling {
 				cancelBinding.SetHelp("esc", "press again to cancel")
@@ -4100,20 +4642,26 @@ func (m *UI) ShortHelp() []key.Binding {
 			binds = append(binds, cancelBinding)
 		}
 
-		switch m.focus {
-		case uiFocusEditor:
-			tab.SetHelp("tab", "focus chat")
-		default:
-			tab.SetHelp("tab", "focus editor")
+		isSidebar := m.focus == uiFocusSidebar
+
+		// Inspect mode (#412): while viewing a sub-agent, going back is
+		// the primary action, so lead with it; with more than one live
+		// agent in the entry ring, also advertise ctrl+] as "next agent".
+		// The sidebar help stays exactly as it was.
+		if m.isInspecting() && !isSidebar {
+			binds = append(binds, k.InspectBack)
+			if len(m.inspectRing) > 1 {
+				next := k.InspectDrill
+				next.SetHelp("ctrl+]", "next agent")
+				binds = append(binds, next)
+			}
 		}
 
-		binds = append(
-			binds,
-			tab,
-			k.ShiftTab,
-			commands,
-			k.Models,
-		)
+		commonBinds := []key.Binding{tab}
+		if !isSidebar {
+			commonBinds = append(commonBinds, k.ShiftTab, commands, k.Models)
+		}
+		binds = append(binds, commonBinds...)
 
 		if m.canToggleSidebar() {
 			binds = append(binds, k.Chat.ToggleSidebar)
@@ -4125,12 +4673,6 @@ func (m *UI) ShortHelp() []key.Binding {
 				binds,
 				k.Editor.Newline,
 			)
-		case uiFocusSidebar:
-			binds = append(
-				binds,
-				k.Chat.UpDown,
-				k.Chat.FocusChat,
-			)
 		case uiFocusMain:
 			binds = append(
 				binds,
@@ -4140,9 +4682,23 @@ func (m *UI) ShortHelp() []key.Binding {
 				k.Chat.PageDown,
 				k.Chat.Copy,
 			)
-			if m.pillsExpanded && len(m.pillSectionsWithContent()) > 1 {
-				binds = append(binds, k.Chat.PillLeft)
+			// Entry hint (#412): the selected transcript item is an agent
+			// block ctrl+] can drill into. Type check on the selected item
+			// only; agentBlocks() walks the whole transcript and help is
+			// rebuilt on every render.
+			if !m.isInspecting() && m.selectedAgentBlock() {
+				binds = append(binds, k.InspectDrill)
 			}
+		case uiFocusSidebar:
+			esc := k.Editor.Escape
+			esc.SetHelp("esc", "back to editor")
+			upDown := k.Chat.UpDown
+			upDown.SetHelp("↑/↓", "scroll")
+			binds = append(
+				binds,
+				upDown,
+				esc,
+			)
 		}
 	default:
 		// TODO: other states
@@ -4157,10 +4713,14 @@ func (m *UI) ShortHelp() []key.Binding {
 		)
 	}
 
+	isSidebar := m.focus == uiFocusSidebar
+	footerBinds := []key.Binding{k.Quit}
+	if !isSidebar {
+		footerBinds = append(footerBinds, k.Help)
+	}
 	binds = append(
 		binds,
-		k.Quit,
-		k.Help,
+		footerBinds...,
 	)
 
 	return binds
@@ -4209,7 +4769,7 @@ func (m *UI) FullHelp() [][]key.Binding {
 			})
 	case uiChat:
 		// Show cancel binding if agent is busy.
-		if m.isAgentBusy() {
+		if m.isAgentBusy() && !m.isInspecting() {
 			cancelBinding := k.Chat.Cancel
 			if m.isCanceling {
 				cancelBinding.SetHelp("esc", "press again to cancel")
@@ -4221,24 +4781,23 @@ func (m *UI) FullHelp() [][]key.Binding {
 
 		mainBinds := []key.Binding{}
 		tab := k.Tab
-		switch m.focus {
-		case uiFocusEditor:
-			tab.SetHelp("tab", "focus chat")
-		default:
-			tab.SetHelp("tab", "focus editor")
-		}
 
-		mainBinds = append(
-			mainBinds,
-			tab,
-			k.ShiftTab,
-			commands,
-			k.Models,
-			k.Sessions,
-			k.ToggleYolo,
-		)
-		if hasSession {
-			mainBinds = append(mainBinds, k.Chat.NewSession, k.Chat.EndFollow)
+		isSidebar := m.focus == uiFocusSidebar
+
+		mainBinds = append(mainBinds, tab)
+		if !isSidebar {
+			// The sidebar key handler only routes focus/scroll keys, so
+			// don't advertise bindings that are inert while it's focused.
+			mainBinds = append(mainBinds, k.ShiftTab, commands, k.Models, k.Sessions, k.ToggleYolo)
+			if hasSession {
+				mainBinds = append(mainBinds, k.Chat.NewSession, k.Chat.EndFollow)
+			}
+		}
+		if sid := m.focusedLiveDispatchSessionID(); sid != "" {
+			// A live dispatch is targeted: advertise the cancel binding
+			// (#373). It rides the inspect handler, so unlike the rows
+			// above it also works while the sidebar is focused.
+			mainBinds = append(mainBinds, k.CancelAgent)
 		}
 		if m.canToggleSidebar() {
 			mainBinds = append(mainBinds, k.Chat.ToggleSidebar)
@@ -4246,19 +4805,38 @@ func (m *UI) FullHelp() [][]key.Binding {
 
 		binds = append(binds, mainBinds)
 
+		// Inspect group (#412): drill-in and back, only while they
+		// apply. Back leads while inspecting, matching ShortHelp.
+		if !isSidebar {
+			var inspectBinds []key.Binding
+			if m.isInspecting() {
+				inspectBinds = append(inspectBinds, k.InspectBack)
+				if len(m.inspectRing) > 1 {
+					next := k.InspectDrill
+					next.SetHelp("ctrl+]", "next agent")
+					inspectBinds = append(inspectBinds, next)
+				}
+			} else if m.selectedAgentBlock() {
+				inspectBinds = append(inspectBinds, k.InspectDrill)
+			}
+			if len(inspectBinds) > 0 {
+				binds = append(binds, inspectBinds)
+			}
+		}
+
 		switch m.focus {
 		case uiFocusEditor:
 			editorBinds := []key.Binding{
 				k.Editor.Newline,
 				k.Editor.MentionFile,
 				k.Editor.OpenEditor,
-				k.Editor.PasteText,
-				k.Editor.SelectAll,
-				k.Editor.CopySelection,
-				k.Editor.CutSelection,
 			}
+			// AddImage (ctrl+f) opens the file picker, which now accepts text
+			// files on any model, so its hint always shows. Only the clipboard
+			// image paste stays gated to image-capable models.
+			editorBinds = append(editorBinds, k.Editor.AddImage)
 			if m.currentModelSupportsImages() {
-				editorBinds = append(editorBinds, k.Editor.AddImage, k.Editor.PasteImage)
+				editorBinds = append(editorBinds, k.Editor.PasteImage)
 			}
 			binds = append(binds, editorBinds)
 			if hasAttachments {
@@ -4276,9 +4854,6 @@ func (m *UI) FullHelp() [][]key.Binding {
 				binds,
 				[]key.Binding{
 					k.Chat.UpDown,
-				},
-				[]key.Binding{
-					k.Chat.FocusChat,
 				},
 				[]key.Binding{
 					k.Chat.Home,
@@ -4307,9 +4882,6 @@ func (m *UI) FullHelp() [][]key.Binding {
 					k.Chat.ClearHighlight,
 				},
 			)
-			if m.pillsExpanded && len(m.pillSectionsWithContent()) > 1 {
-				binds = append(binds, []key.Binding{k.Chat.PillLeft})
-			}
 		}
 	default:
 		if m.session == nil {
@@ -4328,13 +4900,13 @@ func (m *UI) FullHelp() [][]key.Binding {
 				k.Editor.Newline,
 				k.Editor.MentionFile,
 				k.Editor.OpenEditor,
-				k.Editor.PasteText,
-				k.Editor.SelectAll,
-				k.Editor.CopySelection,
-				k.Editor.CutSelection,
 			}
+			// AddImage (ctrl+f) opens the file picker, which now accepts text
+			// files on any model, so its hint always shows. Only the clipboard
+			// image paste stays gated to image-capable models.
+			editorBinds = append(editorBinds, k.Editor.AddImage)
 			if m.currentModelSupportsImages() {
-				editorBinds = append(editorBinds, k.Editor.AddImage, k.Editor.PasteImage)
+				editorBinds = append(editorBinds, k.Editor.PasteImage)
 			}
 			binds = append(binds, editorBinds)
 			if hasAttachments {
@@ -4350,12 +4922,14 @@ func (m *UI) FullHelp() [][]key.Binding {
 		}
 	}
 
+	isSidebar := m.focus == uiFocusSidebar
+	footerBinds := []key.Binding{k.Quit}
+	if !isSidebar {
+		footerBinds = append([]key.Binding{help}, footerBinds...)
+	}
 	binds = append(
 		binds,
-		[]key.Binding{
-			help,
-			k.Quit,
-		},
+		footerBinds,
 	)
 
 	return binds
@@ -4386,6 +4960,25 @@ func (m *UI) currentModelSupportsImages() bool {
 	return model != nil && model.SupportsImages
 }
 
+// currentModelName returns the display name of the coder agent's current
+// model for user-facing messages, falling back to "current model" when the
+// selection cannot be resolved.
+func (m *UI) currentModelName() string {
+	cfg := m.com.Config()
+	if cfg == nil {
+		return "current model"
+	}
+	agentCfg, ok := cfg.Agents[config.AgentCoder]
+	if !ok {
+		return "current model"
+	}
+	selected, ok := cfg.Models[agentCfg.Model]
+	if !ok || selected.Model == "" {
+		return "current model"
+	}
+	return selected.Model
+}
+
 // toggleCompactMode toggles compact mode between uiChat and uiChatCompact states.
 func (m *UI) toggleCompactMode() tea.Cmd {
 	m.forceCompactMode = !m.forceCompactMode
@@ -4399,7 +4992,6 @@ func (m *UI) toggleCompactMode() tea.Cmd {
 	if m.forceCompactMode && m.focus == uiFocusSidebar {
 		// The sidebar is going away, so focus the editor again to keep key
 		// events routed somewhere useful.
-		m.sidebarScrollbarVisible = false
 		if m.activeInline != nil {
 			m.focusActiveInline(uiFocusEditor)
 		} else {
@@ -4432,6 +5024,14 @@ func (m *UI) updateLayoutAndSize() {
 			m.isCompact = true
 		} else {
 			m.isCompact = false
+		}
+		// The sidebar isn't drawn in compact mode; if it kept focus, its key
+		// handler would keep swallowing input and help would keep showing
+		// sidebar bindings. Return focus to the editor, mirroring the
+		// sidebar's esc handler.
+		if m.isCompact && m.focus == uiFocusSidebar {
+			m.focus = uiFocusEditor
+			m.textarea.Focus()
 		}
 	}
 
@@ -4473,55 +5073,6 @@ func (m *UI) handleTextareaHeightChange(prevHeight int) tea.Cmd {
 // the textarea height changed as a result.
 func (m *UI) updateTextarea(msg tea.Msg) tea.Cmd {
 	return m.updateTextareaWithPrevHeight(msg, m.textarea.Height())
-}
-
-// forwardMouseToTextarea forwards a mouse event to the textarea with
-// coordinates translated into the textarea's local space. It reports whether
-// the event landed within the textarea's rendered region and was forwarded.
-func (m *UI) forwardMouseToTextarea(msg tea.MouseMsg) (bool, tea.Cmd) {
-	mouse := msg.Mouse()
-
-	// The textarea is rendered inside layout.editor below the attachments
-	// row. renderEditorView always reserves the first row for attachments
-	// (an empty line when there are none), so the textarea always starts
-	// one row below the editor top.
-	const attachmentsRow = 1
-	origin := image.Pt(m.layout.editor.Min.X, m.layout.editor.Min.Y+attachmentsRow)
-
-	// The textarea occupies its own height starting at the origin.
-	area := image.Rectangle{Min: origin, Max: origin.Add(image.Pt(m.layout.editor.Dx(), m.textarea.Height()))}
-	if !image.Pt(mouse.X, mouse.Y).In(area) {
-		return false, nil
-	}
-
-	rel := tea.Mouse{
-		X:      mouse.X - origin.X,
-		Y:      mouse.Y - origin.Y,
-		Button: mouse.Button,
-		Mod:    mouse.Mod,
-	}
-
-	switch msg.(type) {
-	case tea.MouseClickMsg:
-		if rel.Button != uv.MouseLeft {
-			return false, nil
-		}
-		m.textareaMouseSelecting = true
-		m.textarea.BeginSelection(rel.X, rel.Y)
-		return true, nil
-	case tea.MouseMotionMsg:
-		if !m.textareaMouseSelecting {
-			return true, nil
-		}
-		m.textarea.ExtendSelection(rel.X, rel.Y)
-		return true, nil
-	case tea.MouseReleaseMsg:
-		m.textarea.EndSelection()
-		m.textareaMouseSelecting = false
-		return true, nil
-	default:
-		return false, nil
-	}
 }
 
 // updateTextareaWithPrevHeight is for cases when the height of the layout may
@@ -4585,7 +5136,11 @@ func (m *UI) generateLayout(w, h int) uiLayout {
 			editorHeight = m.activeInline.Height(editorWidth)
 		}
 	}
-	// The sidebar width
+	// The sidebar width, budgeted right-to-left: the rightmost column is the
+	// scrollbar gutter (flush to the terminal edge), then a 1-column right pad
+	// keeps the scrollbar off the content, then sidebarContentWidth
+	// (sidebarWidth-2), and 1 column of left padding separates the sidebar from
+	// the main pane.
 	sidebarWidth := 32
 	// The header height
 	const landingHeaderHeight = 4
@@ -4731,8 +5286,13 @@ func (m *UI) generateLayout(w, h int) uiLayout {
 				layout.Len(appRect.Dx()-sidebarWidth),
 				layout.Fill(1),
 			).Split(appRect).Assign(&mainRect, &sideRect)
-			// Add padding left
+			// Add padding left (gap between main pane and sidebar)
 			sideRect.Min.X += 1
+			// The sidebar extends to the terminal's rightmost column so its
+			// reserved scrollbar gutter is flush to the edge and content is
+			// never clipped. The app-level right margin (appRect.Max.X -= 1)
+			// applies to the main pane; the sidebar claims that column back.
+			sideRect.Max.X = area.Max.X
 			var editorRect image.Rectangle
 			layout.Vertical(
 				layout.Len(mainRect.Dy()-editorHeight),
@@ -5032,9 +5592,123 @@ type modeSwitchedMsg struct {
 // closeCompletions closes the completions popup and resets state.
 func (m *UI) closeCompletions() {
 	m.completionsOpen = false
+	m.completionsTrigger = completions.TriggerNone
 	m.completionsQuery = ""
 	m.completionsStartIndex = 0
 	m.completions.Close()
+}
+
+// skillCompletionValues returns the skills offered by the '/' popup.
+//
+// The catalog is the right source: it is the effective, post-dedup,
+// post-disable set, it includes the builtin skills the raw discovery states
+// omit, and it carries each skill's frontmatter description. The discovery
+// states are only a fallback for the window between startup and the first
+// catalog load, where a name-only list still beats an empty popup.
+func (m *UI) skillCompletionValues() []completions.SkillCompletionValue {
+	var values []completions.SkillCompletionValue
+	if len(m.skillCatalog) > 0 {
+		for _, entry := range m.skillCatalog {
+			if entry.Name == "" {
+				continue
+			}
+			values = append(values, completions.SkillCompletionValue{
+				Name:        entry.Name,
+				Description: entry.Description,
+				Path:        entry.ID,
+			})
+		}
+	} else {
+		seen := make(map[string]struct{}, len(m.skillStates))
+		for _, s := range m.skillStates {
+			if s == nil || s.Name == "" || s.State != skills.StateNormal {
+				continue
+			}
+			if _, dup := seen[s.Name]; dup {
+				continue
+			}
+			seen[s.Name] = struct{}{}
+			values = append(values, completions.SkillCompletionValue{
+				Name: s.Name,
+				Path: s.Path,
+			})
+		}
+	}
+	slices.SortFunc(values, func(a, b completions.SkillCompletionValue) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+	return values
+}
+
+// openSkillCompletions opens the completions popup in skill mode at the
+// given trigger index. Skills are already in memory, so no async load is
+// needed.
+// wordCanBeSkillToken reports whether word — the token beginning at the '/'
+// that opened the skill popup — can still be a skill reference.
+//
+// '/' opens both a skill token and every absolute path, and at the moment it
+// is typed the two are indistinguishable. They diverge on the next
+// separator: a skill name is a single segment (plugin skills qualify with a
+// colon, as in "sdd:plan"), so a second '/' means the user is typing a path
+// like /tmp/out.log and the popup must stop claiming their keystrokes.
+func wordCanBeSkillToken(word string) bool {
+	return !strings.Contains(strings.TrimPrefix(word, "/"), "/")
+}
+
+func (m *UI) openSkillCompletions(startIndex int) {
+	values := m.skillCompletionValues()
+	prompts := m.promptCompletionValues()
+	if len(values) == 0 && len(prompts) == 0 {
+		// An open-but-empty popup still consumes enter and the arrow keys,
+		// so a user with nothing configured could not submit a prompt
+		// containing a '/'. Unlike '@' there is nothing to wait on here —
+		// nothing to offer means no popup.
+		return
+	}
+
+	m.completionsOpen = true
+	m.completionsTrigger = completions.TriggerSkill
+	m.completionsQuery = ""
+	m.completionsStartIndex = startIndex
+	m.completionsPositionStart = m.completionsPosition()
+	m.completions.SetSkillItems(values, prompts)
+}
+
+// promptCompletionValues turns the loaded MCP prompts into popup items.
+//
+// Names are server-qualified ("gitea:review"), which is both how
+// commands.LoadMCPPrompts already keys them and the only form that can be
+// unambiguous: prompt names are unique per server, so two servers may each
+// expose "review". Skills are not qualified — Crush skill names come
+// straight from SKILL.md frontmatter and there is no namespace to qualify
+// them with.
+func (m *UI) promptCompletionValues() []completions.PromptCompletionValue {
+	values := make([]completions.PromptCompletionValue, 0, len(m.mcpPrompts))
+	for _, p := range m.mcpPrompts {
+		if p.ClientID == "" || p.PromptID == "" {
+			continue
+		}
+		args := make([]completions.PromptArgument, 0, len(p.Arguments))
+		for _, a := range p.Arguments {
+			args = append(args, completions.PromptArgument{
+				ID:          a.ID,
+				Title:       a.Title,
+				Description: a.Description,
+				Required:    a.Required,
+			})
+		}
+		values = append(values, completions.PromptCompletionValue{
+			Name:        p.ClientID + ":" + p.PromptID,
+			Description: cmp.Or(p.Description, p.Title),
+			MCPName:     p.ClientID,
+			PromptID:    p.PromptID,
+			Arguments:   args,
+		})
+	}
+	slices.SortFunc(values, func(a, b completions.PromptCompletionValue) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+	return values
 }
 
 // insertCompletionText replaces the @query in the textarea with the given text.
@@ -5051,16 +5725,240 @@ func (m *UI) insertCompletionText(text string) bool {
 	m.textarea.SetValue(newValue)
 	m.textarea.MoveToEnd()
 	m.textarea.InsertRune(' ')
+
+	// Record the inserted range so backspace can delete it atomically.
+	// The trailing space is part of the run: deleting the completion
+	// should not leave a stray separator behind.
+	m.lastCompletionText = text + " "
+	m.lastCompletionStart = m.completionsStartIndex
+	m.lastCompletionEnd = m.completionsStartIndex + len(m.lastCompletionText)
+	// The attached path belongs to the run recorded above, so it is reset
+	// here with the rest of the range and re-set by the callers that
+	// actually attach something. Without this it survives into the next
+	// completion: inserting @file.go and then /skill left the file's path
+	// attached to the skill's range, so backspacing the skill removed the
+	// unrelated file's chip.
+	m.lastCompletionFilePath = ""
 	return true
+}
+
+// dropCompletionAttachment removes the attachment that the just-deleted
+// completion put on the prompt, given the prompt text that survives the
+// deletion.
+//
+// Two guards make this safe, both of which the naive "remove by path" version
+// got wrong:
+//
+// Repeat mentions share one attachment. insertFileCompletion's fileCmd
+// dedupes on sessionFileReads, so mentioning the same file twice creates a
+// single attachment owned, in effect, by the first mention. Removing on the
+// second backspace deleted that shared attachment while its first mention was
+// still sitting in the prompt — the chip vanished and the file was silently
+// never sent. So the attachment only goes when nothing left in the prompt
+// still mentions it.
+//
+// Removing it must also roll back the dedupe entry, or the file becomes
+// un-attachable: re-mentioning it hits sessionFileReads, returns nil, and the
+// user gets a mention with no attachment and no indication anything is wrong.
+func (m *UI) dropCompletionAttachment(remaining string) {
+	path := m.lastCompletionFilePath
+	if path == "" {
+		return
+	}
+	if promptMentions(remaining, path) {
+		return
+	}
+	m.attachments.RemoveByFilePath(path)
+	if absPath, err := filepath.Abs(path); err == nil {
+		m.sessionFileReads = slices.DeleteFunc(m.sessionFileReads, func(p string) bool {
+			return p == absPath
+		})
+	}
+}
+
+// promptMentions reports whether value still carries an "@target" token.
+// Matching goes through the same tokenizer that highlights mentions, so what
+// counts as a live mention here is exactly what the user sees highlighted.
+func promptMentions(value, target string) bool {
+	// ScanPromptTokens works a line at a time and reports rune offsets, so
+	// slice the rune view of each line rather than the byte string.
+	for _, line := range strings.Split(value, "\n") {
+		runes := []rune(line)
+		for _, tok := range common.ScanPromptTokens(runes) {
+			if tok.Kind != common.PromptTokenFile {
+				continue
+			}
+			if string(runes[tok.Start+1:tok.End]) == target {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// trackMentionAttachment records which attachment a token in the prompt owns,
+// so deleting that token can take the attachment with it. A token that
+// already has an entry (the same prompt inserted twice, the same file
+// mentioned twice) appends rather than overwrites, so each occurrence can be
+// removed independently.
+func (m *UI) trackMentionAttachment(key, token string) {
+	if m.mentionAttachments == nil {
+		m.mentionAttachments = map[string][]string{}
+	}
+	m.mentionAttachments[token] = append(m.mentionAttachments[token], key)
+}
+
+// dropMentionAttachment removes the attachment owned by a token that has just
+// been deleted from the prompt.
+//
+// This is driven by the deletion itself rather than by reconciling the whole
+// prompt after every keystroke. Reconciling looks more thorough and is much
+// worse: an attachment's identity would have to be recoverable from the
+// prompt text, and it often is not. A path or resource title containing a
+// space does not tokenize back to what was inserted, and the tokenizer's
+// known-name set is re-primed asynchronously when MCP servers reload — each
+// of which made a live attachment disappear mid-composition while its
+// mention sat on screen.
+// Acting only where the token is known to have gone can miss a removal, which
+// is a visible chip the user can delete; the alternative silently drops data
+// the user believes they attached.
+func (m *UI) dropMentionAttachment(token string) {
+	if token == "" {
+		return
+	}
+	keys, ok := m.mentionAttachments[token]
+	if !ok || len(keys) == 0 {
+		return
+	}
+	// A repeat mention shares one attachment (fileCmd dedupes), so it only
+	// goes when nothing left in the prompt still names it.
+	if slices.Contains(m.promptTokenTexts(), token) {
+		return
+	}
+	// The token is gone. Drop one tracking entry and remove its attachment;
+	// if more entries remain (a duplicate token was deleted earlier and the
+	// rest of the prompt was edited away in the meantime), they go too, so
+	// no orphan chip survives its token.
+	key := keys[len(keys)-1]
+	keys = keys[:len(keys)-1]
+	if len(keys) == 0 {
+		delete(m.mentionAttachments, token)
+	} else {
+		m.mentionAttachments[token] = keys
+	}
+	m.attachments.RemoveByFilePath(key)
+	// A late-arriving read for a mention that is already gone would land as
+	// an orphan chip with nothing referring to it.
+	if m.discardedMentions == nil {
+		m.discardedMentions = map[string]bool{}
+	}
+	m.discardedMentions[key] = true
+	// The dedupe record has to go too, or re-mentioning the file silently
+	// attaches nothing.
+	if absPath, err := filepath.Abs(strings.TrimPrefix(token, "@")); err == nil {
+		m.sessionFileReads = slices.DeleteFunc(m.sessionFileReads, func(p string) bool {
+			return p == absPath
+		})
+	}
+}
+
+// resetMentionTracking forgets every token/attachment association. Called
+// when the prompt's attachments are cleared — on send, and on a new session —
+// so a stale entry cannot claim an attachment added later by another path.
+func (m *UI) resetMentionTracking() {
+	m.mentionAttachments = nil
+	m.discardedMentions = nil
+}
+
+// promptTokenTexts is the list of token strings currently in the prompt.
+func (m *UI) promptTokenTexts() []string {
+	var out []string
+	for _, line := range strings.Split(m.textarea.Value(), "\n") {
+		runes := []rune(line)
+		for _, tok := range common.ScanPromptTokens(runes) {
+			out = append(out, string(runes[tok.Start:tok.End]))
+		}
+	}
+	return out
+}
+
+// tokenTextAt returns the token beginning at the given byte offset and ending
+// at the cursor.
+func (m *UI) tokenTextAt(start int) string {
+	value := m.textarea.Value()
+	cur := m.textarea.ByteOffset()
+	if start < 0 || cur > len(value) || start >= cur {
+		return ""
+	}
+	return value[start:cur]
+}
+
+// tokenEndingAtCursor reports the byte offset where the prompt token under// tokenEndingAtCursor reports the byte offset where the prompt token under
+// the cursor begins, when the cursor sits exactly at that token's end.
+//
+// This is what makes a highlighted token delete as a unit: the editor draws
+// "@path", "/skill" and "/server:prompt(a=b)" as single chips, so backspacing
+// into one has to take the whole thing. Anywhere else — mid-word, after a
+// trailing space, on ordinary prose — it reports false and backspace behaves
+// normally.
+func (m *UI) tokenEndingAtCursor() (int, bool) {
+	cur := m.textarea.ByteOffset()
+	if cur <= 0 {
+		return 0, false
+	}
+	value := m.textarea.Value()
+	if cur > len(value) {
+		return 0, false
+	}
+	// Tokens never span lines, so work within the cursor's line and convert
+	// the line-relative rune offsets ScanPromptTokens reports back to byte
+	// offsets in the whole value.
+	lineStart := strings.LastIndexByte(value[:cur], '\n') + 1
+	lineEnd := len(value)
+	if i := strings.IndexByte(value[cur:], '\n'); i >= 0 {
+		lineEnd = cur + i
+	}
+	line := []rune(value[lineStart:lineEnd])
+	for _, tok := range common.ScanPromptTokens(line) {
+		startByte := lineStart + len(string(line[:tok.Start]))
+		endByte := lineStart + len(string(line[:tok.End]))
+		if endByte == cur {
+			return startByte, true
+		}
+	}
+	return 0, false
+}
+
+// clearCompletionRange forgets the last inserted completion, so a later
+// backspace deletes one character like any other.
+func (m *UI) clearCompletionRange() {
+	m.lastCompletionStart = 0
+	m.lastCompletionEnd = 0
+	m.lastCompletionText = ""
+	m.lastCompletionFilePath = ""
+}
+
+// insertAgentCompletion inserts the selected live agent's @handle into
+// the textarea, replacing the @query (#313). No attachment: the handle
+// means routing (leading) or a card (mid-sentence), both decided at
+// submit time by what the prompt looks like then.
+func (m *UI) insertAgentCompletion(handle string) tea.Cmd {
+	prevHeight := m.textarea.Height()
+	if !m.insertCompletionText("@" + handle) {
+		return nil
+	}
+	return m.handleTextareaHeightChange(prevHeight)
 }
 
 // insertFileCompletion inserts the selected file path into the textarea,
 // replacing the @query, and adds the file as an attachment.
 func (m *UI) insertFileCompletion(path string) tea.Cmd {
 	prevHeight := m.textarea.Height()
-	if !m.insertCompletionText(path) {
+	if !m.insertCompletionText("@" + path) {
 		return nil
 	}
+	m.lastCompletionFilePath = path
+	m.trackMentionAttachment(path, "@"+path)
 	heightCmd := m.handleTextareaHeightChange(prevHeight)
 
 	fileCmd := func() tea.Msg {
@@ -5091,10 +5989,18 @@ func (m *UI) insertFileCompletion(path string) tea.Cmd {
 			return nil
 		}
 
+		mimeType, ok := common.SniffAttachmentMIME(content)
+		if !ok {
+			// Content sniffs as binary: skip the attachment. The
+			// @-mention stays in the prompt, so the LLM can still
+			// read the file through tools later.
+			return nil
+		}
+
 		return message.Attachment{
 			FilePath: path,
 			FileName: filepath.Base(path),
-			MimeType: mimeOf(content),
+			MimeType: mimeType,
 			Content:  content,
 		}
 	}
@@ -5102,15 +6008,44 @@ func (m *UI) insertFileCompletion(path string) tea.Cmd {
 }
 
 // insertMCPResourceCompletion inserts the selected resource into the textarea,
-// replacing the @query, and adds the resource as an attachment.
+// replacing the @query, and adds the resource as an attachment. An unexpanded
+// resource template is only inserted as text: its URI still carries RFC 6570
+// placeholders ("cairn://run/{id}"), so reading it now would send the literal
+// braces to the server and fail — the read happens once someone (user or
+// agent) has substituted real values.
 func (m *UI) insertMCPResourceCompletion(item completions.ResourceCompletionValue) tea.Cmd {
 	displayText := cmp.Or(item.Title, item.URI)
+	if item.IsTemplate() {
+		// Insert the raw template URI, not the title: the placeholders are
+		// the point — they show what needs filling in.
+		displayText = item.URI
+	}
 
 	prevHeight := m.textarea.Height()
-	if !m.insertCompletionText(displayText) {
+	// Only prefix '@' when the text can actually read back as one mention.
+	// ScanPromptTokens ends a token at the first space, so "@Daily Report
+	// 2026" highlights as a mention of a file called "Daily" followed by
+	// loose prose, and the model sees the same. A template URI is not a
+	// path at all — "@cairn://run/{id}" invites the model to resolve
+	// something that does not exist. Both keep the bare text they had
+	// before mentions were prefixed.
+	insertText := displayText
+	if !item.IsTemplate() && !strings.ContainsAny(displayText, " \t") {
+		insertText = "@" + displayText
+	}
+	if !m.insertCompletionText(insertText) {
 		return nil
 	}
 	heightCmd := m.handleTextareaHeightChange(prevHeight)
+	if item.IsTemplate() {
+		return heightCmd
+	}
+	// The attachment this completion is about to add is keyed by the
+	// resource URI, so record that — not displayText, which may be the
+	// human-readable title. Without it, backspacing an MCP resource mention
+	// removed the text and left the chip behind.
+	m.lastCompletionFilePath = item.URI
+	m.trackMentionAttachment(item.URI, insertText)
 
 	resourceCmd := func() tea.Msg {
 		contents, err := m.com.Workspace.ReadMCPResource(
@@ -5159,6 +6094,147 @@ func (m *UI) insertMCPResourceCompletion(item completions.ResourceCompletionValu
 	return tea.Batch(heightCmd, resourceCmd)
 }
 
+// insertSkillCompletion inserts the selected skill name into the textarea,
+// replacing the /query. Unlike files, skills are not attached — the
+// "/skill-name" text in the prompt is the signal to load the skill.
+func (m *UI) insertSkillCompletion(skill completions.SkillCompletionValue) tea.Cmd {
+	prevHeight := m.textarea.Height()
+	if !m.insertCompletionText("/" + skill.Name) {
+		return nil
+	}
+	return m.handleTextareaHeightChange(prevHeight)
+}
+
+// insertMCPPromptCompletion handles picking an MCP prompt from the "/" popup.
+//
+// Prompts that declare arguments open the arguments dialog first; the
+// insertion happens once the values come back, via promptArgsResolvedMsg.
+func (m *UI) insertMCPPromptCompletion(p completions.PromptCompletionValue) tea.Cmd {
+	if len(p.Arguments) == 0 {
+		return m.attachMCPPrompt(p.Name, p.MCPName, p.PromptID, nil)
+	}
+	args := make([]commands.Argument, 0, len(p.Arguments))
+	for _, a := range p.Arguments {
+		args = append(args, commands.Argument{
+			ID:          a.ID,
+			Title:       cmp.Or(a.Title, a.ID),
+			Description: a.Description,
+			Required:    a.Required,
+		})
+	}
+	// Capture the splice point before the popup closes: closeCompletions
+	// zeroes completionsStartIndex, and the insertion does not happen until
+	// the dialog resolves. Without carrying it on the action, the token was
+	// spliced at index 0 and ate everything before the trigger.
+	startIndex := m.completionsStartIndex
+	m.pendingPromptTrigger.start = startIndex
+	m.pendingPromptTrigger.text = m.textareaWord()
+	m.closeCompletions()
+	m.dialog.OpenDialog(dialog.NewArguments(m.com, "/"+p.Name, p.Description, args,
+		dialog.ActionInsertMCPPrompt{
+			Name:       p.Name,
+			MCPName:    p.MCPName,
+			PromptID:   p.PromptID,
+			Arguments:  args,
+			StartIndex: startIndex,
+		}))
+	return nil
+}
+
+// attachMCPPrompt resolves the prompt against its server and attaches the
+// result.
+//
+// The resolved body becomes an attachment rather than text spliced into the
+// editor: prompt templates run long, and dropping one into the prompt area
+// would bury whatever the user was writing. The editor keeps a compact
+// "/server:prompt" token — argument values stay out of it, so a long value
+// cannot wrap the token across lines and no escaping scheme leaks into what
+// the user reads — while the body rides along as an attachment the model
+// receives, exactly like an @file mention. The chip under the composer
+// carries the argument count, which is the only piece of argument
+// information the composer needs to show.
+func (m *UI) attachMCPPrompt(name, mcpName, promptID string, args map[string]string) tea.Cmd {
+	// The dialog returns every declared argument, blank ones included. A
+	// blank optional is "not supplied": it must not reach the server and
+	// must not be counted on the chip.
+	supplied := make(map[string]string, len(args))
+	for k, v := range args {
+		if strings.TrimSpace(v) != "" {
+			supplied[k] = v
+		}
+	}
+
+	token := "/" + name
+
+	prevHeight := m.textarea.Height()
+	if !m.insertCompletionText(token) {
+		return nil
+	}
+	// Key the attachment uniquely per insertion. Keying by the prompt name
+	// alone made RemoveByFilePath's first-match delete remove the wrong
+	// entry when the same prompt was inserted twice — dropping one body
+	// while its token was still in the editor.
+	m.promptAttachSeq++
+	attachKey := fmt.Sprintf("%s#%d", name, m.promptAttachSeq)
+	m.lastCompletionFilePath = attachKey
+	m.trackMentionAttachment(attachKey, token)
+	heightCmd := m.handleTextareaHeightChange(prevHeight)
+
+	argCount := len(supplied)
+	insertedText := m.lastCompletionText
+	insertedStart := m.lastCompletionStart
+	promptCmd := func() tea.Msg {
+		body, err := m.com.Workspace.GetMCPPrompt(mcpName, promptID, supplied)
+		if err != nil || body == "" {
+			if err != nil {
+				slog.Warn("Failed to resolve MCP prompt", "prompt", name, "error", err)
+			}
+			// Roll the token back. Leaving it stranded would send the model
+			// the literal "/server:prompt(...)" text with none of the body
+			// behind it — a silently degraded turn rather than a blocked one.
+			return promptResolveFailedMsg{
+				name:  name,
+				start: insertedStart,
+				text:  insertedText,
+				err:   err,
+			}
+		}
+		return message.Attachment{
+			FilePath:       attachKey,
+			FileName:       "/" + name,
+			MimeType:       "text/markdown",
+			Content:        []byte(body),
+			Kind:           message.AttachmentKindMCPPrompt,
+			PromptArgCount: argCount,
+		}
+	}
+	return tea.Batch(heightCmd, promptCmd)
+}
+
+// promptResolveFailedMsg asks the editor to take back a prompt token whose
+// body could not be resolved.
+type promptResolveFailedMsg struct {
+	name  string
+	start int
+	text  string
+	err   error
+}
+
+// removePromptToken deletes a previously inserted prompt token, provided the
+// editor still holds exactly that run at exactly that offset. Anything else
+// means the user has since edited around it, and silently cutting text out of
+// the middle of their prompt would be worse than leaving the token.
+func (m *UI) removePromptToken(start int, text string) {
+	value := m.textarea.Value()
+	end := start + len(text)
+	if start < 0 || end > len(value) || value[start:end] != text {
+		return
+	}
+	m.textarea.SetValue(value[:start] + value[end:])
+	m.textarea.MoveToEnd()
+	m.clearCompletionRange()
+}
+
 // completionsPosition returns the X and Y position for the completions popup.
 func (m *UI) completionsPosition() image.Point {
 	cur := m.textarea.Cursor()
@@ -5193,18 +6269,36 @@ func (m *UI) isAgentBusy() bool {
 	if m.bangCancel != nil {
 		return true
 	}
+	if m.com == nil || m.com.Workspace == nil {
+		return false
+	}
 	return m.agentBusyCache.val
+}
+
+// isCurrentSessionBusy reports whether the agent is actively processing a
+// request for the session the user is currently viewing. Unlike
+// isAgentBusy, activity in another session does not make the current
+// session appear busy.
+//
+// Like isAgentBusy this is a pure cache read (it is called from render
+// paths such as renderPills); a value cached for a different session reads
+// as idle until the off-thread refresh for this session lands.
+func (m *UI) isCurrentSessionBusy() bool {
+	if m.bangCancel != nil {
+		return true
+	}
+	if !m.hasSession() || m.com == nil || m.com.Workspace == nil {
+		return false
+	}
+	if m.sessionBusyCache.session != m.session.ID {
+		return false
+	}
+	return m.sessionBusyCache.val
 }
 
 // hasSession returns true if there is an active session with a valid ID.
 func (m *UI) hasSession() bool {
 	return m.session != nil && m.session.ID != ""
-}
-
-// CurrentSession returns the active session, or nil when there is none.
-// It is safe to call after the TUI has exited.
-func (m *UI) CurrentSession() *session.Session {
-	return m.session
 }
 
 // refreshCronTasks fetches the current session's scheduled tasks from
@@ -5216,6 +6310,20 @@ func (m *UI) refreshCronTasks() {
 	}
 	m.cronTasks = m.com.Workspace.AgentListCronTasks(m.session.ID)
 	m.renderPills()
+}
+
+// CurrentSession returns the active session, or nil when there is none.
+// It is safe to call after the TUI has exited.
+func (m *UI) CurrentSession() *session.Session {
+	return m.session
+}
+
+// focusSidebar moves focus to the sidebar panel, blurring the editor and chat.
+func (m *UI) focusSidebar() {
+	m.focus = uiFocusSidebar
+	m.textarea.Blur()
+	m.chat.Blur()
+	m.updateLayoutAndSize()
 }
 
 // mimeOf detects the MIME type of the given content.
@@ -5253,6 +6361,19 @@ func (m *UI) renderEditorView(width int) string {
 	if len(m.attachments.List()) > 0 {
 		attachmentsView = m.attachments.Render(width)
 	}
+	// Retokenize @file and /skill tokens on every render. The scan is
+	// linear in prompt length and render happens every frame anyway, so
+	// this is the single seam that stays correct for every value-mutation
+	// path (typing, paste, history, completion inserts). Bang mode is a
+	// shell prompt — its slashes are paths, not skills — so tokens are
+	// suppressed there.
+	if m.promptHighlighter != nil {
+		if m.bangMode {
+			m.promptHighlighter.Rescan("")
+		} else {
+			m.promptHighlighter.Rescan(m.textarea.Value())
+		}
+	}
 	return strings.Join([]string{
 		attachmentsView,
 		m.textarea.View(),
@@ -5260,9 +6381,12 @@ func (m *UI) renderEditorView(width int) string {
 	}, "\n")
 }
 
-// cacheSidebarLogo renders and caches the sidebar logo at the specified width.
+// cacheSidebarLogo renders and caches the sidebar logo. width is the full
+// sidebar width; the logo is rendered at the content width (i.e. minus the
+// reserved scrollbar gutter) so it matches drawSidebar and is never clipped
+// when the gutter is drawn.
 func (m *UI) cacheSidebarLogo(width int) {
-	m.sidebarLogo = renderLogo(m.com.Styles, true, m.com.IsHyper(), width)
+	m.sidebarLogo = renderLogo(m.com.Styles, true, m.com.IsHyper(), sidebarContentWidth(width))
 }
 
 // applyThemeForProvider swaps the active theme to the one associated with
@@ -5321,8 +6445,14 @@ func (m *UI) refreshStyles() {
 		m.cacheSidebarLogo(m.layout.sidebar.Dx())
 	}
 	m.textarea.SetStyles(t.Editor.Textarea)
-	m.completions.SetStyles(t.Completions.Normal, t.Completions.Focused, t.Completions.Match)
-	m.attachments.SetStyles(t.Attachments)
+	// The highlighter copies its styles at construction, so it needs the
+	// same re-push every other value-copying subcomponent here gets.
+	if m.promptHighlighter != nil {
+		m.promptHighlighter.SetStyles(t.Editor.TokenFile, t.Editor.TokenSkill)
+		m.promptHighlighter.Rescan(m.textarea.Value())
+	}
+	m.completions.SetStyles(t.Completions.Normal, t.Completions.Focused, t.Completions.Match, t.Completions.Agent)
+	m.attachments.Renderer().SetStyles(t.Attachments)
 	m.todoSpinner.Style = t.Pills.TodoSpinner
 	m.status.help.Styles = t.Help
 	if d := m.dialog.Dialog(dialog.ThemeID); d != nil {
@@ -5354,6 +6484,30 @@ func (m *UI) attachSkill(skillID, name string) tea.Cmd {
 			Content:  content,
 		}
 	}
+}
+
+// ensureSession makes sure a session is active, creating one if none is. It
+// returns a command that loads the freshly created session (nil when a session
+// already existed) and an error if creation failed. It mutates UI state, so
+// callers must run on the Update goroutine.
+func (m *UI) ensureSession() (tea.Cmd, error) {
+	if m.hasSession() {
+		return nil, nil
+	}
+	newSession, err := m.com.Workspace.CreateSession(context.Background(), "New Session")
+	if err != nil {
+		return nil, err
+	}
+	if m.forceCompactMode {
+		m.isCompact = true
+	}
+	var cmd tea.Cmd
+	if newSession.ID != "" {
+		m.session = &newSession
+		cmd = m.loadSession(newSession.ID)
+	}
+	m.setState(uiChat, m.focus)
+	return cmd, nil
 }
 
 // openThemeNewDialog opens the new theme naming dialog. The new theme
@@ -5388,30 +6542,6 @@ func (m *UI) openThemeEditorDialog(themeName string) {
 	m.dialog.OpenDialog(themeDialog)
 }
 
-// ensureSession makes sure a session is active, creating one if none is. It
-// returns a command that loads the freshly created session (nil when a session
-// already existed) and an error if creation failed. It mutates UI state, so
-// callers must run on the Update goroutine.
-func (m *UI) ensureSession() (tea.Cmd, error) {
-	if m.hasSession() {
-		return nil, nil
-	}
-	newSession, err := m.com.Workspace.CreateSession(context.Background(), "New Session")
-	if err != nil {
-		return nil, err
-	}
-	if m.forceCompactMode {
-		m.isCompact = true
-	}
-	var cmd tea.Cmd
-	if newSession.ID != "" {
-		m.session = &newSession
-		cmd = m.loadSession(newSession.ID)
-	}
-	m.setState(uiChat, m.focus)
-	return cmd, nil
-}
-
 // sendMessage sends a message with the given content and attachments.
 func (m *UI) sendMessage(content string, attachments ...message.Attachment) tea.Cmd {
 	return m.sendMessageInternal(content, false, attachments...)
@@ -5422,6 +6552,12 @@ func (m *UI) sendMessageInternal(content string, hidden bool, attachments ...mes
 	if err := m.com.Workspace.AgentReadyErr(); err != nil {
 		return util.ReportError(err)
 	}
+
+	// Start the turn timer.
+	common.StartTurn()
+
+	// A new prompt clears the previous turn's outcome from the status bar.
+	m.turnOutcome = ""
 
 	// Any new prompt supersedes a pending, unconfirmed plan.
 	m.setPlanReadyPending("")
@@ -5435,16 +6571,6 @@ func (m *UI) sendMessageInternal(content string, hidden bool, attachments ...mes
 		cmds = append(cmds, loadCmd)
 	}
 
-	common.StartTurn()
-	m.turnOutcome = ""
-	m.turnStopPending = false
-	m.submissionGen++
-	gen := m.submissionGen
-	activity := m.activityFor(m.session.ID)
-	activity.gen = gen
-	activity.pending++
-	activity.completion = nil
-
 	ctx := context.Background()
 	cmds = append(cmds, func() tea.Msg {
 		for _, path := range m.sessionFileReads {
@@ -5456,6 +6582,12 @@ func (m *UI) sendMessageInternal(content string, hidden bool, attachments ...mes
 
 	// Capture session ID to avoid race with main goroutine updating m.session.
 	sessionID := m.session.ID
+	// The turn's content width hint: tools that read width-sensitive remote
+	// content (A2UI surfaces with server-pre-rendered bar geometry) get the
+	// surface card's interior width so the server sizes its rows to fill
+	// the card. The chat package owns the computation — it must track the
+	// real render chain, not constants copied here.
+	contentWidth := chat.ToolA2UISurfaceWidth(m.layout.main.Dx())
 	// Optimistically mark the agent busy: the prompt we are about to submit
 	// either starts a run or is enqueued behind one. This keeps esc pressed
 	// right after enter routing to cancelAgent instead of reading a stale
@@ -5463,20 +6595,251 @@ func (m *UI) sendMessageInternal(content string, hidden bool, attachments ...mes
 	// Bump the busy/queue generations so any probe started before this
 	// optimistic write is discarded rather than reverting us to idle.
 	m.agentBusyCache.set(true)
+	m.sessionBusyCache.setForSession(true, sessionID)
 	m.busyFetchGen++
-	m.pendingSubmissions++
 	m.invalidatePromptQueue()
 	cmds = append(cmds, func() tea.Msg {
-		// Remote runs return on admission; local runs can execute here.
-		// Both must release optimistic busy state, including on failure.
-		runCtx := message.WithOperatorSteering(context.Background(), true)
+		// AgentRun is fire-and-forget: it returns once the prompt has
+		// been accepted (HTTP 202) or synchronously with a validation
+		// or transport error. Run failures and cancellation surface
+		// through SSE-derived events, not this return value.
+		runCtx := agent.WithContentWidth(context.Background(), contentWidth)
+		// Prompt submissions amend the active turn (operator steering)
+		// whether or not they are generated plan continuations.
+		runCtx = message.WithOperatorSteering(runCtx, true)
 		if hidden {
 			runCtx = message.WithHiddenUserMessage(runCtx)
 		}
 		err := m.com.Workspace.AgentRun(runCtx, sessionID, content, attachments...)
-		return agentRunSubmittedMsg{sessionID: sessionID, gen: gen, err: err}
+		if err != nil && !errors.Is(err, context.Canceled) {
+			return util.InfoMsg{
+				Type: util.InfoTypeError,
+				Msg:  fmt.Sprintf("%v", err),
+			}
+		}
+		return agentRunSubmittedMsg{}
 	})
 	return tea.Batch(cmds...)
+}
+
+// handleA2UIButtonClicked turns an activated A2UI button into an agent turn
+// (#45). The surface that emitted the event is retired first — its field
+// values are read and it stops accepting focus and keys, so the form cannot
+// be re-submitted. A button that reads as a cancel (see
+// chat.A2UIButtonIsCancel) only dismisses; any other button starts a new
+// turn carrying the button and the gathered field values, through the same
+// prompt path a typed message uses (sendMessage → AgentRun, which enqueues
+// behind a running turn).
+//
+// While a sub-agent transcript is being inspected (#407) the click is
+// refused outright: the parent never asked the question, so the surface is
+// left live and nothing is sent anywhere.
+//
+// The retire lookup may miss — e.g. the message content was rescanned and
+// the surface rebuilt without an ID — in which case the submission still
+// goes out with just the button identity rather than being dropped.
+func (m *UI) handleA2UIButtonClicked(clicked a2uievent.ButtonClicked) tea.Cmd {
+	// A surface in an inspected transcript is read-only (#407): the click
+	// must not retire the surface, start a parent turn, or round-trip to
+	// an MCP server.
+	if m.isInspecting() {
+		return util.ReportInfo("This form belongs to a sub-agent transcript and is read-only")
+	}
+	// A cancel/dismiss button only ever dismisses the surface locally —
+	// it never starts an agent turn nor round-trips to an MCP server.
+	// Checked first, before any provenance branch.
+	if chat.A2UIButtonIsCancel(clicked) {
+		m.chat.RetireA2UISurface(clicked.SurfaceID)
+		return nil
+	}
+	// MCP-served surface: route the interaction back to the owning server
+	// when it speaks the action round-trip, instead of starting an agent
+	// turn. The button press is itself the consent, so the a2ui_action
+	// call is not gated on permission. The surface is long-lived — it is
+	// NOT retired, and a surface payload in the response updates it in
+	// place.
+	// Provenance resolves through the item that owns the surface, falling
+	// back to the global surfaceID-keyed registry only when no live item
+	// claims it: surface IDs are server-scoped (typically "default"), so two
+	// servers would otherwise clobber each other in that registry and route
+	// one another's clicks.
+	// An assistant-authored surface is never MCP-owned, whatever the
+	// registries say. It is checked first because assistant items are
+	// invisible to both lookups below — they do not implement
+	// A2UISurfaceItem, and the global registry is keyed by surface ID alone
+	// — so a shared ID would otherwise route this submission to a server
+	// that has nothing to do with it.
+	mcpName, isMCP := "", false
+	if !m.chat.HasAssistantA2UISurface(clicked.SurfaceID) {
+		mcpName, isMCP = m.chat.A2UISurfaceOwner(clicked.SurfaceID)
+		if !isMCP {
+			mcpName, isMCP = chat.A2UISurfaceProvenance(clicked.SurfaceID)
+		}
+	}
+	if isMCP && clicked.Action != nil {
+		if m.mcpServesTool(mcpName, "a2ui_action") {
+			return m.runA2UIAction(mcpName, clicked)
+		}
+		// The server serves surfaces but not the action round-trip: keep
+		// today's behavior so a dumb server still works.
+	}
+	// RetireA2UISurface only matches assistant items, so an MCP surface's
+	// values must be read from the tool item that holds it — otherwise the
+	// fallback submits the button identity with everything the user typed
+	// silently dropped.
+	values, ok := m.chat.RetireA2UISurface(clicked.SurfaceID)
+	if !ok {
+		values, _ = m.chat.A2UISurfaceFieldValues(clicked.SurfaceID)
+	}
+	return m.sendMessage(chat.A2UISubmissionPrompt(clicked, values))
+}
+
+// mcpServesTool reports whether the named MCP server exposes toolName.
+//
+// It reads the workspace's published MCP state rather than mcp.HasTool: that
+// registry is only populated in the process that owns the MCP sessions, so
+// in client/server mode it is permanently empty and every HasTool gate is
+// false — which silently disabled the whole A2UI action round-trip on a
+// remote client and left its /mcp/call-tool route unreachable.
+func (m *UI) mcpServesTool(mcpName, toolName string) bool {
+	if mcpName == "" {
+		return false
+	}
+	info, ok := m.com.Workspace.MCPGetStates()[mcpName]
+	if !ok {
+		return false
+	}
+	return info.ServesA2UITool(toolName)
+}
+
+// a2uiActionResultMsg carries the outcome of an a2ui_action round-trip back
+// to the UI so the surface updates in place (or a plain-text reply lands as
+// tool output) without an agent turn.
+type a2uiActionResultMsg struct {
+	surfaceID string
+	mcpName   string
+	// surfaces holds any A2UI payloads the response embedded, applied to
+	// the surface in place. content holds plain text from the response.
+	surfaces []string
+	content  string
+	err      error
+}
+
+// runA2UIAction calls the owning server's a2ui_action tool with the
+// button's action name and the surface's resolved input values as the
+// context. The call runs off the UI goroutine; the result returns as an
+// a2uiActionResultMsg.
+func (m *UI) runA2UIAction(mcpName string, clicked a2uievent.ButtonClicked) tea.Cmd {
+	values, _ := m.chat.A2UISurfaceFieldValues(clicked.SurfaceID)
+	if values == nil {
+		values = map[string]any{}
+	}
+	args := map[string]any{
+		"name":    clicked.Action.Name,
+		"context": values,
+	}
+	surfaceID := clicked.SurfaceID
+	return func() tea.Msg {
+		res, err := m.com.Workspace.CallMCPTool(context.Background(), mcpName, "a2ui_action", args)
+		if err != nil {
+			return a2uiActionResultMsg{surfaceID: surfaceID, mcpName: mcpName, err: err}
+		}
+		out := a2uiActionResultMsg{surfaceID: surfaceID, mcpName: mcpName, content: res.Content}
+		for _, s := range res.Surfaces {
+			out.surfaces = append(out.surfaces, s.Payload)
+		}
+		return out
+	}
+}
+
+// handleA2UIActionResult applies an a2ui_action response: any A2UI payload
+// updates the originating surface in place (the surface stays live), and any
+// plain text lands as an informational note. A transport/server error is
+// surfaced as an error note — the surface is left untouched.
+func (m *UI) handleA2UIActionResult(msg a2uiActionResultMsg) tea.Cmd {
+	if msg.err != nil {
+		return util.ReportError(fmt.Errorf("A2UI action failed: %w", msg.err))
+	}
+	var cmds []tea.Cmd
+	for _, payload := range msg.surfaces {
+		if cmd := m.applyA2UIPayloadToSurface(msg.mcpName, msg.surfaceID, payload); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+	if msg.content != "" {
+		cmds = append(cmds, util.ReportInfo(msg.content))
+	}
+	if len(cmds) == 0 {
+		return nil
+	}
+	return tea.Batch(cmds...)
+}
+
+// applyA2UIPayloadToSurface scans an A2UI payload and feeds its server
+// messages into the surface the payload targets, which updates in place. A
+// payload that does not scan, or that targets a surface nothing holds, is
+// reported back to the owning server as an a2ui_error when it exposes that
+// tool. clickedID is the surface the interaction came from — the fallback
+// target for a payload that declares no surface of its own — and mcpName is
+// the server that sent it, which is who any error is reported to.
+func (m *UI) applyA2UIPayloadToSurface(mcpName, clickedID, payload string) tea.Cmd {
+	msgs, err := chat.A2UIMessagesFromPayload(payload)
+	if err != nil {
+		return m.reportA2UIError(mcpName, clickedID, "INVALID_JSON",
+			"Failed to parse A2UI payload.")
+	}
+	if len(msgs) == 0 {
+		// The payload parsed but carried no server messages — it scanned
+		// as prose, not A2UI. Applying it would be a silent no-op, which
+		// looks to the user like a dead button.
+		return m.reportA2UIError(mcpName, clickedID, "INVALID_PAYLOAD",
+			"Payload carried no A2UI server messages.")
+	}
+	// Honor the surface the payload itself declares: a server may answer an
+	// action by updating a sibling surface, not the clicked one. Forcing
+	// every payload onto the clicked ID would corrupt that surface instead.
+	target := chat.A2UIMessagesSurfaceID(msgs)
+	if target == "" {
+		target = clickedID
+	}
+	if !m.chat.ApplyA2UISurfaceUpdate(target, msgs) {
+		// Either nothing holds that surface, or the server just deleted
+		// it. A delete is the expected end of a surface's life; a payload
+		// aimed at a surface we never had is a real mismatch worth
+		// reporting back.
+		if !chat.A2UIMessagesDeleteSurface(msgs) {
+			return m.reportA2UIError(mcpName, target, "SURFACE_NOT_FOUND",
+				fmt.Sprintf("No live surface %q to apply the payload to.", target))
+		}
+	}
+	return nil
+}
+
+// reportA2UIError reports a render failure to mcpName via its a2ui_error
+// tool, when it exposes one. Otherwise the failure is only shown to the user
+// (the existing render-failure alert path). mcpName may be empty when the
+// caller only holds a surface ID, in which case the owner is resolved from
+// the surface — item-scoped first, same as the action path, because the
+// global registry is keyed by surface ID alone and two servers sharing an ID
+// clobber each other there.
+func (m *UI) reportA2UIError(mcpName, surfaceID, code, message string) tea.Cmd {
+	ok := mcpName != ""
+	if !ok {
+		if mcpName, ok = m.chat.A2UISurfaceOwner(surfaceID); !ok {
+			mcpName, ok = chat.A2UISurfaceProvenance(surfaceID)
+		}
+	}
+	if !ok || !m.mcpServesTool(mcpName, "a2ui_error") {
+		return nil
+	}
+	args := map[string]any{"code": code, "message": message, "surfaceId": surfaceID}
+	return func() tea.Msg {
+		_, err := m.com.Workspace.CallMCPTool(context.Background(), mcpName, "a2ui_error", args)
+		if err != nil {
+			return util.InfoMsg{Type: util.InfoTypeError, Msg: fmt.Sprintf("A2UI error report failed: %v", err)}
+		}
+		return nil
+	}
 }
 
 // handleChannelMessage injects a channel event pushed by an MCP server into a
@@ -5500,30 +6863,50 @@ func (m *UI) handleChannelMessage(ev mcp.Event) tea.Cmd {
 	}
 	loadCmd, err := m.ensureSession()
 	if err != nil {
-		slog.Debug("Failed to create session for channel message", "error", err)
-		return nil
+		slog.Warn("Failed to create session for channel message", "error", err, "channel", ev.Name)
+		return channelErrorCmd(ev.Name, fmt.Errorf("create session: %w", err))
 	}
 	if !m.hasSession() {
-		slog.Debug("Channel message dropped: no active session after ensureSession", "channel", ev.Name)
 		return loadCmd
 	}
-	// The coordinator sets the channel binding during the turn
-	// (syncSessionChannel), so there is no need to write it here —
-	// doing so would race with the coordinator's own write and
-	// publish a duplicate session update.
+	// The coordinator binds the session to its channel during the turn
+	// (syncSessionChannel), so it is not written here: a second write
+	// would race the coordinator's and publish a duplicate session
+	// update.
 	sessionID := m.session.ID
 	channel := ev.Name
 	content := ev.ChannelMessage
 	runCmd := func() tea.Msg {
-		if err := m.com.Workspace.AgentRunChannel(context.Background(), channel, sessionID, content); err != nil {
-			slog.Debug("Failed to inject channel message", "error", err, "session", sessionID)
+		// The prompt may have been enqueued behind a running turn;
+		// re-fetch busy/queue state.
+		submitted := func() tea.Msg { return agentRunSubmittedMsg{} }
+		err := m.com.Workspace.AgentRunChannel(context.Background(), channel, sessionID, content)
+		if err == nil {
+			return submitted()
 		}
-		return nil
+		slog.Warn("Failed to inject channel message", "error", err, "session", sessionID, "channel", channel)
+		if errors.Is(err, context.Canceled) {
+			return submitted()
+		}
+		// Surface the failure the way a typed prompt's does. Without
+		// this a channel-driven session that fails every turn looks
+		// healthy in the TUI.
+		return tea.BatchMsg{submitted, channelErrorCmd(channel, err)}
 	}
 	if loadCmd != nil {
 		return tea.Batch(loadCmd, runCmd)
 	}
 	return runCmd
+}
+
+// channelErrorCmd reports a failure handling a channel event to the UI,
+// prefixed with the channel name so it reads as coming from that channel
+// rather than from something the user typed.
+func channelErrorCmd(channel string, err error) tea.Cmd {
+	if channel == "" {
+		channel = "channel"
+	}
+	return util.ReportError(fmt.Errorf("%s: %w", channel, err))
 }
 
 // runShellCommand executes a shell command server-side without triggering
@@ -5641,10 +7024,6 @@ func (m *UI) cancelAgent() tea.Cmd {
 	if m.isCanceling {
 		// Second escape press — actually cancel.
 		m.isCanceling = false
-		if activity := m.sessionActivities[m.currentSessionID()]; activity != nil {
-			activity.completion = nil
-			m.pruneActivity(m.currentSessionID())
-		}
 
 		// Cancel a running bang command if one is in progress.
 		if m.bangCancel != nil {
@@ -5710,14 +7089,14 @@ func (m *UI) openDialog(id string) tea.Cmd {
 		if cmd := m.openMCPTogglesDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
-	case dialog.SkillsTogglesID:
-		if cmd := m.openSkillsTogglesDialog(); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
 	case dialog.FilePickerID:
 		if cmd := m.openFilesDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+	case dialog.MCPServersID:
+		m.openMCPServersDialog()
+	case dialog.ChannelsID:
+		m.openChannelsDialog()
 	case dialog.ThemeID:
 		m.openThemeDialog()
 	case dialog.ThemeNewID:
@@ -5728,6 +7107,8 @@ func (m *UI) openDialog(id string) tea.Cmd {
 		if cmd := m.openQuitDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+	case dialog.SkillsID:
+		m.openSkillsDialog()
 	default:
 		// Unknown dialog
 		break
@@ -5789,9 +7170,6 @@ func (m *UI) openCommandsDialog() tea.Cmd {
 		return util.ReportError(err)
 	}
 
-	commands.SetPendingPreview(m.pendingPreview)
-	commands.SetHasCheckpoint(m.session != nil && m.session.SummaryMessageID != "")
-
 	m.dialog.OpenDialog(commands)
 
 	return commands.InitialCmd()
@@ -5825,9 +7203,53 @@ func (m *UI) openNotificationsDialog() tea.Cmd {
 	return nil
 }
 
+// openMCPServersDialog opens the MCP servers management dialog.
+func (m *UI) openMCPServersDialog() {
+	if m.dialog.ContainsDialog(dialog.MCPServersID) {
+		m.dialog.BringToFront(dialog.MCPServersID)
+		return
+	}
+	mcpDialog := dialog.NewMCPServers(m.com, m.com.Workspace)
+	m.dialog.OpenDialog(mcpDialog)
+}
+
+// openChannelsDialog opens the channels management dialog.
+func (m *UI) openChannelsDialog() {
+	if m.dialog.ContainsDialog(dialog.ChannelsID) {
+		m.dialog.BringToFront(dialog.ChannelsID)
+		return
+	}
+	channelsDialog := dialog.NewChannels(m.com, m.com.Workspace)
+	m.dialog.OpenDialog(channelsDialog)
+}
+
+// openSkillsDialog opens the skills management dialog.
+func (m *UI) openSkillsDialog() {
+	if m.dialog.ContainsDialog(dialog.SkillsID) {
+		m.dialog.BringToFront(dialog.SkillsID)
+		return
+	}
+	skillsDialog := dialog.NewSkills(m.com, m.com.Workspace)
+	m.dialog.OpenDialog(skillsDialog)
+}
+
+// sessionChildrenLoadedMsg delivers the sessions picker's sub-agent tree
+// fetched off the Update loop (#409): one ListAllChildSessions round trip
+// per picker open instead of N ListChildSessions calls inside the
+// constructor. gen is the picker generation captured at dispatch; a batch
+// whose generation no longer matches was fetched for a picker that was
+// closed or reopened and is dropped.
+type sessionChildrenLoadedMsg struct {
+	gen      uint64
+	children []session.Session
+	err      error
+}
+
 // openSessionsDialog opens the sessions dialog. If the dialog is already open,
 // it brings it to the front. Otherwise, it will list all the sessions and open
-// the dialog.
+// the dialog, returning a command that fetches the sub-agent tree in one
+// batch (#409) so opening the picker makes no child-session fetch on the
+// Update goroutine.
 func (m *UI) openSessionsDialog() tea.Cmd {
 	if m.dialog.ContainsDialog(dialog.SessionsID) {
 		// Bring to front
@@ -5846,6 +7268,41 @@ func (m *UI) openSessionsDialog() tea.Cmd {
 	}
 
 	m.dialog.OpenDialog(dialog)
+
+	// Capture the workspace and the generation as locals: the command
+	// runs off-thread and must never touch model state; the result is
+	// applied by applySessionChildren on the Update goroutine.
+	m.sessionsChildrenGen++
+	gen := m.sessionsChildrenGen
+	ws := m.com.Workspace
+	return func() tea.Msg {
+		// Bounded: a wedged server (client/server mode) must not leave the
+		// batch in flight for the lifetime of the picker.
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		children, err := ws.ListAllChildSessions(ctx)
+		return sessionChildrenLoadedMsg{gen: gen, children: children, err: err}
+	}
+}
+
+// applySessionChildren hands a fetched sub-agent batch to the open
+// sessions picker (#409). A batch for a picker that was closed or since
+// reopened (generation moved on) is dropped. A failed fetch still lands,
+// as an empty tree plus one warning, so the picker never sits on
+// "Loading" waiting for a batch that is never coming.
+func (m *UI) applySessionChildren(msg sessionChildrenLoadedMsg) tea.Cmd {
+	if msg.gen != m.sessionsChildrenGen || !m.dialog.ContainsDialog(dialog.SessionsID) {
+		return nil
+	}
+	sessionsDialog, ok := m.dialog.Dialog(dialog.SessionsID).(*dialog.Session)
+	if !ok {
+		return nil
+	}
+	if msg.err != nil {
+		sessionsDialog.SetChildren(nil)
+		return util.ReportWarn(fmt.Sprintf("Couldn't load sub-agent sessions: %v", msg.err))
+	}
+	sessionsDialog.SetChildren(msg.children)
 	return nil
 }
 
@@ -6055,137 +7512,11 @@ func (m *UI) openPlanHandoff() {
 	}
 }
 
-// openCheckpointHandoff replaces the textarea with the inline prompt asking
-// what to do with a previewed checkpoint. Dismissing it keeps the staged
-// checkpoint, so the palette still offers keep and discard afterwards.
-func (m *UI) summarizeSession(sessionID string) tea.Cmd {
-	ws := m.com.Workspace
-	if sessionID == m.currentSessionID() {
-		m.turnOutcome = ""
-	}
-	m.submissionGen++
-	gen := m.submissionGen
-	activity := m.activityFor(sessionID)
-	activity.gen = gen
-	activity.pending++
-	activity.completion = nil
-	m.turnStopPending = false
-	m.pendingSubmissions++
-	m.invalidateBusyCaches()
-	m.agentBusyCache.set(true)
-	return func() tea.Msg {
-		return summaryFinishedMsg{sessionID: sessionID, gen: gen, err: ws.AgentSummarize(context.Background(), sessionID, "")}
-	}
-}
-
-func (m *UI) openCheckpointHandoff() {
-	if m.pendingPreview == nil || m.session == nil {
-		return
-	}
-	// Captured at open time: acceptance has to use the counters computed when
-	// this preview was written, so a later change to the staged preview cannot
-	// make the adopted checkpoint disagree with the plan that produced it.
-	preview := *m.pendingPreview
-	inline := dialog.NewCheckpointHandoffInline(m.com)
-	inline.OnKeep = func() tea.Cmd { return m.acceptCheckpoint(preview) }
-	inline.OnDiscard = func() tea.Cmd { return m.discardCheckpoint(preview.CheckpointID) }
-	inline.OnRedo = func(comments string) tea.Cmd { return m.redoCheckpoint(preview.CheckpointID, comments) }
-	m.activeInline = inline
-	m.textarea.Blur()
-	m.focus = uiFocusEditor
-	m.activeInline.SetFocused(true)
-	if m.status != nil {
-		m.updateLayoutAndSize()
-	}
-}
-
-// acceptCheckpoint adopts the staged checkpoint named by preview.
-func (m *UI) acceptCheckpoint(preview compaction.Preview) tea.Cmd {
-	if m.session == nil {
-		return nil
-	}
-	sessionID := m.session.ID
-	return func() tea.Msg {
-		if err := m.com.Workspace.AgentConfirmSummarize(context.Background(), sessionID, preview); err != nil {
-			return util.ReportError(err)()
-		}
-		return discardPreviewMsg{}
-	}
-}
-
-// discardCheckpoint throws the staged checkpoint away and changes nothing.
-func (m *UI) discardCheckpoint(checkpointID string) tea.Cmd {
-	if m.session == nil {
-		return nil
-	}
-	sessionID := m.session.ID
-	return func() tea.Msg {
-		if err := m.com.Workspace.AgentDiscardSummarize(context.Background(), sessionID, checkpointID); err != nil {
-			return util.ReportError(err)()
-		}
-		return discardPreviewMsg{}
-	}
-}
-
-// redoCheckpoint discards the staged checkpoint and writes another with the
-// user's notes as the emphasis. The old one has to go first: previews are rows
-// in the transcript, so answering twice without discarding would leave the
-// session holding checkpoints nobody asked for, each rendering as a summary.
-func (m *UI) redoCheckpoint(checkpointID, comments string) tea.Cmd {
-	if m.session == nil {
-		return nil
-	}
-	sessionID := m.session.ID
-	m.pendingPreview = nil
-	return func() tea.Msg {
-		if err := m.com.Workspace.AgentDiscardSummarize(context.Background(), sessionID, checkpointID); err != nil {
-			return util.ReportError(err)()
-		}
-		fresh, err := m.com.Workspace.AgentSummarizePreview(context.Background(), sessionID, comments)
-		if err != nil {
-			return util.ReportError(err)()
-		}
-		return previewCheckpointMsg{preview: fresh}
-	}
-}
-
 // handleAgentNotification translates domain agent events into desktop
 // notifications using the UI notification backend.
-// compactionVisible reports whether the in-flight compaction note describes
-// the session the user is looking at. A compaction keeps running when they
-// switch away, and its status must not follow them to the next session.
-func (m *UI) compactionVisible() bool {
-	return m.summarizingNote != "" && m.session != nil && m.summarizingNoteSession == m.session.ID
-}
-
 func (m *UI) handleAgentNotification(n notify.Notification) tea.Cmd {
 	var cmds []tea.Cmd
 	switch n.Type {
-	case notify.TypeAgentFinished:
-		if n.SessionID == m.currentSessionID() && m.turnOutcome == tea.ProgramStateDone {
-			m.turnOutcome = ""
-		}
-		// Show what the stored balance says right away, and fetch again:
-		// the refresh for the turn's last response is only kicked off once
-		// its request finishes, so it may still be in flight here.
-		m.updateHyperCredits()
-		if m.com.IsHyper() {
-			cmds = append(cmds, m.fetchHyperCredits())
-		}
-	case notify.TypeAgentError:
-		if n.SessionID == m.currentSessionID() {
-			m.turnOutcome = tea.ProgramStateError
-		}
-		// Queued runs have no waiting caller to display their errors.
-		if n.Message != "" {
-			cmds = append(cmds, util.ReportError(errors.New(n.Message)))
-		}
-	case notify.TypeReAuthenticate:
-		return m.handleReAuthenticate(n.ProviderID)
-	case notify.TypeAWSSSOAuth:
-		return m.handleAWSSSOAuth(n.AWSSOCommand, n.AWSSOURL)
-	case notify.TypeAWSSSOAuthResult:
-		return m.handleAWSSSOAuthResult(n.Message)
 	case notify.TypeSummarizing:
 		// While a compaction runs the placeholder says what it is doing and
 		// how far along it is, so minutes of streaming are not mistaken for a
@@ -6207,24 +7538,69 @@ func (m *UI) handleAgentNotification(n notify.Notification) tea.Cmd {
 			return nil
 		}
 		return util.ReportInfo(n.Progress)
+	case notify.TypeAgentFinished:
+		common.StopTurn()
+		m.turnStopPending = n.FinishState != notify.FinishContinuing
+		if n.SessionID == m.currentSessionID() {
+			// The finish state says whether this completion ends the run
+			// or hands work to the next queued turn; the status program
+			// reports it directly instead of inferring from stale states.
+			switch n.FinishState {
+			case notify.FinishIdleSuccess:
+				// A queued submission or an optimistic in-flight one means
+				// the session keeps working after this completion.
+				if m.pendingSubmissions > 0 || m.activityFor(n.SessionID).pending > 0 {
+					m.turnOutcome = tea.ProgramStateWorking
+				} else {
+					m.turnOutcome = tea.ProgramStateDone
+				}
+				// Probe idle before the "waiting" notification; local runs
+				// can publish idle before the submission's own return.
+				act := m.activityFor(n.SessionID)
+				act.completion = &n
+				if act.pending == 0 {
+					cmds = append(cmds, m.dispatchCompletionCheck(&n))
+				}
+			case notify.FinishIdleUnsuccessful:
+				// An already-reported error stays the loudest signal; every
+				// other unsuccessful finish reads as idle.
+				if m.turnOutcome != tea.ProgramStateError {
+					m.turnOutcome = tea.ProgramStateIdle
+				}
+			}
+		}
+		cmds = append(cmds, m.sendNotification(notification.Notification{
+			Title:   "Crush is waiting...",
+			Message: fmt.Sprintf("Agent's turn completed in \"%s\"", n.SessionTitle),
+		}))
+		// Show what the stored balance says right away, and fetch again:
+		// the refresh for the turn's last response is only kicked off once
+		// its request finishes, so it may still be in flight here.
+		m.updateHyperCredits()
+		if m.com.IsHyper() {
+			cmds = append(cmds, m.fetchHyperCredits())
+		}
+	case notify.TypeAgentError:
+		if n.SessionID == m.currentSessionID() {
+			m.turnOutcome = tea.ProgramStateError
+		}
+		// Terminal edge like TypeAgentFinished; fall through to the
+		// busy/queue refresh below.
+	case notify.TypeReAuthenticate:
+		return m.handleReAuthenticate(n.ProviderID)
+	case notify.TypeAWSSSOAuth:
+		return m.handleAWSSSOAuth(n.AWSSOCommand, n.AWSSOURL)
+	case notify.TypeAWSSSOAuthResult:
+		return m.handleAWSSSOAuthResult(n.Message)
 	default:
 		return nil
 	}
-	activity := m.activityFor(n.SessionID)
-	defer m.pruneActivity(n.SessionID)
-	activity.completion = nil
-	m.turnStopPending = n.Type == notify.TypeAgentError || n.FinishState != notify.FinishContinuing
-	// A turn ending does not mean the session is idle. Re-probe before
-	// stopping the timer or presenting a successful idle notification.
+	// TypeAgentFinished / TypeAgentError are the busy→idle edge: the agent
+	// clears its active request before publishing precisely so observers
+	// can re-probe. Drop the memoized busy state and re-fetch it and the
+	// prompt queue off-thread.
 	m.invalidateBusyCaches()
 	m.invalidatePromptQueue()
-	if n.Type == notify.TypeAgentFinished && n.FinishState == notify.FinishIdleSuccess {
-		activity.completion = &n
-		// Local AgentRun can publish idle before its own submission returns.
-		if activity.pending == 0 {
-			cmds = append(cmds, m.dispatchCompletionCheck(activity.completion))
-		}
-	}
 	if cmd := m.dispatchBusyRefresh(); cmd != nil {
 		cmds = append(cmds, cmd)
 	}
@@ -6248,6 +7624,56 @@ func (m *UI) handleReAuthenticate(providerID string) tea.Cmd {
 		return nil
 	}
 	return m.openAuthenticationDialog(providerCfg.ToProvider(), cfg.Models[agentCfg.Model], agentCfg.Model)
+}
+
+// handleSlashCommand processes slash commands typed in the editor. If the
+// input matches a known slash command it executes the command and returns
+// (cmd, true); otherwise it returns (nil, false) so the caller can continue
+// normal message processing.
+func (m *UI) handleSlashCommand(value string) (tea.Cmd, bool) {
+	switch value {
+	case "/clear":
+		m.randomizePlaceholders()
+		if m.isCurrentSessionBusy() {
+			m.historyReset()
+			return util.ReportWarn("Agent is busy, please wait before starting a new session..."), true
+		}
+		if !m.hasSession() {
+			// No active session to start fresh from, but /clear should still
+			// reset the input history/draft — matching /compact and the prior
+			// behaviour. newSession would early-return without resetting.
+			m.historyReset()
+			return nil, true
+		}
+		return m.newSession(), true
+
+	case "/compact":
+		m.randomizePlaceholders()
+		m.historyReset()
+		if m.isCurrentSessionBusy() {
+			return util.ReportWarn("Agent is busy, please wait before summarizing session..."), true
+		}
+		if !m.hasSession() {
+			return nil, true
+		}
+		sessionID := m.session.ID
+		return func() tea.Msg {
+			err := m.com.Workspace.AgentSummarize(context.Background(), sessionID, "")
+			if err != nil {
+				return util.ReportError(err)()
+			}
+			return nil
+		}, true
+
+	default:
+		// Match bare "/search" too: without this, typing the command with
+		// no query falls through as an unknown command rather than
+		// explaining that it is not configured yet.
+		if value == "/search" || strings.HasPrefix(value, "/search ") {
+			return util.ReportWarn("Semantic search is not yet configured. Add an embedding provider to crush.json to enable /search."), true
+		}
+		return nil, false
+	}
 }
 
 // handleAWSSSOAuth opens the AWS SSO progress dialog (or updates the SSO URL
@@ -6303,9 +7729,12 @@ func (m *UI) newSession() tea.Cmd {
 
 	planCmd := m.resetPlanModeState()
 	m.session = nil
-	m.sidebarOffset = 0
+	m.clearInspectState()
+	m.inspectPending = nil
+	m.sidebarScroll = 0
 	m.sessionFiles = nil
 	m.sessionFileReads = nil
+	m.resetMentionTracking()
 	m.setState(uiLanding, uiFocusEditor)
 	m.textarea.Focus()
 	m.chat.Blur()
@@ -6365,6 +7794,32 @@ func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {
 		return nil
 	}
 
+	// When the pasted content is strictly empty, the clipboard likely holds
+	// a non-text format (e.g. an image copied from Preview on macOS). On
+	// macOS, terminal emulators intercept CMD+V and send the clipboard's
+	// text via bracketed paste; if the clipboard has an image instead of
+	// text, the resulting PasteMsg is empty. Fall back to reading image data
+	// from the native clipboard so the paste is not silently swallowed.
+	// (GitHub issue #197)
+	//
+	// The check is a strict == "" rather than TrimSpace: the #197 repro
+	// produces a strictly empty message, and trimming would also swallow
+	// genuine whitespace-only pastes (silently dropping them when no image is
+	// found). Mirroring the key-bound path (ui.go:2476-2480), the fallback is
+	// gated to image-capable models so a text-only model doesn't attach an
+	// image chip that preparePrompt then silently drops at send time.
+	if msg.Content == "" {
+		if m.currentModelSupportsImages() {
+			return m.pasteImageFromClipboard
+		}
+		// An empty paste on an image-incapable model means the clipboard
+		// holds something the model can't use (most commonly an image) or
+		// nothing at all; either way the paste would otherwise vanish with
+		// zero feedback, which made #197 undiagnosable from the UX. Warn
+		// instead of returning nil so the user knows why nothing landed.
+		return util.ReportWarn(fmt.Sprintf("Paste ignored: %s doesn't support images", m.currentModelName()))
+	}
+
 	if hasPasteExceededThreshold(msg) {
 		return func() tea.Msg {
 			content := []byte(msg.Content)
@@ -6372,8 +7827,10 @@ func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {
 				return util.ReportWarn("Paste is too big (>5mb)")
 			}
 			name := fmt.Sprintf("paste_%d.txt", m.pasteIdx())
-			mimeBufferSize := min(512, len(content))
-			mimeType := http.DetectContentType(content[:mimeBufferSize])
+			mimeType, ok := common.SniffAttachmentMIME(content)
+			if !ok {
+				return util.ReportWarn(fmt.Sprintf("Paste looks binary (%s), not attaching", mimeType))
+			}
 			return message.Attachment{
 				FileName: name,
 				FilePath: name,
@@ -6395,7 +7852,8 @@ func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {
 			if _, err := os.Stat(path); os.IsNotExist(err) {
 				return false
 			}
-			if !common.IsImagePath(path) {
+
+			if !common.IsAllowedAttachmentType(path) {
 				return false
 			}
 		}
@@ -6453,9 +7911,14 @@ func (m *UI) handleFilePathPaste(path string) tea.Cmd {
 			return util.ReportError(err)
 		}
 
-		mimeBufferSize := min(512, len(content))
-		mimeType := http.DetectContentType(content[:mimeBufferSize])
 		fileName := filepath.Base(path)
+		mimeType, ok := common.SniffAttachmentMIME(content)
+		if !ok {
+			// Allowed by extension but the content sniffs as binary —
+			// attaching would inline byte soup or send a file part
+			// providers reject.
+			return util.ReportWarn(fmt.Sprintf("%s looks binary (%s), not attaching", fileName, mimeType))
+		}
 		return message.Attachment{
 			FilePath: path,
 			FileName: fileName,
@@ -6463,19 +7926,6 @@ func (m *UI) handleFilePathPaste(path string) tea.Cmd {
 			Content:  content,
 		}
 	}
-}
-
-// pasteTextFromClipboard reads text from the system clipboard and returns a
-// tea.PasteMsg so it flows through the same paste logic as bracketed paste.
-func (m *UI) pasteTextFromClipboard() tea.Msg {
-	textData, err := clipboard.Read(clipboard.FormatText)
-	if err != nil || len(textData) == 0 {
-		return util.InfoMsg{
-			Type: util.InfoTypeError,
-			Msg:  "Clipboard is empty or does not contain text",
-		}
-	}
-	return tea.PasteMsg{Content: string(textData)}
 }
 
 // pasteImageFromClipboard reads image data from the system clipboard and
@@ -6513,38 +7963,15 @@ func (m *UI) pasteImageFromClipboard() tea.Msg {
 		return nil // Clipboard does not contain an image or valid file path
 	}
 
-	if !common.IsImagePath(path) {
-		return util.NewInfoMsg("File type is not a supported image format")
+	if !common.IsAllowedAttachmentType(path) {
+		return util.NewInfoMsg("File type is not supported")
 	}
 
-	fileInfo, statErr := os.Stat(path)
-	if statErr != nil {
-		return util.InfoMsg{
-			Type: util.InfoTypeError,
-			Msg:  fmt.Sprintf("Unable to read file: %v", statErr),
-		}
-	}
-	if fileInfo.Size() > common.MaxAttachmentSize {
-		return util.InfoMsg{
-			Type: util.InfoTypeError,
-			Msg:  "File too large, max 5MB",
-		}
-	}
-
-	content, readErr := os.ReadFile(path)
-	if readErr != nil {
-		return util.InfoMsg{
-			Type: util.InfoTypeError,
-			Msg:  fmt.Sprintf("Unable to read file: %v", readErr),
-		}
-	}
-
-	return message.Attachment{
-		FilePath: path,
-		FileName: filepath.Base(path),
-		MimeType: mimeOf(content),
-		Content:  content,
-	}
+	// Same pipeline as pasting a path into the terminal: stat, size cap,
+	// and the binary-content sniff. Duplicating it here previously let a
+	// binary file attach through the PasteImage key that the terminal
+	// paste path would have rejected.
+	return m.handleFilePathPaste(path)()
 }
 
 var pasteRE = regexp.MustCompile(`paste_(\d+).txt`)
@@ -6657,22 +8084,6 @@ func (m *UI) handleStateChanged() []tea.Cmd {
 	}
 }
 
-// refreshMCPStates re-seeds MCP client states without handleStateChanged's
-// UpdateAgentModel side effect, so it is safe to call on a timer.
-func (m *UI) refreshMCPStates() tea.Cmd {
-	return func() tea.Msg {
-		return mcpStateChangedMsg{states: m.com.Workspace.MCPGetStates()}
-	}
-}
-
-const mcpRefreshInterval = 2 * time.Second
-
-func mcpRefreshTick() tea.Cmd {
-	return tea.Tick(mcpRefreshInterval, func(time.Time) tea.Msg {
-		return mcpRefreshTickMsg{}
-	})
-}
-
 func handleMCPPromptsEvent(ws workspace.Workspace, name string) tea.Cmd {
 	return func() tea.Msg {
 		ws.MCPRefreshPrompts(context.Background(), name)
@@ -6723,6 +8134,51 @@ func (m *UI) disableDockerMCP() tea.Msg {
 	return util.NewInfoMsg("Docker MCP disabled successfully")
 }
 
+// toggleSkill enables or disables a skill by name, persisting the change
+// to config and reloading skills so the change takes effect immediately.
+func (m *UI) toggleSkill(skillName string) tea.Cmd {
+	if skillName == "" {
+		// Never persist an empty name to disabled_skills. Broken skill
+		// files produce states with no name; toggling them is meaningless.
+		slog.Warn("Ignoring skill toggle with empty skill name")
+		return nil
+	}
+	return func() tea.Msg {
+		cfg := m.com.Config()
+		if cfg == nil || cfg.Options == nil {
+			return util.NewErrorMsg(fmt.Errorf("no config available"))
+		}
+
+		disabled := cfg.Options.DisabledSkills
+		found := false
+		var newList []string
+		for _, name := range disabled {
+			if name == skillName {
+				found = true
+				continue
+			}
+			newList = append(newList, name)
+		}
+
+		action := "enabled"
+		if !found {
+			newList = append(newList, skillName)
+			action = "disabled"
+		}
+
+		if err := m.com.Workspace.SetConfigField(config.ScopeGlobal, "options.disabled_skills", newList); err != nil {
+			return util.ReportError(err)()
+		}
+
+		// Reload skills so the change takes effect immediately.
+		if err := m.com.Workspace.ReloadSkills(); err != nil {
+			return util.ReportError(err)()
+		}
+
+		return skillsRefreshedMsg{info: fmt.Sprintf("Skill %q %s", skillName, action)}
+	}
+}
+
 // renderLogo renders the Crush logo with the given styles and dimensions.
 func renderLogo(t *styles.Styles, compact, hyper bool, width int) string {
 	return logo.Render(t.Logo.GradCanvas, version.Version, compact, logo.Opts{
@@ -6736,10 +8192,136 @@ func renderLogo(t *styles.Styles, compact, hyper bool, width int) string {
 	})
 }
 
-// previewCheckpointMsg carries a staged checkpoint back from the workspace so
-// the model can hold it for the accept/discard commands.
-type previewCheckpointMsg struct{ preview compaction.Preview }
+// gitBranchLabel renders the polled branch with the git branch glyph when
+// the terminal is expected to render Nerd Font glyphs. Without Nerd Font
+// support it is the bare branch name, as it has always been.
+func (m *UI) gitBranchLabel() string {
+	if m.gitBranch == "" {
+		return ""
+	}
+	if glyph := nerdfont.Glyph(styles.GitBranchIcon, ""); glyph != "" {
+		return glyph + " " + m.gitBranch
+	}
+	return m.gitBranch
+}
 
-// discardPreviewMsg clears the staged checkpoint once it has been accepted or
-// thrown away, so the palette stops offering a decision that is already made.
-type discardPreviewMsg struct{}
+func (m *UI) openCheckpointHandoff() {
+	if m.pendingPreview == nil || m.session == nil {
+		return
+	}
+	// Captured at open time: acceptance has to use the counters computed when
+	// this preview was written, so a later change to the staged preview cannot
+	// make the adopted checkpoint disagree with the plan that produced it.
+	preview := *m.pendingPreview
+	inline := dialog.NewCheckpointHandoffInline(m.com)
+	inline.OnKeep = func() tea.Cmd { return m.acceptCheckpoint(preview) }
+	inline.OnDiscard = func() tea.Cmd { return m.discardCheckpoint(preview.CheckpointID) }
+	inline.OnRedo = func(comments string) tea.Cmd { return m.redoCheckpoint(preview.CheckpointID, comments) }
+	m.activeInline = inline
+	m.textarea.Blur()
+	m.focus = uiFocusEditor
+	m.activeInline.SetFocused(true)
+	if m.status != nil {
+		m.updateLayoutAndSize()
+	}
+}
+
+// acceptCheckpoint adopts the staged checkpoint named by preview.
+func (m *UI) acceptCheckpoint(preview compaction.Preview) tea.Cmd {
+	if m.session == nil {
+		return nil
+	}
+	sessionID := m.session.ID
+	return func() tea.Msg {
+		if err := m.com.Workspace.AgentConfirmSummarize(context.Background(), sessionID, preview); err != nil {
+			return util.ReportError(err)()
+		}
+		return discardPreviewMsg{}
+	}
+}
+
+// discardCheckpoint throws the staged checkpoint away and changes nothing.
+func (m *UI) discardCheckpoint(checkpointID string) tea.Cmd {
+	if m.session == nil {
+		return nil
+	}
+	sessionID := m.session.ID
+	return func() tea.Msg {
+		if err := m.com.Workspace.AgentDiscardSummarize(context.Background(), sessionID, checkpointID); err != nil {
+			return util.ReportError(err)()
+		}
+		return discardPreviewMsg{}
+	}
+}
+
+// redoCheckpoint discards the staged checkpoint and writes another with the
+// user's notes as the emphasis. The old one has to go first: previews are rows
+// in the transcript, so answering twice without discarding would leave the
+// session holding checkpoints nobody asked for, each rendering as a summary.
+func (m *UI) redoCheckpoint(checkpointID, comments string) tea.Cmd {
+	if m.session == nil {
+		return nil
+	}
+	sessionID := m.session.ID
+	m.pendingPreview = nil
+	return func() tea.Msg {
+		if err := m.com.Workspace.AgentDiscardSummarize(context.Background(), sessionID, checkpointID); err != nil {
+			return util.ReportError(err)()
+		}
+		fresh, err := m.com.Workspace.AgentSummarizePreview(context.Background(), sessionID, comments)
+		if err != nil {
+			return util.ReportError(err)()
+		}
+		return previewCheckpointMsg{preview: fresh}
+	}
+}
+
+// compactionVisible reports whether the in-flight compaction note describes
+// the session the user is looking at. A compaction keeps running when they
+// switch away, and its status must not follow them to the next session.
+func (m *UI) compactionVisible() bool {
+	return m.summarizingNote != "" && m.session != nil && m.summarizingNoteSession == m.session.ID
+}
+
+// sessionActivity retains only submissions and completion checks still pending.
+
+// scaledWheelLines converts a coalesced wheel delta into whole scroll lines
+// using the configured scroll speed multiplier. Fractional results below one
+// line are accumulated so sub-1 speeds still scroll over successive events.
+func (m *UI) scaledWheelLines(delta float64) int {
+	speed := config.DefaultScrollSpeed
+	if cfg := m.com.Config(); cfg != nil && cfg.Options != nil {
+		speed = cfg.Options.TUI.ScrollSpeedValue()
+	}
+	scaled := delta*speed + m.wheelRemainder
+	lines := int(scaled)
+	m.wheelRemainder = scaled - float64(lines)
+	return lines
+}
+
+// applyNerdFontsOption wires the tui.nerd_fonts option into Nerd Font
+// detection: nil keeps automatic detection, and true or false force glyphs
+// on and off.
+func applyNerdFontsOption(opts *config.Options) {
+	if opts == nil || opts.TUI == nil || opts.TUI.NerdFonts == nil {
+		nerdfont.ClearOverride()
+		return
+	}
+	nerdfont.SetOverride(*opts.TUI.NerdFonts)
+}
+
+// refreshMCPStates re-seeds MCP client states without handleStateChanged's
+// UpdateAgentModel side effect, so it is safe to call on a timer.
+func (m *UI) refreshMCPStates() tea.Cmd {
+	return func() tea.Msg {
+		return mcpStateChangedMsg{states: m.com.Workspace.MCPGetStates()}
+	}
+}
+
+const mcpRefreshInterval = 2 * time.Second
+
+func mcpRefreshTick() tea.Cmd {
+	return tea.Tick(mcpRefreshInterval, func(time.Time) tea.Msg {
+		return mcpRefreshTickMsg{}
+	})
+}

@@ -31,6 +31,7 @@ import (
 	"charm.land/fantasy/providers/bedrock"
 	"charm.land/fantasy/providers/google"
 	"charm.land/fantasy/providers/openai"
+	"charm.land/fantasy/providers/openaicompat"
 	"charm.land/fantasy/providers/openrouter"
 	"charm.land/fantasy/providers/vercel"
 	"charm.land/lipgloss/v2"
@@ -55,6 +56,11 @@ import (
 
 const (
 	DefaultSessionName = "Untitled Session"
+
+	// Constants for auto-summarization thresholds
+	largeContextWindowThreshold = 200_000
+	largeContextWindowBuffer    = 20_000
+	smallContextWindowRatio     = 0.2
 )
 
 var userAgent = fmt.Sprintf("Charm-Crush/%s (https://charm.land/crush)", version.Version)
@@ -82,24 +88,45 @@ type SessionAgentCall struct {
 	// session that may be busy) MUST set it; SessionID alone is
 	// ambiguous when concurrent turns share the same session.
 	RunID             string
-	Channel           string
 	HiddenUserMessage bool
-	Prompt            string
-	ProviderOptions   fantasy.ProviderOptions
-	Attachments       []message.Attachment
-	MaxOutputTokens   int64
-	Temperature       *float64
-	TopP              *float64
-	TopK              *int64
-	FrequencyPenalty  *float64
-	PresencePenalty   *float64
-	NonInteractive    bool
+	// Steer marks the call as a mid-run injection into a running
+	// dispatched agent (#312): the persisted user message carries
+	// TextContent.Steer so a rebuilt transcript can tell steers apart
+	// from the dispatch's initial prompt and from todo nudges (#410).
+	// Only the injection paths set it; callers cannot forge it onto an
+	// ordinary prompt.
+	Steer   bool
+	Channel string
+	// ContentWidth is the UI's chat content width hint in cells (0 when
+	// the turn has no interactive UI). Tools rendering width-sensitive
+	// remote content (e.g. A2UI surfaces with pre-sized bar geometry)
+	// use it to ask the server for exactly the right size.
+	ContentWidth     int
+	Prompt           string
+	ProviderOptions  fantasy.ProviderOptions
+	Attachments      []message.Attachment
+	MaxOutputTokens  int64
+	Temperature      *float64
+	TopP             *float64
+	TopK             *int64
+	FrequencyPenalty *float64
+	PresencePenalty  *float64
+	NonInteractive   bool
 	// PermissionPolicy is the permission behavior for this turn. Unlike the
 	// caller's context, it is retained when the turn is queued.
 	PermissionPolicy permission.RequestPolicy
 	// OperatorSteering permits anonymous operator input to amend the active
 	// turn without changing its permission policy. Channel input is excluded.
 	OperatorSteering bool
+	// systemDelivery marks a dispatch-result delivery turn (#388): a
+	// queue partition keeps it where it would drop a user prompt
+	// (ClearQueue, Cancel, the cancel-covered handoffs), and the
+	// queued-prompt surfaces the UI reads (QueuedPrompts,
+	// QueuedPromptsList) skip it, so Esc-clears-queue never drops a
+	// delivery and the queue pill never counts one. It is set from the
+	// WithSystemDelivery context marker on the delivery path and is
+	// unexported so external callers cannot forge it.
+	systemDelivery bool
 	// OnComplete, when non-nil, replaces the default RunComplete
 	// publish path: the inner Run hands the terminal payload to this
 	// callback instead of emitting it on the RunComplete broker. The
@@ -113,6 +140,19 @@ type SessionAgentCall struct {
 	// recursion drains, so falling back to the default broker
 	// publish keeps the event visible to subscribers.
 	OnComplete func(notify.RunComplete)
+	// OnConsumed, when non-nil, reports what the queue did with this
+	// call (#351): true exactly once, after the message was consumed —
+	// persisted into the active turn by a fold, or the call was
+	// dequeued to run as its own turn — and false exactly once when a
+	// queue-removal path dropped it without running (a cancel covering
+	// it, or an explicit queue clear). The A2A executor's steer path
+	// waits on it to turn the enqueue into a terminal task state, and a
+	// queued dispatch delivery stamps its durable records delivered on
+	// true (#355); a run that ends with the call still queued fires
+	// nothing, and that stranded case is #398's. enqueueCall preserves
+	// it across queueing; every fire site is nil-safe and fires at most
+	// once per call.
+	OnConsumed func(consumed bool)
 	// Accepted, when non-nil, is the accept reservation taken by
 	// BeginAccepted before the call was dispatched onto a goroutine
 	// (the client/server fire-and-forget path). Run consumes it under
@@ -130,21 +170,28 @@ type SessionAgentCall struct {
 	// paths treat as covered by any present mark, preserving the
 	// pre-sequence behavior.
 	acceptSeq uint64
-	// turn is shared only with this call's automatic-summary continuations.
-	// Ordinary queued submissions receive their own identity on promotion.
-	turn *turnOutcome
-	// OnAuthRefresh, when non-nil, is called by fantasy when a stream
-	// fails with an authentication error (HTTP 401). The callback should
-	// refresh credentials and return nil on success, in which case
-	// fantasy retries the stream transparently. Returning an error
-	// surfaces the original auth error without retry.
-	OnAuthRefresh func(ctx context.Context, err *fantasy.ProviderError) error
 	// channelMeta holds the attributes of the <channel> element a
 	// channel-originated turn was started with, parsed once at Run
 	// entry. It survives the auto-summarize continuation, whose Prompt
 	// is rewritten and no longer carries the element, so the reply
 	// target is not lost when a long channel turn is summarized.
 	channelMeta map[string]string
+	// OnAuthRefresh, when non-nil, is called by fantasy when a stream
+	// fails with an authentication error (HTTP 401). The callback should
+	// refresh credentials and return nil on success, in which case
+	// fantasy retries the stream transparently. Returning an error
+	// surfaces the original auth error without retry.
+	OnAuthRefresh func(ctx context.Context, err *fantasy.ProviderError) error
+	// turnText, when non-nil, is called once with the finished turn's
+	// response text as its arguments, after the turn's final step but
+	// before the run hands off to a queued follow-up. enqueueCall strips
+	// only the exported hooks, so the field survives queueing: a turn
+	// re-queued by a summarize continuation reports into the same
+	// holder. Set only on the dispatch call template, which routes by
+	// the turn's own call: the work turn reports its findings, a steer
+	// turn (#397) reports into the steers' record instead. Nil
+	// everywhere else.
+	turnText func(call SessionAgentCall, text string)
 }
 
 // filterToolsForChannel scopes the tool list for a turn. A channel-originated
@@ -173,18 +220,16 @@ func filterToolsForChannel(agentTools []fantasy.AgentTool, channel string, state
 	return filtered
 }
 
-type turnOutcome struct {
-	completed bool
-	result    *fantasy.AgentResult
-	err       error
-}
-
 type SessionAgent interface {
 	Run(context.Context, SessionAgentCall) (*fantasy.AgentResult, error)
 	BeginAccepted(sessionID string) *AcceptedRun
 	SetModels(large Model, small Model)
 	SetTools(tools []fantasy.AgentTool)
 	SetSystemPrompt(systemPrompt string)
+	// WaitReady blocks until the agent's build-time setup (system prompt,
+	// initial tool list) has finished and returns its error. Agents whose
+	// prompt and tools are supplied at construction return immediately.
+	WaitReady() error
 	Cancel(sessionID string)
 	CancelAll()
 	IsSessionBusy(sessionID string) bool
@@ -192,13 +237,23 @@ type SessionAgent interface {
 	QueuedPrompts(sessionID string) int
 	QueuedPromptsList(sessionID string) []string
 	ClearQueue(sessionID string)
-	Summarize(context.Context, string, string, fantasy.ProviderOptions, func(context.Context, *fantasy.ProviderError) error) error
-	RestoreSummarize(context.Context, string) error
-	SummarizePreview(context.Context, string, string, fantasy.ProviderOptions, func(context.Context, *fantasy.ProviderError) error) (compaction.Preview, error)
-	ConfirmSummarize(context.Context, string, compaction.Preview) error
-	DiscardSummarize(context.Context, string, string) error
+	Summarize(ctx context.Context, sessionID, instructions string, opts fantasy.ProviderOptions, onAuthRefresh func(context.Context, *fantasy.ProviderError) error) error
+	SummarizePreview(ctx context.Context, sessionID, instructions string, opts fantasy.ProviderOptions, onAuthRefresh func(context.Context, *fantasy.ProviderError) error) (compaction.Preview, error)
+	ConfirmSummarize(ctx context.Context, sessionID string, preview compaction.Preview) error
+	DiscardSummarize(ctx context.Context, sessionID, checkpointID string) error
+	RestoreSummarize(ctx context.Context, sessionID string) error
 	Model() Model
 	GenerateTitle(ctx context.Context, sessionID, userPrompt string)
+	// EnqueueWhenBusy enqueues call behind the session's active turn
+	// and reports whether it was accepted (#351): true means the call
+	// sits in the queue and will be consumed — folded into the active
+	// turn or run as the follow-up turn — while false means the run
+	// has ended and the session refuses the message instead of
+	// starting a fresh turn on a task session that is never
+	// continuable. It is the delivery primitive behind mid-run
+	// steering, both in-process and through the A2A executor's steer
+	// path.
+	EnqueueWhenBusy(call SessionAgentCall) bool
 }
 
 type Model struct {
@@ -208,19 +263,13 @@ type Model struct {
 	FlatRate   bool
 }
 
-// activeCancel owns one cancellation generation across synchronous handoffs.
-// Its context is immutable: suspended callers must still observe cancellation
-// after a later submission starts with a fresh owner. Notification state is
-// confined to the goroutine executing this owner's call stack.
+// activeCancel wraps a context.CancelFunc with a unique pointer identity.
+// The pointer is used for compare-and-delete in the dispatch completion path:
+// when a finishing run's deferred cleanup fires, it must only remove its own
+// entry — not a newer run's entry that was installed in the window between
+// the explicit Del and the function return.
 type activeCancel struct {
-	ctx          context.Context
-	cancel       context.CancelFunc
-	notification notify.Notification
-	// Sticky across the busy interval, independent of any caller's outcome.
-	unsuccessful bool
-	// Guarded by the session dispatch mutex until removal from activeRequests.
-	// Remember interactive admissions even if they fold or are cleared.
-	interactive bool
+	cancel context.CancelFunc
 }
 
 type sessionAgent struct {
@@ -240,14 +289,18 @@ type sessionAgent struct {
 	disableAutoSummarize bool
 	isYolo               bool
 	notify               pubsub.Publisher[notify.Notification]
-	compactionHooks      func(event string) CompactionHookRunner
 	runComplete          pubsub.Publisher[notify.RunComplete]
-	// ledger is the session memory store; nil when observation is off.
-	ledger        ledger.Service
-	observeMemory bool
+	compactionHooks      func(event string) CompactionHookRunner
+	ledger               ledger.Service
+	observeMemory        bool
 
 	messageQueue   *csync.Map[string, []SessionAgentCall]
 	activeRequests *csync.Map[string, *activeCancel]
+
+	// titles tracks the detached title generations Run starts. They
+	// outlive Run and write to the session store, so anything that closes
+	// the store must wait on it first.
+	titles sync.WaitGroup
 
 	// dispatchMu holds a per-session mutex that serializes the
 	// accepted -> (cancel-on-entry | queued | active) transition in
@@ -273,6 +326,17 @@ type sessionAgent struct {
 	// dispatchMu so two goroutines can't race to lock different mutex
 	// instances for the same session.
 	dispatchMuCreate sync.Mutex
+	// todoEnforcement carries this agent's resolved todo enforcement
+	// settings (#315): the nudge ladder and the opt-in mutating-tool
+	// gate. Nil when the ladder is off (the no-op fast path every
+	// method checks for).
+	todoEnforcement *todoEnforcement
+	// todoKill observes the wander-kill escalation (#316). Nil except
+	// for dispatched agents; see SessionAgentOptions.TodoKill.
+	todoKill func(sessionID string, reason string)
+	// loopStop observes the loop-detection stop (#343). Nil except for
+	// dispatched agents; see SessionAgentOptions.LoopStop.
+	loopStop func(sessionID string)
 	// acceptedMu serializes increments/decrements of acceptedRuns and
 	// the assignment of accept sequence numbers from acceptSeqGen. It
 	// is separate from dispatchMu so AcceptedRun.Close (which may run
@@ -285,6 +349,11 @@ type sessionAgent struct {
 	// across the agent. Cancel uses its current value as the per-session
 	// high-water mark.
 	acceptSeqGen uint64
+	// ready is this agent's own one-shot setup latch, observed through
+	// WaitReady. It is satisfied from construction unless a builder
+	// (coordinator.buildAgent) replaces it with an armed latch before the
+	// agent is reachable by anyone else.
+	ready *readiness
 }
 
 type SessionAgentOptions struct {
@@ -297,27 +366,57 @@ type SessionAgentOptions struct {
 	IsYolo               bool
 	Sessions             session.Service
 	Messages             message.Service
-	// Ledger persists session memory for the observer and the renderer. Nil
-	// leaves observation off entirely, which is the default: this feature is
-	// opt-in until it has measured well enough to trust.
+	Cfg                  *config.ConfigStore
+	Tools                []fantasy.AgentTool
+	Notify               pubsub.Publisher[notify.Notification]
+	RunComplete          pubsub.Publisher[notify.RunComplete]
+	// Ledger persists session memory. Nil disables observation and leaves
+	// compaction summarizing with a model, which is the default.
 	Ledger ledger.Service
 	// ObserveMemory distills each completed turn into the ledger when true.
 	ObserveMemory bool
-	Cfg           *config.ConfigStore
-	Tools         []fantasy.AgentTool
-	Notify        pubsub.Publisher[notify.Notification]
-	RunComplete   pubsub.Publisher[notify.RunComplete]
 
 	// CompactionHooks returns the runner for a compaction event, or nil when
-	// the user configured none for it. It is a function because each event has
-	// its own configured command list, and it is nil for sub-agents, which
-	// never compact.
+	// the user configured none for it. It is a function because each event
+	// has its own configured command list, and it is nil for sub-agents,
+	// which never compact.
 	CompactionHooks func(event string) CompactionHookRunner
+
+	// TodoEnforcement carries this agent's resolved todo enforcement
+	// settings (#315): nudge injection and the opt-in mutating-tool
+	// gate. The zero value disables the ladder (Enabled and HardGate
+	// both false), which keeps direct constructors — tests and the
+	// default agents — unchanged.
+	TodoEnforcement config.TodoEnforcementSettings
+	// TodoKill is the wander-kill escalation's supervisor hook (#316):
+	// invoked when a run ignores its nudges past the resolved kill
+	// threshold. The observer owns the kill (#348): it records the
+	// reason and ends the run — routing it through the dispatched run's
+	// tasks/cancel, or the direct fallback — so the ladder closure does
+	// not cancel the run itself. Nil everywhere but dispatched agents,
+	// so only they can be killed.
+	TodoKill func(sessionID string, reason string)
+	// LoopStop observes the loop-detection stop (#343): invoked when the
+	// run's step loop ends on the loop-detection stop condition. The
+	// stop itself is intrinsic to the run; this is the coordinator's
+	// chance to record the reason — over the served transport path the
+	// result's steps never reach the parent, so this observer is the
+	// only signal a loop stop ever happened. Nil everywhere but
+	// dispatched agents.
+	LoopStop func(sessionID string)
 }
 
 func NewSessionAgent(
 	opts SessionAgentOptions,
 ) SessionAgent {
+	return newSessionAgent(opts)
+}
+
+// newSessionAgent is the concrete constructor behind NewSessionAgent. Builders
+// inside the package use it so they can arm the agent's readiness latch before
+// handing the agent out; see coordinator.buildAgent.
+func newSessionAgent(opts SessionAgentOptions) *sessionAgent {
+	enforcement := newTodoEnforcement(opts.TodoEnforcement, opts.Sessions)
 	return &sessionAgent{
 		largeModel:           csync.NewValue(opts.LargeModel),
 		smallModel:           csync.NewValue(opts.SmallModel),
@@ -328,18 +427,22 @@ func NewSessionAgent(
 		messages:             opts.Messages,
 		cfg:                  opts.Cfg,
 		disableAutoSummarize: opts.DisableAutoSummarize,
-		tools:                csync.NewSliceFrom(opts.Tools),
+		tools:                csync.NewSliceFrom(wrapTodoGate(opts.Tools, enforcement)),
 		isYolo:               opts.IsYolo,
 		notify:               opts.Notify,
-		compactionHooks:      opts.CompactionHooks,
 		runComplete:          opts.RunComplete,
 		ledger:               opts.Ledger,
 		observeMemory:        opts.ObserveMemory,
+		compactionHooks:      opts.CompactionHooks,
 		messageQueue:         csync.NewMap[string, []SessionAgentCall](),
 		activeRequests:       csync.NewMap[string, *activeCancel](),
 		dispatchMu:           csync.NewMap[string, *sync.Mutex](),
 		acceptedRuns:         csync.NewMap[string, int](),
 		cancelMark:           csync.NewMap[string, uint64](),
+		todoEnforcement:      enforcement,
+		todoKill:             opts.TodoKill,
+		loopStop:             opts.LoopStop,
+		ready:                readyNow(),
 	}
 }
 
@@ -456,8 +559,40 @@ func (a *sessionAgent) enqueueCall(call SessionAgentCall) {
 	}
 	queued.OnComplete = nil
 	queued.Accepted = nil
+	// OnConsumed is deliberately kept (#351): the queued call's waiter
+	// is told when the queue consumes or drops it, which is the whole
+	// point of the hook.
 	existing = append(existing, queued)
 	a.messageQueue.Set(call.SessionID, existing)
+}
+
+// consume reports a queued call's fate to its OnConsumed waiter (#351):
+// true when the queue handed the message to a turn, false when a
+// queue-removal path dropped it without running. Nil-safe — calls with
+// no waiter fire nothing — and expected to fire at most once per call.
+func (c SessionAgentCall) consume(consumed bool) {
+	if c.OnConsumed != nil {
+		c.OnConsumed(consumed)
+	}
+}
+
+// EnqueueWhenBusy enqueues call on the session's queue only while a run
+// is active, atomically against the run's own dispatch decision and its
+// post-turn queue handoff, and reports whether it was enqueued. It is the
+// delivery primitive behind mid-run message injection (#312): a message
+// to a running agent lands as its next input — folded into the active
+// turn at the next step, or picked up as the immediate follow-up turn —
+// while a message to an agent whose run has ended is refused instead of
+// starting a fresh turn on a task session that is never continuable.
+func (a *sessionAgent) EnqueueWhenBusy(call SessionAgentCall) bool {
+	sessMu := a.sessionMu(call.SessionID)
+	sessMu.Lock()
+	defer sessMu.Unlock()
+	if !a.IsSessionBusy(call.SessionID) {
+		return false
+	}
+	a.enqueueCall(call)
+	return true
 }
 
 // drainQueueForStep partitions the session's queued calls for the current
@@ -470,33 +605,38 @@ func (a *sessionAgent) enqueueCall(call SessionAgentCall) {
 // Calls covered by a pending cancel are dropped; the dropped ones that
 // carry a RunID are returned in canceledWithRunID so the caller can
 // publish their terminal cancelled RunComplete (a caller waiting on that
-// RunID, e.g. `crush run`, would otherwise hang). Ordinary calls without a
-// RunID and with the same permission policy are folded into the active turn.
-// Explicit operator steering may also fold across policy differences, under
-// the active policy. Correlated calls, continuations and other mismatched
-// policies stay queued without blocking later eligible steering calls.
-// fold is processed by the caller without the lock held.
-func (a *sessionAgent) drainQueueForStep(ctx context.Context, sessionID string) (fold, canceledWithRunID []SessionAgentCall) {
+// RunID, e.g. `crush run`, would otherwise hang). Uncanceled calls without
+// a RunID are returned in fold to be folded into the active turn,
+// preserving the existing follow-up behavior. Uncanceled calls that carry
+// a RunID are left in the queue so each runs as its own turn via the
+// recursive run path and publishes its own RunComplete, giving every
+// RunID-bearing prompt an explicit lifecycle instead of being silently
+// absorbed into another turn. fold is processed by the caller without the
+// lock held.
+func (a *sessionAgent) drainQueueForStep(sessionID string) (fold, canceledWithRunID []SessionAgentCall) {
 	dispatchLock := a.sessionMu(sessionID)
 	dispatchLock.Lock()
 	defer dispatchLock.Unlock()
-	// Cancel and subsequent admissions use this lock too. A canceled step
-	// must leave later submissions for the fresh owner, not consume them.
-	if ctx.Err() != nil {
-		return nil, nil
-	}
-	activePolicy := permission.RequestPolicyFromContext(ctx)
 	queuedCalls, _ := a.messageQueue.Get(sessionID)
 	var keep []SessionAgentCall
 	for _, queued := range queuedCalls {
+		if queued.systemDelivery {
+			// Dispatch-result delivery (#388): never folded into the
+			// active turn and never covered by a pending cancel — it
+			// waits for its own turn.
+			keep = append(keep, queued)
+			continue
+		}
 		if a.canceledBySeq(sessionID, queued.acceptSeq) {
+			// The steer waiter learns the drop (#351), including the
+			// non-RunID drops that were silent before.
+			queued.consume(false)
 			if queued.RunID != "" {
 				canceledWithRunID = append(canceledWithRunID, queued)
 			}
 			continue
 		}
-		operatorSteering := queued.OperatorSteering && queued.Channel == ""
-		if (!operatorSteering && queued.PermissionPolicy != activePolicy) || queued.RunID != "" || queued.turn != nil {
+		if queued.RunID != "" {
 			keep = append(keep, queued)
 			continue
 		}
@@ -511,8 +651,7 @@ func (a *sessionAgent) drainQueueForStep(ctx context.Context, sessionID string) 
 }
 
 // publishCanceledQueueDrops emits a terminal cancelled RunComplete for
-// every dropped detached call that carries a RunID. Internal continuations
-// leave completion to their suspended caller. A queued prompt removed
+// every dropped queued call that carries a RunID. A queued prompt removed
 // from the queue without ever running — covered by a pending cancel, or
 // cleared by Cancel/ClearQueue — would otherwise leave a caller blocked on
 // that RunID: `crush run` ignores live message events and exits only on a
@@ -523,26 +662,21 @@ func (a *sessionAgent) drainQueueForStep(ctx context.Context, sessionID string) 
 func (a *sessionAgent) publishCanceledQueueDrops(drops []SessionAgentCall) {
 	var hasRunID bool
 	for _, d := range drops {
-		if d.RunID != "" && d.turn == nil {
+		if d.RunID != "" {
 			hasRunID = true
 			break
 		}
 	}
-	if !hasRunID || a.runComplete == nil {
+	if !hasRunID {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	for _, d := range drops {
-		// A suspended caller owns its continuation's completion. It detects
-		// the missing outcome after draining; never invoke its live callback
-		// from the goroutine clearing the queue.
-		if d.RunID == "" || d.turn != nil {
+		if d.RunID == "" {
 			continue
 		}
-		// Detached queue entries have no callbacks. Preserve this batch's
-		// deadline rather than creating a new publication budget per entry.
-		a.runComplete.PublishMustDeliver(ctx, pubsub.UpdatedEvent, notify.RunComplete{
+		a.publishRunComplete(ctx, d, notify.RunComplete{
 			SessionID: d.SessionID,
 			RunID:     d.RunID,
 			Cancelled: true,
@@ -556,11 +690,26 @@ func (a *sessionAgent) publishCanceledQueueDrops(drops []SessionAgentCall) {
 // hanging when their queued prompt is discarded without running.
 func (a *sessionAgent) clearQueueAndNotify(sessionID string) {
 	queued, ok := a.messageQueue.Get(sessionID)
-	a.messageQueue.Del(sessionID)
 	if !ok {
 		return
 	}
-	a.publishCanceledQueueDrops(queued)
+	// System deliveries (#388) are exempt: a dispatch result the parent
+	// has not consumed yet survives the clear and still runs.
+	var drops, keep []SessionAgentCall
+	for _, call := range queued {
+		if call.systemDelivery {
+			keep = append(keep, call)
+			continue
+		}
+		call.consume(false)
+		drops = append(drops, call)
+	}
+	if len(keep) > 0 {
+		a.messageQueue.Set(sessionID, keep)
+	} else {
+		a.messageQueue.Del(sessionID)
+	}
+	a.publishCanceledQueueDrops(drops)
 }
 
 // clearPendingCancel removes any pending-cancel mark for sessionID. It
@@ -630,19 +779,6 @@ func (a *sessionAgent) persistCanceledTurn(ctx context.Context, call SessionAgen
 // observes exactly one terminal event regardless of which Run branch ends
 // the turn.
 func (a *sessionAgent) publishRunComplete(ctx context.Context, call SessionAgentCall, complete notify.RunComplete) {
-	// Memory is distilled before either terminal path is taken. The
-	// coordinator always supplies an OnComplete hook, so a call placed after
-	// the branch below never runs for an ordinary session - which is how this
-	// feature sat inert while its own tests passed, because they drove the
-	// distillation directly rather than through the event that triggers it.
-	//
-	// Firing on both paths is safe because observation is idempotent: a
-	// retried attempt reports the same messages, entry ids are content
-	// addressed, and covered messages are not read twice.
-	if complete.Error == "" && !complete.Cancelled {
-		a.observeTurn(complete)
-	}
-
 	if call.OnComplete != nil {
 		call.OnComplete(complete)
 		return
@@ -650,9 +786,7 @@ func (a *sessionAgent) publishRunComplete(ctx context.Context, call SessionAgent
 	if a.runComplete == nil {
 		return
 	}
-	completeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	a.runComplete.PublishMustDeliver(completeCtx, pubsub.UpdatedEvent, complete)
+	a.runComplete.PublishMustDeliver(ctx, pubsub.UpdatedEvent, complete)
 }
 
 // ValidateCall performs the cheap structural validation that
@@ -671,96 +805,23 @@ func ValidateCall(call SessionAgentCall) error {
 	return nil
 }
 
-func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy.AgentResult, error) {
-	return a.run(ctx, call, nil, false)
-}
-
-// finishOwner runs only after the owner's entire call stack has unwound.
-// Work submitted after cancellation gets a new cancellation context without
-// exposing an idle admission gap or reviving a suspended summary caller.
-func (a *sessionAgent) finishOwner(ctx context.Context, sessionID string, owner *activeCancel) {
-	mu := a.sessionMu(sessionID)
-	for {
-		mu.Lock()
-		owner.unsuccessful = owner.unsuccessful || owner.ctx.Err() != nil
-		owner.cancel()
-		queued, _ := a.messageQueue.Get(sessionID)
-		if ctx.Err() != nil {
-			a.clearQueueAndNotify(sessionID)
-			queued = nil
-		}
-		if len(queued) == 0 {
-			a.activeRequests.CompareAndDelete(sessionID, owner)
-			mu.Unlock()
-			if owner.interactive && a.notify != nil {
-				owner.notification.FinishState = notify.FinishIdleSuccess
-				if owner.unsuccessful {
-					owner.notification.FinishState = notify.FinishIdleUnsuccessful
-				}
-				a.notify.Publish(pubsub.CreatedEvent, owner.notification)
-			}
-			return
-		}
-		call := queued[0]
-		a.messageQueue.Set(sessionID, queued[1:])
-		ownerCtx, cancel := context.WithCancel(context.WithValue(ctx, tools.SessionIDContextKey, sessionID))
-		owner = &activeCancel{ctx: ownerCtx, cancel: cancel, interactive: owner.interactive, unsuccessful: owner.unsuccessful}
-		a.activeRequests.Set(sessionID, owner)
-		mu.Unlock()
-		// This detached submission has already returned to its caller.
-		// Its completion is published by run, not returned as our outcome.
-		_, _ = a.run(ctx, call, owner, false)
-	}
-}
-
-// finishTurn records only this logical turn's outcome. Detached submissions
-// have no backend caller left to report their errors.
-func (a *sessionAgent) finishTurn(call SessionAgentCall, result *fantasy.AgentResult, err error) {
-	if call.turn.completed {
-		return
-	}
-	call.turn.completed = true
-	call.turn.result, call.turn.err = result, err
-	if err != nil && !errors.Is(err, context.Canceled) && call.OnComplete == nil && a.notify != nil {
-		a.notify.Publish(pubsub.CreatedEvent, notify.Notification{
-			SessionID: call.SessionID, RunID: call.RunID,
-			Type: notify.TypeAgentError, Message: err.Error(),
-		})
-	}
-}
-
-// runQueued keeps draining after a detached turn fails. A waiting caller's
-// continuation must not inherit that failure or remain stranded behind it.
-func (a *sessionAgent) runQueued(ctx context.Context, call SessionAgentCall, owner *activeCancel, retain bool) {
-	mu := a.sessionMu(call.SessionID)
-	for {
-		_, _ = a.run(ctx, call, owner, retain)
-		mu.Lock()
-		queued, _ := a.messageQueue.Get(call.SessionID)
-		if owner.ctx.Err() != nil || len(queued) == 0 {
-			mu.Unlock()
-			return
-		}
-		call = queued[0]
-		a.messageQueue.Set(call.SessionID, queued[1:])
-		mu.Unlock()
-	}
-}
-
-// run reuses the session owner for synchronous internal handoffs. Retain is
-// true while a caller is suspended for automatic summarization, so its queued
-// work publishes intermediate notifications rather than an idle edge.
-func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *activeCancel, retain bool) (result *fantasy.AgentResult, retErr error) {
+func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *fantasy.AgentResult, retErr error) {
 	if err := ValidateCall(call); err != nil {
 		return nil, err
 	}
-	ctx = permission.WithRequestPolicy(ctx, call.PermissionPolicy)
 
 	if call.Channel != "" && call.channelMeta == nil {
 		call.channelMeta, _ = parseChannelMeta(call.Prompt)
 	}
 
-	var userMsgCreated bool
+	// genCtx/cancel are the run context and its cancel func, created under
+	// the per-session dispatch mutex below so a concurrent Cancel can observe
+	// the activeRequests entry before the assistant message exists.
+	var (
+		genCtx         context.Context
+		cancel         context.CancelFunc
+		userMsgCreated bool
+	)
 
 	// Serialize the dispatch decision (cancel-on-entry | queued | active)
 	// against a concurrent Cancel. Cancel takes the same per-session lock, so
@@ -773,15 +834,7 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 	sessMu := a.sessionMu(call.SessionID)
 	sessMu.Lock()
 
-	ownerCanceled := owner != nil && owner.ctx.Err() != nil
-	if ownerCanceled || (call.Accepted != nil && a.canceledBySeq(call.SessionID, call.Accepted.seq)) {
-		if owner != nil {
-			owner.unsuccessful = true
-			owner.interactive = owner.interactive || !call.NonInteractive
-			owner.notification.SessionID = call.SessionID
-			owner.notification.RunID = call.RunID
-			owner.notification.Type = notify.TypeAgentFinished
-		}
+	if call.Accepted != nil && a.canceledBySeq(call.SessionID, call.Accepted.seq) {
 		// Cancel-on-entry: a cancel arrived while this accepted run was
 		// dispatched but not yet active, and this handle's accept sequence
 		// is at or below the session's cancel mark. The mark is left in
@@ -796,32 +849,6 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		// RunComplete) would hang on an immediately-canceled accepted run.
 		call.Accepted.Close()
 		sessMu.Unlock()
-		if owner == nil && !call.NonInteractive && a.notify != nil {
-			defer func() {
-				notification := notify.Notification{
-					SessionID: call.SessionID, RunID: call.RunID, Type: notify.TypeAgentFinished,
-					FinishState: notify.FinishIdleUnsuccessful,
-				}
-				readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-				defer cancel()
-				// A failed title lookup must not suppress the idle edge.
-				if sess, err := a.sessions.Get(readCtx, call.SessionID); err == nil {
-					notification.SessionTitle = sess.Title
-				}
-				// Cleanup may outlive the owner that Cancel interrupted.
-				// Transfer the idle edge to the current owner, or emit it
-				// ourselves when no owner remains to notify the UI.
-				sessMu.Lock()
-				active, busy := a.activeRequests.Get(call.SessionID)
-				if busy {
-					active.interactive = true
-				}
-				sessMu.Unlock()
-				if !busy {
-					a.notify.Publish(pubsub.CreatedEvent, notification)
-				}
-			}()
-		}
 		complete := notify.RunComplete{
 			SessionID: call.SessionID,
 			RunID:     call.RunID,
@@ -829,28 +856,14 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		}
 		if err := a.persistCanceledTurn(ctx, call, false); err != nil {
 			complete.Error = err.Error()
-			complete.Cancelled = false
-			if call.turn == nil {
-				call.turn = &turnOutcome{}
-			}
-			a.finishTurn(call, nil, err)
 			a.publishRunComplete(ctx, call, complete)
 			return nil, err
 		}
 		a.publishRunComplete(ctx, call, complete)
-		if ownerCanceled {
-			if call.turn != nil {
-				a.finishTurn(call, nil, owner.ctx.Err())
-			}
-			return nil, owner.ctx.Err()
-		}
 		return nil, nil
 	}
 
-	if owner == nil && a.IsSessionBusy(call.SessionID) {
-		if active, ok := a.activeRequests.Get(call.SessionID); ok && !call.NonInteractive {
-			active.interactive = true
-		}
+	if a.IsSessionBusy(call.SessionID) {
 		// Busy: an earlier prompt is active. Queue this call so it is
 		// folded into (or sequenced after) the active turn, and release any
 		// accept reservation. A Cancel arriving after this point sees the
@@ -870,51 +883,29 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		return nil, nil
 	}
 
-	// One owner covers the synchronous chain, including summary and queue
-	// handoffs. After it unwinds, finishOwner can admit surviving submissions.
-	if owner == nil {
-		runCtx := context.WithValue(ctx, tools.SessionIDContextKey, call.SessionID)
-		ownerCtx, ownerCancel := context.WithCancel(runCtx)
-		owner = &activeCancel{ctx: ownerCtx, cancel: ownerCancel}
-		a.activeRequests.Set(call.SessionID, owner)
-		defer a.finishOwner(ctx, call.SessionID, owner)
+	// Idle: become the active run. Register the cancel func before dropping
+	// the lock so a Cancel that arrives between here and assistant creation
+	// is not lost.
+	runCtx := context.WithValue(ctx, tools.SessionIDContextKey, call.SessionID)
+	// The per-turn permission policy travels on the call, not the caller's
+	// context: it survives queueing behind another turn.
+	if call.PermissionPolicy != 0 {
+		runCtx = permission.WithRequestPolicy(runCtx, call.PermissionPolicy)
 	}
+	genCtx, cancel = context.WithCancel(runCtx)
+	ac := &activeCancel{cancel: cancel}
+	a.activeRequests.Set(call.SessionID, ac)
 	if call.Accepted != nil {
-		// Summary continuations must retain this turn's cancellation boundary.
-		call.acceptSeq = call.Accepted.seq
 		call.Accepted.Close()
 	}
-	owner.interactive = owner.interactive || !call.NonInteractive
 	sessMu.Unlock()
 
-	continuation := call.turn != nil
-	if call.turn == nil {
-		call.turn = &turnOutcome{}
-	}
-	defer func() {
-		a.finishTurn(call, result, retErr)
-		owner.unsuccessful = owner.unsuccessful || call.turn.err != nil
-	}()
-	owner.notification = notify.Notification{SessionID: call.SessionID, RunID: call.RunID, Type: notify.TypeAgentFinished}
-	// Cancellation is shared across handoffs; permission authority is not.
-	genCtx, cancel := context.WithCancel(permission.WithRequestPolicy(owner.ctx, call.PermissionPolicy))
 	defer cancel()
-
-	// Detached calls and continuations must complete preparation failures
-	// here. Only an initial callback-bearing call has a backend fallback;
-	// a continuation's suspended caller has already delegated completion.
-	preparing := true
-	defer func() {
-		if !preparing || (call.OnComplete != nil && !continuation) || retErr == nil {
-			return
-		}
-		a.publishRunComplete(ctx, call, notify.RunComplete{
-			SessionID: call.SessionID,
-			RunID:     call.RunID,
-			Error:     retErr.Error(),
-			Cancelled: errors.Is(retErr, context.Canceled),
-		})
-	}()
+	// Conditional cleanup: only remove our entry if it hasn't been replaced
+	// by a newer run. Without this guard, the deferred Del fires after a
+	// concurrent run registers in the completion window, silently wiping
+	// the new run's cancel and breaking cancellation.
+	defer a.activeRequests.CompareAndDelete(call.SessionID, ac)
 
 	// Copy mutable fields under lock to avoid races with SetTools/SetModels.
 	agentTools := filterToolsForChannel(a.tools.Copy(), call.Channel, mcp.GetStates())
@@ -954,20 +945,56 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session: %w", err)
 	}
-	owner.notification.SessionTitle = currentSession.Title
+
+	// The todo enforcement ladder's state for this run (#315): seeded
+	// with whether the session already carries a todo list, advanced by
+	// OnToolCall, consulted by PrepareStep. Nil (ladder off) makes every
+	// method a no-op. The kill rung (#316) is wired only for dispatched
+	// agents, the only ones built with a todoKill observer, because only
+	// a dispatched run has a parent that can re-dispatch it. Every other
+	// agent (the main coder, plan mode, agent-tool sub-agents, crush run)
+	// gets a nil hook and tops out at the escalating nudge (#393). A run
+	// whose tools leave out the todos tool gets no ladder at all, since
+	// every rung asks for a call the model cannot make.
+	var onKill func(reason string)
+	if a.todoKill != nil {
+		todoKillFn := a.todoKill
+		// The observer owns the kill (#348): the supervisor records the
+		// reason and routes the kill through the dispatched run's
+		// tasks/cancel, or its direct fallback. The ladder closure here
+		// only reports — canceling itself would bypass the protocol
+		// reason entirely, and an out-of-process agent (#72/#73) has no
+		// in-process cancel to call.
+		onKill = func(reason string) {
+			todoKillFn(call.SessionID, reason)
+			slog.Warn("Todo enforcement killed the run", "session_id", call.SessionID, "reason", reason)
+		}
+	}
+	var todoRun *todoEnforcementRun
+	if hasTodosTool(agentTools) {
+		// The ladder classifies each call against the tool itself (an
+		// MCP read-only hint), so it keeps the run's tools by name; a
+		// gated tool is classified as the tool it wraps.
+		toolByName := make(map[string]fantasy.AgentTool, len(agentTools))
+		for _, tool := range agentTools {
+			if gate, ok := tool.(*todoGateTool); ok {
+				tool = gate.inner
+			}
+			toolByName[tool.Info().Name] = tool
+		}
+		todoRun = a.todoEnforcement.newRun(len(currentSession.Todos) > 0, onKill, toolByName)
+	}
 
 	msgs, err := a.getSessionMessages(ctx, currentSession)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session messages: %w", err)
 	}
 
-	// Generate title from the first real (non-shell) user prompt.
-	// can take tens of seconds. Blocking Run on it delays the
-	// response to the caller. Use a detached context so the title
-	// goroutine survives Run's cancel.
+	// Generate title from the first real (non-shell) user prompt. Use a
+	// detached context so the title goroutine survives Run's cancel.
 	if !hasUserTextMessage(msgs) {
 		titleCtx := context.WithoutCancel(ctx)
-		go a.GenerateTitle(titleCtx, call.SessionID, call.Prompt)
+		a.titles.Go(func() { a.GenerateTitle(titleCtx, call.SessionID, call.Prompt) })
 	}
 
 	// Add the user message to the session.
@@ -981,8 +1008,11 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 	// cancel func were already created and registered under the dispatch
 	// mutex above for both the accepted and in-process paths.
 	ctx = context.WithValue(ctx, tools.SessionIDContextKey, call.SessionID)
-	// Skip the deferred completion when the handoff already published it
-	// or delegated it to this logical turn's queued continuation.
+	// skipRunComplete is set just before the queued-recursion path so
+	// the outer Run doesn't publish a RunComplete that would race
+	// with — and be superseded by — the recursive call's own
+	// RunComplete (each queued user prompt is its own turn and
+	// publishes exactly one terminal event).
 	var skipRunComplete bool
 	// currentAssistant is declared here so the deferred RunComplete
 	// publish below can capture the pointer that PrepareStep will
@@ -1017,13 +1047,6 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		if skipRunComplete {
 			return
 		}
-		// Freeze the same outcome for the return value and completion event.
-		// Cancellation may arrive during the finished notification or flush.
-		if call.turn.completed {
-			result, retErr = call.turn.result, call.turn.err
-		} else if retErr == nil {
-			retErr = ctx.Err()
-		}
 		complete := notify.RunComplete{SessionID: call.SessionID, RunID: call.RunID}
 		if currentAssistant != nil {
 			complete.MessageID = currentAssistant.ID
@@ -1032,6 +1055,8 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		if retErr != nil {
 			complete.Error = retErr.Error()
 			complete.Cancelled = errors.Is(retErr, context.Canceled)
+		} else if ctx.Err() != nil {
+			complete.Cancelled = true
 		}
 		// Prefer the per-call hook when supplied so the coordinator
 		// can coalesce retries (e.g. unauthorized → re-auth → retry)
@@ -1041,18 +1066,14 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		// subscriber channel can't silently drop it and hang
 		// non-interactive clients waiting on RunComplete.
 		a.publishRunComplete(ctx, call, complete)
+		// Record that this context's RunID has seen its terminal event so
+		// queue-handoff paths do not emit a second one for it.
+		if call.RunID != "" {
+			MarkRunCompletePublished(ctx)
+		}
 	}()
-	preparing = false
 
-	// Stale tool output is dropped from the request rather than from storage:
-	// it is the largest thing a long session carries, the least likely to
-	// still matter, and trivially re-derivable by re-running the call.
-	view, pruned := compaction.Prune(msgs, a.prunePolicy(int64(largeModel.CatwalkCfg.ContextWindow)))
-	if pruned > 0 {
-		slog.Debug("Pruned stale tool output from the request",
-			"session_id", call.SessionID, "tokens", pruned)
-	}
-	history, files := a.preparePrompt(view, largeModel.CatwalkCfg.SupportsImages, call.Attachments...)
+	history, files := a.preparePrompt(msgs, largeModel.CatwalkCfg.SupportsImages, call.Attachments...)
 
 	startTime := time.Now()
 	a.eventPromptSent(call.SessionID)
@@ -1103,9 +1124,11 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 			// sequence so a follow-up queued after the cancel (higher seq)
 			// is not dropped. A dropped prompt carrying a RunID still gets
 			// its terminal cancelled RunComplete so a caller waiting on it
-			// does not hang. Eligible steering may pass queued independent
-			// turns, but never changes the active turn's permission policy.
-			fold, canceledRunIDs := a.drainQueueForStep(callContext, call.SessionID)
+			// does not hang. Uncanceled prompts without a RunID are folded
+			// into this turn; uncanceled prompts with a RunID are left
+			// queued so each runs as its own turn (with its own
+			// RunComplete) via the recursive run path below.
+			fold, canceledRunIDs := a.drainQueueForStep(call.SessionID)
 			a.publishCanceledQueueDrops(canceledRunIDs)
 			for _, queued := range fold {
 				userMessage, createErr := a.createUserMessage(callContext, queued)
@@ -1113,7 +1136,16 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 					return callContext, prepared, createErr
 				}
 				prepared.Messages = append(prepared.Messages, userMessage.ToAIMessage()...)
+				// The fold persisted the message into this turn (#351):
+				// the steer waiter may stop waiting.
+				queued.consume(true)
 			}
+
+			// The todo enforcement nudge (#315): after the queued
+			// follow-ups, so it is the most recent thing the model
+			// reads. Persisted on the session, so the nudge is visible
+			// in the transcript and carries into later turns' history.
+			prepared.Messages = a.injectTodoNudge(callContext, call.SessionID, todoRun, prepared.Messages)
 
 			prepared.Messages = a.workaroundProviderMediaLimitations(prepared.Messages, largeModel)
 
@@ -1155,6 +1187,7 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 			callContext = context.WithValue(callContext, tools.ChannelContextKey, call.Channel)
 			callContext = context.WithValue(callContext, tools.SupportsImagesContextKey, largeModel.CatwalkCfg.SupportsImages)
 			callContext = context.WithValue(callContext, tools.ModelNameContextKey, largeModel.CatwalkCfg.Name)
+			callContext = context.WithValue(callContext, tools.ContentWidthContextKey, call.ContentWidth)
 			currentAssistant = &assistantMsg
 			return callContext, prepared, err
 		},
@@ -1229,6 +1262,7 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 			return m.Model
 		},
 		OnToolCall: func(tc fantasy.ToolCallContent) error {
+			todoRun.recordToolCall(tc.ToolName, tc.Input)
 			input, wasSanitized := sanitizeToolInput(tc.ToolName, tc.ToolCallID, tc.Input)
 			if wasSanitized {
 				sanitizedToolCalls[tc.ToolCallID] = true
@@ -1321,25 +1355,34 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		},
 		StopWhen: []fantasy.StopCondition{
 			func(_ []fantasy.StepResult) bool {
-				if a.disableAutoSummarize {
+				cw := int64(largeModel.CatwalkCfg.ContextWindow)
+				// If context window is unknown (0), skip auto-summarize
+				// to avoid immediately truncating custom/local models.
+				if cw == 0 {
 					return false
 				}
-				// A context window of zero means unknown: custom and local
-				// models are then never summarized out from under the user.
-				// The reserve also covers the completion this turn would ask
-				// for, which the raw buffer did not.
-				if !compaction.ShouldCompact(
-					currentSession.PromptTokens+currentSession.CompletionTokens,
-					int64(largeModel.CatwalkCfg.ContextWindow),
-					call.MaxOutputTokens,
-				) {
-					return false
+				tokens := currentSession.CompletionTokens + currentSession.PromptTokens
+				remaining := cw - tokens
+				var threshold int64
+				if cw > largeContextWindowThreshold {
+					threshold = largeContextWindowBuffer
+				} else {
+					threshold = int64(float64(cw) * smallContextWindowRatio)
 				}
-				shouldSummarize = true
-				return true
+				if (remaining <= threshold) && !a.disableAutoSummarize {
+					shouldSummarize = true
+					return true
+				}
+				return false
 			},
 			func(steps []fantasy.StepResult) bool {
-				return hasRepeatedToolCalls(steps, loopDetectionWindowSize, loopDetectionMaxRepeats)
+				if !hasRepeatedToolCalls(steps, loopDetectionWindowSize, loopDetectionMaxRepeats) {
+					return false
+				}
+				if a.loopStop != nil {
+					a.loopStop(call.SessionID)
+				}
+				return true
 			},
 		},
 	})
@@ -1485,7 +1528,6 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		return nil, err
 	}
 
-	continuing := false
 	if shouldSummarize {
 		a.activeRequests.Del(call.SessionID)
 		if summarizeErr := a.Summarize(compactionTriggerContext(genCtx), call.SessionID, "", call.ProviderOptions, call.OnAuthRefresh); summarizeErr != nil {
@@ -1493,17 +1535,13 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		}
 		// If the agent wasn't done...
 		if len(currentAssistant.ToolCalls()) > 0 {
-			sessMu.Lock()
-			if err := owner.ctx.Err(); err != nil {
-				sessMu.Unlock()
-				return nil, err
+			existing, ok := a.messageQueue.Get(call.SessionID)
+			if !ok {
+				existing = []SessionAgentCall{}
 			}
-			existing, _ := a.messageQueue.Get(call.SessionID)
 			call.Prompt = fmt.Sprintf("The previous session was interrupted because it got too long, the initial user request was: `%s`", call.Prompt)
 			existing = append(existing, call)
 			a.messageQueue.Set(call.SessionID, existing)
-			continuing = true
-			sessMu.Unlock()
 		}
 	}
 
@@ -1517,27 +1555,48 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		a.sendChannelReply(ctx, call, currentAssistant.Content().String(), completedToolCalls)
 	}
 
+	// Report the finished turn's text to the per-turn observer (#397):
+	// the same guard as the channel reply — the error path already
+	// returned, and a summarize cut that queued a continuation reports
+	// when that continuation finishes. Runs before the queue handoff
+	// below so a steer accepted during the final step, which becomes
+	// the handed-off turn, is attributed to its own call's observer
+	// and never replaces this turn's findings.
+	if call.turnText != nil && currentAssistant != nil && (!shouldSummarize || len(currentAssistant.ToolCalls()) == 0) {
+		call.turnText(call, result.Response.Content.Text())
+	}
+
+	// Release active request before publishing the notification.
+	// TUI handlers poll IsSessionBusy() and only re-evaluate when a
+	// tea.Msg arrives, so the cleanup must precede the notify or
+	// subscribers see stale busy state at the moment of receipt.
+	a.activeRequests.Del(call.SessionID)
 	cancel()
 
-	finished := func() {
-		if !call.NonInteractive && a.notify != nil {
-			a.notify.Publish(pubsub.CreatedEvent, notify.Notification{
-				SessionID:    call.SessionID,
-				SessionTitle: currentSession.Title,
-				Type:         notify.TypeAgentFinished,
-				FinishState:  notify.FinishContinuing,
-			})
-		}
+	// Send notification that agent has finished its turn (skip for
+	// nested/non-interactive sessions).
+	if !call.NonInteractive && a.notify != nil {
+		a.notify.Publish(pubsub.CreatedEvent, notify.Notification{
+			SessionID:    call.SessionID,
+			SessionTitle: currentSession.Title,
+			Type:         notify.TypeAgentFinished,
+		})
 	}
 
-	// The session remains owned across dequeue and execution. A canceled
-	// stack must unwind before finishOwner admits any surviving submissions.
+	// Hand off to the next queued prompt (if any) under dispatchMu so
+	// the transition from this finished run to the queued run is atomic
+	// against a concurrent Cancel. activeRequests for this session was
+	// just deleted above, so without the lock there is a window in
+	// which the session looks idle and a cancel becomes a no-op that
+	// fails to stop the queued prompt. Holding the lock lets us observe
+	// a pending cancel recorded against the session and drop the queue
+	// instead of running it, and (for the recursion) hand a fresh
+	// accept reservation to the dequeued call so acceptedRuns stays > 0
+	// across the recursive Run's own dispatch handoff — keeping the
+	// session observable to Cancel for the entire transition and
+	// closing the dequeue -> re-register window.
 	mu := a.sessionMu(call.SessionID)
 	mu.Lock()
-	if owner.ctx.Err() != nil {
-		mu.Unlock()
-		return result, owner.ctx.Err()
-	}
 	queuedMessages, _ := a.messageQueue.Get(call.SessionID)
 	if mark, ok := a.cancelMark.Get(call.SessionID); ok && mark > 0 && len(queuedMessages) > 0 {
 		// A cancel was recorded for this session (e.g. it arrived while
@@ -1548,7 +1607,14 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		var kept []SessionAgentCall
 		var canceledRunIDDrops []SessionAgentCall
 		for _, q := range queuedMessages {
+			if q.systemDelivery {
+				// Dispatch-result delivery (#388): the cancel covers
+				// user prompts, never an undelivered dispatch result.
+				kept = append(kept, q)
+				continue
+			}
 			if q.acceptSeq == 0 || q.acceptSeq <= mark {
+				q.consume(false)
 				if q.RunID != "" {
 					canceledRunIDDrops = append(canceledRunIDDrops, q)
 				}
@@ -1578,59 +1644,90 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 			a.cancelMark.Del(call.SessionID)
 		}
 		mu.Unlock()
-		if retain {
-			finished()
-		}
-		if continuing {
-			return nil, context.Canceled
-		}
 		return result, err
 	}
-	// A terminal turn retains its outcome while draining independent work.
-	// A suspended turn instead receives its continuation's terminal outcome.
+	// There are queued messages, restart the loop. Suppress the outer
+	// defer's emit: it would otherwise observe the recursive Run's retErr
+	// (named-return clobbering through the return below) against this
+	// turn's MessageID/Text and publish a mixed, racing event.
 	skipRunComplete = true
+	// Decide whether this turn still owes its own terminal RunComplete.
+	// Each submitted prompt with a RunID has its own lifecycle, so a turn
+	// that is finished and handing off to a *different* queued prompt must
+	// publish its own RunComplete here — leaving it to the recursive turn
+	// (which carries a different RunID) would hang a caller waiting on
+	// this turn's RunID. The exception is the summarize-continuation path,
+	// which re-queues this same call (same RunID) to resume after a
+	// summary; in that case the eventual terminal turn for this RunID
+	// publishes, so publishing now would double-emit.
+	outerOwesRunComplete := call.RunID != ""
+	if outerOwesRunComplete {
+		for _, q := range queuedMessages {
+			if q.RunID == call.RunID {
+				outerOwesRunComplete = false
+				break
+			}
+		}
+	}
 	firstQueuedMessage := queuedMessages[0]
 	a.messageQueue.Set(call.SessionID, queuedMessages[1:])
+	// Reserve a fresh accept for the dequeued prompt before dropping the
+	// lock so acceptedRuns > 0 across the handoff into the recursive
+	// Run. This closes the window between this dequeue and the recursive
+	// Run registering its activeRequests entry: a cancel arriving in
+	// that window now records a pending cancel (acceptedRuns > 0) that
+	// the recursive Run's accepted path observes as cancel-on-entry.
+	firstQueuedMessage.Accepted = a.BeginAccepted(call.SessionID)
+	// The dequeued call starts its own turn: tell its OnConsumed waiter
+	// the message was consumed (#351), before the recursive Run can drop
+	// it again through a different path (a cancel-on-entry fires the
+	// accepted call's own cleanup, not this one).
+	firstQueuedMessage.consume(true)
 	mu.Unlock()
-	finished()
-	if !continuing {
-		if err == nil {
-			err = ctx.Err()
+	// The queued prompt runs before this turn's completion is published,
+	// so a caller waiting on this RunID never observes success while work
+	// queued behind it is still unpublished. Its own error is not ours:
+	// the promoted call publishes its own terminal completion, and the
+	// initial caller must not fail for it.
+	queuedCtx := ctx
+	if firstQueuedMessage.RunID != "" {
+		queuedCtx = WithRunID(queuedCtx, firstQueuedMessage.RunID)
+	}
+	queuedResult, queuedErr := a.Run(queuedCtx, firstQueuedMessage)
+	// The promoted caller's runAgent already returned once the prompt was
+	// accepted into the queue, so a failure in the promoted turn reaches no
+	// one through it: report it here, attributed to the promoted RunID.
+	if queuedErr != nil && !errors.Is(queuedErr, context.Canceled) {
+		if a.notify != nil && !firstQueuedMessage.NonInteractive {
+			a.notify.Publish(pubsub.CreatedEvent, notify.Notification{
+				SessionID:    call.SessionID,
+				SessionTitle: currentSession.Title,
+				RunID:        firstQueuedMessage.RunID,
+				Type:         notify.TypeAgentError,
+				Message:      queuedErr.Error(),
+			})
 		}
-		a.finishTurn(call, result, err)
-		result, err = call.turn.result, call.turn.err
+		if firstQueuedMessage.RunID != "" && !RunCompletePublished(queuedCtx) {
+			a.publishRunComplete(queuedCtx, firstQueuedMessage, notify.RunComplete{
+				SessionID: call.SessionID,
+				RunID:     firstQueuedMessage.RunID,
+				Error:     queuedErr.Error(),
+			})
+		}
+	}
+	_ = queuedResult
+	if outerOwesRunComplete {
 		complete := notify.RunComplete{SessionID: call.SessionID, RunID: call.RunID}
 		if currentAssistant != nil {
 			complete.MessageID = currentAssistant.ID
 			complete.Text = currentAssistant.Content().String()
 		}
-		if err != nil {
-			complete.Error = err.Error()
-			complete.Cancelled = errors.Is(err, context.Canceled)
+		if ctx.Err() != nil {
+			complete.Cancelled = true
 		}
 		a.publishRunComplete(ctx, call, complete)
 	}
-	a.runQueued(ctx, firstQueuedMessage, owner, retain)
-	if call.turn.completed {
-		return call.turn.result, call.turn.err
-	}
-	// ClearQueue/Cancel removed our continuation. This suspended frame is
-	// still responsible for its callback and terminal completion.
-	skipRunComplete = false
-	return nil, context.Canceled
-}
-
-// Summarize compacts a session and adopts the checkpoint it writes.
-func (a *sessionAgent) Summarize(ctx context.Context, sessionID, instructions string, opts fantasy.ProviderOptions, onAuthRefresh func(context.Context, *fantasy.ProviderError) error) error {
-	_, err := a.runSummarize(ctx, sessionID, instructions, opts, onAuthRefresh, true)
-	return err
-}
-
-// SummarizePreview writes a checkpoint without adopting it. The session keeps
-// its full history until ConfirmSummarize, so a preview the user rejects or
-// abandons costs the row and nothing else.
-func (a *sessionAgent) SummarizePreview(ctx context.Context, sessionID, instructions string, opts fantasy.ProviderOptions, onAuthRefresh func(context.Context, *fantasy.ProviderError) error) (compaction.Preview, error) {
-	return a.runSummarize(ctx, sessionID, instructions, opts, onAuthRefresh, false)
+	return result, err
 }
 
 func (a *sessionAgent) runSummarize(ctx context.Context, sessionID, instructions string, opts fantasy.ProviderOptions, onAuthRefresh func(context.Context, *fantasy.ProviderError) error, commit bool) (compaction.Preview, error) {
@@ -2010,43 +2107,38 @@ func (a *sessionAgent) runSummarize(ctx context.Context, sessionID, instructions
 
 // ConfirmSummarize adopts a previewed checkpoint, which is the moment the
 // session's older turns stop being sent.
-func (a *sessionAgent) ConfirmSummarize(ctx context.Context, sessionID string, preview compaction.Preview) error {
-	if preview.CheckpointID == "" {
-		return errors.New("nothing to accept")
-	}
-	currentSession, err := a.sessions.Get(ctx, sessionID)
-	if err != nil {
-		return fmt.Errorf("failed to get session: %w", err)
-	}
-	if _, err := a.messages.Get(ctx, preview.CheckpointID); err != nil {
-		return fmt.Errorf("the previewed checkpoint is gone: %w", err)
-	}
 
-	currentSession.SummaryMessageID = preview.CheckpointID
-	currentSession.SummaryCutMessageID = preview.CutID
-	currentSession.PromptTokens = preview.PromptTokens
-	currentSession.CompletionTokens = preview.CompletionTokens
-	currentSession.EstimatedUsage = preview.EstimatedUsage
-	if _, err := a.sessions.Save(ctx, currentSession); err != nil {
-		return fmt.Errorf("failed to save session: %w", err)
-	}
-
-	a.eventSessionCompacted(sessionID, preview.Replaced, preview.Kept)
-	slog.Info("Adopted a previewed checkpoint", "session_id", sessionID,
-		"replaced", preview.Replaced, "kept", preview.Kept)
-	return nil
+// SummarizePreview writes a checkpoint without adopting it. The session keeps
+// its full history until ConfirmSummarize, so a preview the user rejects or
+// abandons costs the row and nothing else.
+func (a *sessionAgent) SummarizePreview(ctx context.Context, sessionID, instructions string, opts fantasy.ProviderOptions, onAuthRefresh func(context.Context, *fantasy.ProviderError) error) (compaction.Preview, error) {
+	return a.runSummarize(ctx, sessionID, instructions, opts, onAuthRefresh, false)
 }
 
-// DiscardSummarize throws away a previewed checkpoint. The session was never
-// pointed at it, so this only removes the row.
-func (a *sessionAgent) DiscardSummarize(ctx context.Context, sessionID, checkpointID string) error {
-	if checkpointID == "" {
-		return errors.New("nothing to discard")
+// compactionTriggerContext marks a compaction as machine-initiated, so a hook
+// can treat "the window filled up" differently from "the user asked".
+func compactionTriggerContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, compactionTriggerKey{}, true)
+}
+
+type compactionProgress struct {
+	replaced int
+	goal     int64
+	written  int64
+	last     time.Time
+}
+
+type CompactionHookRunner interface {
+	RunCompaction(ctx context.Context, eventName, sessionID string, detail hooks.CompactionDetail) (hooks.AggregateResult, error)
+}
+
+type compactionTriggerKey struct{}
+
+func compactionTrigger(ctx context.Context) string {
+	if ctx.Value(compactionTriggerKey{}) != nil {
+		return "auto"
 	}
-	if err := a.messages.Delete(ctx, checkpointID); err != nil {
-		return fmt.Errorf("failed to discard the previewed checkpoint: %w", err)
-	}
-	return nil
+	return "manual"
 }
 
 func (a *sessionAgent) getCacheControlOptions() fantasy.ProviderOptions {
@@ -2080,10 +2172,10 @@ func sessionHeaders(sessionID string) map[string]string {
 }
 
 func (a *sessionAgent) createUserMessage(ctx context.Context, call SessionAgentCall) (message.Message, error) {
-	parts := []message.ContentPart{message.TextContent{Text: call.Prompt, Hidden: call.HiddenUserMessage}}
+	parts := []message.ContentPart{message.TextContent{Text: call.Prompt, Hidden: call.HiddenUserMessage, Steer: call.Steer}}
 	var attachmentParts []message.ContentPart
 	for _, attachment := range call.Attachments {
-		attachmentParts = append(attachmentParts, message.BinaryContent{Path: attachment.FilePath, MIMEType: attachment.MimeType, Data: attachment.Content})
+		attachmentParts = append(attachmentParts, message.BinaryContent{Path: attachment.FilePath, MIMEType: attachment.MimeType, Data: attachment.Content, Kind: attachment.Kind, PromptArgCount: attachment.PromptArgCount})
 	}
 	parts = append(parts, attachmentParts...)
 	msg, err := a.messages.Create(ctx, call.SessionID, message.CreateMessageParams{
@@ -2283,259 +2375,25 @@ func toolResultsForCalls(m message.Message, toolResultsByCall map[string][]fanta
 func (a *sessionAgent) getSessionMessages(ctx context.Context, session session.Session) ([]message.Message, error) {
 	// Read only the tail a compacted session actually sends. The full
 	// transcript can be tens of megabytes on the single shared connection.
-	//
-	// A checkpoint that kept turns verbatim sits after them in creation order
-	// but must be sent before them, so the boundary read is the cut and the
-	// checkpoint is moved back to the front afterwards.
-	boundaryID := session.SummaryMessageID
-	if session.SummaryCutMessageID != "" {
-		boundaryID = session.SummaryCutMessageID
-	}
-	msgs, err := a.messages.ListFromSummary(ctx, session.ID, boundaryID)
+	msgs, err := a.messages.ListFromSummary(ctx, session.ID, session.SummaryMessageID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list messages: %w", err)
 	}
-	if boundaryID == "" {
-		return msgs, nil
-	}
 
-	summaryIndex, cutIndex := -1, -1
-	for i, msg := range msgs {
-		switch msg.ID {
-		case session.SummaryMessageID:
-			summaryIndex = i
-		case session.SummaryCutMessageID:
-			cutIndex = i
+	if session.SummaryMessageID != "" {
+		summaryMsgIndex := -1
+		for i, msg := range msgs {
+			if msg.ID == session.SummaryMessageID {
+				summaryMsgIndex = i
+				break
+			}
 		}
-	}
-
-	if session.SummaryCutMessageID == "" {
-		if summaryIndex != -1 {
-			msgs = msgs[summaryIndex:]
+		if summaryMsgIndex != -1 {
+			msgs = msgs[summaryMsgIndex:]
 			msgs[0].Role = message.User
 		}
-		return msgs, nil
 	}
-
-	if summaryIndex == -1 || cutIndex == -1 {
-		// A dangling checkpoint or cut must not silently erase history.
-		return a.messages.List(ctx, session.ID)
-	}
-
-	// The checkpoint is presented as the user turn carrying it, which is how
-	// every earlier summary was shown to the model.
-	checkpoint := msgs[summaryIndex]
-	checkpoint.Role = message.User
-	view := make([]message.Message, 0, len(msgs))
-	view = append(view, checkpoint)
-	for i, msg := range msgs {
-		if i < cutIndex || i == summaryIndex {
-			continue
-		}
-		view = append(view, msg)
-	}
-	return view, nil
-}
-
-// RestoreSummarize undoes the session's most recent compaction.
-//
-// A checkpoint never deletes the text it replaced, so undo is a pointer write
-// rather than a recovery: the region comes back exactly as it was written. The
-// checkpoint row goes away because nothing refers to it any more, and the
-// prompt counter is re-estimated from the restored transcript, since leaving
-// the compacted figure in place would tell the next check that the session
-// still has room it has just stopped having.
-func (a *sessionAgent) RestoreSummarize(ctx context.Context, sessionID string) error {
-	currentSession, err := a.sessions.Get(ctx, sessionID)
-	if err != nil {
-		return fmt.Errorf("failed to get session: %w", err)
-	}
-	checkpointID := currentSession.SummaryMessageID
-	if checkpointID == "" {
-		return errors.New("this session has no compaction to undo")
-	}
-
-	if err := a.messages.Delete(ctx, checkpointID); err != nil {
-		return fmt.Errorf("failed to remove the checkpoint: %w", err)
-	}
-	msgs, err := a.messages.List(ctx, sessionID)
-	if err != nil {
-		return fmt.Errorf("failed to list messages: %w", err)
-	}
-
-	currentSession.SummaryMessageID = ""
-	currentSession.SummaryCutMessageID = ""
-	currentSession.PromptTokens = compaction.EstimateAll(msgs)
-	currentSession.EstimatedUsage = true
-	if _, err := a.sessions.Save(ctx, currentSession); err != nil {
-		return fmt.Errorf("failed to save session: %w", err)
-	}
-
-	slog.Info("Restored a session from its checkpoint",
-		"session_id", sessionID, "messages", len(msgs))
-	return nil
-}
-
-// splitCheckpoint separates a checkpoint already in the session view from the
-// live transcript ahead of it.
-func splitCheckpoint(msgs []message.Message) (previous string, body []message.Message) {
-	if len(msgs) > 0 && msgs[0].IsSummaryMessage {
-		return compaction.Body(msgs[0].Content().Text), msgs[1:]
-	}
-	return "", msgs
-}
-
-// publishSummarizing tells observers that a session is being compacted, and
-// again when it is not. Without the closing event a compaction that fails or
-// is canceled leaves observers showing "summarizing" indefinitely.
-// progressInterval is how often a streaming compaction is allowed to say
-// something. Checkpoint deltas arrive many times a second, and a status line
-// that fast reads as noise and costs a wire event each.
-const progressInterval = 750 * time.Millisecond
-
-// compactionProgress reports how much of a checkpoint has arrived, in the
-// units the budget was set in. Reasoning models spend a long moment thinking
-// before the first token of the checkpoint exists, so the report names that
-// phase rather than claiming zero progress on a job that is clearly running.
-type compactionProgress struct {
-	replaced int
-	goal     int64
-	written  int64
-	last     time.Time
-}
-
-func (p *compactionProgress) advance(n int) string {
-	p.written += int64(n)
-	if time.Since(p.last) < progressInterval {
-		return ""
-	}
-	p.last = time.Now()
-	if p.written == 0 {
-		return fmt.Sprintf("Compacting %d messages \u00b7 thinking\u2026", p.replaced)
-	}
-	return fmt.Sprintf(
-		"Compacting %d messages \u00b7 checkpoint %s/%s tokens",
-		p.replaced,
-		humanTokens(compaction.TokensForChars(p.written)),
-		humanTokens(p.goal),
-	)
-}
-
-func humanTokens(n int64) string {
-	if n < 1000 {
-		return strconv.FormatInt(n, 10)
-	}
-	// Upper case, to match the context meter: the same number should never
-	// appear two ways on one screen.
-	return strings.Replace(fmt.Sprintf("%.1fK", float64(n)/1000), ".0K", "K", 1)
-}
-
-func (a *sessionAgent) publishSummarizing(sessionID, title string, done bool, progress string) {
-	if a.notify == nil {
-		return
-	}
-	a.notify.Publish(pubsub.CreatedEvent, notify.Notification{
-		SessionID:    sessionID,
-		SessionTitle: title,
-		Type:         notify.TypeSummarizing,
-		Done:         done,
-		Progress:     progress,
-	})
-}
-
-// CompactionHookRunner is the seam the agent needs from the user's compaction
-// hooks: a way to ask whether a compaction may happen.
-type CompactionHookRunner interface {
-	RunCompaction(ctx context.Context, eventName, sessionID string, detail hooks.CompactionDetail) (hooks.AggregateResult, error)
-}
-
-// compactionTriggerContext marks a compaction as machine-initiated, so a hook
-// can treat "the window filled up" differently from "the user asked".
-func compactionTriggerContext(ctx context.Context) context.Context {
-	return context.WithValue(ctx, compactionTriggerKey{}, true)
-}
-
-type compactionTriggerKey struct{}
-
-func compactionTrigger(ctx context.Context) string {
-	if ctx.Value(compactionTriggerKey{}) != nil {
-		return "auto"
-	}
-	return "manual"
-}
-
-// runCompactionHook fires one compaction event and reports whether anything
-// ran. A failing hook never blocks a compaction: only an explicit deny does.
-func (a *sessionAgent) runCompactionHook(ctx context.Context, event, sessionID string, detail hooks.CompactionDetail) (hooks.AggregateResult, bool) {
-	if a.compactionHooks == nil {
-		return hooks.AggregateResult{}, false
-	}
-	runner := a.compactionHooks(event)
-	if runner == nil {
-		return hooks.AggregateResult{}, false
-	}
-	result, err := runner.RunCompaction(ctx, event, sessionID, detail)
-	if err != nil {
-		slog.Warn("Compaction hook failed; continuing without it",
-			"event", event, "session_id", sessionID, "error", err)
-		return hooks.AggregateResult{}, false
-	}
-	return result, true
-}
-
-// compactionOptions returns the configured compaction options, or nil when
-// the agent has no config store.
-func (a *sessionAgent) compactionOptions() *config.CompactionOptions {
-	if a.cfg == nil {
-		return nil
-	}
-	cfg := a.cfg.Config()
-	if cfg == nil {
-		return nil
-	}
-	return cfg.Options.Compaction
-}
-
-// compactionPolicy is the checkpoint policy in force for a model with the
-// given context window. The window is a caller argument rather than agent
-// state because an agent's model can change underneath it.
-func (a *sessionAgent) compactionPolicy(contextWindow int64) compaction.Policy {
-	var configured int64
-	if opts := a.compactionOptions(); opts != nil {
-		configured = int64(opts.TailTokens)
-	}
-	p := compaction.DefaultPolicy
-	p.KeepRecentTokens = compaction.TailBudget(contextWindow, configured)
-	return p
-}
-
-// prunePolicy is the tool-output pruning policy in force for a model with the
-// given context window. Pruning is enabled unless the config says otherwise,
-// matching other tri-state options.
-func (a *sessionAgent) prunePolicy(contextWindow int64) compaction.PrunePolicy {
-	var configuredTail int64
-	if opts := a.compactionOptions(); opts != nil {
-		configuredTail = int64(opts.TailTokens)
-	}
-
-	p := compaction.PrunePolicyForWindow(contextWindow, configuredTail)
-	if opts := a.compactionOptions(); opts != nil && opts.PruneToolResults != nil {
-		p.Disabled = !*opts.PruneToolResults
-	}
-	return p
-}
-
-// compactionTranscriptDir is where displaced transcript regions are kept, or
-// "" when the session has no data directory to keep them in.
-func (a *sessionAgent) compactionTranscriptDir() string {
-	if a.cfg == nil {
-		return ""
-	}
-	cfg := a.cfg.Config()
-	if cfg == nil {
-		return ""
-	}
-	return compaction.TranscriptDir(cfg.Options.DataDirectory)
+	return msgs, nil
 }
 
 // hasUserTextMessage reports whether any user message in msgs contains
@@ -2555,6 +2413,32 @@ func hasUserTextMessage(msgs []message.Message) bool {
 }
 
 // GenerateTitle generates a session title based on the initial prompt.
+// titleProviderOptions forwards the model's configured provider_options
+// (e.g. disabling thinking for Qwen models via chat_template_kwargs) to
+// the title call, which otherwise never goes through getProviderOptions.
+// The options are keyed for openai-compat transports; other transports
+// ignore keys that are not theirs.
+func titleProviderOptions(m Model) fantasy.ProviderOptions {
+	if len(m.ModelCfg.ProviderOptions) == 0 {
+		return nil
+	}
+	merged := map[string]any{}
+	data, err := json.Marshal(m.ModelCfg.ProviderOptions)
+	if err == nil {
+		err = json.Unmarshal(data, &merged)
+	}
+	if err != nil {
+		slog.Error("Could not marshal title provider options", "err", err)
+		return nil
+	}
+	parsed, err := openaicompat.ParseOptions(merged)
+	if err != nil {
+		slog.Error("Could not parse title provider options", "err", err)
+		return nil
+	}
+	return fantasy.ProviderOptions{openaicompat.Name: parsed}
+}
+
 func (a *sessionAgent) GenerateTitle(ctx context.Context, sessionID string, userPrompt string) {
 	if userPrompt == "" {
 		return
@@ -2619,7 +2503,9 @@ func (a *sessionAgent) GenerateTitle(ctx context.Context, sessionID string, user
 			tok = attempt.model.CatwalkCfg.DefaultMaxTokens
 		}
 		agent := newAgent(attempt.model.Model, titlePrompt, tok)
-		resp, err = agent.Stream(ctx, streamCall)
+		call := streamCall
+		call.ProviderOptions = titleProviderOptions(attempt.model)
+		resp, err = agent.Stream(ctx, call)
 		if err == nil && resp.Response.FinishReason != fantasy.FinishReasonLength {
 			model = attempt.model
 			slog.Debug("Generated title with " + attempt.name + " model")
@@ -2875,9 +2761,6 @@ func (a *sessionAgent) Cancel(sessionID string) {
 }
 
 func (a *sessionAgent) ClearQueue(sessionID string) {
-	mu := a.sessionMu(sessionID)
-	mu.Lock()
-	defer mu.Unlock()
 	if a.QueuedPrompts(sessionID) > 0 {
 		slog.Debug("Clearing queued prompts", "session_id", sessionID)
 		a.clearQueueAndNotify(sessionID)
@@ -2924,7 +2807,16 @@ func (a *sessionAgent) QueuedPrompts(sessionID string) int {
 	if !ok {
 		return 0
 	}
-	return len(l)
+	n := 0
+	for _, call := range l {
+		if call.systemDelivery {
+			// Dispatch-result deliveries (#388) are invisible to the
+			// queue surfaces: the pill counts prompts, not system turns.
+			continue
+		}
+		n++
+	}
+	return n
 }
 
 func (a *sessionAgent) QueuedPromptsList(sessionID string) []string {
@@ -2932,9 +2824,12 @@ func (a *sessionAgent) QueuedPromptsList(sessionID string) []string {
 	if !ok {
 		return nil
 	}
-	prompts := make([]string, len(l))
-	for i, call := range l {
-		prompts[i] = call.Prompt
+	var prompts []string
+	for _, call := range l {
+		if call.systemDelivery {
+			continue
+		}
+		prompts = append(prompts, call.Prompt)
 	}
 	return prompts
 }
@@ -2945,11 +2840,15 @@ func (a *sessionAgent) SetModels(large Model, small Model) {
 }
 
 func (a *sessionAgent) SetTools(tools []fantasy.AgentTool) {
-	a.tools.SetSlice(tools)
+	a.tools.SetSlice(wrapTodoGate(tools, a.todoEnforcement))
 }
 
 func (a *sessionAgent) SetSystemPrompt(systemPrompt string) {
 	a.systemPrompt.Set(systemPrompt)
+}
+
+func (a *sessionAgent) WaitReady() error {
+	return a.ready.wait()
 }
 
 func (a *sessionAgent) Model() Model {
@@ -3106,7 +3005,6 @@ func (a *sessionAgent) workaroundProviderMediaLimitations(messages []fantasy.Mes
 	return convertedMessages
 }
 
-// buildSummaryPrompt constructs the prompt text for session summarization.
 func buildSummaryPrompt(todos []session.Todo, instructions, previousCheckpoint, transcriptPath, durableMemory string) string {
 	var sb strings.Builder
 	sb.WriteString("Write the checkpoint for the conversation above.")
@@ -3187,4 +3085,213 @@ func sanitizeToolInput(toolName, toolCallID, input string) (string, bool) {
 		return "{}", true
 	}
 	return input, false
+}
+
+func (a *sessionAgent) Summarize(ctx context.Context, sessionID, instructions string, opts fantasy.ProviderOptions, onAuthRefresh func(context.Context, *fantasy.ProviderError) error) error {
+	_, err := a.runSummarize(ctx, sessionID, instructions, opts, onAuthRefresh, true)
+	return err
+}
+
+// SummarizePreview writes a checkpoint without adopting it. The session keeps
+// its full history until ConfirmSummarize, so a preview the user rejects or
+// abandons costs the row and nothing else.
+
+func (a *sessionAgent) ConfirmSummarize(ctx context.Context, sessionID string, preview compaction.Preview) error {
+	if preview.CheckpointID == "" {
+		return errors.New("nothing to accept")
+	}
+	currentSession, err := a.sessions.Get(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to get session: %w", err)
+	}
+	if _, err := a.messages.Get(ctx, preview.CheckpointID); err != nil {
+		return fmt.Errorf("the previewed checkpoint is gone: %w", err)
+	}
+
+	currentSession.SummaryMessageID = preview.CheckpointID
+	currentSession.SummaryCutMessageID = preview.CutID
+	currentSession.PromptTokens = preview.PromptTokens
+	currentSession.CompletionTokens = preview.CompletionTokens
+	currentSession.EstimatedUsage = preview.EstimatedUsage
+	if _, err := a.sessions.Save(ctx, currentSession); err != nil {
+		return fmt.Errorf("failed to save session: %w", err)
+	}
+
+	a.eventSessionCompacted(sessionID, preview.Replaced, preview.Kept)
+	slog.Info("Adopted a previewed checkpoint", "session_id", sessionID,
+		"replaced", preview.Replaced, "kept", preview.Kept)
+	return nil
+}
+
+// DiscardSummarize throws away a previewed checkpoint. The session was never
+// pointed at it, so this only removes the row.
+func (a *sessionAgent) DiscardSummarize(ctx context.Context, sessionID, checkpointID string) error {
+	if checkpointID == "" {
+		return errors.New("nothing to discard")
+	}
+	if err := a.messages.Delete(ctx, checkpointID); err != nil {
+		return fmt.Errorf("failed to discard the previewed checkpoint: %w", err)
+	}
+	return nil
+}
+
+func (a *sessionAgent) RestoreSummarize(ctx context.Context, sessionID string) error {
+	currentSession, err := a.sessions.Get(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to get session: %w", err)
+	}
+	checkpointID := currentSession.SummaryMessageID
+	if checkpointID == "" {
+		return errors.New("this session has no compaction to undo")
+	}
+
+	if err := a.messages.Delete(ctx, checkpointID); err != nil {
+		return fmt.Errorf("failed to remove the checkpoint: %w", err)
+	}
+	msgs, err := a.messages.List(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to list messages: %w", err)
+	}
+
+	currentSession.SummaryMessageID = ""
+	currentSession.SummaryCutMessageID = ""
+	currentSession.PromptTokens = compaction.EstimateAll(msgs)
+	currentSession.EstimatedUsage = true
+	if _, err := a.sessions.Save(ctx, currentSession); err != nil {
+		return fmt.Errorf("failed to save session: %w", err)
+	}
+
+	slog.Info("Restored a session from its checkpoint",
+		"session_id", sessionID, "messages", len(msgs))
+	return nil
+}
+
+// splitCheckpoint separates a checkpoint already in the session view from the
+// live transcript ahead of it.
+func splitCheckpoint(msgs []message.Message) (previous string, body []message.Message) {
+	if len(msgs) > 0 && msgs[0].IsSummaryMessage {
+		return compaction.Body(msgs[0].Content().Text), msgs[1:]
+	}
+	return "", msgs
+}
+
+// publishSummarizing tells observers that a session is being compacted, and
+// again when it is not. Without the closing event a compaction that fails or
+// is canceled leaves observers showing "summarizing" indefinitely.
+// progressInterval is how often a streaming compaction is allowed to say
+// something. Checkpoint deltas arrive many times a second, and a status line
+// that fast reads as noise and costs a wire event each.
+const progressInterval = 750 * time.Millisecond
+
+func (p *compactionProgress) advance(n int) string {
+	p.written += int64(n)
+	if time.Since(p.last) < progressInterval {
+		return ""
+	}
+	p.last = time.Now()
+	if p.written == 0 {
+		return fmt.Sprintf("Compacting %d messages \u00b7 thinking\u2026", p.replaced)
+	}
+	return fmt.Sprintf(
+		"Compacting %d messages \u00b7 checkpoint %s/%s tokens",
+		p.replaced,
+		humanTokens(compaction.TokensForChars(p.written)),
+		humanTokens(p.goal),
+	)
+}
+
+func humanTokens(n int64) string {
+	if n < 1000 {
+		return strconv.FormatInt(n, 10)
+	}
+	// Upper case, to match the context meter: the same number should never
+	// appear two ways on one screen.
+	return strings.Replace(fmt.Sprintf("%.1fK", float64(n)/1000), ".0K", "K", 1)
+}
+
+func (a *sessionAgent) publishSummarizing(sessionID, title string, done bool, progress string) {
+	if a.notify == nil {
+		return
+	}
+	a.notify.Publish(pubsub.CreatedEvent, notify.Notification{
+		SessionID:    sessionID,
+		SessionTitle: title,
+		Type:         notify.TypeSummarizing,
+		Done:         done,
+		Progress:     progress,
+	})
+}
+
+// runCompactionHook fires one compaction event and reports whether anything
+// ran. A failing hook never blocks a compaction: only an explicit deny does.
+func (a *sessionAgent) runCompactionHook(ctx context.Context, event, sessionID string, detail hooks.CompactionDetail) (hooks.AggregateResult, bool) {
+	if a.compactionHooks == nil {
+		return hooks.AggregateResult{}, false
+	}
+	runner := a.compactionHooks(event)
+	if runner == nil {
+		return hooks.AggregateResult{}, false
+	}
+	result, err := runner.RunCompaction(ctx, event, sessionID, detail)
+	if err != nil {
+		slog.Warn("Compaction hook failed; continuing without it",
+			"event", event, "session_id", sessionID, "error", err)
+		return hooks.AggregateResult{}, false
+	}
+	return result, true
+}
+
+// compactionOptions returns the configured compaction options, or nil when
+// the agent has no config store.
+func (a *sessionAgent) compactionOptions() *config.CompactionOptions {
+	if a.cfg == nil {
+		return nil
+	}
+	cfg := a.cfg.Config()
+	if cfg == nil {
+		return nil
+	}
+	return cfg.Options.Compaction
+}
+
+// compactionPolicy is the checkpoint policy in force for a model with the
+// given context window. The window is a caller argument rather than agent
+// state because an agent's model can change underneath it.
+func (a *sessionAgent) compactionPolicy(contextWindow int64) compaction.Policy {
+	var configured int64
+	if opts := a.compactionOptions(); opts != nil {
+		configured = int64(opts.TailTokens)
+	}
+	p := compaction.DefaultPolicy
+	p.KeepRecentTokens = compaction.TailBudget(contextWindow, configured)
+	return p
+}
+
+// prunePolicy is the tool-output pruning policy in force for a model with the
+// given context window. Pruning is enabled unless the config says otherwise,
+// matching other tri-state options.
+func (a *sessionAgent) prunePolicy(contextWindow int64) compaction.PrunePolicy {
+	var configuredTail int64
+	if opts := a.compactionOptions(); opts != nil {
+		configuredTail = int64(opts.TailTokens)
+	}
+
+	p := compaction.PrunePolicyForWindow(contextWindow, configuredTail)
+	if opts := a.compactionOptions(); opts != nil && opts.PruneToolResults != nil {
+		p.Disabled = !*opts.PruneToolResults
+	}
+	return p
+}
+
+// compactionTranscriptDir is where displaced transcript regions are kept, or
+// "" when the session has no data directory to keep them in.
+func (a *sessionAgent) compactionTranscriptDir() string {
+	if a.cfg == nil {
+		return ""
+	}
+	cfg := a.cfg.Config()
+	if cfg == nil {
+		return ""
+	}
+	return compaction.TranscriptDir(cfg.Options.DataDirectory)
 }

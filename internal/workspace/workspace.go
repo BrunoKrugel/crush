@@ -121,7 +121,18 @@ type Workspace interface {
 	CreateSession(ctx context.Context, title string) (session.Session, error)
 	GetSession(ctx context.Context, sessionID string) (session.Session, error)
 	ListSessions(ctx context.Context) ([]session.Session, error)
+	// ListChildSessions returns the child sessions of the given
+	// session, oldest first (creation order) (#314): the task sessions the
+	// sessions picker nests under their parent. Includes every child
+	// kind; callers filter.
+	ListChildSessions(ctx context.Context, parentSessionID string) ([]session.Session, error)
+	// ListAllChildSessions returns every child session of every
+	// parent in one grouped query (#408), grouped by parent and
+	// oldest-created first. Includes every child kind; callers
+	// filter.
+	ListAllChildSessions(ctx context.Context) ([]session.Session, error)
 	SaveSession(ctx context.Context, sess session.Session) (session.Session, error)
+	SetSessionChannel(ctx context.Context, sessionID, channel string) (session.Session, error)
 	DeleteSession(ctx context.Context, sessionID string) error
 	CreateAgentToolSessionID(messageID, toolCallID string) string
 	ParseAgentToolSessionID(sessionID string) (messageID string, toolCallID string, ok bool)
@@ -165,6 +176,7 @@ type Workspace interface {
 	AgentQueuedPrompts(sessionID string) int
 	AgentQueuedPromptsList(sessionID string) []string
 	AgentClearQueue(sessionID string)
+	AgentListCronTasks(sessionID string) []scheduler.Task
 	AgentSetMain(agentID string) error
 	AgentSummarize(ctx context.Context, sessionID, instructions string) error
 	// AgentRestoreSummarize undoes the session's most recent compaction,
@@ -174,7 +186,6 @@ type Workspace interface {
 	AgentSummarizePreview(ctx context.Context, sessionID, instructions string) (compaction.Preview, error)
 	AgentConfirmSummarize(ctx context.Context, sessionID string, preview compaction.Preview) error
 	AgentDiscardSummarize(ctx context.Context, sessionID, checkpointID string) error
-	AgentListCronTasks(sessionID string) []scheduler.Task
 	UpdateAgentModel(ctx context.Context) error
 	InitCoderAgent(ctx context.Context) error
 	InitCoderAgentNonInteractive(ctx context.Context) error
@@ -211,6 +222,32 @@ type Workspace interface {
 	// History
 	ListSessionHistory(ctx context.Context, sessionID string) ([]history.File, error)
 
+	// Agent tasks (#421)
+	//
+	// The dispatched-agent surface over A2A: every method reads or acts
+	// through the A2A host's agent index and the A2A protocol, never the
+	// dispatch registry, so both workspace modes serve it the same way.
+	// Changes reach the TUI as pubsub.Event[AgentTask] messages once
+	// Subscribe has run.
+	//
+	// ListAgentTasks returns the agents dispatched from sessionID (#399),
+	// finished ones included, oldest first.
+	ListAgentTasks(sessionID string) []AgentTask
+	// AgentTask returns the agent whose child session is sessionID: the
+	// session a dispatch card is for.
+	AgentTask(sessionID string) (AgentTask, bool)
+	// AgentTaskByHandle resolves an @handle among the agents dispatched
+	// from sessionID (#313, #399).
+	AgentTaskByHandle(sessionID, handle string) (AgentTask, bool)
+	// SendAgentMessage steers the running agent dispatched from sessionID
+	// under handle (#313), with the editor's attachments (#414). A
+	// finished, unknown or foreign agent is refused.
+	SendAgentMessage(ctx context.Context, sessionID, handle, text string, attachments []message.Attachment) error
+	// CancelAgentTask stops one running dispatched agent (#373) through
+	// tasks/cancel (#348); ref is a dispatch id, an @handle, or the
+	// child session id.
+	CancelAgentTask(ctx context.Context, ref string) error
+
 	// LSP
 	LSPStart(ctx context.Context, path string)
 	LSPStopAll(ctx context.Context)
@@ -222,6 +259,14 @@ type Workspace interface {
 	WorkingDir() string
 	GitBranch(ctx context.Context) (string, error)
 	Resolver() config.VariableResolver
+	// LoadDiagnostics returns the load diagnostics the config load
+	// collected and the command recorded (#560, #578): the problems
+	// that did not fail the load but that the user should hear about,
+	// such as an external agent that cannot be dispatched or an
+	// allow-commands entry that subtracts nothing from the banned
+	// list. A client workspace returns nil; the server process that
+	// loaded the config logs them itself.
+	LoadDiagnostics() []config.LoadDiagnostic
 
 	// Config mutations (proxied to server in client mode)
 	UpdatePreferredModel(scope config.Scope, modelType config.SelectedModelType, model config.SelectedModel) error
@@ -239,6 +284,15 @@ type Workspace interface {
 	InitializePrompt() (string, error)
 	ListSkills(ctx context.Context) ([]skills.CatalogEntry, error)
 	ReadSkill(ctx context.Context, skillID string) ([]byte, skills.SkillReadResult, error)
+	// ReloadSkills re-discovers skills from disk and publishes updated
+	// states to all subscribers (sidebar, commands dialog, etc.).
+	ReloadSkills() error
+	// ReloadModelDiscovery re-runs model discovery for custom providers and
+	// merges any newly found models into the in-memory config. It returns
+	// the number of models added across all providers.
+	ReloadModelDiscovery(ctx context.Context) (int, error)
+	// GetSkillStates returns the current per-skill discovery states.
+	GetSkillStates() []*skills.SkillState
 
 	// MCP operations (server-side in client mode)
 	MCPGetStates() map[string]mcptools.ClientInfo
@@ -247,9 +301,21 @@ type Workspace interface {
 	RefreshMCPTools(ctx context.Context, name string)
 	ReadMCPResource(ctx context.Context, name, uri string) ([]MCPResourceContents, error)
 	ListMCPPrompts(ctx context.Context) ([]commands.MCPPrompt, error)
+	// CallMCPTool invokes a tool on a named MCP server and returns its
+	// text content plus any A2UI surface payload it embedded. It backs the
+	// A2UI action round-trip: a button press on an MCP-served surface
+	// routes back to the owning server as an a2ui_action (or a render
+	// failure as an a2ui_error) without an agent turn.
+	CallMCPTool(ctx context.Context, name, toolName string, args map[string]any) (MCPToolCallResult, error)
 	GetMCPPrompt(clientID, promptID string, args map[string]string) (string, error)
 	EnableDockerMCP(ctx context.Context) error
 	DisableDockerMCP() error
+	// MCPReconnect restarts a single MCP server by name. It reloads the
+	// config from disk so changes to crush.json (e.g., updated args or
+	// flags) are picked up, then re-resolves env vars (including
+	// OAuth/OIDC token refresh commands) and is the mechanism for
+	// refreshing expired credentials.
+	MCPReconnect(ctx context.Context, name string) error
 	MCPServersDisabled(ctx context.Context) ([]string, error)
 	MCPSetServerDisabled(ctx context.Context, name string, disabled bool) error
 	MCPSetServerConfigDisabled(ctx context.Context, name string, disabled bool) error
@@ -280,4 +346,19 @@ type MCPResourceContents struct {
 	MIMEType string `json:"mime_type,omitempty"`
 	Text     string `json:"text,omitempty"`
 	Blob     []byte `json:"blob,omitempty"`
+}
+
+// MCPToolCallResult holds the model-facing text and any A2UI surface
+// payloads from an MCP tool call.
+type MCPToolCallResult struct {
+	// Content is the result's text (its TextContent, joined).
+	Content string `json:"content"`
+	// Surfaces carries any A2UI surface payloads the result embedded.
+	Surfaces []MCPToolCallSurface `json:"surfaces,omitempty"`
+}
+
+// MCPToolCallSurface is a single A2UI surface payload from a tool call.
+type MCPToolCallSurface struct {
+	Payload string `json:"payload"`
+	URI     string `json:"uri"`
 }

@@ -6,18 +6,18 @@
  * then multi-agent dispatch, then the flat reference material you look things
  * up in.
  *
- * @brunokrugel 08/25/2026 - Initial sidebar for the MVP docs site.
+ * @joestump-agent 08/25/2026 - Initial sidebar for the MVP docs site.
  *
- * @brunokrugel 08/25/2026 - Added the "What this fork adds" page directly
+ * @joestump-agent 08/25/2026 - Added the "What this fork adds" page directly
  * under the introduction, so the fork inventory is the second thing a reader
  * sees rather than something they have to hunt for.
  *
- * @brunokrugel 10/04/2026 - Added the "Multi-agent" category between
+ * @joestump-agent 10/04/2026 - Added the "Multi-agent" category between
  * Features and Reference for the dispatch / A2A pages, ordered from the
  * overview and tutorial through configuration to the architecture, protocol,
  * troubleshooting and design-decision pages.
  *
- * @brunokrugel 10/09/2026 - Added the "Team" page after configuration:
+ * @joestump-agent 10/09/2026 - Added the "Team" page after configuration:
  * what a team can do with A2A today, the TLS listener and its certificate
  * recipe, and how to read a teammate's definition cards.
  */
@@ -60,12 +60,31 @@ const sidebars: SidebarsConfig = {
         'features/lsp',
         'features/mcp',
         'features/channels',
+        'features/a2ui',
         'features/skills',
         'features/hooks',
         'features/scheduled-tasks',
+        'features/semantic-search',
         'features/sessions',
         'features/server-and-workspaces',
         'features/notifications',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Multi-agent',
+      collapsed: false,
+      items: [
+        'agents/overview',
+        'agents/tutorial',
+        'agents/handles-and-inspect',
+        'agents/todo-enforcement',
+        'agents/configuration',
+        'agents/team',
+        'agents/architecture',
+        'agents/a2a-protocol',
+        'agents/troubleshooting',
+        'agents/design-decisions',
       ],
     },
     {

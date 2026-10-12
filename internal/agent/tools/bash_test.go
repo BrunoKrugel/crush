@@ -113,7 +113,7 @@ func (m *recordingPermissionService) SubscribeNotifications(ctx context.Context)
 func newBashToolForTest(workingDir string) fantasy.AgentTool {
 	permissions := &mockBashPermissionService{Broker: pubsub.NewBroker[permission.PermissionRequest]()}
 	attribution := &config.Attribution{TrailerStyle: config.TrailerStyleNone}
-	return NewBashTool(permissions, workingDir, workingDir, attribution, "test-model")
+	return NewBashTool(permissions, workingDir, workingDir, attribution, "test-model", nil, false)
 }
 
 func newBashToolWithRecordingPerms(workingDir string, allow bool) (fantasy.AgentTool, *recordingPermissionService) {
@@ -122,7 +122,7 @@ func newBashToolWithRecordingPerms(workingDir string, allow bool) (fantasy.Agent
 		allow:  allow,
 	}
 	attribution := &config.Attribution{TrailerStyle: config.TrailerStyleNone}
-	return NewBashTool(perms, workingDir, workingDir, attribution, "test-model"), perms
+	return NewBashTool(perms, workingDir, workingDir, attribution, "test-model", nil, false), perms
 }
 
 func TestBashTool_ChainedCommandsRequirePermission(t *testing.T) {
@@ -162,6 +162,83 @@ func TestBashTool_ChainedCommandsDenied(t *testing.T) {
 
 	require.Equal(t, 1, perms.requestCount)
 	require.Contains(t, resp.Content, "User denied permission")
+}
+
+// TestBashTool_WrappedCommandsRequirePermission pins the permission prompt
+// for the forms the old text-prefix matcher let through: a wrapper that
+// runs another program, a redirection, a backgrounded or newline-separated
+// second command, process substitution, and the mutating git flags. Every
+// one must reach the permission service; with a denying service none of
+// them executes.
+func TestBashTool_WrappedCommandsRequirePermission(t *testing.T) {
+	t.Parallel()
+
+	bypasses := []string{
+		"timeout 5 rm -rf pwned",
+		"env rm -rf pwned",
+		"nice rm -rf pwned",
+		"nohup rm -rf pwned",
+		"time rm -rf pwned",
+		"env PATH=/tmp/evil ls",
+		"kill -9 1",
+		"ls & rm -rf pwned",
+		"echo pwned > rcfile",
+		"ls\nrm -rf pwned",
+		"ls <(rm -rf pwned)",
+		"git branch -D main",
+		"git tag -d v1.0.0",
+		"git remote set-url origin https://evil.example/x.git",
+		"git config user.name attacker",
+		"git diff --ext-diff",
+	}
+	for _, command := range bypasses {
+		t.Run(command, func(t *testing.T) {
+			t.Parallel()
+			workingDir := t.TempDir()
+			tool, perms := newBashToolWithRecordingPerms(workingDir, false)
+			ctx := context.WithValue(context.Background(), SessionIDContextKey, "test-session")
+
+			resp := runBashTool(t, tool, ctx, BashParams{
+				Description: "bypass attempt",
+				Command:     command,
+			})
+
+			require.Equal(t, 1, perms.requestCount, "%q must request permission", command)
+			require.Contains(t, resp.Content, "User denied permission")
+		})
+	}
+}
+
+// TestBashTool_PeeledWrappersStayAutoApproved keeps the everyday read-only
+// forms prompt-free, including a wrapper around a read-only command, which
+// the parser peels and checks on its own merits.
+func TestBashTool_PeeledWrappersStayAutoApproved(t *testing.T) {
+	t.Parallel()
+
+	safe := []string{
+		"ls -la",
+		"git status",
+		"git log --oneline -n 3",
+		"timeout 5 ls",
+		"nohup ls -la",
+		"ls; pwd",
+	}
+	for _, command := range safe {
+		t.Run(command, func(t *testing.T) {
+			t.Parallel()
+			workingDir := t.TempDir()
+			tool, perms := newBashToolWithRecordingPerms(workingDir, false)
+			ctx := context.WithValue(context.Background(), SessionIDContextKey, "test-session")
+
+			resp := runBashTool(t, tool, ctx, BashParams{
+				Description: "read-only",
+				Command:     command,
+			})
+
+			require.Equal(t, 0, perms.requestCount, "%q must not request permission", command)
+			require.NotContains(t, resp.Content, "User denied permission")
+		})
+	}
 }
 
 func runBashTool(t *testing.T, tool fantasy.AgentTool, ctx context.Context, params BashParams) fantasy.ToolResponse {
@@ -206,4 +283,55 @@ func TestTruncateOutputEmoji(t *testing.T) {
 	out := TruncateOutput(content, t.TempDir())
 	require.True(t, utf8.ValidString(out), "truncated output must stay valid UTF-8")
 	require.Contains(t, out, "lines truncated")
+}
+
+func TestEffectiveBannedCommands(t *testing.T) {
+	t.Parallel()
+
+	// No allowances: the effective list matches the defaults exactly.
+	require.Equal(t, bannedCommands, effectiveBannedCommands(nil))
+
+	// Allowing a banned command removes it while preserving order and the
+	// rest of the list.
+	effective := effectiveBannedCommands([]string{"ssh", "curl"})
+	require.NotContains(t, effective, "ssh")
+	require.NotContains(t, effective, "curl")
+	require.Contains(t, effective, "systemctl")
+	require.Len(t, effective, len(bannedCommands)-2)
+
+	// Unknown allowances subtract nothing.
+	require.Equal(t, bannedCommands, effectiveBannedCommands([]string{"definitely-not-banned"}))
+}
+
+func TestUnknownAllowedCommands(t *testing.T) {
+	t.Parallel()
+
+	require.Empty(t, UnknownAllowedCommands(nil))
+	require.Empty(t, UnknownAllowedCommands([]string{"ssh", "curl"}))
+	require.Equal(t, []string{"shh"}, UnknownAllowedCommands([]string{"ssh", "shh"}))
+}
+
+func TestBlockFuncs_AllowedCommandNotBlocked(t *testing.T) {
+	t.Parallel()
+
+	// By default, ssh is blocked by the first (commands) blocker.
+	require.True(t, blockFuncs(nil, false)[0]([]string{"ssh"}))
+
+	// Allowing ssh unblocks it, but a still-banned command stays blocked.
+	allowed := blockFuncs([]string{"ssh"}, false)
+	require.False(t, allowed[0]([]string{"ssh"}))
+	require.True(t, allowed[0]([]string{"systemctl"}))
+
+	// Allowing ssh does not touch the argument-level blockers (apt install).
+	stillBlocksAptInstall := false
+	for _, fn := range allowed {
+		if fn([]string{"apt", "install", "cowsay"}) {
+			stillBlocksAptInstall = true
+			break
+		}
+	}
+	require.True(t, stillBlocksAptInstall, "allowed_commands must not unlock package-manager argument blocks")
+
+	// allowAllCommands drops every blocker, including argument-level ones.
+	require.Empty(t, blockFuncs(nil, true))
 }

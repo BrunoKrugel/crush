@@ -102,7 +102,7 @@ interception, so one delegated turn doesn't trigger your hook N times. The outer
 sub-agent tool call itself *is* hooked, so a policy like "never let the agent
 spawn sub-agents" still works.
 
-[Dispatched agents](/fork) — the fork's `dispatch_agent` tool — *do*
+[Dispatched agents](/agents/overview) — the fork's `dispatch_agent` tool — *do*
 fire `PreToolUse`: their tools are wrapped with the parent's hooks, and the
 hook payload carries the dispatched session's ID. Unlike `agent` and
 `agentic_fetch` they have `bash`, `edit`, `multiedit`, and `write`, so a policy
@@ -351,5 +351,5 @@ semantics, and the same stdin envelope work in both.
 
 The complete hook reference — including the exact config, stdin, and output
 schemas — lives in
-[`docs/hooks/README.md`](https://github.com/brunokrugel/crush/blob/main/docs/hooks/README.md)
+[`docs/hooks/README.md`](https://github.com/joestump-agent/crush/blob/main/docs/hooks/README.md)
 in the repo, and in the built-in `crush-hooks` skill.

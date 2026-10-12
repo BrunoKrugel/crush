@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/clipperhouse/displaywidth"
 	"github.com/clipperhouse/uax29/v2/words"
+	a2ui "github.com/tmc/a2ui"
 )
 
 // Constants for multi-click detection.
@@ -35,18 +36,6 @@ type DelayedClickMsg struct {
 // scrollbarHideMsg is sent to hide the scrollbar after the timeout period.
 type scrollbarHideMsg struct {
 	seq int // sequence number to ignore stale messages
-}
-
-// sidebarScrollbarHideMsg is sent to hide the sidebar scrollbar after timeout.
-type sidebarScrollbarHideMsg struct {
-	seq int
-}
-
-// scrollbarHideCmd returns a command that sends a scrollbarHideMsg after the timeout.
-func scrollbarHideCmd(seq int) tea.Cmd {
-	return tea.Tick(scrollbarHideDuration, func(_ time.Time) tea.Msg {
-		return scrollbarHideMsg{seq: seq}
-	})
 }
 
 // resizeSettleDuration is how long after the last resize event the chat
@@ -76,11 +65,10 @@ func chatWarmCmd(seq int, delay time.Duration) tea.Cmd {
 	})
 }
 
-// sidebarScrollbarHideCmd returns a command that sends a sidebarScrollbarHideMsg
-// after the timeout.
-func sidebarScrollbarHideCmd(seq int) tea.Cmd {
+// scrollbarHideCmd returns a command that sends a scrollbarHideMsg after the timeout.
+func scrollbarHideCmd(seq int) tea.Cmd {
 	return tea.Tick(scrollbarHideDuration, func(_ time.Time) tea.Msg {
-		return sidebarScrollbarHideMsg{seq: seq}
+		return scrollbarHideMsg{seq: seq}
 	})
 }
 
@@ -131,6 +119,13 @@ type Chat struct {
 	// follow is a flag to indicate whether the view should auto-scroll to
 	// bottom on new messages.
 	follow bool
+
+	// a2uiReadOnly renders every A2UI surface the chat holds in its
+	// read-only state (#407): while an inspected transcript is on screen,
+	// its surfaces must not take focus or keys. Items set or appended
+	// while it is on inherit it, so a live message landing mid-inspect is
+	// non-interactive from the start.
+	a2uiReadOnly bool
 
 	// drawCache memoizes the decoded form of the last list.Render output so
 	// repeat frames with byte-identical content skip the per-cell ANSI
@@ -444,6 +439,7 @@ func (m *Chat) SetMessages(msgs ...chat.MessageItem) tea.Cmd {
 		}
 		items[i] = msg
 	}
+	m.stampA2UIReadOnly(msgs)
 	m.list.SetItems(items...)
 	m.ScrollToBottom()
 	return nil
@@ -463,7 +459,34 @@ func (m *Chat) AppendMessages(msgs ...chat.MessageItem) {
 		}
 		items[i] = msg
 	}
+	m.stampA2UIReadOnly(msgs)
 	m.list.AppendItems(items...)
+}
+
+// stampA2UIReadOnly applies the chat's read-only state to the given items
+// (#407), so items added while the chat is read-only start out
+// non-interactive instead of waiting for a flag sweep.
+func (m *Chat) stampA2UIReadOnly(msgs []chat.MessageItem) {
+	if !m.a2uiReadOnly {
+		return
+	}
+	for _, msg := range msgs {
+		if ro, ok := msg.(interface{ SetA2UIReadOnly(bool) }); ok {
+			ro.SetA2UIReadOnly(true)
+		}
+	}
+}
+
+// SetA2UIReadOnly toggles read-only rendering of every A2UI surface the
+// chat holds (#407): items currently in the list get the flag applied,
+// and items set or appended while it is on inherit it.
+func (m *Chat) SetA2UIReadOnly(readOnly bool) {
+	m.a2uiReadOnly = readOnly
+	for i := range m.list.Len() {
+		if item, ok := m.list.ItemAt(i).(interface{ SetA2UIReadOnly(bool) }); ok {
+			item.SetA2UIReadOnly(readOnly)
+		}
+	}
 }
 
 // UpdateNestedToolIDs updates the ID map for nested tools within a container.
@@ -932,6 +955,109 @@ func (m *Chat) MessageItem(id string) chat.MessageItem {
 	return item
 }
 
+// ItemAt returns the message item at the given list index, or nil when
+// the index is out of bounds or holds a non-message item.
+func (m *Chat) ItemAt(index int) chat.MessageItem {
+	if index < 0 || index >= m.list.Len() {
+		return nil
+	}
+	item, ok := m.list.ItemAt(index).(chat.MessageItem)
+	if !ok {
+		return nil
+	}
+	return item
+}
+
+// RetireA2UISurface finds the assistant message holding the live A2UI
+// surface with the given ID, reads its current field values, and retires the
+// surface so the form cannot be re-submitted (#45). It reports the gathered
+// values and whether a matching surface was found.
+func (m *Chat) RetireA2UISurface(surfaceID string) (map[string]any, bool) {
+	for i := range m.list.Len() {
+		item, ok := m.list.ItemAt(i).(*chat.AssistantMessageItem)
+		if !ok {
+			continue
+		}
+		if values, ok := item.RetireA2UISurface(surfaceID); ok {
+			return values, true
+		}
+	}
+	return nil, false
+}
+
+// HasAssistantA2UISurface reports whether a live assistant-authored surface
+// carries the given ID. Assistant items do not implement A2UISurfaceItem and
+// are absent from the MCP provenance registry, so without this check a
+// surface ID an assistant happens to share with an MCP server (both default
+// to "default") resolves as MCP-owned and the user's submission is shipped
+// to that server instead of starting an agent turn.
+func (m *Chat) HasAssistantA2UISurface(surfaceID string) bool {
+	for i := range m.list.Len() {
+		item, ok := m.list.ItemAt(i).(*chat.AssistantMessageItem)
+		if ok && item.HasLiveA2UISurface(surfaceID) {
+			return true
+		}
+	}
+	return false
+}
+
+// a2uiSurfaceItem locates the chat item holding the named MCP surface.
+// Surface IDs are only unique within a server — invoking the same tool twice
+// appends two items carrying the same ID — so the focused surface wins: that
+// is the one the user is actually interacting with. Only when nothing is
+// focused does it fall back to the first match.
+func (m *Chat) a2uiSurfaceItem(surfaceID string) (chat.A2UISurfaceItem, bool) {
+	var first chat.A2UISurfaceItem
+	for i := range m.list.Len() {
+		item, ok := m.list.ItemAt(i).(chat.A2UISurfaceItem)
+		if !ok || !item.HasA2UISurface(surfaceID) {
+			continue
+		}
+		if item.A2UISurfaceIsFocused(surfaceID) {
+			return item, true
+		}
+		if first == nil {
+			first = item
+		}
+	}
+	return first, first != nil
+}
+
+// A2UISurfaceOwner returns the MCP server that served the named surface,
+// resolved through the item that owns it rather than the global
+// surfaceID-keyed registry, so two servers using the same surface ID cannot
+// route each other's interactions.
+func (m *Chat) A2UISurfaceOwner(surfaceID string) (string, bool) {
+	item, ok := m.a2uiSurfaceItem(surfaceID)
+	if !ok {
+		return "", false
+	}
+	return item.A2UISurfaceOwner(surfaceID)
+}
+
+// A2UISurfaceFieldValues reads the named MCP surface's current input values,
+// for building an a2ui_action context. It reports whether a tool item held
+// the surface.
+func (m *Chat) A2UISurfaceFieldValues(surfaceID string) (map[string]any, bool) {
+	item, ok := m.a2uiSurfaceItem(surfaceID)
+	if !ok {
+		return nil, false
+	}
+	return item.ToolA2UIFieldValues(surfaceID), true
+}
+
+// ApplyA2UISurfaceUpdate feeds a batch of A2UI server messages back into the
+// named MCP surface (the response to an a2ui_action round-trip). It reports
+// whether the surface still has renderable state afterward — false means no
+// item held it, or the server deleted it.
+func (m *Chat) ApplyA2UISurfaceUpdate(surfaceID string, msgs []a2ui.ServerMessage) bool {
+	item, ok := m.a2uiSurfaceItem(surfaceID)
+	if !ok {
+		return false
+	}
+	return item.ApplyToolA2UIUpdate(surfaceID, msgs)
+}
+
 // ToggleExpandedSelectedItem expands the selected message item if it is expandable.
 func (m *Chat) ToggleExpandedSelectedItem() {
 	if expandable, ok := m.list.SelectedItem().(chat.Expandable); ok {
@@ -1042,39 +1168,52 @@ func (m *Chat) HandleMouseDown(x, y int) (bool, tea.Cmd) {
 
 // HandleDelayedClick handles a delayed single-click action (like expansion).
 // It only executes if the click ID matches (i.e., no double-click occurred)
-// and no text selection was made (drag to select).
-func (m *Chat) HandleDelayedClick(msg DelayedClickMsg) bool {
+// and no text selection was made (drag to select). It returns whether the
+// click was handled and an optional command produced by the clicked item
+// (e.g. a clipboard copy from a click-to-copy affordance).
+func (m *Chat) HandleDelayedClick(msg DelayedClickMsg) (bool, tea.Cmd) {
 	// Ignore if this click was superseded by a newer click (double/triple).
 	if msg.ClickID != m.pendingClickID {
-		return false
+		return false, nil
 	}
 
 	// Don't expand if user dragged to select text.
 	if m.HasHighlight() {
-		return false
+		return false, nil
 	}
 
 	// Execute the click action (e.g., expansion).
 	selectedItem := m.list.SelectedItem()
-	if clickable, ok := selectedItem.(list.MouseClickable); ok {
-		handled := clickable.HandleMouseClick(ansi.MouseButton1, msg.X, msg.Y)
-		// Toggle expansion only when the item signalled it handled the
-		// click. Items like AssistantMessageItem only report handled when
-		// the click is on their expandable region, so this avoids
-		// toggling expansion for clicks outside the clickable area.
-		if handled {
-			if expandable, ok := selectedItem.(chat.Expandable); ok {
-				wasFollowing := m.follow
-				expandable.ToggleExpanded()
-				if wasFollowing {
-					m.ScrollToBottom()
-				}
-			}
-		}
-		return handled
+	var handled bool
+	var cmd tea.Cmd
+	if commandable, ok := selectedItem.(list.MouseClickCommandable); ok {
+		// Items that can produce click commands get first refusal. A
+		// non-nil command (e.g. copy-to-clipboard) replaces the generic
+		// expansion toggle below.
+		handled, cmd = commandable.HandleMouseClickCmd(ansi.MouseButton1, msg.X, msg.Y)
+	} else if clickable, ok := selectedItem.(list.MouseClickable); ok {
+		handled = clickable.HandleMouseClick(ansi.MouseButton1, msg.X, msg.Y)
+	} else {
+		return false, nil
 	}
 
-	return false
+	// Toggle expansion only when the item signalled it handled the
+	// click without producing a command of its own. Items like
+	// AssistantMessageItem only report handled when the click is on
+	// their expandable region, so this avoids toggling expansion for
+	// clicks outside the clickable area.
+	if handled && cmd == nil {
+		if expandable, ok := selectedItem.(chat.Expandable); ok {
+			wasFollowing := m.follow
+			if !expandable.ToggleExpanded() {
+				m.ScrollToIndex(m.list.Selected())
+			}
+			if wasFollowing {
+				m.ScrollToBottom()
+			}
+		}
+	}
+	return handled, cmd
 }
 
 // HandleMouseUp handles mouse up events for the chat component.

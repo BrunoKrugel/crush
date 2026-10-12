@@ -7,7 +7,6 @@ package agenttest
 
 import (
 	"context"
-	"testing"
 
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy/providers/openaicompat"
@@ -17,6 +16,18 @@ import (
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/session"
 )
+
+// CoordinatorOption mutates agent.CoordinatorOptions after the minimal
+// default wiring is applied, letting tests inject dependencies the
+// default leaves nil (e.g. a DispatchHost for A2A-runtime tests).
+type CoordinatorOption func(*agent.CoordinatorOptions)
+
+// WithDispatchHost wires the A2A host before the coordinator starts, so
+// runs that serve over the runtime find it and agent definitions are
+// published on it during construction.
+func WithDispatchHost(host agent.DispatchHost) CoordinatorOption {
+	return func(o *agent.CoordinatorOptions) { o.DispatchHost = host }
+}
 
 // NewCoordinator builds a real agent.Coordinator through the production
 // agent.NewCoordinator constructor so the RunAccepted / BeginAccepted /
@@ -31,16 +42,15 @@ import (
 //
 // The optional coordinator dependencies (history, filetracker, LSP,
 // notify, runComplete, skills) are nil: run guards the publisher fields
-// and the cancel-on-entry path never touches the others.
+// and the cancel-on-entry path never touches the others. Options passed
+// in opts are applied last and may set any of those fields.
 func NewCoordinator(
-	t *testing.T,
 	ctx context.Context,
 	workingDir string,
 	sessions session.Service,
 	messages message.Service,
+	opts ...CoordinatorOption,
 ) (agent.Coordinator, error) {
-	t.Helper()
-
 	cfg, err := config.Init(workingDir, "", false)
 	if err != nil {
 		return nil, err
@@ -68,22 +78,14 @@ func NewCoordinator(
 	coderCfg.AllowedTools = nil
 	cfg.Config().Agents[config.AgentCoder] = coderCfg
 
-	coord, err := agent.NewCoordinator(ctx, agent.CoordinatorOptions{
+	copts := agent.CoordinatorOptions{
 		Config:      cfg,
 		Sessions:    sessions,
 		Messages:    messages,
 		Permissions: permission.NewPermissionService(workingDir, true, nil),
-	})
-	if err != nil {
-		return nil, err
 	}
-
-	// EnableScheduler stays false, so the coordinator wires no cron store
-	// and never starts the scheduler goroutine; the Close cleanup below
-	// is a harmless no-op for it.
-	if closer, ok := coord.(interface{ Close() }); ok {
-		t.Cleanup(closer.Close)
+	for _, opt := range opts {
+		opt(&copts)
 	}
-
-	return coord, nil
+	return agent.NewCoordinator(ctx, copts)
 }

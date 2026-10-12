@@ -84,7 +84,7 @@ func (b *Backend) SendMessage(workspaceID string, msg proto.AgentMessage) error 
 // if the event is dropped. To guarantee termination, when msg.RunID is
 // non-empty and the coordinator did not already publish the run's
 // authoritative terminal RunComplete (e.g. the error was returned before
-// sessionAgent.Run executed, such as a readyWg or UpdateModels failure),
+// sessionAgent.Run executed, such as an agent-readiness or UpdateModels failure),
 // runAgent emits an errored RunComplete on the must-deliver
 // runCompletions broker so the waiter observes a deterministic terminal
 // event. context.Canceled is expected (sessionAgent.Run already
@@ -112,6 +112,9 @@ func (b *Backend) runAgent(ws *Workspace, msg proto.AgentMessage, policy permiss
 
 	if msg.Channel != "" {
 		ctx = agent.WithChannel(ctx, msg.Channel)
+	}
+	if msg.ContentWidth > 0 {
+		ctx = agent.WithContentWidth(ctx, msg.ContentWidth)
 	}
 	_, err := ws.AgentCoordinator.RunAccepted(ctx, accept, msg.SessionID, msg.Prompt, proto.AttachmentsToMessage(msg.Attachments)...)
 	if err == nil || errors.Is(err, context.Canceled) {

@@ -17,24 +17,26 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy"
+	"github.com/charmbracelet/crush/internal/a2a"
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/clipboard"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/db"
+	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/event"
 	"github.com/charmbracelet/crush/internal/filetracker"
 	"github.com/charmbracelet/crush/internal/format"
 	"github.com/charmbracelet/crush/internal/herdr"
 	"github.com/charmbracelet/crush/internal/history"
-	"github.com/charmbracelet/crush/internal/ledger"
 	"github.com/charmbracelet/crush/internal/log"
 	"github.com/charmbracelet/crush/internal/lsp"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/question"
+	"github.com/charmbracelet/crush/internal/semantic"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/shell"
 	"github.com/charmbracelet/crush/internal/skills"
@@ -56,7 +58,6 @@ type UpdateAvailableMsg struct {
 type App struct {
 	Sessions    session.Service
 	Messages    message.Service
-	Ledger      ledger.Service
 	History     history.Service
 	Permissions permission.Service
 	Questions   question.Service
@@ -69,6 +70,11 @@ type App struct {
 	Skills *skills.Manager
 
 	config *config.ConfigStore
+
+	// conn is the shared project database handle, retained so the
+	// semantic index store can be (re)built against it when the coder
+	// agent initialises.
+	conn *sql.DB
 
 	serviceEventsWG *sync.WaitGroup
 	eventsCtx       context.Context
@@ -87,9 +93,20 @@ type App struct {
 	// instead of guessing from message finish parts.
 	runCompletions *pubsub.Broker[notify.RunComplete]
 
+	// a2aHost is the process's A2A host, set once when the coder agent
+	// initializes; a2aHostReady is closed then. A UI watching dispatched
+	// agents over A2A (#421) dials the host's agent index through it.
+	a2aHostMu    sync.Mutex
+	a2aHost      *a2a.ServerFactory
+	a2aHostReady chan struct{}
+
 	// herdrClient reports agent state to herdr when running inside
 	// a herdr-managed pane. Nil when not in a herdr environment.
 	herdrClient *herdr.Client
+
+	// newCoordinator is the seam used to build the agent coordinator,
+	// so tests can capture the lifetime context it receives.
+	newCoordinator func(context.Context, agent.CoordinatorOptions) (agent.Coordinator, error)
 }
 
 // New initializes a new application instance. skillsMgr carries the
@@ -111,7 +128,6 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 	app := &App{
 		Sessions:    sessions,
 		Messages:    messages,
-		Ledger:      ledger.NewService(q),
 		History:     files,
 		Permissions: permission.NewPermissionService(store.WorkingDir(), skipPermissionsRequests, allowedTools),
 		Questions:   question.NewService(),
@@ -122,12 +138,15 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 		globalCtx: ctx,
 
 		config: store,
+		conn:   conn,
 
 		events:             pubsub.NewBroker[tea.Msg](),
 		serviceEventsWG:    &sync.WaitGroup{},
 		tuiWG:              &sync.WaitGroup{},
 		agentNotifications: pubsub.NewBroker[notify.Notification](),
 		runCompletions:     pubsub.NewBroker[notify.RunComplete](),
+		a2aHostReady:       make(chan struct{}),
+		newCoordinator:     agent.NewCoordinator,
 	}
 
 	app.setupEvents()
@@ -165,41 +184,20 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 	}
 	go mcp.Initialize(ctx, app.Permissions, store, forceStart, localDisabled)
 
-	// A session that loaded MCP tools holds those activations for as long
-	// as it exists. Deleting the session must reclaim them, otherwise a
-	// long-lived server process accumulates one entry per conversation.
-	go func() {
-		deleted := app.Sessions.Subscribe(ctx)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case event, ok := <-deleted:
-				if !ok {
-					return
-				}
-				if event.Type == pubsub.DeletedEvent {
-					mcp.ClearSession(event.Payload.ID)
-				}
-			}
-		}
-	}()
+	// Keep channel MCP sessions healthy: a channel-only connection carries no
+	// traffic of its own, so a dropped stream is never surfaced by the lazy
+	// tool-call renewal path. The health check pings channel sessions
+	// periodically and renews the dead ones.
+	mcp.StartChannelHealthCheck(ctx, store)
 
 	// Start herdr integration when running inside a herdr pane.
 	app.herdrClient = herdr.Init()
 	herdr.BridgeLocal(ctx, app.herdrClient, herdr.BridgeSources{
-		PermRequests:          app.Permissions,
-		PermNotifications:     app.Permissions,
-		RunCompletions:        app.runCompletions,
-		Messages:              app.Messages,
-		Questions:             app.Questions,
-		QuestionNotifications: app.Questions,
-		Notifications:         app.agentNotifications,
-		Sessions:              app.Sessions,
+		PermRequests:      app.Permissions,
+		PermNotifications: app.Permissions,
+		RunCompletions:    app.runCompletions,
+		Messages:          app.Messages,
 	})
-	if model, ok := cfg.Models[config.SelectedModelTypeLarge]; ok {
-		app.herdrClient.ReportModel(model.Model)
-	}
 
 	// Release the shared database connection on shutdown. The pool
 	// closes the underlying *sql.DB when the last reference is released.
@@ -213,13 +211,6 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 	// TODO: remove the concept of agent config, most likely.
 	if !cfg.IsConfigured() {
 		slog.Warn("No agent configuration found")
-		return app, nil
-	}
-	// Without a selected model there is nothing to talk to yet. The TUI
-	// prompts for one; non-interactive runs pick the first available model
-	// when they initialize the agent.
-	if !cfg.HasSelectedModel(config.SelectedModelTypeLarge) {
-		slog.Warn("No model selected")
 		return app, nil
 	}
 	if err := app.InitCoderAgent(ctx); err != nil {
@@ -278,26 +269,12 @@ func (app *App) RunCompletions() *pubsub.Broker[notify.RunComplete] {
 }
 
 // ReportCurrentSession tells herdr which session the user is now
-// viewing so the pane can show its title and persist a resumable
-// reference. A no-op when not running inside a herdr pane. Call this
-// whenever the active session changes (load, new, or select). An
-// empty sessionID clears the presentation (landing screen).
-func (app *App) ReportCurrentSession(ctx context.Context, sessionID string) {
-	// Outside a herdr pane there is nothing to report to, so the
-	// title lookup would be a database read for no one.
-	if app.herdrClient == nil {
-		return
-	}
-	var title string
-	if sessionID != "" {
-		sess, err := app.Sessions.Get(ctx, sessionID)
-		if err != nil {
-			slog.Debug("Failed to look up session title for herdr", "session_id", sessionID, "error", err)
-		} else {
-			title = sess.Title
-		}
-	}
-	app.herdrClient.SetSession(sessionID, title)
+// viewing so it can persist a resumable reference for the pane. Safe
+// to call when not running inside a herdr pane; the underlying client
+// is nil-safe. Call this whenever the active session changes (load,
+// new, or select).
+func (app *App) ReportCurrentSession(sessionID string) {
+	app.herdrClient.SetSessionID(sessionID)
 }
 
 // resolveSession resolves which session to use for a non-interactive run
@@ -321,7 +298,9 @@ func (app *App) resolveSession(ctx context.Context, continueSessionID string, us
 
 	case useLast:
 		sess, err := app.Sessions.GetLast(ctx)
-		if err != nil {
+		// GetLastSession selects top-level sessions only; the guard
+		// keeps --continue safe if that ever changes (#413).
+		if err != nil || sess.ParentSessionID != "" {
 			return session.Session{}, fmt.Errorf("no sessions found to continue")
 		}
 		return sess, nil
@@ -437,8 +416,12 @@ func (app *App) RunNonInteractive(ctx context.Context, output io.Writer, prompt,
 		}
 	}
 
+	// Automatically approve all permission requests for this non-interactive
+	// session.
+	app.Permissions.AutoApproveSession(sess.ID)
+
 	// Report session identity to herdr.
-	app.ReportCurrentSession(ctx, sess.ID)
+	app.ReportCurrentSession(sess.ID)
 
 	type response struct {
 		result *fantasy.AgentResult
@@ -447,7 +430,7 @@ func (app *App) RunNonInteractive(ctx context.Context, output io.Writer, prompt,
 	done := make(chan response, 1)
 
 	go func(ctx context.Context, sessionID, prompt string) {
-		result, err := app.AgentCoordinator.Run(permission.WithAutoApproveRequests(ctx), sessionID, prompt)
+		result, err := app.AgentCoordinator.Run(ctx, sess.ID, prompt)
 		if err != nil {
 			done <- response{
 				err: fmt.Errorf("failed to start agent processing stream: %w", err),
@@ -462,14 +445,6 @@ func (app *App) RunNonInteractive(ctx context.Context, output io.Writer, prompt,
 	messageEvents := app.Messages.Subscribe(ctx)
 	messageReadBytes := make(map[string]int)
 	var printed bool
-
-	// When showEvents is on, create an event printer for stderr and
-	// suppress the spinner (events replace it).
-	var eventPrinter *format.EventPrinter
-	if showEvents {
-		eventPrinter = format.NewEventPrinter(os.Stderr)
-		hideSpinner = true
-	}
 
 	defer func() {
 		if progress && stderrTTY {
@@ -506,64 +481,14 @@ func (app *App) RunNonInteractive(ctx context.Context, output io.Writer, prompt,
 				stopSpinner()
 
 				content := msg.Content().String()
-				readBytes := messageReadBytes[msg.ID]
-
-				if len(content) < readBytes {
-					slog.Error("Non-interactive: message content is shorter than read bytes", "message_length", len(content), "read_bytes", readBytes)
-					return fmt.Errorf("message content is shorter than read bytes: %d < %d", len(content), readBytes)
-				}
-
-				part := content[readBytes:]
-				// Trim leading whitespace. Sometimes the LLM includes leading
-				// formatting and indentation, which we don't want here.
-				if readBytes == 0 {
-					part = strings.TrimLeft(part, " \t")
-				}
+				part, next := format.NextStreamChunk(content, messageReadBytes[msg.ID])
 				// Ignore initial whitespace-only messages.
 				if printed || strings.TrimSpace(part) != "" {
 					printed = true
 					fmt.Fprint(output, part)
 				}
-				messageReadBytes[msg.ID] = len(content)
+				messageReadBytes[msg.ID] = next
 			}
-
-			// When showEvents is on, print tool calls and results
-			// as compact one-line summaries to stderr.
-			if showEvents && eventPrinter != nil {
-				for _, tc := range msg.ToolCalls() {
-					eventPrinter.PrintToolCall(tc.Name, tc.ID, tc.Input, tc.Finished)
-				}
-				for _, tr := range msg.ToolResults() {
-					eventPrinter.PrintToolResult(tr.Name, tr.Content, tr.IsError)
-				}
-			}
-
-			// Only Assistant messages carry streamable text to stdout.
-			if msg.Role != message.Assistant {
-				continue
-			}
-			stopSpinner()
-
-			content := msg.Content().String()
-			readBytes := messageReadBytes[msg.ID]
-
-			if len(content) < readBytes {
-				slog.Error("Non-interactive: message content is shorter than read bytes", "message_length", len(content), "read_bytes", readBytes)
-				return fmt.Errorf("message content is shorter than read bytes: %d < %d", len(content), readBytes)
-			}
-
-			part := content[readBytes:]
-			// Trim leading whitespace. Sometimes the LLM includes leading
-			// formatting and intentation, which we don't want here.
-			if readBytes == 0 {
-				part = strings.TrimLeft(part, " \t")
-			}
-			// Ignore initial whitespace-only messages.
-			if printed || strings.TrimSpace(part) != "" {
-				printed = true
-				fmt.Fprint(output, part)
-			}
-			messageReadBytes[msg.ID] = len(content)
 
 		case <-ctx.Done():
 			stopSpinner()
@@ -920,34 +845,44 @@ func (app *App) InitCoderAgent(ctx context.Context) error {
 	return app.initCoderAgent(ctx, true)
 }
 
+// DeleteSession deletes a session and every descendant session in one
+// transaction (#418). It refuses while a dispatch is still running from
+// the session or from any descendant, because the cascade would delete
+// the dispatched agent's session; dispatch worktrees and branches are
+// never touched, so they stay manageable with `crush dispatch` (#369).
+func (app *App) DeleteSession(ctx context.Context, id string) error {
+	ids := []string{id}
+	queue := []string{id}
+	seen := map[string]bool{id: true}
+	for len(queue) > 0 {
+		var next []string
+		for _, parentID := range queue {
+			children, err := app.Sessions.ListChildren(ctx, parentID)
+			if err != nil {
+				return err
+			}
+			for _, child := range children {
+				if !seen[child.ID] {
+					seen[child.ID] = true
+					ids = append(ids, child.ID)
+					next = append(next, child.ID)
+				}
+			}
+		}
+		queue = next
+	}
+	for _, sessionID := range ids {
+		if app.AgentCoordinator != nil && len(app.AgentCoordinator.DispatchLive(sessionID)) > 0 {
+			return errors.New("an agent dispatched from this session is still running; cancel it first")
+		}
+	}
+	return app.Sessions.Delete(ctx, id)
+}
+
 // InitCoderAgentNonInteractive initializes the coder agent without
 // interactive-only tools (e.g. question).
 func (app *App) InitCoderAgentNonInteractive(ctx context.Context) error {
-	app.ensureModelForNonInteractive()
 	return app.initCoderAgent(ctx, false)
-}
-
-// ensureModelForNonInteractive selects the first available model when the
-// user has never chosen one. Non-interactive runs cannot show the model
-// picker, so they fall back to the top of the model list rather than
-// failing. The choice lives in memory only and is never written to the
-// user's config.
-func (app *App) ensureModelForNonInteractive() {
-	cfg := app.config.Config()
-	if cfg.HasSelectedModel(config.SelectedModelTypeLarge) {
-		return
-	}
-	knownProviders, err := config.Providers(cfg)
-	if err != nil {
-		slog.Warn("Failed to load providers while selecting a fallback model", "error", err)
-	}
-	model, ok := cfg.FirstAvailableModel(knownProviders)
-	if !ok {
-		return
-	}
-	slog.Info("No model selected, falling back to first available model", "provider", model.Provider, "model", model.Model)
-	app.config.OverridePreferredModel(config.SelectedModelTypeLarge, model)
-	app.config.OverridePreferredModel(config.SelectedModelTypeSmall, app.GetDefaultSmallModel(model.Provider))
 }
 
 func (app *App) initCoderAgent(ctx context.Context, interactive bool) error {
@@ -955,18 +890,44 @@ func (app *App) initCoderAgent(ctx context.Context, interactive bool) error {
 	if coderAgentCfg.ID == "" {
 		return fmt.Errorf("coder agent configuration is missing")
 	}
-	var err error
-	// Close the previous coordinator, if any, before replacing it: it
-	// would otherwise keep its cron scheduler goroutine running and hold
-	// the scheduled-tasks ownership lock until process exit — most
-	// visibly when a headless run re-initializes the agent
-	// non-interactively.
+
+	// #420: the coordinator is a per-App singleton. Every client attach
+	// (TUI startup, `crush run`, a reconnect) lands here, and rebuilding
+	// the coordinator would drop the dispatch registry, the injection
+	// targets and the cron scheduler with the old instance. Reuse it and
+	// only flip the tool palette to the mode the attach asks for; the
+	// last attach still decides the mode.
 	if app.AgentCoordinator != nil {
-		if closer, ok := app.AgentCoordinator.(interface{ Close() }); ok {
-			closer.Close()
-		}
+		return app.AgentCoordinator.SetInteractive(ctx, interactive)
 	}
-	app.AgentCoordinator, err = agent.NewCoordinator(ctx, agent.CoordinatorOptions{
+
+	var err error
+	// #346: every dispatch is served over the process-wide A2A host on a
+	// per-process 0600 unix socket, rooted at the data directory; the
+	// same factory dials the dispatches it serves.
+	// #355: the host's default task store is the durable SQLite store
+	// over the shared session database, stamped with this process's host
+	// ID so startup reconcile can attribute rows; the same ID stamps the
+	// dispatch records the coordinator writes. Stores wire only with a
+	// database handle; tests build the App without one and keep the
+	// pre-#355 in-memory behavior.
+	//
+	// #358: options.a2a.listen adds a TLS-only TCP listener beside the
+	// socket, serving the same routes; load validation already refused
+	// plain TCP. Without it the host stays on the socket alone.
+	hostID := a2a.HostID()
+	a2aFactoryOpts := []a2a.ServerFactoryOption{
+		a2a.WithTCPListener(app.config.Config().Options.A2A),
+	}
+	if app.conn != nil {
+		a2aFactoryOpts = append(a2aFactoryOpts, a2a.WithTaskStore(a2a.NewSQLiteStore(app.conn, hostID, nil)))
+	}
+	a2aFactory := a2a.NewServerFactory(app.config.Config().Options.DataDirectory, a2aFactoryOpts...)
+	var dispatchRecords dispatch.DispatchRecords
+	if app.conn != nil {
+		dispatchRecords = dispatch.NewSQLiteRecordStore(app.conn, hostID)
+	}
+	coordinatorOpts := agent.CoordinatorOptions{
 		Config:      app.config,
 		Sessions:    app.Sessions,
 		Messages:    app.Messages,
@@ -979,16 +940,104 @@ func (app *App) initCoderAgent(ctx context.Context, interactive bool) error {
 		RunComplete: app.runCompletions,
 		Skills:      app.Skills,
 		Interactive: interactive,
-		Ledger:      app.Ledger,
-		// Only interactive surfaces (the TUI, the server) fire scheduled
-		// tasks; headless runs must not take the ownership lock.
-		EnableScheduler: interactive,
-	})
+		// #70: every dispatch is registered on the process-wide A2A host
+		// for in-memory discovery and served over its unix socket. This
+		// is the one execution path (#347): without it dispatches are
+		// refused.
+		DispatchHost: a2aFactory,
+		// #355: dispatches persist durable records over the same session
+		// database, so a restart can fail orphaned runs and re-deliver
+		// finished-but-undelivered results. nil without a database keeps
+		// every record write a no-op.
+		DispatchRecords: dispatchRecords,
+	}
+
+	// Semantic search is opt-in: only wire the store and client when an
+	// embedding provider is configured. A failed store init (e.g. a
+	// dimension change demanding a reindex) disables the tools for this
+	// run with a logged, actionable error rather than killing startup.
+	if emb, ok := app.config.Config().ResolvedEmbeddings(); ok {
+		store, err := semantic.NewStore(ctx, app.conn, semantic.EmbeddingConfig{
+			BaseURL:   emb.BaseURL,
+			APIKey:    emb.APIKey,
+			Model:     emb.Model,
+			Dimension: emb.Dimension,
+		})
+		if err != nil {
+			slog.Error("Semantic search disabled: index store initialisation failed", "error", err)
+		} else {
+			coordinatorOpts.SemanticStore = store
+			coordinatorOpts.SemanticClient = semantic.NewClient(semantic.EmbeddingConfig{
+				BaseURL:   emb.BaseURL,
+				APIKey:    emb.APIKey,
+				Model:     emb.Model,
+				Dimension: emb.Dimension,
+			})
+		}
+	}
+
+	buildCoordinator := app.newCoordinator
+	if buildCoordinator == nil {
+		buildCoordinator = agent.NewCoordinator
+	}
+	app.AgentCoordinator, err = buildCoordinator(app.globalCtx, coordinatorOpts)
 	if err != nil {
 		slog.Error("Failed to create coder agent", "err", err)
 		return err
 	}
+	// Only the host a working coordinator dispatches through is the one
+	// a UI should watch (#421): a failed build is retried with a new one.
+	app.setA2AHost(a2aFactory)
+	// #355: close out what a crashed process left behind, before the UI
+	// loads any session. First the a2a reconcile fails orphaned served
+	// tasks and dispatch records; then the coordinator re-delivers every
+	// terminal result the previous process never delivered. Both are
+	// log-only on error: reconcile must not break startup, and rows it
+	// could not touch are retried on the next start.
+	if app.conn != nil {
+		if report, err := a2a.ReconcileOrphanedTasks(app.globalCtx, app.conn, hostID, nil); err != nil {
+			slog.Warn("A2A orphan reconcile failed; rows are retried on the next start", "error", err)
+		} else if report.FailedTasks > 0 || report.FailedDispatches > 0 {
+			slog.Info("A2A orphan reconcile closed out rows from dead processes", "failed_tasks", report.FailedTasks, "failed_dispatches", report.FailedDispatches)
+		}
+		if reconciler, ok := app.AgentCoordinator.(interface {
+			ReconcileDispatchDeliveries(ctx context.Context)
+		}); ok {
+			reconciler.ReconcileDispatchDeliveries(app.globalCtx)
+		}
+	}
+	// #346: the A2A host (and its socket file) dies with the app.
+	app.cleanupFuncs = append(app.cleanupFuncs, func(ctx context.Context) error {
+		return a2aFactory.Close(ctx)
+	})
 	return nil
+}
+
+// setA2AHost records the process's A2A host once and wakes A2AHost's
+// waiters.
+func (app *App) setA2AHost(host *a2a.ServerFactory) {
+	app.a2aHostMu.Lock()
+	defer app.a2aHostMu.Unlock()
+	if app.a2aHost != nil {
+		return
+	}
+	if app.a2aHostReady == nil {
+		app.a2aHostReady = make(chan struct{})
+	}
+	app.a2aHost = host
+	close(app.a2aHostReady)
+}
+
+// A2AHost returns the process's A2A host (#421), or nil before the coder
+// agent has initialized; ready is closed once it is set.
+func (app *App) A2AHost() (host *a2a.ServerFactory, ready <-chan struct{}) {
+	app.a2aHostMu.Lock()
+	defer app.a2aHostMu.Unlock()
+	// An App a test built by hand has no channel yet.
+	if app.a2aHostReady == nil {
+		app.a2aHostReady = make(chan struct{})
+	}
+	return app.a2aHost, app.a2aHostReady
 }
 
 // Subscribe sends events to the TUI as tea.Msgs.
@@ -1033,6 +1082,19 @@ func (app *App) Shutdown() {
 	// before closing the DB so agents can finish writing their state.
 	if app.AgentCoordinator != nil {
 		app.AgentCoordinator.CancelAll()
+	}
+
+	// Release dispatch workspaces synchronously while the app is still
+	// alive (#367): decided and workless workspaces go now, completed or
+	// killed work with commits stays for salvage. Optional on the
+	// coordinator so test doubles without dispatch support keep working;
+	// ReleaseDispatches applies its own dispatchSweepTimeout bound.
+	if app.AgentCoordinator != nil {
+		if releaser, ok := app.AgentCoordinator.(interface {
+			ReleaseDispatches(ctx context.Context)
+		}); ok {
+			releaser.ReleaseDispatches(context.Background())
+		}
 	}
 
 	// Shared shutdown context for all timeout-bounded cleanup.

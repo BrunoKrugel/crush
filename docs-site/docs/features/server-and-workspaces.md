@@ -70,11 +70,11 @@ view live.
 
 :::info[Fork feature]
 The sub-agent tree and the `children` endpoint are additions in the
-`brunokrugel/crush` fork.
+`joestump-agent/crush` fork.
 :::
 
 Every sub-agent run — `agent`, `agentic_fetch`, and
-[dispatched agents](/fork) — gets a task session that is a child of
+[dispatched agents](/agents/overview) — gets a task session that is a child of
 the session that started it. The picker nests them under their parent (see
 [Sessions](/features/sessions#sub-agent-sessions)), and a client lists them
 with:
@@ -129,8 +129,8 @@ event stream.
 ## Dispatched agents against a server
 
 :::info[Fork feature]
-[Multi-agent dispatch](/fork) is an addition in the
-`brunokrugel/crush` fork.
+[Multi-agent dispatch](/agents/overview) is an addition in the
+`joestump-agent/crush` fork.
 :::
 
 A client talking to a server — `crush --host …`, or `CRUSH_CLIENT_SERVER=1` —
@@ -142,7 +142,7 @@ never through the server's dispatch registry. Transcripts come from the session
 store, so the [sub-agent session tree](#sub-agent-sessions) and inspect mode open
 a sub-agent's transcript as well.
 
-The server proxies each workspace's [A2A host](/fork) for that
+The server proxies each workspace's [A2A host](/agents/a2a-protocol) for that
 client:
 
 ```
@@ -151,7 +151,7 @@ POST /v1/workspaces/{id}/a2a/agents/{dispatch id}
 ```
 
 - **The agent index.** The `GET` is the host's
-  [agent index](/fork): a JSON snapshot, or, with
+  [agent index](/agents/a2a-protocol#agent-index): a JSON snapshot, or, with
   `Accept: text/event-stream`, the snapshot followed by one upsert per change. A
   stream opened before anything is dispatched waits for the host to start. A
   snapshot answers `503` until it has.

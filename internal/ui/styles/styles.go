@@ -10,12 +10,12 @@ import (
 
 	"charm.land/bubbles/v2/filepicker"
 	"charm.land/bubbles/v2/help"
-	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/glamour/v2/ansi"
 	"charm.land/lipgloss/v2"
 	"github.com/alecthomas/chroma/v2"
 	"github.com/charmbracelet/crush/internal/ui/diffview"
+	"github.com/charmbracelet/crush/internal/ui/textarea"
 	uv "github.com/charmbracelet/ultraviolet"
 )
 
@@ -26,10 +26,16 @@ const (
 	ModelIcon       string = "◇"
 	HypercreditIcon string = "◆"
 
-	// GitBranchIcon is the Powerline git branch glyph (U+E0A0), shown
-	// beside the checked-out branch when the terminal is expected to
-	// render Nerd Font glyphs. Terminals without Nerd Font support show
-	// the bare branch name instead.
+	// AgentIcon marks a dispatched sub-agent surface: the @ popup's agent
+	// rows, the inspect-mode sidebar banner, and the agent tag on an
+	// inspected transcript's metadata lines. Nerd Font md-robot; renders
+	// as one cell on Nerd Font terminals and as a replacement glyph
+	// elsewhere.
+	AgentIcon string = "󰚩"
+
+	// GitBranchIcon is the Powerline git branch glyph (U+E0A0), shown beside
+	// the checked-out branch when the terminal is expected to render Nerd
+	// Font glyphs.
 	GitBranchIcon string = "\ue0a0"
 
 	ArrowRightIcon string = "→"
@@ -74,9 +80,13 @@ const (
 	CronOneShotIcon   string = "⏱"
 	CronDeletedIcon   string = "✕"
 
-	ImageIcon  string = "■"
-	TextIcon   string = "≡"
-	SkillIcon  string = "▲"
+	ImageIcon string = "▣"
+	TextIcon  string = "≡"
+	SkillIcon string = "▲"
+	// PromptIcon marks a resolved MCP prompt. Single-width and geometric to
+	// match the icons above: an emoji here would be double-width and
+	// colour-rendered, breaking both the row's look and its width math.
+	PromptIcon string = "◈"
 	RemoveIcon string = "✕"
 
 	ColorSwatchIcon string = "■"
@@ -84,16 +94,12 @@ const (
 	ScrollbarThumb string = "┃"
 	ScrollbarTrack string = "│"
 
-	// The LSP severity icons are Nerd Font glyphs shown when the terminal
-	// is expected to render Nerd Font glyphs. Each glyph carries a
-	// trailing space as a separator from the count that follows it.
-	// Terminals without Nerd Font support fall back to the letters E, W,
-	// I, and H through nerdfont.Glyph at the call sites, which supply
-	// their own spacing where needed.
-	LSPErrorIcon   string = "\U000F0159 " // nf-md-close_circle
-	LSPWarningIcon string = "\U000F0028 " // nf-md-alert
-	LSPInfoIcon    string = "\U000F02FC " // nf-md-information
-	LSPHintIcon    string = "\U000F0335 " // nf-md-bug_outline
+	ChannelIcon string = "󰍩"
+
+	LSPErrorIcon   string = "E"
+	LSPWarningIcon string = "W"
+	LSPInfoIcon    string = "I"
+	LSPHintIcon    string = "H"
 )
 
 const (
@@ -213,6 +219,11 @@ type Styles struct {
 		QuestionRadioOff   lipgloss.Style // Unselected single-choice radio.
 		QuestionCheckOn    lipgloss.Style // Checked multi-choice indicator.
 		QuestionCheckOff   lipgloss.Style // Unchecked multi-choice indicator.
+
+		// Inline token highlighting in the prompt textarea: @file mentions
+		// and /skill references typed into the prompt.
+		TokenFile  lipgloss.Style
+		TokenSkill lipgloss.Style
 	}
 
 	// Radio
@@ -282,6 +293,9 @@ type Styles struct {
 	Sidebar struct {
 		SessionTitle lipgloss.Style // Current session title at top of sidebar
 		WorkingDir   lipgloss.Style // Working directory path (PrettyPath)
+		// AgentInspect is the highlighted banner naming the sub-agent
+		// whose transcript the inspect view is showing.
+		AgentInspect lipgloss.Style
 	}
 
 	// ModelInfo (model name, provider, reasoning, token/cost summary)
@@ -358,9 +372,7 @@ type Styles struct {
 		SectionHeader      lipgloss.Style
 
 		// Plan section styles
-		PlanBox lipgloss.Style // Border+padding for the final plan message
-
-		// Compaction section styles
+		PlanBox          lipgloss.Style // Border+padding for the final plan message
 		CompactionBox    lipgloss.Style // Border+padding for a session checkpoint
 		CompactionHeader lipgloss.Style // "Session Summary" label
 		CompactionNote   lipgloss.Style // What the checkpoint replaced and what stayed
@@ -376,6 +388,17 @@ type Styles struct {
 		AssistantInfoDuration  lipgloss.Style
 		SubduedHypercreditIcon lipgloss.Style // Subdued ◆ for hypercredit figures within subdued text
 		AssistantCanceled      lipgloss.Style // Italic "Canceled" footer
+		AssistantCopyIcon      lipgloss.Style // Muted click-to-copy footer glyph
+
+		// A2UISurface is the themed container wrapped around rendered A2UI
+		// surfaces so they read as part of the chat (fork: A2UI).
+		A2UISurface lipgloss.Style
+
+		// Channel message metadata line styles (fork: channels).
+		ChannelInfoIcon      lipgloss.Style // Chat-bubble glyph prefix
+		ChannelInfoSender    lipgloss.Style // Sender name in channel metadata line
+		ChannelInfoProvider  lipgloss.Style // "via <channel>" text
+		ChannelInfoTimestamp lipgloss.Style // "at <timestamp>" text
 	}
 
 	// Tool - styles for tool call rendering
@@ -653,6 +676,9 @@ type Styles struct {
 		Normal  lipgloss.Style
 		Focused lipgloss.Style
 		Match   lipgloss.Style
+		// Agent styles the live-agent rows in the @ popup so they read
+		// as actors rather than file paths.
+		Agent lipgloss.Style
 	}
 
 	// Attachments styles
@@ -727,6 +753,7 @@ type AttachmentStyles struct {
 	Image    lipgloss.Style
 	Text     lipgloss.Style
 	Skill    lipgloss.Style
+	Prompt   lipgloss.Style
 	Remove   lipgloss.Style
 	Deleting lipgloss.Style
 	More     lipgloss.Style // "N more…" hint for chips that didn't fit

@@ -39,7 +39,7 @@ through language servers, and extends through MCP servers and Agent Skills.
 
 ## About this fork
 
-These docs cover **[`joestump-agent/crush`](https://github.com/brunokrugel/crush)**,
+These docs cover **[`joestump-agent/crush`](https://github.com/joestump-agent/crush)**,
 a fork that tracks [`charmbracelet/crush`](https://github.com/charmbracelet/crush)
 upstream and adds features on top. Everything upstream does, this fork does.
 
@@ -54,12 +54,12 @@ The additions, in brief:
 
 | Addition | What it is |
 | --- | --- |
-| [A2UI](/fork) | Inline rendering of A2UI surfaces via [a2tea](https://github.com/charmbracelet/crush), including interactive round-trips |
+| [A2UI](/features/a2ui) | Inline rendering of A2UI surfaces via [a2tea](https://github.com/joestump-agent/a2tea), including interactive round-trips |
 | [Scheduled tasks](/features/scheduled-tasks) | `CronCreate` / `CronList` / `CronDelete` tools that re-run prompts on a cron schedule |
-| [Semantic search](/fork) | A local sqlite-vec index over the repo, searched by meaning |
+| [Semantic search](/features/semantic-search) | A local sqlite-vec index over the repo, searched by meaning |
 | [Channels](/features/channels) | The push mechanism is upstream; the fork adds the `channel_enabled` config key, the `channel_reply` tool, and deterministic reply routing |
 | [MCP prompts](/features/mcp#prompts-and-resources) | MCP prompts offered in the `/` completions and the command palette |
-| [Multi-agent dispatch](/fork) | A `dispatch_agent` tool that runs background agents in isolated git worktrees over in-process A2A, steered with `@handles` and readable live in inspect mode |
+| [Multi-agent dispatch](/agents/overview) | A `dispatch_agent` tool that runs background agents in isolated git worktrees over in-process A2A, steered with `@handles` and readable live in inspect mode |
 
 Plus a long tail of quality-of-life work — click-to-copy, clickable
 hyperlinks, a syntax-highlighted composer, text-file attachments, Skills, MCP
@@ -73,7 +73,7 @@ Crush is licensed
 [FSL-1.1-MIT](https://github.com/charmbracelet/crush/raw/main/LICENSE.md).
 Bugs in upstream behaviour belong
 [upstream](https://github.com/charmbracelet/crush/issues); bugs in the additions
-above belong [here](https://github.com/brunokrugel/crush/issues).
+above belong [here](https://github.com/joestump-agent/crush/issues).
 
 ## Where to start
 

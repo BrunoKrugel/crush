@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/crush/internal/ui/textarea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 
@@ -22,8 +22,6 @@ import (
 	"github.com/charmbracelet/crush/internal/ui/attachments"
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/dialog"
-	"github.com/charmbracelet/crush/internal/ui/notification"
-	"github.com/charmbracelet/crush/internal/ui/util"
 	"github.com/charmbracelet/crush/internal/workspace"
 )
 
@@ -34,8 +32,11 @@ import (
 type countingWorkspace struct {
 	workspace.Workspace
 
-	ready          bool
-	agentBusy      bool
+	ready     bool
+	agentBusy bool
+	// sessionBusy is the value AgentIsSessionBusy reports (fork: session-
+	// scoped busy).
+	sessionBusy    bool
 	yolo           bool
 	queued         []string
 	model          workspace.AgentModel
@@ -43,30 +44,43 @@ type countingWorkspace struct {
 	lspDiags       map[string]lsp.DiagnosticCounts
 	mcpStates      map[string]mcp.ClientInfo
 	mcpPendingAuth []mcp.PendingAuthServer
-	summarizeErr   error
 
-	readyCalls      int
-	agentBusyCalls  int
-	queuedCalls     int
-	queueListCalls  int
-	permCalls       int
-	permSetCalls    int
-	clearQueueCalls int
-	cancelCalls     int
-	modelCalls      int
-	lspStateCalls   int
-	lspDiagCalls    int
-	mcpStateCalls   int
-	mcpPendingCalls int
+	readyCalls     int
+	agentBusyCalls int
+	// sessionBusyCalls records each session ID AgentIsSessionBusy was probed
+	// with, in order (fork: session-scoped busy).
+	sessionBusyCalls []string
+	queuedCalls      int
+	queueListCalls   int
+	permCalls        int
+	permSetCalls     int
+	clearQueueCalls  int
+	cancelCalls      int
+	modelCalls       int
+	lspStateCalls    int
+	lspDiagCalls     int
+	mcpStateCalls    int
+	mcpPendingCalls  int
+
+	// sessions / childSessions serve the sessions picker; the child-fetch
+	// counters pin that Update performs no child fetch and that the
+	// picker's command fetches the whole tree exactly once (#409).
+	sessions          []session.Session
+	childSessions     []session.Session
+	allChildErr       error
+	listChildCalls    int
+	listAllChildCalls int
 }
 
 func (w *countingWorkspace) AgentIsReady() bool { w.readyCalls++; return w.ready }
 func (w *countingWorkspace) AgentIsBusy() bool  { w.agentBusyCalls++; return w.agentBusy }
 
-func (w *countingWorkspace) AgentIsSessionBusy(string) bool { return w.agentBusy }
-
-func (w *countingWorkspace) AgentSummarize(context.Context, string, string) error {
-	return w.summarizeErr
+// AgentIsSessionBusy records the session ID it was probed with so a test can
+// assert the busy refresh was scoped to the current session (fork: session-
+// scoped busy).
+func (w *countingWorkspace) AgentIsSessionBusy(sessionID string) bool {
+	w.sessionBusyCalls = append(w.sessionBusyCalls, sessionID)
+	return w.sessionBusy
 }
 
 func (w *countingWorkspace) AgentReadyErr() error {
@@ -96,6 +110,8 @@ func (w *countingWorkspace) PermissionSetSkipRequests(skip bool) {
 
 func (w *countingWorkspace) AgentClearQueue(string) { w.clearQueueCalls++; w.queued = nil }
 func (w *countingWorkspace) AgentCancel(string)     { w.cancelCalls++ }
+
+func (w *countingWorkspace) AgentListCronTasks(string) []scheduler.Task { return nil }
 
 func (w *countingWorkspace) AgentModel() workspace.AgentModel {
 	w.modelCalls++
@@ -136,14 +152,38 @@ func (w *countingWorkspace) MCPServersEnabled(context.Context) ([]string, error)
 	return nil, nil
 }
 
-func (w *countingWorkspace) AgentListCronTasks(string) []scheduler.Task { return nil }
-
 func (w *countingWorkspace) ListMessages(context.Context, string) ([]message.Message, error) {
 	return nil, nil
 }
 
 func (w *countingWorkspace) ListUserMessages(context.Context, string) ([]message.Message, error) {
 	return nil, nil
+}
+
+// ListSessions and the child-fetch probes serve the sessions picker.
+func (w *countingWorkspace) ListSessions(context.Context) ([]session.Session, error) {
+	return w.sessions, nil
+}
+
+func (w *countingWorkspace) ListChildSessions(context.Context, string) ([]session.Session, error) {
+	w.listChildCalls++
+	return nil, nil
+}
+
+func (w *countingWorkspace) ListAllChildSessions(context.Context) ([]session.Session, error) {
+	w.listAllChildCalls++
+	return w.childSessions, w.allChildErr
+}
+
+// ParseAgentToolSessionID mirrors the real rule: agent-tool task session
+// IDs carry the "messageID$$toolCallID" shape.
+func (w *countingWorkspace) ParseAgentToolSessionID(sessionID string) (string, string, bool) {
+	for i := 0; i+1 < len(sessionID); i++ {
+		if sessionID[i] == '$' && sessionID[i+1] == '$' {
+			return sessionID[:i], sessionID[i+2:], true
+		}
+	}
+	return "", "", false
 }
 
 func (w *countingWorkspace) WorkingDir() string { return "" }
@@ -206,9 +246,12 @@ func pinTTLs(t *testing.T) {
 }
 
 // warmCaches marks all memoized workspace state fresh so only explicit
-// invalidation (not startup staleness) can trigger refresh dispatches.
+// invalidation (not startup staleness) can trigger refresh dispatches. It
+// warms the session-scoped busy cache too, since the TTL backstop treats an
+// unwarmed sessionBusyCache as stale (fork: session-scoped busy).
 func warmCaches(m *UI, busy bool) {
 	m.agentBusyCache.set(busy)
+	m.sessionBusyCache.setForSession(busy, m.currentSessionID())
 	m.yoloCache.set(false)
 	m.agentReady = true
 	m.promptQueueCheckedAt = time.Now()
@@ -228,12 +271,9 @@ func runCmds(m *UI, cmd tea.Cmd) {
 		for _, c := range msg {
 			runCmds(m, c)
 		}
-	case busyStateMsg, promptQueueMsg, agentRunSubmittedMsg, summaryFinishedMsg, completionCheckedMsg, lspStatesMsg, agentModelChangedMsg, mcpStateChangedMsg:
+	case busyStateMsg, promptQueueMsg, agentRunSubmittedMsg, lspStatesMsg, agentModelChangedMsg, mcpStateChangedMsg, completionCheckedMsg:
 		_, next := m.Update(msg)
 		runCmds(m, next)
-	case util.InfoMsg:
-		// Observe the status without waiting for its expiry timer.
-		m.Update(msg)
 	}
 }
 
@@ -329,321 +369,6 @@ func TestMessageCreatedEventRefreshesBusyAndQueue(t *testing.T) {
 	require.Equal(t, 1, m.promptQueue, "refreshed queue count must land in the cache")
 	require.False(t, m.busyFetchInFlight)
 	require.False(t, m.promptQueueInFlight)
-}
-
-func TestManualSummaryPresentation(t *testing.T) {
-	pinTTLs(t)
-	for _, tc := range []struct {
-		name string
-		err  error
-		text string
-		kind util.InfoType
-	}{
-		{"success", nil, "", util.InfoTypeInfo},
-		{"cancelled", context.Canceled, "Summary cancelled", util.InfoTypeInfo},
-		{"failure", context.DeadlineExceeded, context.DeadlineExceeded.Error(), util.InfoTypeError},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			m := newBusyUI(&countingWorkspace{ready: true, summarizeErr: tc.err})
-			warmCaches(m, false)
-			common.StartTurn()
-			t.Cleanup(common.StopTurn)
-			runCmds(m, m.summarizeSession("s1"))
-			require.Zero(t, m.pendingSubmissions)
-			require.Empty(t, common.Elapsed())
-			require.Equal(t, tc.kind, m.status.msg.Type)
-			require.Equal(t, tc.text, m.status.msg.Msg)
-		})
-	}
-}
-
-func TestAgentErrorNotificationDisplaysFailure(t *testing.T) {
-	pinTTLs(t)
-
-	for _, text := range []string{"failed to load messages: queued history unavailable", ""} {
-		t.Run(text, func(t *testing.T) {
-			ws := &countingWorkspace{ready: true, agentBusy: true}
-			m := newBusyUI(ws)
-			warmCaches(m, true)
-			m.status.helpKm = m
-
-			_, cmd := m.Update(pubsub.Event[notify.Notification]{
-				Type: pubsub.CreatedEvent,
-				Payload: notify.Notification{
-					Type: notify.TypeAgentError, SessionID: "s1", Message: text,
-				},
-			})
-			require.Zero(t, ws.syncProbes())
-			runCmds(m, cmd)
-			require.True(t, m.isAgentBusy(), "another queued turn can still be running")
-			require.Equal(t, 1, ws.agentBusyCalls)
-			require.Equal(t, 1, ws.queueListCalls)
-			if text == "" {
-				require.True(t, m.status.msg.IsEmpty(), "empty notifications must not replace the status")
-				return
-			}
-			require.Equal(t, util.InfoTypeError, m.status.msg.Type)
-			require.Equal(t, text, m.status.msg.Msg)
-			require.Contains(t, drawStatusLines(t, m.status, 100, 1)[0], text)
-		})
-	}
-}
-
-type recordingNotificationBackend struct{ sent []notification.Notification }
-
-func (b *recordingNotificationBackend) Send(n notification.Notification) tea.Cmd {
-	return func() tea.Msg {
-		b.sent = append(b.sent, n)
-		return nil
-	}
-}
-
-func TestCompletionPresentation(t *testing.T) {
-	pinTTLs(t)
-	for _, tc := range []struct {
-		name             string
-		state            notify.FinishState
-		busy             bool
-		pending          int
-		wantNotification bool
-	}{
-		{"success idle", notify.FinishIdleSuccess, false, 0, true},
-		{"failure idle", notify.FinishIdleUnsuccessful, false, 0, false},
-		{"handoff", notify.FinishContinuing, true, 0, false},
-		{"new work", notify.FinishIdleSuccess, true, 0, false},
-		{"pending submission", notify.FinishIdleSuccess, false, 1, false},
-		{"legacy", "", false, 0, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			m := newBusyUI(&countingWorkspace{ready: true, agentBusy: tc.busy})
-			warmCaches(m, true)
-			m.pendingSubmissions = tc.pending
-			m.activityFor("s1").pending = tc.pending
-			backend := &recordingNotificationBackend{}
-			m.notifyBackend = backend
-			m.caps.ReportFocusEvents = true
-			common.StartTurn()
-			t.Cleanup(common.StopTurn)
-			runCmds(m, m.handleAgentNotification(notify.Notification{
-				Type: notify.TypeAgentFinished, FinishState: tc.state, SessionID: "s1", SessionTitle: "test",
-			}))
-			require.Equal(t, tc.wantNotification, len(backend.sent) == 1)
-			require.Equal(t, tc.busy || tc.pending > 0, common.Elapsed() != "")
-		})
-	}
-}
-
-func TestCompletionBeforeSubmissionReturns(t *testing.T) {
-	pinTTLs(t)
-	for _, tc := range []struct {
-		name          string
-		err           error
-		newSubmission bool
-	}{
-		{"success", nil, false},
-		{"cancelled", context.Canceled, false},
-		{"failure", context.DeadlineExceeded, false},
-		{"superseded", nil, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			m := newBusyUI(&countingWorkspace{ready: true})
-			warmCaches(m, true)
-			backend := &recordingNotificationBackend{}
-			m.notifyBackend = backend
-			m.caps.ReportFocusEvents = true
-			m.pendingSubmissions = 1
-			m.activityFor("s1").pending = 1
-			runCmds(m, m.handleAgentNotification(notify.Notification{
-				Type: notify.TypeAgentFinished, FinishState: notify.FinishIdleSuccess, SessionID: "s1",
-			}))
-			require.Empty(t, backend.sent)
-			if tc.newSubmission {
-				m.sendMessage("new work")
-				_, cmd := m.Update(agentRunSubmittedMsg{sessionID: "s1", gen: m.submissionGen})
-				runCmds(m, cmd)
-			}
-			_, cmd := m.Update(agentRunSubmittedMsg{sessionID: "s1", err: tc.err})
-			runCmds(m, cmd)
-			require.Equal(t, tc.err == nil && !tc.newSubmission, len(backend.sent) == 1)
-			require.Zero(t, m.pendingSubmissions)
-		})
-	}
-}
-
-func TestCompletionIsIndependentAcrossSessions(t *testing.T) {
-	pinTTLs(t)
-	for _, tc := range []struct {
-		name    string
-		typeID  notify.Type
-		state   notify.FinishState
-		pending bool
-		want    int
-	}{
-		{"handoff", notify.TypeAgentFinished, notify.FinishContinuing, false, 1},
-		{"error", notify.TypeAgentError, "", false, 1},
-		{"two-successes", notify.TypeAgentFinished, notify.FinishIdleSuccess, false, 2},
-		{"pending-handoff", notify.TypeAgentFinished, notify.FinishContinuing, true, 1},
-		{"pending-error", notify.TypeAgentError, "", true, 1},
-		{"pending-success", notify.TypeAgentFinished, notify.FinishIdleSuccess, true, 2},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			m := newBusyUI(&countingWorkspace{ready: true})
-			warmCaches(m, false)
-			backend := &recordingNotificationBackend{}
-			m.notifyBackend = backend
-			m.caps.ReportFocusEvents = true
-			if tc.pending {
-				m.sendMessage("A")
-				t.Cleanup(common.StopTurn)
-			}
-			a := m.handleAgentNotification(notify.Notification{
-				Type: notify.TypeAgentFinished, FinishState: notify.FinishIdleSuccess, SessionID: "s1", SessionTitle: "A",
-			})
-			runCmds(m, m.handleAgentNotification(notify.Notification{
-				Type: tc.typeID, FinishState: tc.state, SessionID: "s2", SessionTitle: "B",
-			}))
-			runCmds(m, a)
-			if tc.pending {
-				_, submitted := m.Update(agentRunSubmittedMsg{sessionID: "s1", gen: m.submissionGen})
-				runCmds(m, submitted)
-			}
-			require.Len(t, backend.sent, tc.want)
-			require.Contains(t, backend.sent[len(backend.sent)-1].Message, `"A"`)
-			require.Empty(t, m.sessionActivities, "finished sessions must not retain bookkeeping")
-		})
-	}
-}
-
-func TestCompletionDoesNotWaitForOtherSessionSubmission(t *testing.T) {
-	pinTTLs(t)
-	m := newBusyUI(&countingWorkspace{ready: true})
-	warmCaches(m, false)
-	backend := &recordingNotificationBackend{}
-	m.notifyBackend = backend
-	m.caps.ReportFocusEvents = true
-	m.sendMessage("A")
-	aGeneration := m.submissionGen
-	t.Cleanup(common.StopTurn)
-	runCmds(m, m.handleAgentNotification(notify.Notification{
-		Type: notify.TypeAgentFinished, FinishState: notify.FinishIdleSuccess, SessionID: "s1", SessionTitle: "A",
-	}))
-	m.session = &session.Session{ID: "s2"}
-	m.sendMessage("B")
-	_, submitted := m.Update(agentRunSubmittedMsg{sessionID: "s1", gen: aGeneration})
-	runCmds(m, submitted)
-	require.Len(t, backend.sent, 1)
-	require.Contains(t, backend.sent[0].Message, `"A"`)
-	require.Equal(t, 1, m.pendingSubmissions)
-	require.NotContains(t, m.sessionActivities, "s1")
-	_, submitted = m.Update(agentRunSubmittedMsg{sessionID: "s2", gen: m.submissionGen})
-	runCmds(m, submitted)
-	require.Empty(t, m.sessionActivities)
-}
-
-func TestStaleCompletionDoesNotStopNewTurn(t *testing.T) {
-	pinTTLs(t)
-	m := newBusyUI(&countingWorkspace{ready: true})
-	warmCaches(m, true)
-	backend := &recordingNotificationBackend{}
-	m.notifyBackend = backend
-	m.caps.ReportFocusEvents = true
-	oldGeneration := m.busyFetchGen
-	oldCompletion := &notify.Notification{SessionID: "s1"}
-	m.activityFor("s1").completion = oldCompletion
-	m.sendMessage("new work")
-	t.Cleanup(common.StopTurn)
-	_, cmd := m.Update(completionCheckedMsg{notification: oldCompletion, busyGen: oldGeneration})
-	runCmds(m, cmd)
-	m.applyBusyState(busyStateMsg{gen: oldGeneration})
-	require.Empty(t, backend.sent)
-	require.NotEmpty(t, common.Elapsed())
-	// Even a fresh probe can race a local submission not yet sent to the server.
-	m.applyBusyState(busyStateMsg{gen: m.busyFetchGen, ready: true})
-	require.NotEmpty(t, common.Elapsed())
-	_, cmd = m.Update(agentRunSubmittedMsg{sessionID: "s1", gen: m.submissionGen, err: context.DeadlineExceeded})
-	runCmds(m, cmd)
-	require.Zero(t, m.pendingSubmissions)
-	require.Empty(t, common.Elapsed())
-	require.Equal(t, util.InfoTypeError, m.status.msg.Type)
-}
-
-func TestAcceptedRemoteTurnKeepsTimer(t *testing.T) {
-	pinTTLs(t)
-	for _, olderFailure := range []bool{false, true} {
-		t.Run(map[bool]string{false: "admission", true: "older-failure"}[olderFailure], func(t *testing.T) {
-			ws := &countingWorkspace{ready: true}
-			m := newBusyUI(ws)
-			warmCaches(m, false)
-			if olderFailure {
-				m.sendMessage("older")
-			}
-			oldGeneration := m.submissionGen
-			m.sendMessage("new work")
-			t.Cleanup(common.StopTurn)
-			_, cmd := m.Update(agentRunSubmittedMsg{sessionID: "s1", gen: m.submissionGen})
-			runCmds(m, cmd)
-			if olderFailure {
-				_, cmd = m.Update(agentRunSubmittedMsg{sessionID: "s1", gen: oldGeneration, err: context.Canceled})
-				runCmds(m, cmd)
-			}
-			require.Zero(t, m.pendingSubmissions)
-			require.NotEmpty(t, common.Elapsed(), "idle before dispatch is not completion")
-			ws.agentBusy = true
-			m.invalidateBusyCaches()
-			runCmds(m, m.dispatchBusyRefresh())
-			require.True(t, m.isAgentBusy())
-			require.NotEmpty(t, common.Elapsed())
-		})
-	}
-}
-
-func TestCompletionSurvivesDelayedMessage(t *testing.T) {
-	pinTTLs(t)
-	for _, tc := range []struct {
-		name          string
-		pending, busy bool
-	}{
-		{"probe-in-flight", false, false},
-		{"submission-pending", true, false},
-		{"new-remote-work", false, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			ws := &countingWorkspace{ready: true}
-			m := newBusyUI(ws)
-			warmCaches(m, true)
-			backend := &recordingNotificationBackend{}
-			m.notifyBackend = backend
-			m.caps.ReportFocusEvents = true
-			if tc.pending {
-				m.pendingSubmissions = 1
-				m.activityFor("s1").pending = 1
-			}
-			completion := m.handleAgentNotification(notify.Notification{
-				Type: notify.TypeAgentFinished, FinishState: notify.FinishIdleSuccess, SessionID: "s1",
-			})
-			// Capture the idle result before the message invalidates the cache.
-			checked := m.dispatchCompletionCheck(m.activityFor("s1").completion)()
-			ws.agentBusy = tc.busy
-			_, delayed := m.Update(pubsub.Event[message.Message]{
-				Type:    pubsub.CreatedEvent,
-				Payload: message.Message{ID: "earlier", SessionID: "s1", Role: message.User},
-			})
-			runCmds(m, delayed)
-			if tc.pending {
-				runCmds(m, completion)
-				_, submitted := m.Update(agentRunSubmittedMsg{sessionID: "s1"})
-				runCmds(m, submitted)
-			} else {
-				_, result := m.Update(checked)
-				runCmds(m, result)
-			}
-			if tc.busy {
-				require.Empty(t, backend.sent)
-			} else {
-				require.Len(t, backend.sent, 1)
-			}
-		})
-	}
 }
 
 // TestAgentTerminalNotificationsRefreshBusy pins the busy→idle edge: the
@@ -1208,4 +933,51 @@ func TestRemoteYoloToggleUpdatesEditorPrompt(t *testing.T) {
 	require.False(t, m.yoloModeCached())
 	require.Equal(t, normalPrompt, ansi.Strip(m.textarea.View()),
 		"toggling yolo off must restore the normal editor prompt")
+}
+
+// TestBusyRefreshIsSessionScoped pins the fork's session-scoped busy feature:
+// isCurrentSessionBusy reflects only the VIEWED session's activity, never the
+// agent's activity in another session (fork: session-scoped busy).
+func TestBusyRefreshIsSessionScoped(t *testing.T) {
+	pinTTLs(t)
+
+	refresh := func(m *UI) {
+		cmd := m.dispatchBusyRefresh()
+		require.NotNil(t, cmd)
+		m.Update(cmd())
+	}
+
+	t.Run("current session busy", func(t *testing.T) {
+		ws := &countingWorkspace{ready: true, sessionBusy: true}
+		m := newBusyUI(ws)
+		refresh(m)
+		require.True(t, m.isCurrentSessionBusy(),
+			"the viewed session's own activity must read as busy")
+	})
+
+	t.Run("another session busy does not affect current", func(t *testing.T) {
+		ws := &countingWorkspace{ready: true, sessionBusy: false}
+		m := newBusyUI(ws)
+		refresh(m)
+		require.False(t, m.isCurrentSessionBusy(),
+			"a session not busy must not mark the current session busy")
+		for _, id := range ws.sessionBusyCalls {
+			require.Equal(t, "s1", id, "AgentIsSessionBusy must be scoped to the current session")
+		}
+	})
+
+	t.Run("agent not ready", func(t *testing.T) {
+		ws := &countingWorkspace{ready: false, sessionBusy: true}
+		m := newBusyUI(ws)
+		refresh(m)
+		require.False(t, m.isCurrentSessionBusy(), "a not-ready agent must not read as busy")
+	})
+
+	t.Run("no active session", func(t *testing.T) {
+		ws := &countingWorkspace{ready: true, sessionBusy: true}
+		m := newBusyUI(ws)
+		m.session = nil
+		refresh(m)
+		require.False(t, m.isCurrentSessionBusy(), "no active session must not read as busy")
+	})
 }

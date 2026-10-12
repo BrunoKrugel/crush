@@ -3,6 +3,263 @@
   "$id": "https://github.com/charmbracelet/crush/internal/config/config",
   "$ref": "#/$defs/Config",
   "$defs": {
+    "A2AOptions": {
+      "properties": {
+        "listen": {
+          "type": "string",
+          "description": "host:port for the A2A host's TCP listener. Requires tls_cert and tls_key: plain TCP is refused",
+          "examples": [
+            "127.0.0.1:7443"
+          ]
+        },
+        "tls_cert": {
+          "type": "string",
+          "description": "PEM certificate file for the A2A TCP listener. Must be an absolute path or start with ~/",
+          "examples": [
+            "~/.config/crush/certs/a2a.pem"
+          ]
+        },
+        "tls_key": {
+          "type": "string",
+          "description": "PEM private key file for tls_cert. Must be an absolute path or start with ~/",
+          "examples": [
+            "~/.config/crush/certs/a2a-key.pem"
+          ]
+        },
+        "client_ca": {
+          "type": "string",
+          "description": "PEM CA certificates. When set, the A2A TCP listener requires and verifies client certificates (mutual TLS). Must be an absolute path or start with ~/",
+          "examples": [
+            "~/.config/crush/certs/clients-ca.pem"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AgentAuth": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "bearer"
+          ],
+          "description": "Auth scheme"
+        },
+        "token": {
+          "type": "string",
+          "description": "Bearer token"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AgentDefinition": {
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "main",
+            "subagent",
+            "dispatch"
+          ],
+          "description": "Agent role"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "builtin",
+            "a2a"
+          ],
+          "description": "Execution runtime"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Agent description"
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Disable this agent"
+        },
+        "model": {
+          "$ref": "#/$defs/AgentModel",
+          "description": "The large or small model slot"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "System prompt: builtin:\u003cid\u003e or file:\u003cpath\u003e"
+        },
+        "prompt_append": {
+          "type": "string",
+          "description": "Appended system prompt: file:\u003cpath\u003e"
+        },
+        "tools": {
+          "$ref": "#/$defs/AgentTools",
+          "description": "Tool allow and deny lists; entries are tool names or the @read and @write groups"
+        },
+        "mcp": {
+          "$ref": "#/$defs/AgentMCP",
+          "description": "MCP servers available to the agent: *"
+        },
+        "skills": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Skill names for this agent"
+        },
+        "context_paths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Context file paths for this agent"
+        },
+        "workspace": {
+          "type": "string",
+          "enum": [
+            "worktree",
+            "none"
+          ],
+          "description": "Dispatch workspace isolation"
+        },
+        "todos": {
+          "$ref": "#/$defs/AgentTodos",
+          "description": "Todo enforcement knobs for this agent"
+        },
+        "kill": {
+          "$ref": "#/$defs/AgentKill",
+          "description": "Kill thresholds for this agent; dispatch agents only"
+        },
+        "todo_enforcement": {
+          "$ref": "#/$defs/TodoEnforcementConfig",
+          "description": "Legacy alias for the todos and kill blocks"
+        },
+        "card": {
+          "type": "string",
+          "description": "External Agent Card URL for runtime a2a agents"
+        },
+        "auth": {
+          "$ref": "#/$defs/AgentAuth",
+          "description": "Bearer auth for runtime a2a agents"
+        },
+        "transport": {
+          "$ref": "#/$defs/AgentTransport",
+          "description": "Transport tuning for runtime a2a agents"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AgentKill": {
+      "properties": {
+        "after_ignored_nudges": {
+          "$ref": "#/$defs/IntOrOff",
+          "description": "Ignored nudges before the agent is killed; 0 or off disables"
+        },
+        "stall": {
+          "$ref": "#/$defs/ConfigDuration",
+          "description": "Time without a todo update that marks the run stalled; 0 or off disables"
+        },
+        "timeout": {
+          "$ref": "#/$defs/ConfigDuration",
+          "description": "Total run time before the agent is killed; 0 or off disables"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AgentMCP": {
+      "properties": {
+        "allow": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "MCP servers: *"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AgentModel": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "large",
+            "small"
+          ]
+        },
+        {
+          "properties": {
+            "provider": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            }
+          },
+          "type": "object",
+          "required": [
+            "provider",
+            "model"
+          ]
+        }
+      ]
+    },
+    "AgentTodos": {
+      "properties": {
+        "nudge": {
+          "type": "boolean",
+          "description": "Inject a nudge when the agent works without a todo list"
+        },
+        "nudge_after_tool_calls": {
+          "$ref": "#/$defs/IntOrOff",
+          "description": "Tool calls without todos activity before a nudge is injected; 0 or off disables"
+        },
+        "hard_gate": {
+          "type": "boolean",
+          "description": "Reject mutating tools until a todo list exists"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AgentTools": {
+      "properties": {
+        "allow": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Tools to allow: names"
+        },
+        "deny": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Tools to deny: names or groups"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AgentTransport": {
+      "properties": {
+        "idle_timeout": {
+          "$ref": "#/$defs/ConfigDuration",
+          "description": "How long a run may stay silent before it is ended; 0 or off disables"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "Attribution": {
       "properties": {
         "trailer_style": {
@@ -102,6 +359,10 @@
           "$ref": "#/$defs/LSPs",
           "description": "Language Server Protocol configurations"
         },
+        "embeddings": {
+          "$ref": "#/$defs/EmbeddingsConfig",
+          "description": "Embedding provider configuration for semantic search"
+        },
         "options": {
           "$ref": "#/$defs/Options",
           "description": "General application options"
@@ -130,6 +391,78 @@
           },
           "type": "object",
           "description": "Environment variables to set on startup"
+        },
+        "agents": {
+          "additionalProperties": {
+            "$ref": "#/$defs/AgentDefinition"
+          },
+          "type": "object",
+          "description": "Agent definitions: override a built-in agent field by field"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConfigDuration": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "string",
+          "pattern": "^off$|^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+        }
+      ]
+    },
+    "DispatchOptions": {
+      "properties": {
+        "max_concurrent": {
+          "type": "integer",
+          "description": "Maximum number of concurrently running dispatched agents; a value below 1 is a load error",
+          "default": 4,
+          "examples": [
+            2
+          ]
+        },
+        "default_agent": {
+          "type": "string",
+          "description": "Agent id dispatch_agent runs when the call names no agent; must be an enabled dispatch agent",
+          "default": "worker"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "EmbeddingsConfig": {
+      "properties": {
+        "base_url": {
+          "type": "string",
+          "description": "Base URL of an OpenAI-compatible embeddings endpoint",
+          "default": "https://api.openai.com/v1",
+          "examples": [
+            "https://api.openai.com/v1"
+          ]
+        },
+        "api_key": {
+          "type": "string",
+          "description": "API key for the embeddings endpoint. Supports shell expansion of $VAR and $(command)."
+        },
+        "model": {
+          "type": "string",
+          "description": "Embedding model name",
+          "default": "text-embedding-3-small",
+          "examples": [
+            "text-embedding-3-small"
+          ]
+        },
+        "dimension": {
+          "type": "integer",
+          "description": "Embedding vector dimension. Baked into the vector table on first creation; changing it requires reindexing.",
+          "default": 768,
+          "examples": [
+            768
+          ]
         }
       },
       "additionalProperties": false,
@@ -159,6 +492,18 @@
       "type": "object",
       "required": [
         "command"
+      ]
+    },
+    "IntOrOff": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "string",
+          "pattern": "^off$"
+        }
       ]
     },
     "LSPConfig": {
@@ -388,6 +733,15 @@
           "type": "object",
           "description": "HTTP headers for HTTP/SSE MCP servers"
         },
+        "channel_enabled": {
+          "type": "boolean",
+          "description": "Enable this MCP server as a channel (equivalent to --channels)",
+          "default": false
+        },
+        "channel_reply": {
+          "$ref": "#/$defs/MCPChannelReply",
+          "description": "Automatically route replies for turns originating from this channel back through one of the server's tools"
+        },
         "oauth": {
           "type": "boolean",
           "description": "Enable OAuth 2.1 authorization flow for this MCP server (HTTP transport only)",
@@ -404,15 +758,6 @@
         "oauth_callback_port": {
           "type": "integer",
           "description": "Fixed localhost port for the OAuth callback"
-        },
-        "channel_enabled": {
-          "type": "boolean",
-          "description": "Enable this MCP server as a channel (equivalent to --channels)",
-          "default": false
-        },
-        "channel_reply": {
-          "$ref": "#/$defs/MCPChannelReply",
-          "description": "Automatically route replies for turns originating from this channel back through one of the server's tools"
         }
       },
       "additionalProperties": false,
@@ -672,6 +1017,28 @@
           "type": "array",
           "description": "List of skill names to disable and hide from the agent"
         },
+        "disable_a2ui": {
+          "type": "boolean",
+          "description": "Disable A2UI entirely: drops the prompt section inviting the model to emit renderable \u003ca2ui-json\u003e surfaces and stops advertising the a2ui capability to MCP servers",
+          "default": false
+        },
+        "allowed_commands": {
+          "items": {
+            "type": "string",
+            "examples": [
+              "ssh",
+              "curl",
+              "scp"
+            ]
+          },
+          "type": "array",
+          "description": "List of commands to allow that are normally banned. Only affects the exact-command block list; package-manager argument blocks (e.g. 'apt install') are unaffected. Allowed commands still require permission approval."
+        },
+        "allow_all_commands": {
+          "type": "boolean",
+          "description": "Remove all command restrictions from the bash tool",
+          "default": false
+        },
         "request_timeout": {
           "type": "integer",
           "description": "Timeout in seconds for each LLM API request. Streaming responses are aborted only after this much inactivity, so slow but active streams are never killed. 0 disables it, negative values are invalid.",
@@ -681,6 +1048,18 @@
             300,
             0
           ]
+        },
+        "todo_enforcement": {
+          "$ref": "#/$defs/TodoEnforcementConfig",
+          "description": "Proactive todo enforcement: inject a nudge when an agent works without a todo list"
+        },
+        "dispatch": {
+          "$ref": "#/$defs/DispatchOptions",
+          "description": "Dispatched agent options"
+        },
+        "a2a": {
+          "$ref": "#/$defs/A2AOptions",
+          "description": "A2A host options: an optional TLS-only TCP listener beside the per-process unix socket"
         }
       },
       "additionalProperties": false,
@@ -739,6 +1118,7 @@
             "azure",
             "bedrock",
             "google-vertex",
+            "hyper",
             "hyper",
             "litellm",
             "llamacpp",
@@ -935,6 +1315,15 @@
           "description": "Enable terminal mouse capture for selection, clicks, and scrolling in the TUI. Disable to let the terminal emulator or tmux handle text selection and copy/paste",
           "default": true
         },
+        "working_dir_format": {
+          "type": "string",
+          "description": "Format for the working directory shown in the header. Supported placeholders: {cwd} for the path, {user} for the current user, {host} for the hostname.",
+          "default": "{user}@{host}:{cwd}",
+          "examples": [
+            "{cwd}",
+            "{host}:{cwd}"
+          ]
+        },
         "exit_banner": {
           "type": "string",
           "enum": [
@@ -944,6 +1333,70 @@
           ],
           "description": "Exit banner style after quitting Crush",
           "default": "default"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TodoEnforcementConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Inject a context nudge when an agent works without a todo list",
+          "default": true
+        },
+        "nudge_threshold": {
+          "$ref": "#/$defs/IntOrOff",
+          "description": "Tool calls without todos activity before a nudge is injected; a mutating tool call trips it immediately. 0 or 'off' disables nudging, the same as enabled: false; a negative value is a load error",
+          "default": 4,
+          "examples": [
+            8,
+            1,
+            "off"
+          ]
+        },
+        "hard_gate": {
+          "type": "boolean",
+          "description": "Reject mutating tools (file writers, non-read-only bash commands, MCP tools without a read-only hint) until a todo list exists",
+          "default": false
+        },
+        "kill_after_nudges": {
+          "$ref": "#/$defs/IntOrOff",
+          "description": "Wander kill: nudges a dispatched agent may ignore before it is killed. 0 or 'off' disables; a negative value is a load error",
+          "default": 2,
+          "examples": [
+            3,
+            10,
+            "off"
+          ]
+        },
+        "stall_window": {
+          "$ref": "#/$defs/ConfigDuration",
+          "description": "Wander kill: time without a todo update that marks a dispatched run as stalled. 0 or 'off' disables; a negative value is a load error",
+          "default": 0,
+          "examples": [
+            300,
+            "30m",
+            "off"
+          ]
+        },
+        "hard_timeout": {
+          "$ref": "#/$defs/ConfigDuration",
+          "description": "Wander kill: time after which a dispatched run is killed outright. 0 or 'off' disables; a negative value is a load error",
+          "default": 0,
+          "examples": [
+            1800,
+            "30m",
+            "off"
+          ]
+        },
+        "inactivity_timeout": {
+          "type": "integer",
+          "description": "A2A backstop: seconds without any event that end a silent dispatched run with a Failed status; 0 disables",
+          "default": 0,
+          "examples": [
+            900
+          ]
         }
       },
       "additionalProperties": false,

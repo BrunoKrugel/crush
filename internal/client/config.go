@@ -252,12 +252,56 @@ func (c *Client) ReadSkill(ctx context.Context, id, skillID string) (*proto.Read
 	return &result, nil
 }
 
+// ReloadSkills triggers a skill re-discovery on the server.
+func (c *Client) ReloadSkills(ctx context.Context, id string) error {
+	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/skills/reload", id), nil, nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to reload skills: %w", err)
+	}
+	defer rsp.Body.Close()
+	if rsp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to reload skills: status code %d", rsp.StatusCode)
+	}
+	return nil
+}
+
+// ReloadModelDiscovery triggers model re-discovery on the server and returns
+// the number of newly discovered models.
+func (c *Client) ReloadModelDiscovery(ctx context.Context, id string) (int, error) {
+	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/config/reload-discovery", id), nil, nil, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to reload model discovery: %w", err)
+	}
+	defer rsp.Body.Close()
+	if rsp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("failed to reload model discovery: status code %d", rsp.StatusCode)
+	}
+	var result proto.ReloadModelDiscoveryResponse
+	if err := json.NewDecoder(rsp.Body).Decode(&result); err != nil {
+		return 0, fmt.Errorf("failed to decode reload discovery response: %w", err)
+	}
+	return result.Added, nil
+}
+
 // MCPResourceContents holds the contents of an MCP resource.
 type MCPResourceContents struct {
 	URI      string `json:"uri"`
 	MIMEType string `json:"mime_type,omitempty"`
 	Text     string `json:"text,omitempty"`
 	Blob     []byte `json:"blob,omitempty"`
+}
+
+// MCPToolCallResult holds the model-facing text and any A2UI surface
+// payloads from an MCP tool call.
+type MCPToolCallResult struct {
+	Content  string               `json:"content"`
+	Surfaces []MCPToolCallSurface `json:"surfaces,omitempty"`
+}
+
+// MCPToolCallSurface is a single A2UI surface payload from a tool call.
+type MCPToolCallSurface struct {
+	Payload string `json:"payload"`
+	URI     string `json:"uri"`
 }
 
 // EnableDockerMCP enables the Docker MCP server on the workspace.
@@ -282,6 +326,21 @@ func (c *Client) DisableDockerMCP(ctx context.Context, id string) error {
 	defer rsp.Body.Close()
 	if rsp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to disable docker MCP: status code %d", rsp.StatusCode)
+	}
+	return nil
+}
+
+// MCPReconnect restarts a single MCP server, re-resolving env vars.
+func (c *Client) MCPReconnect(ctx context.Context, id, name string) error {
+	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/mcp/reconnect", id), nil, jsonBody(struct {
+		Name string `json:"name"`
+	}{Name: name}), http.Header{"Content-Type": []string{"application/json"}})
+	if err != nil {
+		return fmt.Errorf("failed to reconnect MCP: %w", err)
+	}
+	defer rsp.Body.Close()
+	if rsp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to reconnect MCP: status code %d", rsp.StatusCode)
 	}
 	return nil
 }
@@ -438,6 +497,27 @@ func (c *Client) ListMCPPrompts(ctx context.Context, id string) ([]proto.MCPProm
 		return nil, fmt.Errorf("failed to decode MCP prompts: %w", err)
 	}
 	return prompts, nil
+}
+
+// CallMCPTool calls a tool on a named MCP server.
+func (c *Client) CallMCPTool(ctx context.Context, id, name, toolName string, args map[string]any) (MCPToolCallResult, error) {
+	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/mcp/call-tool", id), nil, jsonBody(struct {
+		Name     string         `json:"name"`
+		ToolName string         `json:"tool_name"`
+		Args     map[string]any `json:"args"`
+	}{Name: name, ToolName: toolName, Args: args}), http.Header{"Content-Type": []string{"application/json"}})
+	if err != nil {
+		return MCPToolCallResult{}, fmt.Errorf("failed to call MCP tool: %w", err)
+	}
+	defer rsp.Body.Close()
+	if rsp.StatusCode != http.StatusOK {
+		return MCPToolCallResult{}, fmt.Errorf("failed to call MCP tool: status code %d", rsp.StatusCode)
+	}
+	var result MCPToolCallResult
+	if err := json.NewDecoder(rsp.Body).Decode(&result); err != nil {
+		return MCPToolCallResult{}, fmt.Errorf("failed to decode MCP tool result: %w", err)
+	}
+	return result, nil
 }
 
 // GetMCPPrompt retrieves a prompt from a named MCP server.

@@ -86,6 +86,18 @@ type KeyMap struct {
 	Tab        key.Binding
 	ToggleYolo key.Binding
 	ShiftTab   key.Binding
+
+	// Inspect mode (#314): drill into an agent block's session and
+	// navigate back. Unbound anywhere else across the dialog and
+	// textarea keymaps.
+	InspectDrill key.Binding
+	InspectBack  key.Binding
+
+	// Cancel one dispatched agent (#373). Active only when a live
+	// dispatch block is focused in the chat or while inspecting a live
+	// dispatch; never Esc or ctrl+[, which belong to the cancel and
+	// inspect interactions.
+	CancelAgent key.Binding
 }
 
 func DefaultKeyMap() KeyMap {
@@ -126,6 +138,18 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("shift+tab"),
 			key.WithHelp("shift+tab", "mode"),
 		),
+		InspectDrill: key.NewBinding(
+			key.WithKeys("ctrl+]"),
+			key.WithHelp("ctrl+]", "inspect agent"),
+		),
+		InspectBack: key.NewBinding(
+			key.WithKeys("esc", "ctrl+["),
+			key.WithHelp("esc", "back to chat"),
+		),
+		CancelAgent: key.NewBinding(
+			key.WithKeys("ctrl+x"),
+			key.WithHelp("ctrl+x", "cancel agent"),
+		),
 	}
 
 	km.Editor.SendMessage = key.NewBinding(
@@ -145,7 +169,7 @@ func DefaultKeyMap() KeyMap {
 	)
 	km.Editor.AddImage = key.NewBinding(
 		key.WithKeys("ctrl+f"),
-		key.WithHelp("ctrl+f", "add image"),
+		key.WithHelp("ctrl+f", "add file"),
 	)
 	km.Editor.PasteImage = key.NewBinding(
 		key.WithKeys("ctrl+v"),

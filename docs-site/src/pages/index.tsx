@@ -43,7 +43,7 @@ function Hero(): ReactNode {
         <div className="charmHero__install">
           <span aria-hidden="true">$</span>
           <span className="charmHero__installCmd">
-            git clone https://github.com/brunokrugel/crush.git &amp;&amp; cd
+            git clone https://github.com/joestump-agent/crush.git &amp;&amp; cd
             crush &amp;&amp; go install .
           </span>
         </div>
@@ -92,7 +92,7 @@ function Fork(): ReactNode {
           <div>
             <p className="charmSection__lede">
               These docs cover the{' '}
-              <a href="https://github.com/brunokrugel/crush">
+              <a href="https://github.com/joestump-agent/crush">
                 joestump-agent/crush
               </a>{' '}
               fork, which tracks{' '}
@@ -119,16 +119,29 @@ function Fork(): ReactNode {
             <h3>Fork additions</h3>
             <ul>
               <li>
+                <Link to="/features/channels">Channel reply routing</Link> —
+                deterministic replies back through the pushing server
+              </li>
+              <li>
+                <Link to="/features/a2ui">A2UI rendering</Link> via{' '}
+                <a href="https://github.com/joestump-agent/a2tea">a2tea</a>
+              </li>
+              <li>
                 <Link to="/features/scheduled-tasks">Scheduled tasks</Link> —
                 cron-driven prompts
               </li>
               <li>
-                <Link to="/features/channels">Channels</Link> — push events into a
-                live session and reply back to the source
+                <Link to="/features/semantic-search">Semantic search</Link> — a
+                local vector index over the repo
               </li>
               <li>
-                <Link to="/fork">Everything else</Link> — context compaction with
-                checkpoints, lazy MCP loading, and more
+                <Link to="/features/mcp#prompts-and-resources">MCP prompts</Link>{' '}
+                in the <code>/</code> completions and the palette
+              </li>
+              <li>
+                <Link to="/fork">Everything else</Link> — click-to-copy,
+                clickable links, a highlighted composer, text attachments, and
+                the Skills, MCP and Channels dialogs
               </li>
             </ul>
           </div>

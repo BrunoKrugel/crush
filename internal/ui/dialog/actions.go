@@ -3,14 +3,12 @@ package dialog
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/catwalk/pkg/catwalk"
 	"github.com/charmbracelet/crush/internal/commands"
-	"github.com/charmbracelet/crush/internal/compaction"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/oauth"
@@ -96,47 +94,14 @@ type (
 		Name string
 	}
 	ActionInitializeProject struct{}
-	// ActionSummarize compacts a session. Arguments and Args follow the
-	// custom-command pattern: Arguments describes what to collect before
-	// compacting, a non-nil Args marks that the values arrived, and
+	// ActionSummarize compacts a session. Arguments describes what to
+	// collect first, a non-nil Args marks that the values arrived, and
 	// Instructions carries the user's emphasis for the checkpoint.
 	ActionSummarize struct {
 		SessionID    string
 		Arguments    []commands.Argument
 		Args         map[string]string
 		Instructions string
-	}
-
-	// ActionRestoreSummarize undoes the last compaction of a session, bringing
-	// back the messages its checkpoint replaced.
-	ActionRestoreSummarize struct {
-		SessionID string
-	}
-
-	// ActionPreviewSummarize writes a checkpoint without adopting it, so the
-	// user can read what would be kept before the session gives up the text it
-	// replaces. Accepting and discarding are separate actions because the
-	// answer may not arrive until later: the preview stays staged until then.
-	ActionPreviewSummarize struct {
-		SessionID    string
-		Arguments    []commands.Argument
-		Args         map[string]string
-		Instructions string
-	}
-
-	// ActionAcceptPreview adopts a staged checkpoint. Preview carries the
-	// counters computed when it was written, so acceptance cannot disagree
-	// with the plan that produced the text.
-	ActionAcceptPreview struct {
-		SessionID string
-		Preview   compaction.Preview
-	}
-
-	// ActionDiscardPreview throws away a staged checkpoint. The session was
-	// never pointed at it, which is the whole safety of previewing.
-	ActionDiscardPreview struct {
-		SessionID    string
-		CheckpointID string
 	}
 	// ActionSelectReasoningEffort is a message indicating a reasoning effort
 	// has been selected.
@@ -173,15 +138,35 @@ type (
 	ActionEnableDockerMCP struct{}
 	// ActionDisableDockerMCP is a message to disable Docker MCP.
 	ActionDisableDockerMCP struct{}
-	// ActionToggleLazyMCP flips the global lazy-MCP default, which decides
-	// whether MCP tool schemas stay out of the model context until
-	// mcp_search loads them.
-	ActionToggleLazyMCP struct{}
+	// ActionMCPReconnect reconnects (restarts) a single MCP server by name.
+	// This re-resolves env vars (including OAuth/OIDC token refresh commands)
+	// and is the mechanism for refreshing expired credentials.
+	ActionMCPReconnect struct {
+		ServerName string
+	}
+	// ActionMCPRefreshTools refreshes the tool list for a single MCP server.
+	ActionMCPRefreshTools struct {
+		ServerName string
+	}
+	// ActionMCPRefreshPrompts refreshes the prompt list for a single MCP server.
+	ActionMCPRefreshPrompts struct {
+		ServerName string
+	}
+	// ActionMCPRefreshResources refreshes the resource list for a single MCP server.
+	ActionMCPRefreshResources struct {
+		ServerName string
+	}
+	// ActionSkillsReload triggers a full skill re-discovery from disk.
+	ActionSkillsReload struct{}
+	// ActionReloadModelDiscovery triggers model re-discovery for custom
+	// providers from the model selection dialog, picking up models that
+	// appeared after startup (e.g. an `ollama pull`) without a restart.
+	ActionReloadModelDiscovery struct{}
+	// ActionSkillToggle toggles a skill's enabled/disabled state.
+	ActionSkillToggle struct {
+		SkillName string
+	}
 )
-
-// CompactInstructionsArg is the argument the compact dialog collects the
-// user's emphasis under, so the collected value can be read back there.
-const CompactInstructionsArg = "instructions"
 
 // Messages for MCP OAuth authentication dialog.
 type (
@@ -212,6 +197,10 @@ type (
 		State APIKeyInputState
 	}
 )
+
+// CompactInstructionsArg is the palette instructions argument ID used by
+// the compact and preview commands.
+const CompactInstructionsArg = "instructions"
 
 // Messages for OAuth2 device flow dialog.
 type (
@@ -255,6 +244,25 @@ type (
 
 // ActionCmd represents an action that carries a [tea.Cmd] to be passed to the
 // Bubble Tea program loop.
+// ActionInsertMCPPrompt is a message to attach an MCP prompt to the prompt
+// currently being composed, rather than running it as a whole turn the way
+// ActionRunMCPPrompt does. It is produced by the inline "/" completion, where
+// the user is mid-sentence and the prompt is one ingredient of their message.
+type ActionInsertMCPPrompt struct {
+	// Name is the server-qualified "server:prompt" form shown in the editor.
+	Name     string
+	MCPName  string
+	PromptID string
+	// Arguments the prompt declares; Args is what the user supplied.
+	Arguments []commands.Argument
+	Args      map[string]string
+	// StartIndex is where the token replaces the trigger text in the
+	// editor. It travels on the action because the completions popup — and
+	// with it the model's own start index — is closed before this dialog
+	// opens.
+	StartIndex int
+}
+
 type ActionCmd struct {
 	Cmd tea.Cmd
 }
@@ -277,7 +285,7 @@ func (a ActionFilePickerSelected) Cmd() tea.Cmd {
 		if err != nil {
 			return util.InfoMsg{
 				Type: util.InfoTypeError,
-				Msg:  fmt.Sprintf("unable to read the image: %v", err),
+				Msg:  fmt.Sprintf("unable to read the file: %v", err),
 			}
 		}
 		if isFileLarge {
@@ -291,13 +299,21 @@ func (a ActionFilePickerSelected) Cmd() tea.Cmd {
 		if err != nil {
 			return util.InfoMsg{
 				Type: util.InfoTypeError,
-				Msg:  fmt.Sprintf("unable to read the image: %v", err),
+				Msg:  fmt.Sprintf("unable to read the file: %v", err),
 			}
 		}
 
-		mimeBufferSize := min(512, len(content))
-		mimeType := http.DetectContentType(content[:mimeBufferSize])
 		fileName := filepath.Base(path)
+		mimeType, ok := common.SniffAttachmentMIME(content)
+		if !ok {
+			// Allowed by extension but the content sniffs as binary —
+			// attaching would inline byte soup or send a file part
+			// providers reject.
+			return util.InfoMsg{
+				Type: util.InfoTypeWarn,
+				Msg:  fmt.Sprintf("%s looks binary (%s), not attaching", fileName, mimeType),
+			}
+		}
 
 		return message.Attachment{
 			FilePath: path,

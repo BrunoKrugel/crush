@@ -1,6 +1,10 @@
 package backend
 
-import "context"
+import (
+	"context"
+
+	"github.com/charmbracelet/crush/internal/a2a"
+)
 
 // InsertWorkspaceForTest registers ws with b under its current ID and
 // path. It is intended for tests in other packages that need to drive
@@ -25,12 +29,34 @@ func InsertWorkspaceForTest(b *Backend, ws *Workspace) {
 		}
 		ws.ctx, ws.cancel = context.WithCancel(parent)
 	}
+	ws.trackWith(&b.tracker)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.workspaces.Set(ws.ID, ws)
 	if ws.resolvedPath != "" {
 		b.pathIndex[ws.resolvedPath] = ws.ID
 	}
+}
+
+// WaitForWorkspaceTeardownForTest blocks until every workspace this
+// backend has handed out has had its teardown hook run to completion,
+// or ctx is done.
+//
+// This is deliberately not [Backend.ListWorkspaces] or
+// [Backend.Shutdown]. Teardown drops a workspace from the index and
+// releases the backend lock BEFORE it invokes the workspace's shutdown
+// hook, so an empty workspace map says only that the workspace is
+// unreachable — its pooled DB connection may still be open. Backend
+// shutdown, meanwhile, runs only the server-level callback and closes
+// no workspace resources at all.
+//
+// Tests that let [t.TempDir] own a workspace's data directory must wait
+// on this before the directory is removed. On Unix an open file unlinks
+// happily; Windows refuses, and the failure surfaces as a "TempDir
+// RemoveAll cleanup ... being used by another process" error attributed
+// to whichever test lost the race.
+func WaitForWorkspaceTeardownForTest(ctx context.Context, b *Backend) error {
+	return b.tracker.wait(ctx)
 }
 
 // RegisterClientForTesting installs a creation hold for clientID on
@@ -66,4 +92,12 @@ func WorkspaceLiveStreamCountForTest(ws *Workspace) int {
 		}
 	}
 	return n
+}
+
+// SetWorkspaceA2AHostForTest makes ws find its A2A host through source
+// instead of its app, for tests in other packages that drive the agent
+// proxy (#421) against a synthetic workspace. source returns the host,
+// nil until there is one, and a channel closed once it is set.
+func SetWorkspaceA2AHostForTest(ws *Workspace, source func() (*a2a.ServerFactory, <-chan struct{})) {
+	ws.a2aHost = source
 }

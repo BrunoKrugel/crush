@@ -24,6 +24,7 @@ import (
 	fang "charm.land/fang/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/client"
 	"github.com/charmbracelet/crush/internal/config"
@@ -58,17 +59,24 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("debug", "d", false, "Debug")
 	rootCmd.PersistentFlags().StringVarP(&clientHost, "host", "H", server.DefaultHost(), "Connect to a specific crush server host (for advanced users)")
 	rootCmd.Flags().BoolP("help", "h", false, "Help")
-	rootCmd.Flags().BoolP("yolo", "y", false, "Automatically accept all permissions (dangerous mode)")
+	// yolo must be PERSISTENT: a root-local flag is invisible to subcommands,
+	// so the only position a subcommand-invoking argv can carry it —
+	// `crush --yolo run …` — died with "unknown flag", which crash-looped
+	// every harness-scheduled prompt run. setupLocalWorkspace reads it from
+	// cmd.Flags(), which includes inherited persistent flags.
+	rootCmd.PersistentFlags().BoolP("yolo", "y", false, "Automatically accept all permissions (dangerous mode)")
 	rootCmd.PersistentFlags().StringSlice("channels", nil, "MCP servers to enable as channels (repeatable), e.g. --channels server:webhook")
-	_ = rootCmd.PersistentFlags().MarkHidden("channels")
 	rootCmd.Flags().StringP("session", "s", "", "Continue a previous session by ID")
 	rootCmd.Flags().BoolP("continue", "C", false, "Continue the most recent session")
+	rootCmd.Flags().StringSlice("allow-commands", nil, "Allow specific commands from the default bash blocklist (repeatable); does not affect package-manager argument blocks like 'apt install'. Env: CRUSH_ALLOW_COMMANDS (comma-separated)")
+	rootCmd.Flags().Bool("allow-all-commands", false, "Remove all bash blocklist restrictions, including package-manager blocks (dangerous). Env: CRUSH_ALLOW_ALL_COMMANDS")
 	rootCmd.MarkFlagsMutuallyExclusive("session", "continue")
 
 	rootCmd.AddCommand(
 		runCmd,
 		dirsCmd,
 		projectsCmd,
+		dispatchCmd,
 		updateProvidersCmd,
 		logsCmd,
 		logoutCmd,
@@ -193,6 +201,9 @@ func Execute() {
 	// stderr. We discard early logs here as a workaround. The proper
 	// fix is to remove slog calls from config.Load and have it return
 	// warnings/diagnostics instead of logging them as a side effect.
+	// The agent-definition warnings already work that way (#560): Load
+	// keeps them on the ConfigStore and setupLocalWorkspace replays
+	// them once the logger exists.
 	slog.SetDefault(slog.New(slog.DiscardHandler))
 
 	// NOTE: very hacky: we create a colorprofile writer with STDOUT, then make
@@ -266,12 +277,57 @@ func setupWorkspace(cmd *cobra.Command) (workspace.Workspace, func(), error) {
 	return setupLocalWorkspace(cmd)
 }
 
+// resolveAllowCommands returns the bash allow-command settings from flags,
+// falling back to the CRUSH_ALLOW_COMMANDS / CRUSH_ALLOW_ALL_COMMANDS
+// environment variables for 12-factor compliance. CLI flags take precedence
+// over env vars. Comma-separated env entries are trimmed and empties dropped.
+func resolveAllowCommands(cmd *cobra.Command) (allowCommands []string, allowAllCommands bool) {
+	allowCommands, _ = cmd.Flags().GetStringSlice("allow-commands")
+	allowAllCommands, _ = cmd.Flags().GetBool("allow-all-commands")
+
+	if !allowAllCommands {
+		if v := os.Getenv("CRUSH_ALLOW_ALL_COMMANDS"); v != "" {
+			allowAllCommands = strings.EqualFold(v, "true") || v == "1"
+		}
+	}
+	if len(allowCommands) == 0 {
+		if v := os.Getenv("CRUSH_ALLOW_COMMANDS"); v != "" {
+			for _, c := range strings.Split(v, ",") {
+				if c = strings.TrimSpace(c); c != "" {
+					allowCommands = append(allowCommands, c)
+				}
+			}
+		}
+	}
+	return allowCommands, allowAllCommands
+}
+
+// warnUnknownAllowedCommands records a startup diagnostic for
+// allow-command entries (from config and flags/env) that aren't in the
+// default banned list, since they subtract nothing and usually indicate
+// a typo. It goes to the ConfigStore, not the logger: this runs before
+// crushlog.Setup, so a direct slog.Warn reaches the discard handler and
+// is lost (#578). The replays that run once the logger exists carry it
+// to crush.log, to `crush run`'s stderr and to the TUI startup notice.
+func warnUnknownAllowedCommands(store *config.ConfigStore, configAllowed, flagAllowed []string) {
+	combined := make([]string, 0, len(configAllowed)+len(flagAllowed))
+	combined = append(combined, configAllowed...)
+	combined = append(combined, flagAllowed...)
+	if unknown := tools.UnknownAllowedCommands(combined); len(unknown) > 0 {
+		store.AddLoadDiagnostic(config.LoadDiagnostic{
+			Severity: config.DiagnosticWarning,
+			Message:  "ignoring allow-commands entries not in the default banned list: " + strings.Join(unknown, ", "),
+		})
+	}
+}
+
 // setupLocalWorkspace creates an in-process app.App and wraps it in an
 // AppWorkspace.
 func setupLocalWorkspace(cmd *cobra.Command) (workspace.Workspace, func(), error) {
 	debug, _ := cmd.Flags().GetBool("debug")
 	yolo, _ := cmd.Flags().GetBool("yolo")
 	channels, _ := cmd.Flags().GetStringSlice("channels")
+	allowCommands, allowAllCommands := resolveAllowCommands(cmd)
 	dataDir, _ := cmd.Flags().GetString("data-dir")
 	ctx := cmd.Context()
 
@@ -288,6 +344,11 @@ func setupLocalWorkspace(cmd *cobra.Command) (workspace.Workspace, func(), error
 	cfg := store.Config()
 	store.Overrides().SkipPermissionRequests = yolo
 	store.Overrides().EnabledChannels = channels
+	// Held as runtime overrides (not written into Options) so they survive the
+	// config reloads triggered by MCP reconnects and model changes.
+	store.Overrides().AllowAllCommands = allowAllCommands
+	store.Overrides().AllowedCommands = allowCommands
+	warnUnknownAllowedCommands(store, cfg.Options.AllowedCommands, allowCommands)
 
 	if err := os.MkdirAll(cfg.Options.DataDirectory, 0o700); err != nil {
 		return nil, nil, fmt.Errorf("failed to create data directory: %q %w", cfg.Options.DataDirectory, err)
@@ -311,6 +372,9 @@ func setupLocalWorkspace(cmd *cobra.Command) (workspace.Workspace, func(), error
 
 	logFile := filepath.Join(cfg.Options.DataDirectory, "logs", "crush.log")
 	crushlog.Setup(logFile, debug)
+	// The logger exists now, so the diagnostics Load collected while
+	// nothing was listening reach crush.log (#560).
+	logLoadDiagnostics(store.LoadDiagnostics())
 
 	// Discover skills once before app.New. Local mode hosts a single
 	// workspace per process, so WithGlobalMirror keeps the package
@@ -337,7 +401,9 @@ func setupLocalWorkspace(cmd *cobra.Command) (workspace.Workspace, func(), error
 	}
 
 	ws := workspace.NewAppWorkspace(appInstance, store)
-	cleanup := func() { appInstance.Shutdown() }
+	// The workspace's Shutdown stops its agent-index watcher (#421)
+	// before it shuts the app down.
+	cleanup := ws.Shutdown
 	return ws, cleanup, nil
 }
 
@@ -400,6 +466,7 @@ func connectToServer(cmd *cobra.Command) (*client.Client, *proto.Workspace, func
 	debug, _ := cmd.Flags().GetBool("debug")
 	yolo, _ := cmd.Flags().GetBool("yolo")
 	channels, _ := cmd.Flags().GetStringSlice("channels")
+	allowCommands, allowAllCommands := resolveAllowCommands(cmd)
 	dataDir, _ := cmd.Flags().GetString("data-dir")
 
 	cwd, err := ResolveCwd(cmd)
@@ -413,13 +480,15 @@ func connectToServer(cmd *cobra.Command) (*client.Client, *proto.Workspace, func
 	}
 
 	wsReq := proto.Workspace{
-		Path:     cwd,
-		DataDir:  dataDir,
-		Debug:    debug,
-		YOLO:     yolo,
-		Channels: channels,
-		Version:  version.Version,
-		Env:      os.Environ(),
+		Path:             cwd,
+		DataDir:          dataDir,
+		Debug:            debug,
+		YOLO:             yolo,
+		Channels:         channels,
+		AllowAllCommands: allowAllCommands,
+		AllowedCommands:  allowCommands,
+		Version:          version.Version,
+		Env:              os.Environ(),
 	}
 
 	ws, err := createWorkspaceOnLiveServer(cmd.Context(), c, wsReq, func() error {
@@ -948,6 +1017,15 @@ func MaybePrependStdin(prompt string) (string, error) {
 // support.
 func resolveWorkspaceSessionID(ctx context.Context, ws workspace.Workspace, id string) (session.Session, error) {
 	if sess, err := ws.GetSession(ctx, id); err == nil {
+		// A child session only opens as the active session when it is
+		// an agent-tool task session, which the TUI routes into inspect
+		// mode under its parent. Any other child (e.g. a title session)
+		// is refused before the TUI starts (#413).
+		if sess.ParentSessionID != "" {
+			if _, _, ok := ws.ParseAgentToolSessionID(sess.ID); !ok {
+				return session.Session{}, fmt.Errorf("cannot open a child session: %s", sess.ID)
+			}
+		}
 		return sess, nil
 	}
 
@@ -981,7 +1059,6 @@ func ResolveCwd(cmd *cobra.Command) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to change directory: %v", err)
 		}
-		return cwd, nil
 	}
 	cwd, err := os.Getwd()
 	if err != nil {

@@ -140,7 +140,6 @@ func (c *coordinator) agenticFetchTool(_ context.Context, client *http.Client) (
 
 			promptOpts := []prompt.Option{
 				prompt.WithWorkingDir(tmpDir),
-				prompt.WithSkills(c.activeSkills),
 			}
 
 			promptTemplate, err := prompt.NewPrompt("agentic_fetch", string(agenticFetchPromptTmpl), promptOpts...)
@@ -188,17 +187,25 @@ func (c *coordinator) agenticFetchTool(_ context.Context, client *http.Client) (
 				IsYolo:               c.permissions.SkipRequests(),
 				Sessions:             c.sessions,
 				Messages:             c.messages,
-				Cfg:                  c.cfg,
 				Tools:                fetchTools,
 			})
 
-			return c.runSubAgent(permission.WithAutoApproveRequests(ctx), subAgentParams{
-				Agent:          agent,
-				SessionID:      validationResult.SessionID,
-				AgentMessageID: validationResult.AgentMessageID,
-				ToolCallID:     call.ID,
-				Prompt:         fullPrompt,
-				SessionTitle:   "Fetch Analysis",
+			// The fetch turn runs through the A2A runtime (#392): the
+			// agent is served on the process host for the turn's
+			// lifetime and the coordinator drives it with the A2A
+			// client — no direct in-process Run.
+			return c.runSubAgentOverA2A(ctx, subAgentParams{
+				Agent:            agent,
+				SessionID:        validationResult.SessionID,
+				AgentMessageID:   validationResult.AgentMessageID,
+				ToolCallID:       call.ID,
+				Prompt:           fullPrompt,
+				SessionTitle:     "Fetch Analysis",
+				AgentName:        "Fetch",
+				AgentDescription: "Fetches and analyzes web content and search results.",
+				SessionSetup: func(sessionID string) {
+					c.permissions.AutoApproveSession(sessionID)
+				},
 			})
 		},
 	), nil

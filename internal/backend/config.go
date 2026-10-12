@@ -2,8 +2,10 @@ package backend
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/charmbracelet/crush/internal/agent"
 	mcptools "github.com/charmbracelet/crush/internal/agent/tools/mcp"
@@ -45,6 +47,19 @@ type MCPResourceContents struct {
 	MIMEType string `json:"mime_type,omitempty"`
 	Text     string `json:"text,omitempty"`
 	Blob     []byte `json:"blob,omitempty"`
+}
+
+// MCPToolCallResult holds the model-facing text and any A2UI surface
+// payloads from an MCP tool call.
+type MCPToolCallResult struct {
+	Content  string               `json:"content"`
+	Surfaces []MCPToolCallSurface `json:"surfaces,omitempty"`
+}
+
+// MCPToolCallSurface is a single A2UI surface payload from a tool call.
+type MCPToolCallSurface struct {
+	Payload string `json:"payload"`
+	URI     string `json:"uri"`
 }
 
 // SetConfigField sets a key/value pair in the config file for the
@@ -170,11 +185,7 @@ func (b *Backend) InitializePrompt(workspaceID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var active []*skills.Skill
-	if ws.Skills != nil {
-		active = ws.Skills.ActiveSkills()
-	}
-	return agent.InitializePrompt(ws.Cfg, active)
+	return agent.InitializePrompt(ws.Cfg)
 }
 
 // GitBranch returns the current Git branch of the workspace's working
@@ -230,6 +241,40 @@ func (b *Backend) ListSkills(workspaceID string) ([]proto.SkillInfo, error) {
 		}
 	}
 	return result, nil
+}
+
+// ReloadSkills re-discovers skills from disk for a workspace.
+func (b *Backend) ReloadSkills(workspaceID string) error {
+	ws, err := b.GetWorkspace(workspaceID)
+	if err != nil {
+		return err
+	}
+	mgr := ws.Skills
+	if mgr == nil {
+		return nil
+	}
+	discoveryCfg := skills.DiscoveryConfig{
+		WorkingDir: ws.Cfg.WorkingDir(),
+		Resolver:   ws.Cfg.Resolver().ResolveValue,
+	}
+	opts := ws.Cfg.Config().Options
+	if opts != nil {
+		discoveryCfg.SkillsPaths = opts.SkillsPaths
+		discoveryCfg.DisabledSkills = opts.DisabledSkills
+	}
+	mgr.Reload(discoveryCfg)
+	return nil
+}
+
+// ReloadModelDiscovery re-runs model discovery for a workspace's custom
+// providers and merges any newly found models into the in-memory config. It
+// returns the number of models added across all providers.
+func (b *Backend) ReloadModelDiscovery(ctx context.Context, workspaceID string) (int, error) {
+	ws, err := b.GetWorkspace(workspaceID)
+	if err != nil {
+		return 0, err
+	}
+	return ws.Cfg.ReloadModelDiscovery(ctx)
 }
 
 // EnableDockerMCP validates Docker MCP availability, stages the
@@ -313,6 +358,28 @@ func (b *Backend) ReadMCPResource(ctx context.Context, workspaceID, name, uri st
 	return result, nil
 }
 
+// CallMCPTool invokes a tool on a named MCP server and returns its text
+// content plus any A2UI surface payload it embedded.
+func (b *Backend) CallMCPTool(ctx context.Context, workspaceID, name, toolName string, args map[string]any) (MCPToolCallResult, error) {
+	ws, err := b.GetWorkspace(workspaceID)
+	if err != nil {
+		return MCPToolCallResult{}, err
+	}
+	input, err := json.Marshal(args)
+	if err != nil {
+		return MCPToolCallResult{}, fmt.Errorf("failed to encode tool arguments: %w", err)
+	}
+	res, err := mcptools.RunTool(ctx, ws.Cfg, name, toolName, string(input))
+	if err != nil {
+		return MCPToolCallResult{}, err
+	}
+	out := MCPToolCallResult{Content: res.Content}
+	for _, s := range res.Surfaces {
+		out.Surfaces = append(out.Surfaces, MCPToolCallSurface{Payload: s.Payload, URI: s.URI})
+	}
+	return out, nil
+}
+
 // GetMCPPrompt retrieves a prompt from a named MCP server.
 func (b *Backend) GetMCPPrompt(workspaceID, clientID, promptID string, args map[string]string) (string, error) {
 	ws, err := b.GetWorkspace(workspaceID)
@@ -322,6 +389,27 @@ func (b *Backend) GetMCPPrompt(workspaceID, clientID, promptID string, args map[
 	return commands.GetMCPPrompt(ws.Cfg, clientID, promptID, args)
 }
 
+// MCPReconnect restarts a single MCP server by name.
+func (b *Backend) MCPReconnect(ctx context.Context, workspaceID, name string) error {
+	ws, err := b.GetWorkspace(workspaceID)
+	if err != nil {
+		return err
+	}
+	if err := mcptools.DisableSingle(ws.Cfg, name); err != nil {
+		return fmt.Errorf("failed to disconnect MCP %q: %w", name, err)
+	}
+	if err := ws.Cfg.ReloadFromDisk(ctx); err != nil {
+		slog.Warn("Failed to reload config from disk before reconnecting MCP; using existing config", "name", name, "error", err)
+	} else {
+		// Remote clients render from a cached config snapshot that only
+		// refreshes on ConfigChanged, so a reload that picked up on-disk
+		// edits must be published like every other config mutation here.
+		publishConfigChanged(ws)
+	}
+	return mcptools.InitializeSingle(ctx, name, ws.Cfg)
+}
+
+// ListMCPPrompts returns the prompts exposed by a workspace's MCP servers.
 func (b *Backend) ListMCPPrompts(workspaceID string) ([]proto.MCPPrompt, error) {
 	if _, err := b.GetWorkspace(workspaceID); err != nil {
 		return nil, err

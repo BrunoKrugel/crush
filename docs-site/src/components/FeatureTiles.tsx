@@ -71,6 +71,19 @@ const TILES: Tile[] = [
     more: 'Channels',
   },
   {
+    icon: '▣',
+    title: 'A2UI surfaces',
+    body: (
+      <>
+        Models speak the A2UI protocol and Crush draws it:
+        cards, lists, buttons and dashboards rendered inline in the chat instead
+        of raw JSON.
+      </>
+    ),
+    href: '/features/a2ui',
+    more: 'A2UI',
+  },
+  {
     icon: '◇',
     title: 'LSP-enhanced',
     body: (
@@ -117,6 +130,18 @@ const TILES: Tile[] = [
     ),
     href: '/features/hooks',
     more: 'Hooks',
+  },
+  {
+    icon: '⌕',
+    title: 'Semantic search',
+    body: (
+      <>
+        A local vector index over your codebase, so the agent can find code by
+        what it does rather than by what it is called.
+      </>
+    ),
+    href: '/features/semantic-search',
+    more: 'Semantic search',
   },
   {
     icon: '⧉',

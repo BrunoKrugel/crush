@@ -215,6 +215,8 @@ const (
 )
 
 type MCPConfig struct {
+	// Lazy keeps this server's tools out of the model context until loaded.
+	Lazy          *bool             `json:"lazy,omitempty" jsonschema:"description=Keep this server's tools out of the model context until the agent loads them with mcp_search,default=true"`
 	Command       string            `json:"command,omitempty" jsonschema:"description=Command to execute for stdio MCP servers,example=npx"`
 	Env           map[string]string `json:"env,omitempty" jsonschema:"description=Environment variables to set for the MCP server"`
 	Args          []string          `json:"args,omitempty" jsonschema:"description=Arguments to pass to the MCP server command"`
@@ -224,12 +226,6 @@ type MCPConfig struct {
 	DisabledTools []string          `json:"disabled_tools,omitempty" jsonschema:"description=List of tools from this MCP server to disable,example=get-library-doc"`
 	EnabledTools  []string          `json:"enabled_tools,omitempty" jsonschema:"description=Allow list of tools from this MCP server,example=get-library-doc"`
 	Timeout       int               `json:"timeout,omitempty" jsonschema:"description=Timeout in seconds for MCP server connections,default=10,example=30,example=60,example=120"`
-
-	// Lazy keeps this server's tool schemas out of the model context
-	// until the agent loads them with mcp_search. When nil the server
-	// follows options.lazy_mcp (default true). Set it to false to pin
-	// every tool from this server into context on every turn.
-	Lazy *bool `json:"lazy,omitempty" jsonschema:"description=Keep this server's tools out of context until the agent loads them. Unset follows options.lazy_mcp. Set false to always show them,default=true"`
 
 	// Sessionless marks a server that does not maintain an MCP session (it
 	// never issues a Mcp-Session-Id). When true, Crush omits the
@@ -251,6 +247,19 @@ type MCPConfig struct {
 	// omitted from the outgoing request rather than sent as
 	// "Header:".
 	Headers map[string]string `json:"headers,omitempty" jsonschema:"description=HTTP headers for HTTP/SSE MCP servers"`
+
+	// ChannelEnabled enables an MCP server as a channel directly from config,
+	// equivalent to passing its name via --channels on the CLI. This lets
+	// channels be declared persistently in crush.json without needing a CLI
+	// flag on every launch.
+	ChannelEnabled bool `json:"channel_enabled,omitempty" jsonschema:"description=Enable this MCP server as a channel (equivalent to --channels),default=false"`
+
+	// ChannelReply, when set on a server enabled as a channel, makes Crush
+	// route the final assistant response of every turn that originated from
+	// this channel back through one of the server's own tools, so a message
+	// received on the channel gets a reply on the channel even when the
+	// model only produced terminal output.
+	ChannelReply *MCPChannelReply `json:"channel_reply,omitempty" jsonschema:"description=Automatically route replies for turns originating from this channel back through one of the server's tools"`
 
 	// OAuth enables the MCP OAuth 2.1 authorization flow for HTTP
 	// transport servers. When true, the client uses dynamic client
@@ -279,19 +288,6 @@ type MCPConfig struct {
 	// OAuthToken is the persisted OAuth token for this server. It is
 	// managed internally and stored in the global data config.
 	OAuthToken *oauth.Token `json:"oauth_token,omitempty" jsonschema:"-"`
-
-	// ChannelEnabled enables an MCP server as a channel directly from config,
-	// equivalent to passing its name via --channels on the CLI. This lets
-	// channels be declared persistently in crush.json without needing a CLI
-	// flag on every launch.
-	ChannelEnabled bool `json:"channel_enabled,omitempty" jsonschema:"description=Enable this MCP server as a channel (equivalent to --channels),default=false"`
-
-	// ChannelReply, when set on a server enabled as a channel, makes Crush
-	// route the final assistant response of every turn that originated from
-	// this channel back through one of the server's own tools, so a message
-	// received on the channel gets a reply on the channel even when the
-	// model only produced terminal output.
-	ChannelReply *MCPChannelReply `json:"channel_reply,omitempty" jsonschema:"description=Automatically route replies for turns originating from this channel back through one of the server's tools"`
 }
 
 // MCPChannelReply configures deterministic reply routing for an MCP server
@@ -345,28 +341,6 @@ type LSPConfig struct {
 	Timeout     int               `json:"timeout,omitempty" jsonschema:"description=Timeout in seconds for LSP server initialization,default=30,example=60,example=120"`
 }
 
-// CompactionOptions controls how a long session is compressed to fit its
-// context window.
-type CompactionOptions struct {
-	// PruneToolResults replaces the output of tool calls that are no longer
-	// part of the recent working set with a one-line skeleton naming what ran
-	// and how much was dropped. The tool call itself stays, so the model
-	// knows what it already tried and can run it again. Stored transcripts
-	// are never modified.
-	PruneToolResults *bool `json:"prune_tool_results,omitempty" jsonschema:"description=Replace the output of stale tool calls with a one-line skeleton naming what ran; stored history is never modified,default=true"`
-	// TailTokens is how much of the most recent conversation a compaction
-	// keeps verbatim instead of folding into its checkpoint.
-	TailTokens int `json:"tail_tokens,omitempty" jsonschema:"description=Tokens of recent conversation a compaction keeps verbatim. When unset this is 15% of the model's context window,example=8000,example=40000"`
-	// ObserveMemory distills each completed turn into a session memory
-	// ledger using the small model. Recorded memory is attached to every
-	// checkpoint verbatim, so decisions and constraints persist across
-	// compactions instead of being re-summarized generation after
-	// generation. It costs one cheap model call per turn with enough new
-	// material to be worth reading, which is why it can be turned off; it
-	// is on unless explicitly disabled.
-	ObserveMemory *bool `json:"observe_memory,omitempty" jsonschema:"description=Record session memory at the end of each turn; memory is kept verbatim beside every checkpoint, so decisions survive compaction,default=true"`
-}
-
 type TUIOptions struct {
 	CompactMode bool        `json:"compact_mode,omitempty" jsonschema:"description=Enable compact mode for the TUI interface,default=false"`
 	DiffMode    string      `json:"diff_mode,omitempty" jsonschema:"description=Diff mode for the TUI interface,enum=unified,enum=split"`
@@ -374,10 +348,11 @@ type TUIOptions struct {
 	Completions Completions `json:"completions,omitzero" jsonschema:"description=Completions UI options"`
 	Transparent *bool       `json:"transparent,omitempty" jsonschema:"description=Enable transparent background for the TUI interface,default=false"`
 	Scrollbar   string      `json:"scrollbar,omitempty" jsonschema:"description=Chat scrollbar visibility,enum=default,enum=always,enum=never,default=default"`
-	ScrollSpeed *float64    `json:"scroll_speed,omitempty" jsonschema:"description=Multiplier applied to mouse wheel scroll distance in the TUI (1 disables acceleration\\, lower values scroll slower\\, higher values scroll faster),default=1,example=2,example=3"`
 	Mouse       *bool       `json:"mouse,omitempty" jsonschema:"description=Enable terminal mouse capture for selection\\, clicks\\, and scrolling in the TUI. Disable to let the terminal emulator or tmux handle text selection and copy/paste,default=true"`
-	NerdFonts   *bool       `json:"nerd_fonts,omitempty" jsonschema:"description=Override Nerd Font glyph detection for the TUI: true forces glyphs on\\, false forces them off\\, and unset keeps automatic detection"`
-	ExitBanner  ExitBanner  `json:"exit_banner,omitempty" jsonschema:"description=Exit banner style after quitting Crush,enum=default,enum=compact,enum=none,default=default"`
+	// WorkingDirFormat controls how the working directory is rendered in
+	// the header. Supported placeholders: {cwd}, {user}, {host}.
+	WorkingDirFormat string     `json:"working_dir_format,omitempty" jsonschema:"description=Format for the working directory shown in the header. Supported placeholders: {cwd} for the path\\, {user} for the current user\\, {host} for the hostname.,default={user}@{host}:{cwd},example={cwd},example={host}:{cwd}"`
+	ExitBanner       ExitBanner `json:"exit_banner,omitempty" jsonschema:"description=Exit banner style after quitting Crush,enum=default,enum=compact,enum=none,default=default"`
 }
 
 // IsTransparent reports whether the TUI draws a transparent background. The
@@ -385,20 +360,6 @@ type TUIOptions struct {
 // without unwrapping either.
 func (t *TUIOptions) IsTransparent() bool {
 	return t != nil && t.Transparent != nil && *t.Transparent
-}
-
-// DefaultScrollSpeed is the wheel-to-lines multiplier used when the user has
-// not configured one.
-const DefaultScrollSpeed = 1.0
-
-// ScrollSpeedValue returns the configured scroll speed multiplier. The nil
-// receiver and the unset pointer both mean the default. Values are clamped to
-// a small positive minimum so scrolling never inverts or stalls.
-func (t *TUIOptions) ScrollSpeedValue() float64 {
-	if t == nil || t.ScrollSpeed == nil {
-		return DefaultScrollSpeed
-	}
-	return max(*t.ScrollSpeed, 0.1)
 }
 
 // UnmarshalJSON tolerates the legacy string form of the "theme" field.
@@ -500,14 +461,13 @@ func (Attribution) JSONSchemaExtend(schema *jsonschema.Schema) {
 }
 
 type Options struct {
-	ContextPaths         []string           `json:"context_paths,omitempty" jsonschema:"description=Paths to files containing context information for the AI,example=.cursorrules,example=CRUSH.md"`
-	GlobalContextPaths   []string           `json:"global_context_paths,omitempty" jsonschema:"description=Paths to files containing global context information for the AI,default=~/.config/crush/CRUSH.md,default=~/.config/AGENTS.md"`
-	SkillsPaths          []string           `json:"skills_paths,omitempty" jsonschema:"description=Paths to directories containing Agent Skills (folders with SKILL.md files),example=~/.config/crush/skills,example=./skills"`
-	TUI                  *TUIOptions        `json:"tui,omitempty" jsonschema:"description=Terminal user interface options"`
-	Debug                bool               `json:"debug,omitempty" jsonschema:"description=Enable debug logging,default=false"`
-	DebugLSP             bool               `json:"debug_lsp,omitempty" jsonschema:"description=Enable debug logging for LSP servers,default=false"`
-	DisableAutoSummarize bool               `json:"disable_auto_summarize,omitempty" jsonschema:"description=Disable automatic conversation summarization,default=false"`
-	Compaction           *CompactionOptions `json:"compaction,omitempty" jsonschema:"description=Context compaction options"`
+	ContextPaths         []string    `json:"context_paths,omitempty" jsonschema:"description=Paths to files containing context information for the AI,example=.cursorrules,example=CRUSH.md"`
+	GlobalContextPaths   []string    `json:"global_context_paths,omitempty" jsonschema:"description=Paths to files containing global context information for the AI,default=~/.config/crush/CRUSH.md,default=~/.config/AGENTS.md"`
+	SkillsPaths          []string    `json:"skills_paths,omitempty" jsonschema:"description=Paths to directories containing Agent Skills (folders with SKILL.md files),example=~/.config/crush/skills,example=./skills"`
+	TUI                  *TUIOptions `json:"tui,omitempty" jsonschema:"description=Terminal user interface options"`
+	Debug                bool        `json:"debug,omitempty" jsonschema:"description=Enable debug logging,default=false"`
+	DebugLSP             bool        `json:"debug_lsp,omitempty" jsonschema:"description=Enable debug logging for LSP servers,default=false"`
+	DisableAutoSummarize bool        `json:"disable_auto_summarize,omitempty" jsonschema:"description=Disable automatic conversation summarization,default=false"`
 	// DataDirectory is where Crush keeps per-project state such as
 	// the SQLite database and workspace overrides. Relative paths are
 	// resolved against the working directory; absolute paths are used
@@ -521,18 +481,172 @@ type Options struct {
 	InitializeAs              string       `json:"initialize_as,omitempty" jsonschema:"description=Name of the context file to create/update during project initialization,default=AGENTS.md,example=AGENTS.md,example=CRUSH.md,example=CLAUDE.md,example=docs/LLMs.md"`
 	AutoLSP                   *bool        `json:"auto_lsp,omitempty" jsonschema:"description=Automatically setup LSPs based on root markers,default=true"`
 	Progress                  *bool        `json:"progress,omitempty" jsonschema:"description=Show indeterminate progress updates during long operations,default=true"`
-	Notifications             string       `json:"notifications,omitempty" jsonschema:"description=Notification style to use. Options: auto (default)\\, native\\, osc\\, bell\\, herdr\\, disabled. Auto selects based on environment: native for local sessions\\, osc for SSH (with automatic OSC 99/777 detection). Herdr surfaces toasts in herdr's own UI and only works when Crush runs inside a herdr pane; outside one it falls back to OSC.,enum=auto,enum=native,enum=osc,enum=bell,enum=herdr,enum=disabled,default=auto"`
+	Notifications             string       `json:"notifications,omitempty" jsonschema:"description=Notification style to use. Options: auto (default)\\, native\\, osc\\, bell\\, disabled. Auto selects based on environment: native for local sessions\\, osc for SSH (with automatic OSC 99/777 detection).,enum=auto,enum=native,enum=osc,enum=bell,enum=disabled,default=auto"`
 	DisabledSkills            []string     `json:"disabled_skills,omitempty" jsonschema:"description=List of skill names to disable and hide from the agent,example=crush-config"`
-	LazyMCP                   *bool        `json:"lazy_mcp,omitempty" jsonschema:"description=Keep MCP tools out of the model context until the agent loads them with mcp_search. Individual servers override it with mcp.<name>.lazy,default=true"`
-	RequestTimeout            *int         `json:"request_timeout,omitempty" jsonschema:"description=Timeout in seconds for each LLM API request. Streaming responses are aborted only after this much inactivity\\, so slow but active streams are never killed. 0 disables it\\, negative values are invalid.,default=60,example=120,example=300,example=0"`
+	DisableA2UI               bool         `json:"disable_a2ui,omitempty" jsonschema:"description=Disable A2UI entirely: drops the prompt section inviting the model to emit renderable <a2ui-json> surfaces and stops advertising the a2ui capability to MCP servers,default=false"`
+	// AllowedCommands specifies commands that should be removed from the default
+	// banned commands list, allowing the agent to execute them via the bash tool.
+	// This provides a way to selectively enable commands like "ssh" or "curl"
+	// that are blocked by default for security reasons. It only subtracts from
+	// the exact-command block list; package-manager argument blocks such as
+	// "apt install" or "npm -g" are unaffected. Allowed commands are still
+	// subject to the normal permission prompt (they are not auto-approved).
+	AllowedCommands []string `json:"allowed_commands,omitempty" jsonschema:"description=List of commands to allow that are normally banned. Only affects the exact-command block list; package-manager argument blocks (e.g. 'apt install') are unaffected. Allowed commands still require permission approval.,example=ssh,example=curl,example=scp"`
+	// AllowAllCommands removes all restrictions from the banned commands list,
+	// allowing the agent to execute any command via the bash tool. Unlike
+	// allowed_commands, this also removes the package-manager argument blocks.
+	// This is a dangerous option and should be used with caution.
+	AllowAllCommands bool               `json:"allow_all_commands,omitempty" jsonschema:"description=Remove all command restrictions from the bash tool, including package-manager argument blocks (dangerous). Commands still require permission approval unless yolo mode is enabled.,default=false"`
+	RequestTimeout   *int               `json:"request_timeout,omitempty" jsonschema:"description=Timeout in seconds for each LLM API request. Streaming responses are aborted only after this much inactivity\\, so slow but active streams are never killed. 0 disables it\\, negative values are invalid.,default=60,example=120,example=300,example=0"`
+	LazyMCP          *bool              `json:"lazy_mcp,omitempty" jsonschema:"description=Keep MCP tools out of the model context until the agent loads them with mcp_search. Individual servers override it with mcp.<name>.lazy,default=true"`
+	Compaction       *CompactionOptions `json:"compaction,omitempty" jsonschema:"description=Context compaction settings"`
+
+	// TodoEnforcement carries the global todo enforcement defaults
+	// (#315); per agent type overrides live on the agent definitions.
+	TodoEnforcement *TodoEnforcementConfig `json:"todo_enforcement,omitempty" jsonschema:"description=Proactive todo enforcement: inject a nudge when an agent works without a todo list, and optionally reject mutating tools until one exists"`
+	// Dispatch carries the dispatch_agent tool's limits (#390).
+	Dispatch *DispatchOptions `json:"dispatch,omitempty" jsonschema:"description=Dispatched agent options"`
+	// A2A carries the A2A host's optional TCP listener (#358).
+	A2A *A2AOptions `json:"a2a,omitempty" jsonschema:"description=A2A host options: an optional TLS-only TCP listener beside the per-process unix socket"`
 }
 
-// GetLazyMCP reports whether MCP tool schemas are kept out of the model
-// context until the agent asks for them. Both the nil receiver and the
-// unset field mean enabled, so laziness is on by default for every
-// existing config.
-func (o *Options) GetLazyMCP() bool {
-	return o == nil || o.LazyMCP == nil || *o.LazyMCP
+// DefaultDispatchMaxConcurrent bounds how many dispatched agents run at
+// once when the user has not configured a cap (#390): each dispatch
+// provisions a worktree, a scoped LSP manager, an A2A listener and a
+// model session, so an unbounded loop of dispatch calls would exhaust
+// disk, memory and API budget.
+const DefaultDispatchMaxConcurrent = 4
+
+// DefaultDispatchAgent is the agent definition dispatch_agent runs when
+// its call names no agent (#433).
+const DefaultDispatchAgent = AgentWorker
+
+// DispatchOptions configures the dispatch_agent tool (#390).
+type DispatchOptions struct {
+	// MaxConcurrent caps the concurrently running dispatched agents:
+	// live dispatches plus setups still in flight. A value below 1 is
+	// a load error; nil resolves to DefaultDispatchMaxConcurrent.
+	MaxConcurrent *int `json:"max_concurrent,omitempty" jsonschema:"description=Maximum number of concurrently running dispatched agents; a value below 1 is a load error,default=4,example=2"`
+	// DefaultAgent is the agent id dispatch_agent runs when its call
+	// names no agent (#433). It must name an existing dispatch agent
+	// that is not disabled; anything else is a load error. Empty
+	// resolves to DefaultDispatchAgent.
+	DefaultAgent string `json:"default_agent,omitempty" jsonschema:"description=Agent id dispatch_agent runs when the call names no agent; must be an enabled dispatch agent,default=worker"`
+}
+
+// GetDispatchMaxConcurrent returns the resolved dispatch concurrency cap
+// (#390): the configured max_concurrent, or DefaultDispatchMaxConcurrent
+// when unset. The nil receiver and the unset field both mean the default,
+// so callers can ask without unwrapping either.
+func (o *Options) GetDispatchMaxConcurrent() int {
+	if o == nil || o.Dispatch == nil || o.Dispatch.MaxConcurrent == nil {
+		return DefaultDispatchMaxConcurrent
+	}
+	return *o.Dispatch.MaxConcurrent
+}
+
+// GetDispatchDefaultAgent returns the resolved default dispatch agent
+// id (#433): the configured default_agent, or DefaultDispatchAgent when
+// unset. The nil receiver and the empty field both mean the default, so
+// callers can ask without unwrapping either.
+func (o *Options) GetDispatchDefaultAgent() string {
+	if o == nil || o.Dispatch == nil || o.Dispatch.DefaultAgent == "" {
+		return DefaultDispatchAgent
+	}
+	return o.Dispatch.DefaultAgent
+}
+
+// Validate checks the dispatch concurrency cap: a positive value
+// configures it, and a value below 1 is a load error, not a setting —
+// a cap of 0 would refuse every dispatch. The path names the block in
+// the config file, so the error points at the offending key.
+func (d *DispatchOptions) Validate(path string) error {
+	if d == nil {
+		return nil
+	}
+	if d.MaxConcurrent != nil && *d.MaxConcurrent < 1 {
+		return fmt.Errorf("%s.max_concurrent: must be at least 1 (got %d)", path, *d.MaxConcurrent)
+	}
+	return nil
+}
+
+// ValidateDispatchDefaultAgent checks options.dispatch.default_agent
+// against the resolved agents (#433): the id must exist and be a dispatch
+// agent, so a dispatch that names no agent never fails at dispatch time
+// on a bad default. An explicitly named disabled id is an error; the
+// implicit default resolving to a disabled worker is not — that is the
+// opt-out, and the dispatch tools simply go away with it. An external
+// agent that cannot be dispatched is an error too (#560): a default
+// every dispatch would refuse is a misconfiguration, not a warning. It
+// runs after SetupAgents, at load and reload time, and names the config
+// path in every error.
+func (c *Config) ValidateDispatchDefaultAgent() error {
+	const path = "options.dispatch.default_agent"
+	explicit := c.Options != nil && c.Options.Dispatch != nil && c.Options.Dispatch.DefaultAgent != ""
+	id := c.Options.GetDispatchDefaultAgent()
+	agent, ok := c.Agents[id]
+	if !ok {
+		return fmt.Errorf("%s: unknown agent %q", path, id)
+	}
+	if agent.Role != AgentRoleDispatch {
+		return fmt.Errorf("%s: agent %q is a %q agent, not a dispatch agent", path, id, agent.Role)
+	}
+	if agent.Disabled && explicit {
+		return fmt.Errorf("%s: agent %q is disabled", path, id)
+	}
+	if agent.Unusable != "" {
+		return fmt.Errorf("%s: agent %q cannot be dispatched: %s", path, id, agent.Unusable)
+	}
+	return nil
+}
+
+// definitionToolset resolves a definition's own tool palette: allow
+// expanded (an omitted list inherits every tool), minus deny — before
+// the user's disabled_tools. Policy is not a definition error (#433),
+// so the load-time sanity check reads this set, not the policy-filtered
+// AllowedTools the resolved Agent carries.
+func definitionToolset(def AgentDefinition) []string {
+	var toolsSpec AgentTools
+	if def.Tools != nil {
+		toolsSpec = *def.Tools
+	}
+	allow := allToolNames()
+	if toolsSpec.Allow != nil {
+		allow = expandToolRefs(toolsSpec.Allow)
+	}
+	if deny := expandToolRefs(toolsSpec.Deny); len(deny) > 0 {
+		allow = slices.DeleteFunc(allow, func(name string) bool {
+			return slices.Contains(deny, name)
+		})
+	}
+	return allow
+}
+
+// ValidateAgentToolsets runs the load-time sanity checks (#433): an
+// enabled coder, plan, or dispatch agent whose definition resolves to no
+// tools fails the load instead of quietly producing an agent that can do
+// nothing. The user's disabled_tools and permissions deny are policy,
+// not definition errors — they keep their runtime behavior, including
+// the #376 refusal. A disabled agent always loads: it is the opt-out.
+// It runs after SetupAgents, at load and reload time, and names the
+// config path in every error.
+func (c *Config) ValidateAgentToolsets() error {
+	effective := effectiveAgentDefinitions(c.AgentDefinitions)
+	for _, id := range slices.Sorted(maps.Keys(effective)) {
+		switch definitionRole(id, effective[id]) {
+		case AgentRoleMain, AgentRoleDispatch:
+		default:
+			continue
+		}
+		if agent, ok := c.Agents[id]; !ok || agent.Disabled {
+			continue
+		}
+		if len(definitionToolset(effective[id])) > 0 {
+			continue
+		}
+		return fmt.Errorf("agents.%s: enabled agent resolves to no tools", id)
+	}
+	return nil
 }
 
 // DefaultRequestTimeout bounds each LLM API request when the user has not
@@ -559,9 +673,212 @@ func (o *Options) GetRequestTimeout() time.Duration {
 
 type MCPs map[string]MCPConfig
 
+// EmbeddingsConfig configures the embedding provider that backs the
+// semantic_search tool. It points at any OpenAI-compatible
+// /v1/embeddings endpoint. A nil config disables semantic search
+// entirely — the tool is not registered.
+type EmbeddingsConfig struct {
+	BaseURL   string `json:"base_url,omitempty" jsonschema:"description=Base URL of an OpenAI-compatible embeddings endpoint,default=https://api.openai.com/v1,example=https://api.openai.com/v1"`
+	APIKey    string `json:"api_key,omitempty" jsonschema:"description=API key for the embeddings endpoint. Supports shell expansion of $VAR and $(command)."`
+	Model     string `json:"model,omitempty" jsonschema:"description=Embedding model name,default=text-embedding-3-small,example=text-embedding-3-small"`
+	Dimension int    `json:"dimension,omitempty" jsonschema:"description=Embedding vector dimension. Baked into the vector table on first creation; changing it requires reindexing.,default=768,example=768"`
+}
+
 type MCP struct {
 	Name string    `json:"name"`
 	MCP  MCPConfig `json:"mcp"`
+}
+
+// TodoEnforcementConfig configures the proactive todo enforcement ladder
+// (#315): nudges and, opt-in, a hard gate that keeps mutating tools out of
+// agents with no todo list. It appears once under options (global defaults
+// for every agent) and once per agent definition (per agent type
+// overrides); a per-agent field replaces the global one field by field.
+//
+// Nil everywhere means "defaults on": nudge injection enabled, hard gate
+// off.
+type TodoEnforcementConfig struct {
+	// Enabled toggles nudge injection. When false the coordinator never
+	// injects todo nudges; the hard gate is governed by its own field.
+	Enabled *bool `json:"enabled,omitempty" jsonschema:"description=Inject a context nudge when an agent works without a todo list,default=true"`
+	// NudgeThreshold is how many tool calls without todos activity trip
+	// the first nudge. A mutating tool call (a file writer, a
+	// non-read-only bash command, an MCP tool without a read-only hint)
+	// trips it immediately regardless of count. 0 or "off" disables
+	// nudging, the same as enabled: false; a negative value is a load
+	// error.
+	NudgeThreshold *IntOrOff `json:"nudge_threshold,omitempty" jsonschema:"description=Tool calls without todos activity before a nudge is injected; a mutating tool call trips it immediately. 0 or 'off' disables nudging\\, the same as enabled: false; a negative value is a load error"`
+	// HardGate rejects mutating tools (file writers, non-read-only bash
+	// commands, MCP tools without a read-only hint) until the session
+	// has a todo list. Deterministic but brittle; off by default.
+	HardGate *bool `json:"hard_gate,omitempty" jsonschema:"description=Reject mutating tools (file writers\\, non-read-only bash commands\\, MCP tools without a read-only hint) until a todo list exists,default=false"`
+	// KillAfterNudges is the wander-kill rung (#316): how many nudges a
+	// run may ignore before the coordinator kills it deterministically.
+	// The default of 2 kills after both the nudge and the escalating
+	// nudge are ignored; 0 or "off" disables the kill, and any positive
+	// value is honored, unclamped. It only wires up for dispatched
+	// agents (the parent must be able to re-dispatch); the main
+	// agent's ladder stays capped at nudging. A negative value is a
+	// load error.
+	KillAfterNudges *IntOrOff `json:"kill_after_nudges,omitempty" jsonschema:"description=Wander kill: nudges a dispatched agent may ignore before it is killed. 0 or 'off' disables; a negative value is a load error"`
+	// StallWindow kills a dispatched run whose todo list has not been
+	// updated for this long while it keeps running ("stalled todos").
+	// 0 or "off" (the default) disables the stall check. Accepts a
+	// number of seconds (legacy form) or a duration string such as
+	// "30m"; a negative value is a load error.
+	StallWindow *Duration `json:"stall_window,omitempty" jsonschema:"description=Wander kill: time without a todo update that marks a dispatched run as stalled. 0 or 'off' disables; a negative value is a load error"`
+	// HardTimeout kills a dispatched run after this long, whatever its
+	// progress. 0 or "off" (the default) disables the timeout. Accepts
+	// a number of seconds (legacy form) or a duration string such as
+	// "30m"; a negative value is a load error.
+	HardTimeout *Duration `json:"hard_timeout,omitempty" jsonschema:"description=Wander kill: time after which a dispatched run is killed outright. 0 or 'off' disables; a negative value is a load error"`
+	// InactivityTimeout is the A2A-level backstop (#360): a dispatched
+	// run served over A2A that yields no events at all for this many
+	// seconds is ended by the executor with a Failed status carrying
+	// the reason. It guards the runs the in-process watchdogs (#316)
+	// miss: stall_window and hard_timeout default to 0, and the ladder
+	// needs model steps to fire. 0 (the default) disables the backstop.
+	InactivityTimeout *int `json:"inactivity_timeout,omitempty" jsonschema:"description=A2A backstop: seconds without any event that end a silent dispatched run with a Failed status; 0 disables,default=0,example=900"`
+}
+
+// JSONSchemaExtend adds the defaults and examples for the knob fields.
+// They cannot come from the field tags: the tags reach only the $ref
+// wrapper, while the type-specific keyword parsing the tags rely on runs
+// on typed properties, and these are references to the knob definitions.
+func (TodoEnforcementConfig) JSONSchemaExtend(schema *jsonschema.Schema) {
+	if schema.Properties == nil {
+		return
+	}
+	set := func(name string, def any, examples ...any) {
+		if prop, ok := schema.Properties.Get(name); ok {
+			prop.Default = def
+			prop.Examples = examples
+		}
+	}
+	set("nudge_threshold", 4, 8, 1, "off")
+	set("kill_after_nudges", 2, 3, 10, "off")
+	set("stall_window", 0, 300, "30m", "off")
+	set("hard_timeout", 0, 1800, "30m", "off")
+}
+
+// Validate checks the ladder's numeric knobs: 0 or "off" disables a knob
+// and a positive value configures it, but a negative value is a load
+// error, not a setting. The path names the block in the config file, so
+// each error points at the offending key.
+func (c *TodoEnforcementConfig) Validate(path string) error {
+	if c == nil {
+		return nil
+	}
+	if c.NudgeThreshold != nil && *c.NudgeThreshold < 0 {
+		return fmt.Errorf("%s.nudge_threshold: must not be negative (got %d)", path, *c.NudgeThreshold)
+	}
+	if c.KillAfterNudges != nil && *c.KillAfterNudges < 0 {
+		return fmt.Errorf("%s.kill_after_nudges: must not be negative (got %d)", path, *c.KillAfterNudges)
+	}
+	if c.StallWindow != nil && *c.StallWindow < 0 {
+		return fmt.Errorf("%s.stall_window: must not be negative (got %s)", path, durationForError(*c.StallWindow))
+	}
+	if c.HardTimeout != nil && *c.HardTimeout < 0 {
+		return fmt.Errorf("%s.hard_timeout: must not be negative (got %s)", path, durationForError(*c.HardTimeout))
+	}
+	if c.InactivityTimeout != nil && *c.InactivityTimeout < 0 {
+		return fmt.Errorf("%s.inactivity_timeout: must not be negative (got %d)", path, *c.InactivityTimeout)
+	}
+	return nil
+}
+
+// TodoEnforcementSettings is the resolved enforcement ladder: the per-agent
+// override layered over the global options with defaults applied.
+type TodoEnforcementSettings struct {
+	Enabled        bool
+	NudgeThreshold int
+	HardGate       bool
+	// Wander kill (#316). KillAfterNudges is the number of ignored
+	// nudges that trip the kill; StallWindow and HardTimeout are 0 when
+	// disabled. InactivityTimeout is the A2A-level backstop (#360), also
+	// 0 when disabled.
+	KillAfterNudges   int
+	StallWindow       time.Duration
+	HardTimeout       time.Duration
+	InactivityTimeout time.Duration
+}
+
+const (
+	defaultTodoNudgeThreshold = 4
+	// defaultTodoKillAfterNudges kills a dispatched agent after both the
+	// nudge and the escalating nudge have been ignored.
+	defaultTodoKillAfterNudges = 2
+)
+
+// ResolveTodoEnforcement layers the per-agent config over over the global
+// one, field by field, and applies defaults. Nil layers resolve to the
+// defaults: nudging on, threshold 4, hard gate off.
+func ResolveTodoEnforcement(global, over *TodoEnforcementConfig) TodoEnforcementSettings {
+	merged := TodoEnforcementConfig{}
+	if global != nil {
+		merged = *global
+	}
+	if over != nil {
+		if over.Enabled != nil {
+			merged.Enabled = over.Enabled
+		}
+		if over.NudgeThreshold != nil {
+			merged.NudgeThreshold = over.NudgeThreshold
+		}
+		if over.HardGate != nil {
+			merged.HardGate = over.HardGate
+		}
+		if over.KillAfterNudges != nil {
+			merged.KillAfterNudges = over.KillAfterNudges
+		}
+		if over.StallWindow != nil {
+			merged.StallWindow = over.StallWindow
+		}
+		if over.HardTimeout != nil {
+			merged.HardTimeout = over.HardTimeout
+		}
+		if over.InactivityTimeout != nil {
+			merged.InactivityTimeout = over.InactivityTimeout
+		}
+	}
+	settings := TodoEnforcementSettings{
+		Enabled:         true,
+		NudgeThreshold:  defaultTodoNudgeThreshold,
+		KillAfterNudges: defaultTodoKillAfterNudges,
+	}
+	if merged.Enabled != nil {
+		settings.Enabled = *merged.Enabled
+	}
+	if merged.NudgeThreshold != nil {
+		settings.NudgeThreshold = int(*merged.NudgeThreshold)
+	}
+	if merged.HardGate != nil {
+		settings.HardGate = *merged.HardGate
+	}
+	if merged.KillAfterNudges != nil {
+		settings.KillAfterNudges = int(*merged.KillAfterNudges)
+	}
+	if merged.StallWindow != nil {
+		settings.StallWindow = time.Duration(*merged.StallWindow)
+	}
+	if merged.HardTimeout != nil {
+		settings.HardTimeout = time.Duration(*merged.HardTimeout)
+	}
+	// An explicit 0 (or "off") threshold disables nudging outright, the
+	// same as enabled: false; it must win over an explicit enabled: true.
+	if merged.NudgeThreshold != nil && *merged.NudgeThreshold == 0 {
+		settings.Enabled = false
+	}
+	if merged.InactivityTimeout != nil && *merged.InactivityTimeout > 0 {
+		settings.InactivityTimeout = time.Duration(*merged.InactivityTimeout) * time.Second
+	}
+	return settings
+}
+
+// ResolvedTodoEnforcement returns the effective enforcement settings for
+// this agent type, layering its override over the global options.
+func (a Agent) ResolvedTodoEnforcement(global *TodoEnforcementConfig) TodoEnforcementSettings {
+	return ResolveTodoEnforcement(global, a.TodoEnforcement)
 }
 
 func (m MCPs) Sorted() []MCP {
@@ -813,8 +1130,48 @@ type Agent struct {
 	//  if the string array is nil, all tools from the AllowedMCP are available
 	AllowedMCP map[string][]string `json:"allowed_mcp,omitempty"`
 
-	// Overrides the context paths for this agent
+	// ContextPaths overrides options.context_paths for this agent's
+	// prompt (#432). Nil inherits the global paths at render time, so a
+	// dispatch renders the workspace's own context files.
 	ContextPaths []string `json:"context_paths,omitempty"`
+
+	// TodoEnforcement overrides the global todo enforcement settings
+	// (#315) for this agent type, field by field.
+	TodoEnforcement *TodoEnforcementConfig `json:"todo_enforcement,omitempty" jsonschema:"description=Todo enforcement overrides for this agent: nudge injection and the opt-in mutating-tool gate"`
+
+	// The fields below come from the agent's definition (#333). They are
+	// resolved runtime values, not config: no config file loads them.
+	//
+	// Role classifies the agent: main, subagent, or dispatch.
+	Role string `json:"-"`
+	// Runtime selects the execution path: builtin or a2a. A runtime a2a
+	// dispatch agent runs behind its external Agent Card (#434).
+	Runtime string `json:"-"`
+	// Prompt is builtin:<id> or file:<path> (#432).
+	Prompt string `json:"-"`
+	// PromptAppend is a file:<path> appended to the prompt (#432).
+	PromptAppend string `json:"-"`
+	// ModelRef pins an explicit provider and model, overriding the
+	// large/small slot (#432).
+	ModelRef *AgentModelRef `json:"-"`
+	// Skills lists skill names for the agent (#432).
+	Skills []string `json:"-"`
+	// Workspace selects dispatch isolation: worktree or none. A builtin
+	// dispatch always runs in a worktree; a runtime a2a agent resolves
+	// to none (#434).
+	Workspace string `json:"-"`
+	// Card is the external Agent Card URL for runtime a2a agents (#434).
+	Card string `json:"-"`
+	// Auth configures bearer auth for runtime a2a agents (#434). Token
+	// is the unresolved reference; the dispatch resolves it per call.
+	Auth *AgentAuth `json:"-"`
+	// Transport tunes an a2a agent's connection (#434).
+	Transport *AgentTransport `json:"-"`
+	// Unusable is why a runtime a2a definition cannot be dispatched
+	// (#434): a missing or refused card URL, auth without a token, or a
+	// negative idle timeout. The config still loads; dispatch refuses
+	// the agent with this reason. Empty for every usable agent.
+	Unusable string `json:"-"`
 }
 
 type Tools struct {
@@ -884,6 +1241,26 @@ func (h *HookConfig) TimeoutDuration() time.Duration {
 	return time.Duration(h.Timeout) * time.Second
 }
 
+// ResolvedEmbeddings returns the effective embedding configuration with
+// defaults applied, and whether semantic search is enabled at all. The
+// second return value is false when no embeddings block is configured.
+func (c *Config) ResolvedEmbeddings() (EmbeddingsConfig, bool) {
+	if c.Embeddings == nil {
+		return EmbeddingsConfig{}, false
+	}
+	e := *c.Embeddings
+	if e.BaseURL == "" {
+		e.BaseURL = "https://api.openai.com/v1"
+	}
+	if e.Model == "" {
+		e.Model = "text-embedding-3-small"
+	}
+	if e.Dimension <= 0 {
+		e.Dimension = 768
+	}
+	return e, true
+}
+
 // Config holds the configuration for crush.
 type Config struct {
 	Schema string `json:"$schema,omitempty"`
@@ -901,6 +1278,10 @@ type Config struct {
 
 	LSP LSPs `json:"lsp,omitempty" jsonschema:"description=Language Server Protocol configurations"`
 
+	// Embeddings enables the semantic_search tool. Nil (the default)
+	// leaves the tool unregistered.
+	Embeddings *EmbeddingsConfig `json:"embeddings,omitempty" jsonschema:"description=Embedding provider configuration for semantic search"`
+
 	Options *Options `json:"options,omitempty" jsonschema:"description=General application options"`
 
 	Permissions *Permissions `json:"permissions,omitempty" jsonschema:"description=Permission settings for tool usage"`
@@ -912,6 +1293,14 @@ type Config struct {
 	// Env is a map of environment variables set on startup.
 	Env map[string]string `json:"env,omitempty" jsonschema:"description=Environment variables to set on startup"`
 
+	// AgentDefinitions is the user's agents block (#333): built-in
+	// agents overlaid field by field, plus new dispatch agents. The
+	// resolved form lives in Agents; validation runs in ValidateAgents.
+	AgentDefinitions map[string]AgentDefinition `json:"agents,omitempty" jsonschema:"description=Agent definitions: override a built-in agent field by field, or add dispatch agents"`
+
+	// Agents is the resolved agent map the coordinator reads. It is
+	// built by SetupAgents from the built-in definitions plus
+	// AgentDefinitions, so it is never loaded from a config file.
 	Agents map[string]Agent `json:"-"`
 }
 
@@ -922,15 +1311,31 @@ type Config struct {
 // mutator must never write through the live pointer. Instead it clones,
 // mutates the clone, and atomically swaps it in. The clone gives fresh
 // copies of every field a typed mutator touches in place — Models,
-// RecentModels, MCP, and Options (with its nested TUI pointer). Providers
-// is a *csync.Map (internally synchronized) and is shared by reference;
-// the remaining fields are immutable after load from the mutators'
-// standpoint and are likewise shared.
+// RecentModels, MCP, Options (with its nested TUI pointer), and Providers.
+// The remaining fields are immutable after load from the mutators'
+// standpoint and are shared.
+//
+// Providers needs its own copy, and not merely for the map itself. Its
+// values carry a Models slice, and csync.Map.Get hands back a struct whose
+// slice aliases the map's own backing array, so a mutator that writes
+// through a value it read out of the map — which is exactly what the
+// model-discovery merge does — would write into the live, published map's
+// memory while readers are reading it. Sharing the *csync.Map is safe only
+// against a map-level data race, not against this one.
 func (c *Config) cloneForWrite() *Config {
 	nc := *c
 	nc.Models = maps.Clone(c.Models)
 	nc.RecentModels = maps.Clone(c.RecentModels)
 	nc.MCP = maps.Clone(c.MCP)
+	if c.Providers != nil {
+		providers := csync.NewMap[string, ProviderConfig]()
+		for pc := range c.Providers.Seq() {
+			pc.Models = slices.Clone(pc.Models)
+			pc.ChatGPTModels = slices.Clone(pc.ChatGPTModels)
+			providers.Set(pc.ID, pc)
+		}
+		nc.Providers = providers
+	}
 	if c.Options != nil {
 		opts := *c.Options
 		if c.Options.TUI != nil {
@@ -967,99 +1372,6 @@ func (c *Config) EnabledProviders() []ProviderConfig {
 // IsConfigured  return true if at least one provider is configured
 func (c *Config) IsConfigured() bool {
 	return len(c.EnabledProviders()) > 0
-}
-
-// HasSelectedModel reports whether a usable model is selected for the
-// given type. It is false on a fresh install even when credentials are
-// present in the environment, since Crush no longer guesses a provider.
-func (c *Config) HasSelectedModel(modelType SelectedModelType) bool {
-	selected, ok := c.Models[modelType]
-	if !ok || selected.Provider == "" || selected.Model == "" {
-		return false
-	}
-	return c.GetModel(selected.Provider, selected.Model) != nil
-}
-
-// applySelectedModels stores the resolved selections, dropping any type
-// that could not be resolved so callers can detect that no model has been
-// chosen yet.
-func (c *Config) applySelectedModels(resolved resolvedModels) {
-	if c.Models == nil {
-		c.Models = make(map[SelectedModelType]SelectedModel)
-	}
-	for modelType, entry := range map[SelectedModelType]struct {
-		model SelectedModel
-		ok    bool
-	}{
-		SelectedModelTypeLarge: {resolved.Large, resolved.HasLarge},
-		SelectedModelTypeSmall: {resolved.Small, resolved.HasSmall},
-	} {
-		if entry.ok {
-			c.Models[modelType] = entry.model
-		} else {
-			delete(c.Models, modelType)
-		}
-	}
-}
-
-// orderedProviders returns the enabled providers that have models, in
-// catalog order first and then alphabetically by ID. The stable order keeps
-// model lookups reproducible across runs, unlike map iteration.
-func (c *Config) orderedProviders(knownProviders []catwalk.Provider) []ProviderConfig {
-	ordered := make([]ProviderConfig, 0, c.Providers.Len())
-	seen := make(map[string]bool, c.Providers.Len())
-	add := func(providerConfig ProviderConfig) {
-		if providerConfig.Disable || len(providerConfig.Models) == 0 || seen[providerConfig.ID] {
-			return
-		}
-		seen[providerConfig.ID] = true
-		ordered = append(ordered, providerConfig)
-	}
-
-	for _, p := range knownProviders {
-		if providerConfig, ok := c.Providers.Get(string(p.ID)); ok {
-			add(providerConfig)
-		}
-	}
-
-	remaining := slices.Collect(c.Providers.Seq())
-	slices.SortFunc(remaining, func(a, b ProviderConfig) int {
-		return strings.Compare(a.ID, b.ID)
-	})
-	for _, providerConfig := range remaining {
-		add(providerConfig)
-	}
-	return ordered
-}
-
-// FirstAvailableModel returns the first model of the first enabled
-// provider, preferring catalog order so the result matches the top of the
-// model list shown in the TUI. It exists for non-interactive runs, which
-// have no way to prompt for a selection; the result is never persisted.
-func (c *Config) FirstAvailableModel(knownProviders []catwalk.Provider) (SelectedModel, bool) {
-	for _, providerConfig := range c.orderedProviders(knownProviders) {
-		model := providerConfig.Models[0]
-		return SelectedModel{
-			Provider:        providerConfig.ID,
-			Model:           model.ID,
-			MaxTokens:       model.DefaultMaxTokens,
-			ReasoningEffort: model.DefaultReasoningEffort,
-		}, true
-	}
-	return SelectedModel{}, false
-}
-
-// providerForModel finds the enabled provider offering the given model ID.
-// It lets a config name a model without naming a provider.
-func (c *Config) providerForModel(knownProviders []catwalk.Provider, modelID string) (string, bool) {
-	for _, providerConfig := range c.orderedProviders(knownProviders) {
-		if slices.ContainsFunc(providerConfig.Models, func(m catwalk.Model) bool {
-			return m.ID == modelID
-		}) {
-			return providerConfig.ID, true
-		}
-	}
-	return "", false
 }
 
 func (c *Config) GetModel(provider, model string) *catwalk.Model {
@@ -1173,14 +1485,19 @@ func allToolNames() []string {
 	return []string{
 		"agent",
 		"bash",
-		"cron_create",
-		"cron_delete",
-		"cron_list",
 		"crush_info",
 		"crush_logs",
+		"CronCreate",
+		"CronList",
+		"CronDelete",
 		"job_output",
 		"job_kill",
 		"download",
+		"dispatch_agent",
+		"message_agent",
+		"cancel_dispatch",
+		"apply_dispatch",
+		"dismiss_dispatch",
 		"edit",
 		"multiedit",
 		"lsp_diagnostics",
@@ -1197,13 +1514,16 @@ func allToolNames() []string {
 		"grep",
 		"ls",
 		"question",
+		"semantic_search",
+		"semantic_index",
 		"sourcegraph",
 		"todos",
 		"view",
 		"write",
 		"list_mcp_resources",
-		"mcp_search",
 		"read_mcp_resource",
+		"list_mcp_prompts",
+		"call_mcp_prompt",
 	}
 }
 
@@ -1213,30 +1533,6 @@ func resolveAllowedTools(allTools []string, disabledTools []string) []string {
 	}
 	// filter out disabled tools (exclude mode)
 	return filterSlice(allTools, disabledTools, false)
-}
-
-func resolveReadOnlyTools(tools []string) []string {
-	readOnlyTools := []string{"glob", "grep", "ls", "lsp_call_hierarchy", "lsp_definition", "lsp_symbols", "sourcegraph", "view"}
-	// filter to only include tools that are in allowedtools (include mode)
-	return filterSlice(tools, readOnlyTools, true)
-}
-
-func resolvePlanTools(tools []string) []string {
-	// The read-only LSP lookups mirror the task agent's tool set: planning
-	// needs symbol navigation just as much as research does.
-	planTools := []string{
-		"agent",
-		"glob",
-		"grep",
-		"ls",
-		"lsp_call_hierarchy",
-		"lsp_definition",
-		"lsp_symbols",
-		"question",
-		"sourcegraph",
-		"view",
-	}
-	return filterSlice(tools, planTools, true)
 }
 
 func filterSlice(data []string, mask []string, include bool) []string {
@@ -1251,42 +1547,131 @@ func filterSlice(data []string, mask []string, include bool) []string {
 	return filtered
 }
 
-func (c *Config) SetupAgents() {
-	allowedTools := resolveAllowedTools(allToolNames(), c.Options.DisabledTools)
-
-	agents := map[string]Agent{
-		AgentCoder: {
-			ID:           AgentCoder,
-			Name:         "Coder",
-			Description:  "An agent that helps with executing coding tasks.",
-			Model:        SelectedModelTypeLarge,
-			ContextPaths: c.Options.ContextPaths,
-			AllowedTools: allowedTools,
-		},
-
-		AgentTask: {
-			ID:           AgentTask,
-			Name:         "Task",
-			Description:  "An agent that helps with searching for context and finding implementation details.",
-			Model:        SelectedModelTypeLarge,
-			ContextPaths: c.Options.ContextPaths,
-			AllowedTools: resolveReadOnlyTools(allowedTools),
-			// NO MCPs or LSPs by default
-			AllowedMCP: map[string][]string{},
-		},
-
-		AgentPlan: {
-			ID:           AgentPlan,
-			Name:         "Plan",
-			Description:  "An agent that performs deep analysis and prepares implementation plans without modifying files.",
-			Model:        SelectedModelTypeLarge,
-			ContextPaths: c.Options.ContextPaths,
-			AllowedTools: resolvePlanTools(allowedTools),
-			// NO MCPs or LSPs by default
-			AllowedMCP: map[string][]string{},
-		},
+// SetupAgents resolves the agent map from the built-in definitions plus
+// the user's agents block (#333). It stays error-free: validation runs
+// in ValidateAgents and ValidateAgentModelRefs at load and reload time,
+// so a bad definition never reaches this point. What it returns are the
+// load diagnostics (#560): the problems that do not fail the load but
+// change how a definition behaves, in a stable order. The ConfigStore
+// keeps them for the command to show once the logger exists.
+func (c *Config) SetupAgents() []LoadDiagnostic {
+	agents := make(map[string]Agent, len(c.AgentDefinitions)+4)
+	var diags []LoadDiagnostic
+	for id, def := range effectiveAgentDefinitions(c.AgentDefinitions) {
+		agent, agentDiags := c.agentFromDefinition(id, def)
+		agents[id] = agent
+		diags = append(diags, agentDiags...)
 	}
 	c.Agents = agents
+	sortLoadDiagnostics(diags)
+	return diags
+}
+
+// agentFromDefinition resolves one definition into the Agent the
+// coordinator reads, plus the diagnostics resolving it raised.
+// Effective tools are expand(allow) minus expand(deny) minus the user's
+// disabled_tools, so a definition can narrow but never widen user
+// policy.
+func (c *Config) agentFromDefinition(id string, def AgentDefinition) (Agent, []LoadDiagnostic) {
+	diags := unhonoredFieldDiagnostics(id, def)
+
+	// The alias's kill knobs are dispatch-only (#402): on any other role
+	// they are dropped here and warned about, not a load error. The
+	// new-style Kill block takes the hard error instead.
+	enforcementDef := def
+	if alias := def.TodoEnforcement; alias != nil && definitionRole(id, def) != AgentRoleDispatch {
+		trimmed := *alias
+		trimmed.KillAfterNudges = nil
+		trimmed.StallWindow = nil
+		trimmed.HardTimeout = nil
+		trimmed.InactivityTimeout = nil
+		enforcementDef.TodoEnforcement = &trimmed
+	}
+
+	// Only an omitted allow list inherits every tool: an explicit empty
+	// allow grants nothing, matching expand(allow) minus expand(deny).
+	allow := definitionToolset(def)
+	allowedTools := resolveAllowedTools(allow, c.Options.DisabledTools)
+
+	var mcpAllow []string
+	if def.MCP != nil {
+		mcpAllow = def.MCP.Allow
+	}
+
+	var unusable string
+	if orString(def.Runtime, AgentRuntimeBuiltin) == AgentRuntimeA2A {
+		unusable = externalDefinitionProblem("agents."+id, def)
+		if diag, ok := unusableExternalDiagnostic(id, unusable); ok {
+			diags = append(diags, diag)
+		}
+	}
+
+	modelType := SelectedModelTypeLarge
+	var modelRef *AgentModelRef
+	if def.Model != nil {
+		modelType = def.Model.Type
+		modelRef = def.Model.Ref
+	}
+
+	return Agent{
+		ID:              id,
+		Name:            orString(def.Name, id),
+		Description:     orString(def.Description, ""),
+		Disabled:        def.Disabled != nil && *def.Disabled,
+		Model:           modelType,
+		AllowedTools:    allowedTools,
+		AllowedMCP:      expandMCPAllow(mcpAllow),
+		ContextPaths:    def.ContextPaths,
+		TodoEnforcement: todoEnforcementFromDefinition(enforcementDef),
+		Role:            definitionRole(id, def),
+		Runtime:         orString(def.Runtime, AgentRuntimeBuiltin),
+		Prompt:          orString(def.Prompt, ""),
+		PromptAppend:    orString(def.PromptAppend, ""),
+		ModelRef:        modelRef,
+		Skills:          def.Skills,
+		Workspace:       definitionWorkspace(def),
+		Card:            orString(def.Card, ""),
+		Auth:            def.Auth,
+		Transport:       def.Transport,
+		Unusable:        unusable,
+	}, diags
+}
+
+// definitionWorkspace resolves a definition's workspace: a runtime a2a
+// agent always runs with none (#434), whatever it set, since an
+// external agent never touches the local disk; any other definition
+// keeps its own value.
+func definitionWorkspace(def AgentDefinition) string {
+	if orString(def.Runtime, AgentRuntimeBuiltin) == AgentRuntimeA2A {
+		return AgentWorkspaceNone
+	}
+	return orString(def.Workspace, "")
+}
+
+// todoEnforcementFromDefinition maps a definition's todos and kill
+// blocks, or the legacy todo_enforcement alias, onto the resolved
+// TodoEnforcementConfig; nil when neither set anything. Validation has
+// already rejected a definition that sets the alias together with
+// either block, so at most one source feeds the mapping (#402).
+func todoEnforcementFromDefinition(def AgentDefinition) *TodoEnforcementConfig {
+	if def.TodoEnforcement != nil {
+		return def.TodoEnforcement
+	}
+	if def.Todos == nil && def.Kill == nil {
+		return nil
+	}
+	cfg := &TodoEnforcementConfig{}
+	if def.Todos != nil {
+		cfg.Enabled = def.Todos.Nudge
+		cfg.NudgeThreshold = def.Todos.NudgeAfterToolCalls
+		cfg.HardGate = def.Todos.HardGate
+	}
+	if def.Kill != nil {
+		cfg.KillAfterNudges = def.Kill.AfterIgnoredNudges
+		cfg.StallWindow = def.Kill.Stall
+		cfg.HardTimeout = def.Kill.Timeout
+	}
+	return cfg
 }
 
 func (c *ProviderConfig) TestConnection(resolver VariableResolver) error {
@@ -1422,4 +1807,114 @@ func ptrValOr[T any](t *T, el T) T {
 		return el
 	}
 	return *t
+}
+
+// GetLazyMCP reports whether MCP tool schemas are kept out of the model
+// context until the agent asks for them. Both the nil receiver and the
+// unset field mean enabled, so laziness is on by default for every
+// existing config.
+func (o *Options) GetLazyMCP() bool {
+	return o == nil || o.LazyMCP == nil || *o.LazyMCP
+}
+
+type CompactionOptions struct {
+	// PruneToolResults replaces the output of tool calls that are no longer
+	// part of the recent working set with a one-line skeleton naming what ran
+	// and how much was dropped. The tool call itself stays, so the model
+	// knows what it already tried and can run it again. Stored transcripts
+	// are never modified.
+	PruneToolResults *bool `json:"prune_tool_results,omitempty" jsonschema:"description=Replace the output of stale tool calls with a one-line skeleton naming what ran; stored history is never modified,default=true"`
+	// TailTokens is how much of the most recent conversation a compaction
+	// keeps verbatim instead of folding into its checkpoint.
+	TailTokens int `json:"tail_tokens,omitempty" jsonschema:"description=Tokens of recent conversation a compaction keeps verbatim. When unset this is 15% of the model's context window,example=8000,example=40000"`
+	// ObserveMemory distills each completed turn into a session memory
+	// ledger using the small model. Recorded memory is attached to every
+	// checkpoint verbatim, so decisions and constraints persist across
+	// compactions instead of being re-summarized generation after
+	// generation. It costs one cheap model call per turn with enough new
+	// material to be worth reading, which is why it can be turned off; it
+	// is on unless explicitly disabled.
+	ObserveMemory *bool `json:"observe_memory,omitempty" jsonschema:"description=Record session memory at the end of each turn; memory is kept verbatim beside every checkpoint, so decisions survive compaction,default=true"`
+}
+
+// applySelectedModels stores the resolved selections, dropping any type
+// that could not be resolved so callers can detect that no model has been
+// chosen yet.
+func (c *Config) applySelectedModels(resolved resolvedModels) {
+	if c.Models == nil {
+		c.Models = make(map[SelectedModelType]SelectedModel)
+	}
+	for modelType, entry := range map[SelectedModelType]struct {
+		model SelectedModel
+		ok    bool
+	}{
+		SelectedModelTypeLarge: {resolved.Large, !resolved.LargeFallback},
+		SelectedModelTypeSmall: {resolved.Small, !resolved.SmallFallback},
+	} {
+		if entry.ok {
+			c.Models[modelType] = entry.model
+		} else {
+			delete(c.Models, modelType)
+		}
+	}
+}
+
+// orderedProviders returns the enabled providers that have models, in
+// catalog order first and then alphabetically by ID. The stable order keeps
+// model lookups reproducible across runs, unlike map iteration.
+func (c *Config) orderedProviders(knownProviders []catwalk.Provider) []ProviderConfig {
+	ordered := make([]ProviderConfig, 0, c.Providers.Len())
+	seen := make(map[string]bool, c.Providers.Len())
+	add := func(providerConfig ProviderConfig) {
+		if providerConfig.Disable || len(providerConfig.Models) == 0 || seen[providerConfig.ID] {
+			return
+		}
+		seen[providerConfig.ID] = true
+		ordered = append(ordered, providerConfig)
+	}
+
+	for _, p := range knownProviders {
+		if providerConfig, ok := c.Providers.Get(string(p.ID)); ok {
+			add(providerConfig)
+		}
+	}
+
+	remaining := slices.Collect(c.Providers.Seq())
+	slices.SortFunc(remaining, func(a, b ProviderConfig) int {
+		return strings.Compare(a.ID, b.ID)
+	})
+	for _, providerConfig := range remaining {
+		add(providerConfig)
+	}
+	return ordered
+}
+
+// FirstAvailableModel returns the first model of the first enabled
+// provider, preferring catalog order so the result matches the top of the
+// model list shown in the TUI. It exists for non-interactive runs, which
+// have no way to prompt for a selection; the result is never persisted.
+func (c *Config) FirstAvailableModel(knownProviders []catwalk.Provider) (SelectedModel, bool) {
+	for _, providerConfig := range c.orderedProviders(knownProviders) {
+		model := providerConfig.Models[0]
+		return SelectedModel{
+			Provider:        providerConfig.ID,
+			Model:           model.ID,
+			MaxTokens:       model.DefaultMaxTokens,
+			ReasoningEffort: model.DefaultReasoningEffort,
+		}, true
+	}
+	return SelectedModel{}, false
+}
+
+// providerForModel finds the enabled provider offering the given model ID.
+// It lets a config name a model without naming a provider.
+func (c *Config) providerForModel(knownProviders []catwalk.Provider, modelID string) (string, bool) {
+	for _, providerConfig := range c.orderedProviders(knownProviders) {
+		if slices.ContainsFunc(providerConfig.Models, func(m catwalk.Model) bool {
+			return m.ID == modelID
+		}) {
+			return providerConfig.ID, true
+		}
+	}
+	return "", false
 }

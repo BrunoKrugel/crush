@@ -40,7 +40,7 @@ crush schema > schema.json
 ```
 
 Or read the committed copy at
-[`schema.json`](https://github.com/brunokrugel/crush/blob/main/schema.json).
+[`schema.json`](https://github.com/joestump-agent/crush/blob/main/schema.json).
 Adding the `$schema` line above gets you completion and validation in any
 editor with JSON schema support.
 
@@ -110,23 +110,23 @@ names: `permissions deny` writes `options.disabled_tools`, and several
 The top-level `options` object also carries a few keys with no `crushrc`
 builtin yet: `allowed_commands`, `allow_all_commands` (see
 [Permissions](/configuration/permissions#blocked-commands)), `disable_a2ui`
-(see [A2UI](/fork)), and `todo_enforcement.inactivity_timeout` (the
+(see [A2UI](/features/a2ui)), and `todo_enforcement.inactivity_timeout` (the
 A2A backstop for dispatched runs; see
-[Todo enforcement](/fork)). Top-level `tools`
+[Todo enforcement](/agents/todo-enforcement#wander-kill)). Top-level `tools`
 tunes the `glob`, `grep`, and `ls` tool limits.
 
 :::info[Fork feature]
 These `crush.json` keys do not exist upstream: `options.allowed_commands`,
 `options.allow_all_commands`, `options.disable_a2ui`,
-`options.todo_enforcement` ([multi-agent](/fork)),
+`options.todo_enforcement` ([multi-agent](/agents/todo-enforcement)),
 `options.dispatch` (`max_concurrent`, default 4, and `default_agent`, default
-`worker`; see [multi-agent configuration](/fork)),
-`options.a2a` (the A2A host's [TLS-only TCP listener](/fork);
+`worker`; see [multi-agent configuration](/agents/configuration)),
+`options.a2a` (the A2A host's [TLS-only TCP listener](/agents/a2a-protocol#tcp-listener);
 `listen` without `tls_cert` and `tls_key` fails the load), the
-top-level `agents` block ([multi-agent](/fork)), the
-top-level `embeddings` block ([semantic search](/fork)),
+top-level `agents` block ([multi-agent](/agents/configuration)), the
+top-level `embeddings` block ([semantic search](/features/semantic-search)),
 and the per-server `channel_enabled` ([channels](/features/channels)). See
-[What this fork adds](/fork).
+[What this fork adds](/fork#configuration).
 :::
 
 ## Top-level `env`
@@ -151,7 +151,7 @@ fields.
 ## The `agents` block
 
 The top-level `agents` object customizes the built-in agents and defines new
-ones ([multi-agent](/fork)). Every field is optional: a null or
+ones ([multi-agent](/agents/configuration)). Every field is optional: a null or
 omitted field inherits from the built-in with the same id, lists replace
 rather than append, and `0` or `"off"` disables the knob it configures.
 
@@ -197,12 +197,12 @@ Field guide:
 | `disabled` | `true` turns a built-in off: `task` removes the `agent` tool, `plan` cannot be switched to, and `worker` removes the dispatch tools. `coder` cannot be disabled. |
 | `tools` | `allow` and `deny` lists; entries are tool names, `@read`, `@write`, or `*`. Effective tools are allow minus deny minus `options.disabled_tools`, so a definition can narrow but never widen your tool policy. |
 | `mcp` | `allow` list; entries are `*`, a server id from `mcp`, or `server:tool`. |
-| `todos` | `nudge`, `nudge_after_tool_calls`, `hard_gate` (see [Todo enforcement](/fork)). |
+| `todos` | `nudge`, `nudge_after_tool_calls`, `hard_gate` (see [Todo enforcement](/agents/todo-enforcement)). |
 | `kill` | `after_ignored_nudges`, `stall`, `timeout`. Dispatch agents only. |
 | `todo_enforcement` | Legacy alias for `todos` and `kill`, with the `options.todo_enforcement` shape. Cannot be combined with either block. |
 | `context_paths` | Context files for the agent, overriding `options.context_paths`. |
 | `workspace` | `worktree` or `none`. A builtin dispatch agent always runs in a worktree (`none` is accepted and ignored); an `a2a` agent always runs with `none`. |
-| `card`, `auth`, `transport` | [External agents](/fork) only: the card URL, `{ "type": "bearer", "token": "$VAR" }`, and `{ "idle_timeout": "2m" }`. |
+| `card`, `auth`, `transport` | [External agents](/agents/configuration#external-agents) only: the card URL, `{ "type": "bearer", "token": "$VAR" }`, and `{ "idle_timeout": "2m" }`. |
 | `$defaults` | Only `todos` and `kill`: the knobs every agent inherits. |
 
 An `a2a` agent is defined by its external card, so it may only set `role`,
@@ -213,7 +213,7 @@ The runtime builds every agent from its definition, and `dispatch_agent` runs
 whichever dispatch agent its `agent` argument names — `options.dispatch.default_agent`
 when it names none. The full field semantics, a worked example of adding a
 dispatch agent, and the load errors are on
-[Multi-agent configuration](/fork). The
+[Multi-agent configuration](/agents/configuration#agent-definitions). The
 `agent` builtin defines the same block from `crushrc`.
 
 ## Full example

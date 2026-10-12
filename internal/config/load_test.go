@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"charm.land/catwalk/pkg/catwalk"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/env"
+	"github.com/charmbracelet/crush/internal/gittest"
 	"github.com/charmbracelet/crush/internal/oauth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,7 +25,14 @@ import (
 
 func TestMain(m *testing.M) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
-	os.Exit(runIsolated(m))
+	restore, err := gittest.Setup()
+	if err != nil {
+		panic(fmt.Sprintf("hermetic git env: %v", err))
+	}
+
+	exitVal := runIsolated(m)
+	restore()
+	os.Exit(exitVal)
 }
 
 // runIsolated runs the tests with the global config and data paths in a
@@ -820,15 +829,15 @@ func TestConfig_setupAgentsWithNoDisabledTools(t *testing.T) {
 	cfg.SetupAgents()
 	coderAgent, ok := cfg.Agents[AgentCoder]
 	require.True(t, ok)
-	assert.Equal(t, allToolNames(), coderAgent.AllowedTools)
+	assert.ElementsMatch(t, allToolNames(), coderAgent.AllowedTools)
 
 	taskAgent, ok := cfg.Agents[AgentTask]
 	require.True(t, ok)
-	assert.Equal(t, []string{"lsp_symbols", "lsp_definition", "lsp_call_hierarchy", "glob", "grep", "ls", "sourcegraph", "view"}, taskAgent.AllowedTools)
+	assert.ElementsMatch(t, []string{"lsp_symbols", "lsp_definition", "lsp_call_hierarchy", "glob", "grep", "ls", "semantic_search", "sourcegraph", "view"}, taskAgent.AllowedTools)
 
 	planAgent, ok := cfg.Agents[AgentPlan]
 	require.True(t, ok)
-	assert.Equal(t, []string{"agent", "lsp_symbols", "lsp_definition", "lsp_call_hierarchy", "glob", "grep", "ls", "question", "sourcegraph", "view"}, planAgent.AllowedTools)
+	assert.ElementsMatch(t, []string{"agent", "lsp_symbols", "lsp_definition", "lsp_call_hierarchy", "glob", "grep", "ls", "question", "sourcegraph", "view"}, planAgent.AllowedTools)
 }
 
 func TestConfig_setupAgentsWithDisabledTools(t *testing.T) {
@@ -847,14 +856,15 @@ func TestConfig_setupAgentsWithDisabledTools(t *testing.T) {
 	require.True(t, ok)
 
 	assert.Equal(t, []string{"agent", "bash", "cron_create", "cron_delete", "cron_list", "crush_info", "crush_logs", "job_output", "job_kill", "multiedit", "lsp_diagnostics", "lsp_references", "lsp_restart", "lsp_symbols", "lsp_definition", "lsp_call_hierarchy", "lsp_rename", "lsp_replace_symbol", "fetch", "agentic_fetch", "glob", "ls", "question", "sourcegraph", "todos", "view", "write", "list_mcp_resources", "mcp_search", "read_mcp_resource"}, coderAgent.AllowedTools)
+	assert.ElementsMatch(t, []string{"agent", "bash", "crush_info", "crush_logs", "CronCreate", "CronList", "CronDelete", "job_output", "job_kill", "dispatch_agent", "message_agent", "cancel_dispatch", "apply_dispatch", "dismiss_dispatch", "multiedit", "lsp_diagnostics", "lsp_references", "lsp_restart", "lsp_symbols", "lsp_definition", "lsp_call_hierarchy", "lsp_rename", "lsp_replace_symbol", "fetch", "agentic_fetch", "glob", "ls", "question", "semantic_search", "semantic_index", "sourcegraph", "todos", "view", "write", "list_mcp_resources", "read_mcp_resource", "list_mcp_prompts", "call_mcp_prompt"}, coderAgent.AllowedTools)
 
 	taskAgent, ok := cfg.Agents[AgentTask]
 	require.True(t, ok)
-	assert.Equal(t, []string{"lsp_symbols", "lsp_definition", "lsp_call_hierarchy", "glob", "ls", "sourcegraph", "view"}, taskAgent.AllowedTools)
+	assert.ElementsMatch(t, []string{"lsp_symbols", "lsp_definition", "lsp_call_hierarchy", "glob", "ls", "semantic_search", "sourcegraph", "view"}, taskAgent.AllowedTools)
 
 	planAgent, ok := cfg.Agents[AgentPlan]
 	require.True(t, ok)
-	assert.Equal(t, []string{"agent", "lsp_symbols", "lsp_definition", "lsp_call_hierarchy", "glob", "ls", "question", "sourcegraph", "view"}, planAgent.AllowedTools)
+	assert.ElementsMatch(t, []string{"agent", "lsp_symbols", "lsp_definition", "lsp_call_hierarchy", "glob", "ls", "question", "sourcegraph", "view"}, planAgent.AllowedTools)
 }
 
 func TestConfig_setupAgentsWithEveryReadOnlyToolDisabled(t *testing.T) {
@@ -868,6 +878,7 @@ func TestConfig_setupAgentsWithEveryReadOnlyToolDisabled(t *testing.T) {
 				"lsp_call_hierarchy",
 				"lsp_definition",
 				"lsp_symbols",
+				"semantic_search",
 				"sourcegraph",
 				"view",
 			},
@@ -878,6 +889,7 @@ func TestConfig_setupAgentsWithEveryReadOnlyToolDisabled(t *testing.T) {
 	coderAgent, ok := cfg.Agents[AgentCoder]
 	require.True(t, ok)
 	assert.Equal(t, []string{"bash", "cron_create", "cron_delete", "cron_list", "crush_info", "crush_logs", "job_output", "job_kill", "download", "edit", "multiedit", "lsp_diagnostics", "lsp_references", "lsp_restart", "lsp_rename", "lsp_replace_symbol", "fetch", "agentic_fetch", "question", "todos", "write", "list_mcp_resources", "mcp_search", "read_mcp_resource"}, coderAgent.AllowedTools)
+	assert.ElementsMatch(t, []string{"bash", "crush_info", "crush_logs", "CronCreate", "CronList", "CronDelete", "job_output", "job_kill", "download", "dispatch_agent", "message_agent", "cancel_dispatch", "apply_dispatch", "dismiss_dispatch", "edit", "multiedit", "lsp_diagnostics", "lsp_references", "lsp_restart", "lsp_rename", "lsp_replace_symbol", "fetch", "agentic_fetch", "question", "semantic_index", "todos", "write", "list_mcp_resources", "read_mcp_resource", "list_mcp_prompts", "call_mcp_prompt"}, coderAgent.AllowedTools)
 
 	taskAgent, ok := cfg.Agents[AgentTask]
 	require.True(t, ok)
