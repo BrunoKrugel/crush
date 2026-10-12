@@ -101,7 +101,7 @@ func (s *runCoordinator) ConfirmSummarize(context.Context, string, compaction.Pr
 func (s *runCoordinator) RestoreSummarize(context.Context, string) error { return nil }
 
 func (s *runCoordinator) Summarize(context.Context, string, string) error {
-	return nil
+	return s.summarizeErr
 }
 
 func (s *runCoordinator) Model() agent.Model { return agent.Model{} }

@@ -182,12 +182,12 @@ func (c *recordingCoordinator) RestoreSummarize(context.Context, string) error {
 
 func (c *recordingCoordinator) Model() agent.Model { return agent.Model{} }
 
-func (c *recordingCoordinator) UpdateModels(context.Context) error { return nil }
+func (c *recordingCoordinator) UpdateModels(context.Context) error            { return nil }
+func (c *recordingCoordinator) GenerateTitle(context.Context, string, string) {}
 
 func (c *recordingCoordinator) SetMainAgent(string) error { return nil }
 
-func (c *recordingCoordinator) ListCronTasks(string) []scheduler.Task         { return nil }
-func (c *recordingCoordinator) GenerateTitle(context.Context, string, string) {}
+func (c *recordingCoordinator) ListCronTasks(string) []scheduler.Task { return nil }
 
 // fullFakeSessions adapts fakeChannelSessions to the full session.Service
 // interface by embedding it; only the channelSessionStore subset is

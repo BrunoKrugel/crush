@@ -136,6 +136,12 @@ type testWorkspace struct {
 	runSteering       []bool
 	compactCalls      []bool
 	mcpStates         map[string]mcp.ClientInfo
+
+	// Calls the checkpoint handoff drives, recorded so the tests can assert
+	// which workspace method each answer reaches.
+	previewCalls []string
+	confirmCalls []string
+	discardCalls []string
 }
 
 func (w *testWorkspace) Config() *config.Config {

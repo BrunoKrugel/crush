@@ -1081,7 +1081,14 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case mcpStateChangedMsg:
-		m.mcpStates = msg.states
+		cmds = append(cmds, m.applyMCPStates(msg)...)
+		if dia := m.dialog.Dialog(dialog.MCPTogglesID); dia != nil {
+			if toggles, ok := dia.(*dialog.MCPToggles); ok {
+				for name, info := range msg.states {
+					toggles.SetItemStatus(name, mcpStatusText(info))
+				}
+			}
+		}
 	case skillsOverridesLoadedMsg:
 		m.skillsDisabledOverrides = msg.disabled
 		m.skillsEnabledOverrides = msg.enabled
@@ -1089,6 +1096,13 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if toggles, ok := dia.(*dialog.SkillToggles); ok {
 				toggles.SetItems(m.skillsTogglesList())
 			}
+		}
+	case mcpStartingRetryMsg:
+		// A server was still connecting when the last fetch landed; re-probe
+		// so "starting..." converges without depending on state_changed
+		// events (which can be missed in client/server mode).
+		if cmd := m.requestMCPRefresh(); cmd != nil {
+			cmds = append(cmds, cmd)
 		}
 	case mcpRefreshTickMsg:
 		return m, tea.Batch(m.refreshMCPStates(), mcpRefreshTick())
@@ -1177,6 +1191,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.updateSessionMessage(msg.Payload))
 		case pubsub.DeletedEvent:
 			m.chat.RemoveMessage(msg.Payload.ID)
+			m.chat.RemoveMessage(chat.AssistantInfoID(msg.Payload.ID))
 		}
 		// start the spinner if there is a new message
 		if hasInProgressTodo(m.session.Todos) && m.isAgentBusy() && !m.todoIsSpinning {
@@ -1250,17 +1265,26 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case previewCheckpointMsg:
-		// Hold the staged checkpoint so the palette can offer keep and discard,
-		// and surface what it would replace so the decision has a number next
-		// to it rather than only the prose.
-		preview := msg.preview
-		m.pendingPreview = &preview
+		// Hold the staged checkpoint and ask about it in the foreground. A
+		// banner that expired left the decision to be remembered, and a staged
+		// checkpoint rendered in the transcript looked exactly like an applied
+		// one; the inline prompt waits for an answer instead.
+		m.pendingPreview = &msg.preview
 		cmds = append(cmds, util.ReportInfo(fmt.Sprintf(
-			"Checkpoint previewed: %d messages would be replaced, %d kept verbatim. Choose keep or discard checkpoint.",
-			preview.Replaced, preview.Kept,
+			"Checkpoint previewed: %d messages would be replaced, %d kept verbatim.",
+			msg.preview.Replaced, msg.preview.Kept,
 		)))
+		m.openCheckpointHandoff()
 	case discardPreviewMsg:
 		m.pendingPreview = nil
+		// Every decision - keep, discard, whatever the path - lands here, so
+		// the reload does too: the feed then reflects the session as it is,
+		// not as it was while a staged checkpoint was still a row. Skipping
+		// this left the viewport scrolled past content that had just been
+		// deleted, which read as an empty page.
+		if m.session != nil {
+			cmds = append(cmds, m.loadSession(m.session.ID))
+		}
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		// Suppress the chat's full-height scan during the resize so a drag
@@ -2365,20 +2389,14 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		})
 		m.dialog.CloseFrontDialog()
 	case dialog.ActionAcceptPreview:
-		cmds = append(cmds, func() tea.Msg {
-			if err := m.com.Workspace.AgentConfirmSummarize(context.Background(), msg.SessionID, msg.Preview); err != nil {
-				return util.ReportError(err)()
-			}
-			return discardPreviewMsg{}
-		}, m.loadSession(msg.SessionID))
+		if cmd := m.acceptCheckpoint(msg.Preview); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 		m.dialog.CloseDialog(dialog.CommandsID)
 	case dialog.ActionDiscardPreview:
-		cmds = append(cmds, func() tea.Msg {
-			if err := m.com.Workspace.AgentDiscardSummarize(context.Background(), msg.SessionID, msg.CheckpointID); err != nil {
-				return util.ReportError(err)()
-			}
-			return discardPreviewMsg{}
-		}, m.loadSession(msg.SessionID))
+		if cmd := m.discardCheckpoint(msg.CheckpointID); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 		m.dialog.CloseDialog(dialog.CommandsID)
 	case dialog.ActionRestoreSummarize:
 		if m.isAgentBusy() {
@@ -6037,6 +6055,9 @@ func (m *UI) openPlanHandoff() {
 	}
 }
 
+// openCheckpointHandoff replaces the textarea with the inline prompt asking
+// what to do with a previewed checkpoint. Dismissing it keeps the staged
+// checkpoint, so the palette still offers keep and discard afterwards.
 func (m *UI) summarizeSession(sessionID string) tea.Cmd {
 	ws := m.com.Workspace
 	if sessionID == m.currentSessionID() {
@@ -6054,6 +6075,77 @@ func (m *UI) summarizeSession(sessionID string) tea.Cmd {
 	m.agentBusyCache.set(true)
 	return func() tea.Msg {
 		return summaryFinishedMsg{sessionID: sessionID, gen: gen, err: ws.AgentSummarize(context.Background(), sessionID, "")}
+	}
+}
+
+func (m *UI) openCheckpointHandoff() {
+	if m.pendingPreview == nil || m.session == nil {
+		return
+	}
+	// Captured at open time: acceptance has to use the counters computed when
+	// this preview was written, so a later change to the staged preview cannot
+	// make the adopted checkpoint disagree with the plan that produced it.
+	preview := *m.pendingPreview
+	inline := dialog.NewCheckpointHandoffInline(m.com)
+	inline.OnKeep = func() tea.Cmd { return m.acceptCheckpoint(preview) }
+	inline.OnDiscard = func() tea.Cmd { return m.discardCheckpoint(preview.CheckpointID) }
+	inline.OnRedo = func(comments string) tea.Cmd { return m.redoCheckpoint(preview.CheckpointID, comments) }
+	m.activeInline = inline
+	m.textarea.Blur()
+	m.focus = uiFocusEditor
+	m.activeInline.SetFocused(true)
+	if m.status != nil {
+		m.updateLayoutAndSize()
+	}
+}
+
+// acceptCheckpoint adopts the staged checkpoint named by preview.
+func (m *UI) acceptCheckpoint(preview compaction.Preview) tea.Cmd {
+	if m.session == nil {
+		return nil
+	}
+	sessionID := m.session.ID
+	return func() tea.Msg {
+		if err := m.com.Workspace.AgentConfirmSummarize(context.Background(), sessionID, preview); err != nil {
+			return util.ReportError(err)()
+		}
+		return discardPreviewMsg{}
+	}
+}
+
+// discardCheckpoint throws the staged checkpoint away and changes nothing.
+func (m *UI) discardCheckpoint(checkpointID string) tea.Cmd {
+	if m.session == nil {
+		return nil
+	}
+	sessionID := m.session.ID
+	return func() tea.Msg {
+		if err := m.com.Workspace.AgentDiscardSummarize(context.Background(), sessionID, checkpointID); err != nil {
+			return util.ReportError(err)()
+		}
+		return discardPreviewMsg{}
+	}
+}
+
+// redoCheckpoint discards the staged checkpoint and writes another with the
+// user's notes as the emphasis. The old one has to go first: previews are rows
+// in the transcript, so answering twice without discarding would leave the
+// session holding checkpoints nobody asked for, each rendering as a summary.
+func (m *UI) redoCheckpoint(checkpointID, comments string) tea.Cmd {
+	if m.session == nil {
+		return nil
+	}
+	sessionID := m.session.ID
+	m.pendingPreview = nil
+	return func() tea.Msg {
+		if err := m.com.Workspace.AgentDiscardSummarize(context.Background(), sessionID, checkpointID); err != nil {
+			return util.ReportError(err)()
+		}
+		fresh, err := m.com.Workspace.AgentSummarizePreview(context.Background(), sessionID, comments)
+		if err != nil {
+			return util.ReportError(err)()
+		}
+		return previewCheckpointMsg{preview: fresh}
 	}
 }
 

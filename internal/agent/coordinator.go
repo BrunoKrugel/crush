@@ -142,6 +142,7 @@ type Coordinator interface {
 	QueuedPrompts(sessionID string) int
 	QueuedPromptsList(sessionID string) []string
 	ClearQueue(sessionID string)
+
 	Summarize(context.Context, string, string) error
 	// AgentRestoreSummarize undoes the session's most recent compaction,
 	// bringing back the messages its checkpoint replaced.
@@ -151,6 +152,7 @@ type Coordinator interface {
 	ConfirmSummarize(ctx context.Context, sessionID string, preview compaction.Preview) error
 	DiscardSummarize(ctx context.Context, sessionID, checkpointID string) error
 	ListCronTasks(sessionID string) []scheduler.Task
+
 	Model() Model
 	UpdateModels(ctx context.Context) error
 	GenerateTitle(ctx context.Context, sessionID, prompt string)
@@ -222,6 +224,7 @@ type CoordinatorOptions struct {
 	RunComplete pubsub.Publisher[notify.RunComplete]
 	Skills      *skills.Manager
 	Interactive bool
+
 	// Ledger persists session memory. Nil disables observation and leaves
 	// compaction summarizing with a model, which is the default.
 	Ledger ledger.Service
@@ -1008,10 +1011,10 @@ func (c *coordinator) buildAgent(ctx context.Context, prompt *prompt.Prompt, age
 		Tools:                nil,
 		Notify:               c.notify,
 		RunComplete:          c.runComplete,
-		CompactionHooks:      c.compactionHooks(isSubAgent),
-		Ledger:               c.ledger,
-		ObserveMemory:        c.observesMemory(isSubAgent),
-		RenderFromLedger:     c.rendersFromLedger(isSubAgent),
+
+		CompactionHooks: c.compactionHooks(isSubAgent),
+		Ledger:          c.ledger,
+		ObserveMemory:   c.observesMemory(isSubAgent),
 	})
 
 	// The readiness goroutines below perform one-time setup — building the
@@ -1190,6 +1193,7 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 }
 
 // TODO: when we support multiple agents we need to change this so that we pass in the agent specific model config
+
 // compactionHooks hands the agent a way to fire compaction events. Sub-agents
 // never compact, so they are given nothing; for the main agent each event
 // resolves to its own configured command list, or to nothing at all.
@@ -1210,26 +1214,16 @@ func (c *coordinator) compactionHooks(isSubAgent bool) func(string) CompactionHo
 // memory ledger. Sub-agents never do: they are the compaction's own machinery
 // and a memory of a memory is the erosion the ledger exists to prevent. The
 // ledger service being absent also disables it, so a build without one keeps
-// working unchanged.
-// rendersFromLedger reports whether a compaction should build its checkpoint
-// from recorded memory. It shares the ledger-availability condition with
-// observation but not the enable flag, because the two are useful apart: an
-// observer that is running while the renderer is off is how memory gets
-// evaluated before anything depends on it.
-func (c *coordinator) rendersFromLedger(isSubAgent bool) bool {
-	if isSubAgent || c.ledger == nil {
-		return false
-	}
-	co := c.cfg.Config().Options.Compaction
-	return co != nil && co.RenderFromLedger != nil && *co.RenderFromLedger
-}
+// working unchanged. Recording is on unless explicitly disabled: the ledger
+// only pays for itself if it has been accumulating since the turns a later
+// compaction will replace.
 
 func (c *coordinator) observesMemory(isSubAgent bool) bool {
 	if isSubAgent || c.ledger == nil {
 		return false
 	}
 	co := c.cfg.Config().Options.Compaction
-	return co != nil && co.ObserveMemory != nil && *co.ObserveMemory
+	return co == nil || co.ObserveMemory == nil || *co.ObserveMemory
 }
 
 func (c *coordinator) buildAgentModels(ctx context.Context, isSubAgent bool) (Model, Model, error) {
