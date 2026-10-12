@@ -289,10 +289,10 @@ type SessionAgentOptions struct {
 	// Cfg resolves the lazy-MCP policy and backs channel reply routing.
 	// It is required for MCP tool exposure and nil only for agents that
 	// can never have MCP tools.
-	Cfg              *config.ConfigStore
-	Tools            []fantasy.AgentTool
-	Notify           pubsub.Publisher[notify.Notification]
-	RunComplete      pubsub.Publisher[notify.RunComplete]
+	Cfg         *config.ConfigStore
+	Tools       []fantasy.AgentTool
+	Notify      pubsub.Publisher[notify.Notification]
+	RunComplete pubsub.Publisher[notify.RunComplete]
 
 	// CompactionHooks returns the runner for a compaction event, or nil when
 	// the user configured none for it. It is a function because each event has

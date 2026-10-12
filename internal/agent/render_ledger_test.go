@@ -261,8 +261,10 @@ func TestAppendixAccompaniesTheSummary(t *testing.T) {
 	seedSizedTurns(t, env, sess.ID, 4, 3_000)
 
 	_, err = env.ledger.Append(ctx, sess.ID, []compaction.Entry{
-		{Kind: compaction.KindObservation, Relevance: compaction.RelevanceDecision,
-			Text: "User rejected splitting the ledger across sessions"},
+		{
+			Kind: compaction.KindObservation, Relevance: compaction.RelevanceDecision,
+			Text: "User rejected splitting the ledger across sessions",
+		},
 	})
 	require.NoError(t, err)
 
