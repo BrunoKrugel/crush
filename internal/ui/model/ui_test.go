@@ -10,6 +10,7 @@ import (
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/x/nerdfont"
 	"github.com/charmbracelet/crush/internal/agent/notify"
+	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/message"
@@ -129,10 +130,14 @@ type testWorkspace struct {
 	updateCalls       int
 	agentReady        bool
 	agentBusy         bool
+	cfg               *config.Config
 	runPrompts        []string
 	yolo              bool
 	runHidden         []bool
 	compactCalls      []bool
+	cfg               *config.Config
+	cfg               *config.Config
+	mcpStates         map[string]mcp.ClientInfo
 }
 
 func (w *testWorkspace) Config() *config.Config {
@@ -874,4 +879,31 @@ func TestApplyNerdFontsOption(t *testing.T) {
 			require.Equal(t, tt.want, nerdfont.Supported())
 		})
 	}
+}
+
+func (w *testWorkspace) MCPGetStates() map[string]mcp.ClientInfo {
+	return w.mcpStates
+}
+
+// TestRefreshMCPStates verifies that a fast MCP connection whose only
+// EventStateChanged fired before the TUI subscribed still ends up in
+// m.mcpStates once refreshMCPStates re-seeds from the authoritative
+// MCPGetStates(), instead of the sidebar showing "None" forever.
+func TestRefreshMCPStates(t *testing.T) {
+	t.Parallel()
+
+	states := map[string]mcp.ClientInfo{
+		"example": {State: mcp.StateConnected},
+	}
+	ui := &UI{
+		com: &common.Common{
+			Workspace: &testWorkspace{mcpStates: states},
+		},
+	}
+	require.Empty(t, ui.mcpStates, "mcpStates should start empty, as if the connect event was missed")
+
+	msg := ui.refreshMCPStates()()
+	changed, ok := msg.(mcpStateChangedMsg)
+	require.True(t, ok, "refreshMCPStates should return a mcpStateChangedMsg")
+	require.Equal(t, states, changed.states)
 }

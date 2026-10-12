@@ -176,6 +176,11 @@ type (
 		disabled map[string]bool
 		enabled  map[string]bool
 	}
+	// mcpRefreshTickMsg periodically re-seeds MCP client states, so servers
+	// that connected (and published their one and only EventStateChanged)
+	// before the TUI's event subscription went live still appear in the
+	// sidebar instead of being stuck on "None" for the rest of the session.
+	mcpRefreshTickMsg struct{}
 	// sendMessageMsg is sent to send a message.
 	// currently only used for mcp prompts.
 	sendMessageMsg struct {
@@ -708,18 +713,7 @@ func (m *UI) Init() tea.Cmd {
 	if m.com.IsHyper() {
 		cmds = append(cmds, m.fetchHyperCredits())
 	}
-	// The branch is shown from the first frame on, so read it now and keep
-	// polling for checkouts made outside Crush.
-	cmds = append(cmds, m.fetchGitBranch(), m.gitBranchTicker())
-	cmds = append(cmds, m.hyperCreditsTicker())
-	// Prime the memoized MCP state off-thread. There is deliberately no
-	// wait for server-side MCP initialization: the init gate is
-	// process-local and only armed where mcp.Initialize runs (the server),
-	// so waiting here is a no-op in client/server mode. The retry loop and
-	// TTL backstop in mcp.go converge on the settled states instead.
-	if cmd := m.requestMCPRefresh(); cmd != nil {
-		cmds = append(cmds, cmd)
-	}
+	cmds = append(cmds, mcpRefreshTick())
 	return tea.Batch(cmds...)
 }
 
@@ -1061,21 +1055,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case mcpStateChangedMsg:
-		if dia := m.dialog.Dialog(dialog.MCPTogglesID); dia != nil {
-			if toggles, ok := dia.(*dialog.MCPToggles); ok {
-				for name, info := range msg.states {
-					toggles.SetItemStatus(name, mcpStatusText(info))
-				}
-			}
-		}
-		cmds = append(cmds, m.applyMCPStates(msg)...)
-	case mcpStartingRetryMsg:
-		// A server was still connecting when the last fetch landed; re-probe
-		// so "starting..." converges without depending on state_changed
-		// events (which can be missed in client/server mode).
-		if cmd := m.requestMCPRefresh(); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
+		m.mcpStates = msg.states
 	case skillsOverridesLoadedMsg:
 		m.skillsDisabledOverrides = msg.disabled
 		m.skillsEnabledOverrides = msg.enabled
@@ -1084,6 +1064,8 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				toggles.SetItems(m.skillsTogglesList())
 			}
 		}
+	case mcpRefreshTickMsg:
+		return m, tea.Batch(m.refreshMCPStates(), mcpRefreshTick())
 	case mcpPromptsLoadedMsg:
 		m.mcpPrompts = msg.Prompts
 		dia := m.dialog.Dialog(dialog.CommandsID)
@@ -6521,6 +6503,22 @@ func (m *UI) handleStateChanged() []tea.Cmd {
 		}),
 		m.loadMCPrompts,
 	}
+}
+
+// refreshMCPStates re-seeds MCP client states without handleStateChanged's
+// UpdateAgentModel side effect, so it is safe to call on a timer.
+func (m *UI) refreshMCPStates() tea.Cmd {
+	return func() tea.Msg {
+		return mcpStateChangedMsg{states: m.com.Workspace.MCPGetStates()}
+	}
+}
+
+const mcpRefreshInterval = 2 * time.Second
+
+func mcpRefreshTick() tea.Cmd {
+	return tea.Tick(mcpRefreshInterval, func(time.Time) tea.Msg {
+		return mcpRefreshTickMsg{}
+	})
 }
 
 func handleMCPPromptsEvent(ws workspace.Workspace, name string) tea.Cmd {
