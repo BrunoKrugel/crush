@@ -167,8 +167,7 @@ const (
 // Notification is published when a question batch is resolved so
 // that non-answering clients can dismiss their open forms.
 type Notification struct {
-	BatchID   string `json:"batch_id"`
-	SessionID string `json:"session_id"`
+	BatchID string `json:"batch_id"`
 }
 
 // Service manages the lifecycle of question requests. Only one
@@ -190,10 +189,6 @@ type Service interface {
 	// Cancel cancels the pending question. Returns false if no
 	// question is pending.
 	Cancel() bool
-
-	// Pending returns the request that is currently awaiting an
-	// answer, or false when no question is pending.
-	Pending() (Request, bool)
 }
 
 type questionService struct {
@@ -203,7 +198,6 @@ type questionService struct {
 	pending            chan []Answer
 	cancelled          chan struct{}
 	pendingID          string
-	pendingReq         Request
 }
 
 // NewService creates a new question service.
@@ -254,7 +248,6 @@ func (s *questionService) Ask(ctx context.Context, req Request) ([]Answer, error
 	s.pending = make(chan []Answer, 1)
 	s.cancelled = make(chan struct{})
 	s.pendingID = req.ID
-	s.pendingReq = req
 	s.mu.Unlock()
 
 	defer func() {
@@ -262,7 +255,6 @@ func (s *questionService) Ask(ctx context.Context, req Request) ([]Answer, error
 		s.pending = nil
 		s.cancelled = nil
 		s.pendingID = ""
-		s.pendingReq = Request{}
 		s.mu.Unlock()
 	}()
 
@@ -283,7 +275,6 @@ func (s *questionService) Ask(ctx context.Context, req Request) ([]Answer, error
 func (s *questionService) Answer(answers []Answer) bool {
 	s.mu.Lock()
 	batchID := s.pendingID
-	sessionID := s.pendingReq.SessionID
 	ch := s.pending
 	s.mu.Unlock()
 
@@ -296,8 +287,7 @@ func (s *questionService) Answer(answers []Answer) bool {
 	// their open question forms.
 	if batchID != "" {
 		s.notificationBroker.Publish(pubsub.CreatedEvent, Notification{
-			BatchID:   batchID,
-			SessionID: sessionID,
+			BatchID: batchID,
 		})
 	}
 	return true
@@ -308,7 +298,6 @@ func (s *questionService) Answer(answers []Answer) bool {
 func (s *questionService) Cancel() bool {
 	s.mu.Lock()
 	batchID := s.pendingID
-	sessionID := s.pendingReq.SessionID
 	cancelCh := s.cancelled
 	s.mu.Unlock()
 
@@ -321,20 +310,8 @@ func (s *questionService) Cancel() bool {
 	// their open question forms.
 	if batchID != "" {
 		s.notificationBroker.Publish(pubsub.CreatedEvent, Notification{
-			BatchID:   batchID,
-			SessionID: sessionID,
+			BatchID: batchID,
 		})
 	}
 	return true
-}
-
-// Pending returns the request that is currently awaiting an answer,
-// or false when no question is pending.
-func (s *questionService) Pending() (Request, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.pendingID == "" {
-		return Request{}, false
-	}
-	return s.pendingReq, true
 }

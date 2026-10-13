@@ -108,11 +108,6 @@ type Service interface {
 	// already been resolved or is unknown.
 	Deny(permission PermissionRequest) bool
 	Request(ctx context.Context, opts CreatePermissionRequest) (bool, error)
-	// ActiveRequest returns the request that is currently awaiting a
-	// decision, or false when no request is pending. A request is only
-	// reported while it can still be resolved; a request whose waiter
-	// was cancelled is not returned.
-	ActiveRequest() (PermissionRequest, bool)
 	AutoApproveSession(sessionID string)
 	SetSkipRequests(skip bool)
 	SkipRequests() bool
@@ -309,24 +304,6 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 	case granted := <-respCh:
 		return granted, nil
 	}
-}
-
-// ActiveRequest returns the request that is currently awaiting a
-// decision. The active pointer can outlive the waiter that published
-// it (Request leaves it behind when its context is cancelled), so a
-// request is only reported while its ID is still registered in
-// pendingRequests, i.e. while Grant/Deny can actually resolve it.
-func (s *permissionService) ActiveRequest() (PermissionRequest, bool) {
-	s.activeRequestMu.Lock()
-	active := s.activeRequest
-	s.activeRequestMu.Unlock()
-	if active == nil {
-		return PermissionRequest{}, false
-	}
-	if _, ok := s.pendingRequests.Get(active.ID); !ok {
-		return PermissionRequest{}, false
-	}
-	return *active, true
 }
 
 func (s *permissionService) AutoApproveSession(sessionID string) {
