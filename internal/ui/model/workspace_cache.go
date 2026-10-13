@@ -97,13 +97,10 @@ type busyStateMsg struct {
 	ready     bool
 	agentBusy bool
 	yolo      bool
-	// forSession is the session sessionBusy was probed for; a result that
-	// raced a session switch must not retire the new session's spinner.
+	// forSession is the session sessionBusy was probed for.
 	forSession string
-	// sessionBusy reports whether forSession specifically has a run in
-	// flight. Unlike agentBusy it is not true merely because some other
-	// session or a shell command is working, which makes it the
-	// authoritative answer for retiring that session's turn spinner.
+	// sessionBusy reports whether forSession itself has a run in flight,
+	// unlike agentBusy, which any session or shell command sets.
 	sessionBusy bool
 	// model is the coordinator's selected model, fetched by the same probe
 	// so the sidebar/landing model info renders from memoized state. Zero
@@ -123,10 +120,8 @@ type promptQueueMsg struct {
 	prompts []string
 }
 
-// agentRunSubmittedMsg reports the outcome of handing a prompt to the
-// agent. On success the run either started or was enqueued, so busy and
-// queue state should be re-fetched. On failure the turn never began, so
-// nothing else will ever retire its spinner.
+// agentRunSubmittedMsg reports whether AgentRun accepted a prompt. A
+// rejected prompt gets no RunComplete, so err must end its turn.
 type agentRunSubmittedMsg struct {
 	sessionID string
 	gen       uint64
@@ -263,22 +258,8 @@ func (m *UI) applyBusyState(msg busyStateMsg) []tea.Cmd {
 	if m.todoIsSpinning && !busy {
 		m.todoIsSpinning = false
 	}
-	// End a turn once its session has been seen working and then goes idle.
-	// This is the backstop that makes both the spinner and the elapsed clock
-	// safe: a cancel, a re-auth prompt, or a dropped notification all end a
-	// turn without a terminal event, and the TTL guarantees this probe lands.
-	// It matters just as much after an assistant message has taken the
-	// spinner over, since a clock left running means the next turn counts
-	// from this one.
 	m.probedSession = msg.forSession
 	m.probedSessionBusy = msg.sessionBusy
-	if msg.forSession != "" && msg.forSession == m.pending.sessionID {
-		if msg.sessionBusy {
-			m.pending.seenBusy = true
-		} else if m.pending.seenBusy {
-			m.endPendingTurn(msg.forSession)
-		}
-	}
 	if prevBusy != busy {
 		m.renderPills()
 	}

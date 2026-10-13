@@ -15,19 +15,14 @@ var turnClock = struct {
 	started map[string]time.Time
 }{started: map[string]time.Time{}}
 
-// StartTurn begins tracking elapsed time for sessionID's turn. A session
-// that is already timing keeps its original start, so a prompt queued
-// behind a running turn continues to count from the turn in flight rather
-// than restarting mid-turn.
+// StartTurn starts sessionID's turn clock from now, replacing any earlier
+// start.
 func StartTurn(sessionID string) {
 	if sessionID == "" {
 		return
 	}
 	turnClock.mu.Lock()
 	defer turnClock.mu.Unlock()
-	if _, timing := turnClock.started[sessionID]; timing {
-		return
-	}
 	turnClock.started[sessionID] = time.Now()
 }
 

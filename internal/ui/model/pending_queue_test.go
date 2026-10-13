@@ -3,7 +3,9 @@ package model
 import (
 	"testing"
 
+	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/message"
+	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/ui/chat"
 	"github.com/charmbracelet/crush/internal/ui/common"
@@ -75,7 +77,7 @@ func TestQueuedPromptIsNotEchoed(t *testing.T) {
 	m.sendMessage("first")
 	m.appendSessionMessage(userMessage("u1", "s1", "first"))
 	m.appendSessionMessage(message.Message{ID: "a1", Role: message.Assistant, SessionID: "s1"})
-	require.True(t, m.chat.HasSpinningItem(), "the assistant message is spinning")
+	require.True(t, m.chat.HasLiveSpinner(), "the assistant message is spinning")
 
 	m.sendMessage("second")
 
@@ -101,7 +103,7 @@ func TestPromptSentDuringAToolRunIsNotEchoed(t *testing.T) {
 			ID: "tc1", Name: "bash", Input: "{}", Finished: true,
 		}},
 	})
-	require.False(t, m.chat.HasSpinningItem(), "a tool mid-run shows no spinner")
+	require.False(t, m.chat.HasLiveSpinner(), "a tool mid-run shows no spinner")
 
 	m.sendMessage("second")
 
@@ -126,7 +128,7 @@ func TestPromptSentDuringAnUnsentRunIsNotEchoed(t *testing.T) {
 	m.applyBusyState(busyStateMsg{
 		gen: m.busyFetchGen, ready: true, forSession: "s1", sessionBusy: true,
 	})
-	require.False(t, m.chat.HasSpinningItem(), "a tool mid-run shows no spinner")
+	require.False(t, m.chat.HasLiveSpinner(), "a tool mid-run shows no spinner")
 
 	m.sendMessage("keep going")
 
@@ -204,7 +206,7 @@ func TestQueuedPromptDoesNotStackASecondSpinner(t *testing.T) {
 	m.appendSessionMessage(message.Message{
 		ID: "a1", Role: message.Assistant, SessionID: "s1",
 	})
-	require.True(t, m.chat.HasSpinningItem(), "the assistant message is spinning")
+	require.True(t, m.chat.HasLiveSpinner(), "the assistant message is spinning")
 
 	m.sendMessage("second")
 
@@ -232,80 +234,65 @@ func TestPendingSpinnerIsNotDuplicated(t *testing.T) {
 	require.Equal(t, 1, count)
 }
 
-// A cancel emits no terminal event, so the idle probe is the only notice
-// that the turn is over. It has to stop the clock even once an assistant
-// message has taken the spinner over, or the next turn goes on counting
-// from the cancelled one.
-func TestIdleProbeStopsTheClockAfterHandoff(t *testing.T) {
+// runComplete delivers the agent's terminal event for sessionID.
+func runComplete(m *UI, sessionID string, cancelled bool) {
+	m.Update(pubsub.Event[notify.RunComplete]{
+		Payload: notify.RunComplete{SessionID: sessionID, Cancelled: cancelled},
+	})
+}
+
+// The clock stops with the run, even after an assistant message has taken
+// the spinner over.
+func TestRunCompleteStopsTheClockAfterHandoff(t *testing.T) {
 	m := newPendingUI(t)
 	m.sendMessage("hello")
 	m.appendSessionMessage(message.Message{ID: "a1", Role: message.Assistant, SessionID: "s1"})
 	require.False(t, hasPending(m), "the assistant message carries the spinner")
 
-	m.applyBusyState(busyStateMsg{
-		gen: m.busyFetchGen, ready: true, forSession: "s1", sessionBusy: true,
-	})
-	m.applyBusyState(busyStateMsg{
-		gen: m.busyFetchGen, ready: true, forSession: "s1", sessionBusy: false,
-	})
+	runComplete(m, "s1", false)
 
-	require.Empty(t, common.Elapsed("s1"), "the clock stops with the turn")
+	require.Empty(t, common.Elapsed("s1"))
 }
 
-// A turn that ends without ever producing an assistant message, whether by
-// a cancel, a run rejected at submission, or a dropped notification, still
-// retires its spinner, because the authoritative busy probe reports the
-// session idle.
-func TestIdleProbeRetiresPendingSpinner(t *testing.T) {
+// A turn that ends before producing an assistant message retires its
+// spinner and its echo.
+func TestRunCompleteRetiresPendingSpinner(t *testing.T) {
 	m := newPendingUI(t)
 	m.sendMessage("hello")
-	require.True(t, hasPending(m))
 
-	// The run registers, then ends.
-	m.applyBusyState(busyStateMsg{
-		gen: m.busyFetchGen, ready: true, forSession: "s1", sessionBusy: true,
-	})
-	require.True(t, hasPending(m), "still running")
+	runComplete(m, "s1", false)
 
-	m.applyBusyState(busyStateMsg{
-		gen: m.busyFetchGen, ready: true, forSession: "s1", sessionBusy: false,
-	})
-
-	require.False(t, hasPending(m))
-	require.Empty(t, common.Elapsed("s1"), "the clock stops with the turn")
+	require.Empty(t, transcriptIDs(m))
+	require.Empty(t, common.Elapsed("s1"))
 }
 
-// A prompt is accepted before its run registers as active, so an idle probe
-// that lands in that window means "not started yet", not "already over". It
-// must not retire the spinner the send just placed.
-func TestIdleProbeBeforeRunRegistersKeepsSpinner(t *testing.T) {
+// Busy probes say nothing about when a turn ends, so an idle one landing
+// before the run registers must not retire the spinner the send placed.
+func TestIdleProbeKeepsSpinner(t *testing.T) {
 	m := newPendingUI(t)
 	m.sendMessage("hello")
 
 	m.applyBusyState(busyStateMsg{
 		gen: m.busyFetchGen, ready: true, forSession: "s1", sessionBusy: false,
-	})
-
-	require.True(t, hasPending(m), "the run has not registered yet")
-}
-
-// A probe scoped to a session the user has since left must not retire the
-// spinner belonging to the session they moved to.
-func TestIdleProbeForOtherSessionKeepsSpinner(t *testing.T) {
-	m := newPendingUI(t)
-	m.sendMessage("hello")
-
-	m.applyBusyState(busyStateMsg{
-		gen: m.busyFetchGen, ready: true, forSession: "other", sessionBusy: false,
 	})
 
 	require.True(t, hasPending(m))
 }
 
-// Cancelling a turn before it produced anything emits neither a finished
-// nor an error notification, so the spinner can only be retired by the busy
-// probe. Drive the real escape path to prove it is.
-func TestCancelRetiresPendingSpinner(t *testing.T) {
+// Another session's run ending must not retire this session's spinner.
+func TestOtherSessionRunCompleteKeepsSpinner(t *testing.T) {
+	m := newPendingUI(t)
+	m.sendMessage("hello")
+
+	runComplete(m, "other", false)
+
+	require.True(t, hasPending(m))
+	require.NotEmpty(t, common.Elapsed("s1"))
+}
+
+// A cancel before any busy probe has seen the run still ends the turn,
+// because the agent reports a cancelled run like any other.
+func TestEarlyCancelRetiresPendingSpinner(t *testing.T) {
 	pinTTLs(t)
 	ws := &countingWorkspace{ready: true}
 	m := newBusyUI(ws)
@@ -314,23 +301,33 @@ func TestCancelRetiresPendingSpinner(t *testing.T) {
 	t.Cleanup(func() { common.StopTurn("s1") })
 
 	m.sendMessage("hello")
-	require.True(t, hasPending(m))
-
-	// The run registers, then escape is pressed twice.
-	m.applyBusyState(busyStateMsg{
-		gen: m.busyFetchGen, ready: true, forSession: "s1", sessionBusy: true,
-	})
 	m.cancelAgent()
 	m.cancelAgent()
 	require.Equal(t, 1, ws.cancelCalls, "the second escape cancels")
 
-	// No terminal notification follows a cancel; the probe is the backstop.
-	m.applyBusyState(busyStateMsg{
-		gen: m.busyFetchGen, ready: true, forSession: "s1", sessionBusy: false,
-	})
+	runComplete(m, "s1", true)
 
 	require.False(t, hasPending(m), "a cancelled turn must not leave a spinner")
 	require.Empty(t, common.Elapsed("s1"))
+}
+
+// An assistant message left unfinished by a killed run still reports
+// spinning, but frozen. It is not a turn in flight, so a prompt sent into
+// that session starts its own.
+func TestGhostSpinnerDoesNotSwallowTheTurn(t *testing.T) {
+	m := newPendingUI(t)
+	m.setSessionMessages([]message.Message{
+		userMessage("u1", "s1", "earlier"),
+		{
+			ID: "a1", Role: message.Assistant, SessionID: "s1",
+			Parts: []message.ContentPart{message.ReasoningContent{Thinking: "hmm"}},
+		},
+	})
+
+	m.sendMessage("hello")
+
+	require.True(t, hasPending(m))
+	require.NotNil(t, m.chat.MessageItem(chat.PendingUserID))
 }
 
 // Loading a session rebuilds the transcript from stored messages, which can

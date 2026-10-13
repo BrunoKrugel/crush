@@ -568,10 +568,8 @@ type UI struct {
 	// like promptQueueGen it lets a stale in-flight probe result be
 	// discarded and re-fetched instead of clobbering newer state.
 	busyFetchGen uint64
-	// probedSessionBusy is the last busy probe of probedSession. Unlike
-	// the pending turn it also covers runs this client did not start
-	// (sub-agent reports, channel events, another client, a session
-	// opened mid-run), so a prompt sent into one is still queued quietly.
+	// probedSessionBusy is the last busy probe of probedSession, covering
+	// runs this client did not start.
 	probedSession     string
 	probedSessionBusy bool
 	// promptQueueGen is bumped by every queue state transition; an
@@ -594,11 +592,8 @@ type UI struct {
 	todoSpinner    spinner.Model
 	todoIsSpinning bool
 
-	// pending tracks the turn whose spinner is showing before an assistant
-	// message exists to take it over. The placeholder item in the chat is
-	// derived from it, never added or removed directly, so every way a
-	// turn can end (the assistant arriving, an error, a cancel, a dropped
-	// notification) retires the spinner through the same path.
+	// pending is the turn this client sent; the placeholder items in the
+	// chat are derived from it by syncPendingItem.
 	pending pendingTurn
 
 	// preThemeStyles stores the styles before a theme preview so we can revert.
@@ -1037,6 +1032,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 	case pubsub.Event[notify.RunComplete]:
+		m.endPendingTurn(msg.Payload.SessionID)
 		if cmd := m.handlePlanHandoff(msg.Payload); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
@@ -6307,22 +6303,11 @@ func (m *UI) isCurrentSessionBusy() bool {
 type pendingTurn struct {
 	// sessionID is the session running the turn; empty when none.
 	sessionID string
-	// seenBusy records that the run has been observed in flight. A probe
-	// reporting idle before that means the run has not registered yet,
-	// since a prompt is accepted before it becomes active, rather than
-	// that the turn already ended.
-	seenBusy bool
-	// echo shows the prompt itself until the stored user message arrives to
-	// replace it. Nil for a hidden prompt, or once the swap has happened.
+	// echo shows the prompt until the stored user message replaces it.
 	echo chat.MessageItem
-	// spinner is the placeholder item, held so it can be moved to the end
-	// of the transcript without restarting its animation. Nil once an
-	// assistant message has taken the spinner over.
+	// spinner is the placeholder, kept so moving it keeps its animation.
 	spinner chat.MessageItem
-	// handedOff records that an assistant message carries the spinner now,
-	// so the placeholder must not come back. The turn stays pending either
-	// way: the session is watched until it goes idle, which is the only
-	// notice a cancel gives that the turn is over.
+	// handedOff records that an assistant message now carries the spinner.
 	handedOff bool
 }
 
@@ -6344,10 +6329,8 @@ func (m *UI) dropPendingEcho() {
 	m.chat.RemoveMessage(chat.PendingUserID)
 }
 
-// handOffPendingTurn drops the placeholder without ending the turn: an
-// assistant message has arrived to carry the same spinner. The turn stays
-// pending so that its clock is still stopped when the session goes idle,
-// which for a cancelled turn is the only notice there is.
+// handOffPendingTurn drops the placeholder for the assistant message that
+// now carries the spinner, without ending the turn.
 func (m *UI) handOffPendingTurn() {
 	m.pending.handedOff = true
 	m.pending.spinner = nil
@@ -6364,24 +6347,16 @@ func (m *UI) endPendingTurn(sessionID string) {
 	}
 }
 
-// turnInFlight reports whether a turn is already running for sessionID, so
-// that a prompt sent now is queued behind it rather than starting a turn of
-// its own.
-//
-// A spinning item is the visible sign, but the transcript falls silent
-// while a tool runs: an assistant message stops spinning once it carries
-// tool calls, and a tool call stops as soon as the model has finished
-// writing it, which is before the tool has even been run. The pending turn
-// covers that gap, since it is watched until a busy probe has seen the
-// session both working and idle again.
+// turnInFlight reports whether a prompt sent to sessionID now would queue
+// behind a running turn rather than start one.
 func (m *UI) turnInFlight(sessionID string) bool {
-	if m.chat.HasSpinningItem() {
+	if m.pending.sessionID == sessionID {
 		return true
 	}
 	if m.probedSession == sessionID && m.probedSessionBusy {
 		return true
 	}
-	return m.pending.sessionID == sessionID && m.pending.seenBusy
+	return m.chat.HasLiveSpinner()
 }
 
 // syncPendingItem makes the chat match the pending turn, adding or removing
@@ -6668,10 +6643,6 @@ func (m *UI) sendMessageInternal(content string, hidden bool, attachments ...mes
 		return util.ReportError(err)
 	}
 
-	// Loading an idle session freezes the clock to stop ghost spinners.
-	// Sending is new work, so unfreeze it.
-	m.chat.SetAnimationsAllowed(true)
-
 	// A new prompt clears the previous turn's outcome from the status bar.
 	m.turnOutcome = ""
 
@@ -6687,17 +6658,17 @@ func (m *UI) sendMessageInternal(content string, hidden bool, attachments ...mes
 		cmds = append(cmds, loadCmd)
 	}
 
-	// Count elapsed time from the prompt rather than from the model's
-	// first token. An existing start is kept, so a prompt queued behind a
-	// running turn goes on counting from that turn.
+	// A queued prompt belongs in the queue pill and keeps the running
+	// turn's spinner and clock. A fresh turn gets its own, from now.
 	sessionID := m.currentSessionID()
-	common.StartTurn(sessionID)
-
-	// A turn already running for this session owns the spinner; a queued
-	// prompt must not stack a second one underneath it, and it belongs in
-	// the queue pill rather than in the transcript, so it is not echoed
-	// either. A hidden prompt is never shown at all.
-	if !m.turnInFlight(sessionID) {
+	// The decision has to be made with the clock as it stands: a frozen
+	// "working" spinner left by a killed run must not read as a turn in
+	// flight and swallow this prompt. Sending is new work, so unfreeze it
+	// once the decision is in.
+	queued := m.turnInFlight(sessionID)
+	m.chat.SetAnimationsAllowed(true)
+	if !queued {
+		common.StartTurn(sessionID)
 		echo := content
 		echoAttachments := attachments
 		if hidden {
