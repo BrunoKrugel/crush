@@ -749,6 +749,8 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 	ui.isTransparent = opts.TUI.IsTransparent()
 	// enable mouse support (default on)
 	ui.mouseEnabled = opts.TUI.Mouse == nil || *opts.TUI.Mouse
+	// apply the Nerd Font override before anything probes the terminal
+	applyNerdFontsOption(opts)
 
 	return ui
 }
@@ -3311,6 +3313,16 @@ func (m *UI) hyperCreditsTicker() tea.Cmd {
 // path. A failed read keeps whatever the last poll reported.
 func (m *UI) fetchGitBranch() tea.Cmd {
 	return func() tea.Msg {
+		// Warm the Nerd Font probe here rather than on the render path:
+		// the first probe may shell out to fc-list or read font
+		// directories, and [UI.gitBranchLabel] needs the answer for every
+		// frame that shows a branch.
+		slog.Debug(
+			"Nerd font support",
+			"supported", nerdfont.Supported(),
+			"reason", nerdfont.Reason(),
+		)
+
 		ctx, cancel := context.WithTimeout(context.Background(), gitBranchFetchTimeout)
 		defer cancel()
 		branch, err := m.com.Workspace.GitBranch(ctx)

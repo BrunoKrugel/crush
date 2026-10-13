@@ -53,6 +53,7 @@ require (
 	github.com/mattn/go-isatty v0.0.24
 	github.com/mattn/go-runewidth v0.0.31
 	github.com/modelcontextprotocol/go-sdk v1.8.0
+	github.com/ncruces/go-sqlite3 v0.35.6
 	github.com/nxadm/tail v1.4.11
 	github.com/odvcencio/gotreesitter v0.51.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
@@ -156,7 +157,9 @@ require (
 	github.com/muesli/mango-cobra v1.3.0 // indirect
 	github.com/muesli/mango-pflag v0.2.0 // indirect
 	github.com/muesli/roff v0.1.0 // indirect
+	github.com/ncruces/go-sqlite3-wasm/v6 v6.3.35304 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
+	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/pb33f/go-yaml v0.1.1 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.2 // indirect
