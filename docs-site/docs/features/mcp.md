@@ -164,17 +164,12 @@ tools should be used — and it is what makes a two-way
 [channel](/features/channels#two-way-channels) work without any
 channel-specific plumbing.
 
-## The MCP Servers dialog
+## Toggling MCP servers
 
-:::info[Fork feature]
-The MCP servers dialog is an addition in this fork.
-:::
-
-Open it from the command palette (<kbd>ctrl+p</kbd> → **MCP Servers**, or type
-`/mcp` in the composer). It lists every configured server with its live status,
-and lets you reconnect or refresh one without restarting Crush. A reconnect re-reads config
-from disk, so an edit to `crush.json` takes effect immediately. Servers acting
-as [channels](/features/channels) are marked.
+Open the command palette (<kbd>ctrl+p</kbd> → **Toggle MCPs**, or type `/mcp` in
+the composer) to enable or disable individual servers for this repository.
+Disabling a server keeps it configured but its tools stay out of the model's
+reach until you turn it back on.
 
 ## Startup behaviour
 

@@ -144,28 +144,10 @@ type (
 	ActionMCPReconnect struct {
 		ServerName string
 	}
-	// ActionMCPRefreshTools refreshes the tool list for a single MCP server.
-	ActionMCPRefreshTools struct {
-		ServerName string
-	}
-	// ActionMCPRefreshPrompts refreshes the prompt list for a single MCP server.
-	ActionMCPRefreshPrompts struct {
-		ServerName string
-	}
-	// ActionMCPRefreshResources refreshes the resource list for a single MCP server.
-	ActionMCPRefreshResources struct {
-		ServerName string
-	}
-	// ActionSkillsReload triggers a full skill re-discovery from disk.
-	ActionSkillsReload struct{}
 	// ActionReloadModelDiscovery triggers model re-discovery for custom
 	// providers from the model selection dialog, picking up models that
 	// appeared after startup (e.g. an `ollama pull`) without a restart.
 	ActionReloadModelDiscovery struct{}
-	// ActionSkillToggle toggles a skill's enabled/disabled state.
-	ActionSkillToggle struct {
-		SkillName string
-	}
 )
 
 // Messages for MCP OAuth authentication dialog.

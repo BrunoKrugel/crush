@@ -200,12 +200,6 @@ type (
 	// closeDialogMsg is sent to close the current dialog.
 	closeDialogMsg struct{}
 
-	// skillsRefreshedMsg is sent after a skill reload or toggle finishes so
-	// the skills dialog (if open) can refresh in place.
-	skillsRefreshedMsg struct {
-		info string
-	}
-
 	// hyperRefreshDoneMsg is sent after a silent Hyper OAuth refresh
 	// finishes. It carries the original model-selection action so the
 	// selection can be resumed.
@@ -1300,14 +1294,6 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case closeDialogMsg:
 		m.dialog.CloseFrontDialog()
-
-	case skillsRefreshedMsg:
-		// Refresh the skills dialog in place (if it is still open) so the
-		// toggled/reloaded state shows up without slamming the dialog shut.
-		if skillsDialog, ok := m.dialog.Dialog(dialog.SkillsID).(*dialog.Skills); ok {
-			skillsDialog.Refresh()
-		}
-		return m, util.ReportInfo(msg.info)
 
 	case pubsub.Event[session.Session]:
 		if msg.Type == pubsub.DeletedEvent {
@@ -3048,7 +3034,6 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		m.dialog.CloseDialog(dialog.CommandsID)
 		cmds = append(cmds, m.disableDockerMCP)
 	case dialog.ActionMCPReconnect:
-		m.dialog.CloseDialog(dialog.MCPServersID)
 		m.dialog.CloseDialog(dialog.ChannelsID)
 		cmds = append(cmds, func() tea.Msg {
 			ctx := context.Background()
@@ -3057,24 +3042,6 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 			}
 			return util.NewInfoMsg(fmt.Sprintf("MCP server %q reconnected", msg.ServerName))
 		})
-	case dialog.ActionMCPRefreshTools:
-		m.dialog.CloseDialog(dialog.MCPServersID)
-		cmds = append(cmds, func() tea.Msg {
-			m.com.Workspace.RefreshMCPTools(context.Background(), msg.ServerName)
-			return util.NewInfoMsg(fmt.Sprintf("Refreshed tools for MCP server %q", msg.ServerName))
-		})
-	case dialog.ActionMCPRefreshPrompts:
-		m.dialog.CloseDialog(dialog.MCPServersID)
-		cmds = append(cmds, func() tea.Msg {
-			m.com.Workspace.MCPRefreshPrompts(context.Background(), msg.ServerName)
-			return util.NewInfoMsg(fmt.Sprintf("Refreshed prompts for MCP server %q", msg.ServerName))
-		})
-	case dialog.ActionMCPRefreshResources:
-		m.dialog.CloseDialog(dialog.MCPServersID)
-		cmds = append(cmds, func() tea.Msg {
-			m.com.Workspace.MCPRefreshResources(context.Background(), msg.ServerName)
-			return util.NewInfoMsg(fmt.Sprintf("Refreshed resources for MCP server %q", msg.ServerName))
-		})
 	case dialog.ActionInitializeProject:
 		if m.isAgentBusy() {
 			cmds = append(cmds, util.ReportWarn("Agent is busy, please wait before summarizing session..."))
@@ -3082,15 +3049,6 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		}
 		cmds = append(cmds, m.initializeProject())
 		m.dialog.CloseDialog(dialog.CommandsID)
-	case dialog.ActionSkillsReload:
-		cmds = append(cmds, func() tea.Msg {
-			if err := m.com.Workspace.ReloadSkills(); err != nil {
-				return util.ReportError(err)()
-			}
-			return skillsRefreshedMsg{info: "Skills reloaded"}
-		})
-	case dialog.ActionSkillToggle:
-		cmds = append(cmds, m.toggleSkill(msg.SkillName))
 	case dialog.ActionReloadModelDiscovery:
 		// Keep the dialog open; run discovery in the background and refresh
 		// the list when the result arrives (modelsDiscoveryReloadedMsg).
@@ -7105,8 +7063,6 @@ func (m *UI) openDialog(id string) tea.Cmd {
 		if cmd := m.openFilesDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
-	case dialog.MCPServersID:
-		m.openMCPServersDialog()
 	case dialog.ChannelsID:
 		m.openChannelsDialog()
 	case dialog.ThemeID:
@@ -7119,8 +7075,10 @@ func (m *UI) openDialog(id string) tea.Cmd {
 		if cmd := m.openQuitDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
-	case dialog.SkillsID:
-		m.openSkillsDialog()
+	case dialog.SkillsTogglesID:
+		if cmd := m.openSkillsTogglesDialog(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	default:
 		// Unknown dialog
 		break
@@ -7215,16 +7173,6 @@ func (m *UI) openNotificationsDialog() tea.Cmd {
 	return nil
 }
 
-// openMCPServersDialog opens the MCP servers management dialog.
-func (m *UI) openMCPServersDialog() {
-	if m.dialog.ContainsDialog(dialog.MCPServersID) {
-		m.dialog.BringToFront(dialog.MCPServersID)
-		return
-	}
-	mcpDialog := dialog.NewMCPServers(m.com, m.com.Workspace)
-	m.dialog.OpenDialog(mcpDialog)
-}
-
 // openChannelsDialog opens the channels management dialog.
 func (m *UI) openChannelsDialog() {
 	if m.dialog.ContainsDialog(dialog.ChannelsID) {
@@ -7233,16 +7181,6 @@ func (m *UI) openChannelsDialog() {
 	}
 	channelsDialog := dialog.NewChannels(m.com, m.com.Workspace)
 	m.dialog.OpenDialog(channelsDialog)
-}
-
-// openSkillsDialog opens the skills management dialog.
-func (m *UI) openSkillsDialog() {
-	if m.dialog.ContainsDialog(dialog.SkillsID) {
-		m.dialog.BringToFront(dialog.SkillsID)
-		return
-	}
-	skillsDialog := dialog.NewSkills(m.com, m.com.Workspace)
-	m.dialog.OpenDialog(skillsDialog)
 }
 
 // sessionChildrenLoadedMsg delivers the sessions picker's sub-agent tree
@@ -8144,51 +8082,6 @@ func (m *UI) disableDockerMCP() tea.Msg {
 	}
 
 	return util.NewInfoMsg("Docker MCP disabled successfully")
-}
-
-// toggleSkill enables or disables a skill by name, persisting the change
-// to config and reloading skills so the change takes effect immediately.
-func (m *UI) toggleSkill(skillName string) tea.Cmd {
-	if skillName == "" {
-		// Never persist an empty name to disabled_skills. Broken skill
-		// files produce states with no name; toggling them is meaningless.
-		slog.Warn("Ignoring skill toggle with empty skill name")
-		return nil
-	}
-	return func() tea.Msg {
-		cfg := m.com.Config()
-		if cfg == nil || cfg.Options == nil {
-			return util.NewErrorMsg(fmt.Errorf("no config available"))
-		}
-
-		disabled := cfg.Options.DisabledSkills
-		found := false
-		var newList []string
-		for _, name := range disabled {
-			if name == skillName {
-				found = true
-				continue
-			}
-			newList = append(newList, name)
-		}
-
-		action := "enabled"
-		if !found {
-			newList = append(newList, skillName)
-			action = "disabled"
-		}
-
-		if err := m.com.Workspace.SetConfigField(config.ScopeGlobal, "options.disabled_skills", newList); err != nil {
-			return util.ReportError(err)()
-		}
-
-		// Reload skills so the change takes effect immediately.
-		if err := m.com.Workspace.ReloadSkills(); err != nil {
-			return util.ReportError(err)()
-		}
-
-		return skillsRefreshedMsg{info: fmt.Sprintf("Skill %q %s", skillName, action)}
-	}
 }
 
 // renderLogo renders the Crush logo with the given styles and dimensions.

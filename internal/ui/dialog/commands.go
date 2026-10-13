@@ -669,14 +669,12 @@ func (c *Commands) defaultCommands() []*CommandItem {
 	}
 	commands = append(commands, NewCommandItem(c.com.Styles, "toggle_transparent", transparentLabel, "", ActionToggleTransparentBackground{}))
 
-	// Add MCP servers command — opens the MCP servers management dialog.
-	commands = append(commands, NewCommandItem(c.com.Styles, "mcp_servers", "MCP Servers", "", ActionOpenDialog{DialogID: MCPServersID}))
-
 	// Add Channels command — opens the channels management dialog.
 	commands = append(commands, NewCommandItem(c.com.Styles, "channels", "Channels", "", ActionOpenDialog{DialogID: ChannelsID}))
 
-	// Add Skills management command.
-	commands = append(commands, NewCommandItem(c.com.Styles, "skills", "Skills", "", ActionOpenDialog{DialogID: SkillsID}))
+	// Add Skills management command — opens the repository-scoped skill
+	// toggles dialog.
+	commands = append(commands, NewCommandItem(c.com.Styles, "skills", "Skills", "", ActionOpenDialog{DialogID: SkillsTogglesID}))
 
 	commands = append(commands, NewCommandItem(c.com.Styles, "switch_theme", "Themes", "", ActionOpenDialog{ThemeID}))
 

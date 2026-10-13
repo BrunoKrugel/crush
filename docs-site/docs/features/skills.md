@@ -207,8 +207,9 @@ discovery and loading themselves are upstream.
 
 The `/skills` dialog lists every discovered skill, where it came from, and any
 that failed to parse — with the error and its source labelled. Skills that fail
-validation are reported rather than silently dropped. You can reload skills
-from disk and toggle individual skills off from the dialog.
+validation are reported rather than silently dropped. You can toggle individual
+skills off from the dialog: a local toggle disables the skill for this
+repository, and a global toggle edits `options.disabled_skills`.
 
 Ask the agent for the same thing at any time; the `crush_info` tool reports
 active and available skills alongside model, LSP, MCP, hook, and permission
