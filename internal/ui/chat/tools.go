@@ -1919,9 +1919,9 @@ func (t *baseToolMessageItem) markRestored() {
 // grep, edit) never cross it and keep showing the overall turn timer.
 const toolTimerOwnTimeThreshold = 10 * time.Second
 
-func (t *baseToolMessageItem) spinnerTimer() string {
+func (t *baseToolMessageItem) spinnerTimer(sessionID string) string {
 	if d := t.elapsed(); d >= toolTimerOwnTimeThreshold {
 		return common.FormatDuration(d)
 	}
-	return common.Elapsed()
+	return common.Elapsed(sessionID)
 }

@@ -1096,6 +1096,26 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		call.acceptSeq = call.Accepted.seq
 		call.Accepted.Close()
 	}
+	// A run that fails while still preparing — a missing session, a prompt
+	// that fails to build, or a failure inside PrepareStep — still ends with
+	// RunComplete; observers would otherwise think the session busy. Only an
+	// initial callback-bearing call has a backend fallback that publishes, and
+	// a continuation's suspended caller has already delegated completion.
+	preparing := true
+	defer func() {
+		if !preparing || retErr == nil {
+			return
+		}
+		if call.OnComplete != nil && call.turn == nil {
+			return
+		}
+		a.publishRunComplete(ctx, call, notify.RunComplete{
+			SessionID: call.SessionID,
+			RunID:     call.RunID,
+			Error:     retErr.Error(),
+			Cancelled: errors.Is(retErr, context.Canceled),
+		})
+	}()
 	owner.interactive = owner.interactive || !call.NonInteractive
 	// The call's policy wins over the owner's: a queued turn runs with the
 	// policy it was submitted with, not the one the active turn carried.
@@ -1217,28 +1237,11 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 	// message of the turn is the value reachable through this
 	// pointer when the defer runs.
 	var currentAssistant *message.Message
-	// Summary continuations must retain this turn's cancellation boundary.
-	continuation := call.turn != nil
 	if call.turn == nil {
 		call.turn = &turnOutcome{}
 	}
 	owner.notification = notify.Notification{SessionID: call.SessionID, RunID: call.RunID, Type: notify.TypeAgentFinished}
 	owner.notification.SessionTitle = currentSession.Title
-	// Detached calls and continuations must complete preparation failures
-	// here. Only an initial callback-bearing call has a backend fallback;
-	// a continuation's suspended caller has already delegated completion.
-	preparing := true
-	defer func() {
-		if !preparing || (call.OnComplete != nil && !continuation) || retErr == nil {
-			return
-		}
-		a.publishRunComplete(ctx, call, notify.RunComplete{
-			SessionID: call.SessionID,
-			RunID:     call.RunID,
-			Error:     retErr.Error(),
-			Cancelled: errors.Is(retErr, context.Canceled),
-		})
-	}()
 	defer func() {
 		a.finishTurn(call, result, retErr)
 		owner.unsuccessful = owner.unsuccessful || call.turn.err != nil

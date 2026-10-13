@@ -1057,7 +1057,6 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case agentRunSubmittedMsg:
 		cmds = append(cmds, m.submissionFinished(msg.sessionID, msg.gen, msg.err, false))
-		m.turnOutcome = ""
 		if msg.err != nil {
 			// The run never started, so no terminal event is coming to
 			// retire its spinner.
@@ -1065,6 +1064,10 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !errors.Is(msg.err, context.Canceled) {
 				cmds = append(cmds, util.ReportError(msg.err))
 			}
+		} else if msg.sessionID == m.currentSessionID() {
+			// A fresh submission resets the outcome display so a stale
+			// done/error from the previous turn does not linger.
+			m.turnOutcome = ""
 		}
 		// A prompt was just accepted (run started or enqueued): fetch the
 		// authoritative busy/queue state to confirm the optimistic values

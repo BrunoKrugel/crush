@@ -131,7 +131,7 @@ func TestProgramStatusIgnoresOtherSessionOutcomes(t *testing.T) {
 
 	u.turnOutcome = tea.ProgramStateDone
 	u.sendMessage("new work")
-	t.Cleanup(common.StopTurn)
+	t.Cleanup(func() { common.StopTurn("s1") })
 	require.Empty(t, u.turnOutcome)
 	_, cmd := u.Update(agentRunSubmittedMsg{sessionID: "s1", gen: u.submissionGen})
 	runCmds(u, cmd)

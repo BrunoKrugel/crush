@@ -674,7 +674,7 @@ func (c *Commands) defaultCommands() []*CommandItem {
 
 	// Add Skills management command — opens the repository-scoped skill
 	// toggles dialog.
-	commands = append(commands, NewCommandItem(c.com.Styles, "skills", "Skills", "", ActionOpenDialog{DialogID: SkillsTogglesID}))
+	commands = append(commands, NewCommandItem(c.com.Styles, "skills", "Toggle Skills", "", ActionOpenDialog{DialogID: SkillsTogglesID}))
 
 	commands = append(commands, NewCommandItem(c.com.Styles, "switch_theme", "Themes", "", ActionOpenDialog{ThemeID}))
 
