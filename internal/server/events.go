@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -174,6 +175,36 @@ func wrapEvent(ev any) *pubsub.Payload {
 	}
 }
 
+func (c *controllerV1) deliverToClient(ctx context.Context, workspaceID, clientID string, ev any) bool {
+	sessionID, scoped := sessionScopedEventID(ev)
+	if !scoped {
+		return true
+	}
+	current, reported := c.backend.ClientCurrentSession(workspaceID, clientID)
+	if !reported {
+		// The client never reported a current session, so there is
+		// nothing to scope against. Fail open rather than stranding a
+		// prompt nobody can answer.
+		return true
+	}
+	if current == "" {
+		return false
+	}
+	if sessionID == current {
+		return true
+	}
+	root, err := c.backend.RootSessionID(ctx, workspaceID, sessionID)
+	if err != nil {
+		// Fail open: an unresolvable session is delivered as before
+		// rather than stranding a prompt nobody can answer.
+		slog.Debug("Failed to resolve root session for event routing",
+			"session_id", sessionID, "error", err)
+		return true
+	}
+	return root == current
+}
+
+// envelope marshals the inner event and wraps it in a pubsub.Payload.
 // envelope marshals the inner event and wraps it in a pubsub.Payload.
 func envelope(payloadType pubsub.PayloadType, inner any) *pubsub.Payload {
 	raw, err := json.Marshal(inner)
@@ -393,4 +424,28 @@ func questionsToProto(qs []question.Question) []proto.QuestionItem {
 		}
 	}
 	return out
+}
+
+// sessionScopedEventID extracts the session ID from events that
+// belong to a single session's interactive prompts (permission and
+// question requests and their resolution notifications). The second
+// return value reports whether the event is session-scoped at all. An
+// event whose session ID is empty is treated as unscoped: it cannot
+// match any client's current session, so scoping it would drop it for
+// everyone.
+func sessionScopedEventID(ev any) (string, bool) {
+	var id string
+	switch e := ev.(type) {
+	case pubsub.Event[permission.PermissionRequest]:
+		id = e.Payload.SessionID
+	case pubsub.Event[permission.PermissionNotification]:
+		id = e.Payload.SessionID
+	case pubsub.Event[question.Request]:
+		id = e.Payload.SessionID
+	case pubsub.Event[question.Notification]:
+		id = e.Payload.SessionID
+	default:
+		return "", false
+	}
+	return id, id != ""
 }

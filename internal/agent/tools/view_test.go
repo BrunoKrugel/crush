@@ -212,6 +212,11 @@ type mockViewPermissionService struct {
 	*pubsub.Broker[permission.PermissionRequest]
 }
 
+// ActiveRequest reports no active request: the mock never prompts.
+func (m *mockViewPermissionService) ActiveRequest() (permission.PermissionRequest, bool) {
+	return permission.PermissionRequest{}, false
+}
+
 func (m *mockViewPermissionService) Request(ctx context.Context, req permission.CreatePermissionRequest) (bool, error) {
 	return true, nil
 }

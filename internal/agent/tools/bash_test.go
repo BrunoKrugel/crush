@@ -43,6 +43,11 @@ func (m *mockBashPermissionService) SubscribeNotifications(ctx context.Context) 
 	return make(<-chan pubsub.Event[permission.PermissionNotification])
 }
 
+// ActiveRequest reports no active request: the mock never prompts.
+func (m *mockBashPermissionService) ActiveRequest() (permission.PermissionRequest, bool) {
+	return permission.PermissionRequest{}, false
+}
+
 func TestBashTool_DefaultAutoBackgroundThreshold(t *testing.T) {
 	workingDir := t.TempDir()
 	tool := newBashToolForTest(workingDir)
@@ -92,6 +97,11 @@ type recordingPermissionService struct {
 func (m *recordingPermissionService) Request(ctx context.Context, req permission.CreatePermissionRequest) (bool, error) {
 	m.requestCount++
 	return m.allow, nil
+}
+
+// ActiveRequest reports no active request: the mock never prompts.
+func (m *recordingPermissionService) ActiveRequest() (permission.PermissionRequest, bool) {
+	return permission.PermissionRequest{}, false
 }
 
 func (m *recordingPermissionService) Grant(req permission.PermissionRequest) bool { return true }

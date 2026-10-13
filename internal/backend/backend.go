@@ -171,7 +171,11 @@ type clientState struct {
 	streams          int
 	holdTimer        *time.Timer
 	currentSessionID string
-	released         bool
+	// sessionReported distinguishes a client that never reported a
+	// session (API clients predating session reporting) from one that
+	// explicitly cleared its selection.
+	sessionReported bool
+	released        bool
 }
 
 // Workspace represents a running [app.App] workspace with its
@@ -215,6 +219,10 @@ type Workspace struct {
 	// clients tracks each client's claim on this workspace. Refcount
 	// is a derived value: len(clients).
 	clients map[string]*clientState
+	// rootCache memoizes [Backend.RootSessionID] resolutions, keyed by
+	// session ID. Parentage is fixed at creation, so cached entries never
+	// go stale.
+	rootCache sync.Map // map[string]string
 
 	// shutdownFn is the function invoked by [Backend.teardown] to
 	// release the workspace's underlying resources. It defaults to the
@@ -970,7 +978,7 @@ func (b *Backend) DeleteWorkspace(id, clientID string) error {
 // guards against zombie writes from a client that has detached and
 // against ghost presence from a hold-only client that never opened an
 // SSE stream.
-func (b *Backend) SetCurrentSession(workspaceID, clientID, sessionID string) error {
+func (b *Backend) SetCurrentSession(ctx context.Context, workspaceID, clientID, sessionID string) error {
 	if _, err := validateClientID(clientID); err != nil {
 		return err
 	}
@@ -979,17 +987,49 @@ func (b *Backend) SetCurrentSession(workspaceID, clientID, sessionID string) err
 		return ErrWorkspaceNotFound
 	}
 	ws.clientsMu.Lock()
-	defer ws.clientsMu.Unlock()
 	cs, ok := ws.clients[clientID]
 	if !ok || cs.streams == 0 {
 		// No entry, or hold-only (no live stream): refuse the
 		// write. The presence record this is meant to feed
 		// should only reflect clients that can actually observe
 		// session events.
+		ws.clientsMu.Unlock()
 		return ErrClientNotAttached
 	}
 	cs.currentSessionID = sessionID
+	cs.sessionReported = true
+	ws.clientsMu.Unlock()
+
+	// A prompt that was raised while no client viewed the session
+	// would otherwise stay unanswered until the run is cancelled.
+	// Re-publish any pending prompt for the session the client just
+	// switched to; the per-client stream filter limits delivery to
+	// that session's viewers.
+	if sessionID != "" {
+		b.republishPendingPrompts(ctx, ws, sessionID)
+	}
 	return nil
+}
+
+// ClientCurrentSession returns the session the given client is
+// currently viewing within the workspace, or "" when the client has
+// no session selected (e.g. the landing screen) or is unknown. The
+// second return value reports whether the client has ever reported a
+// session: a client that never did (e.g. an API client predating
+// session reporting) is treated differently from one that explicitly
+// cleared its selection.
+func (b *Backend) ClientCurrentSession(workspaceID, clientID string) (string, bool) {
+	ws, ok := b.workspaces.Get(workspaceID)
+	if !ok {
+		return "", false
+	}
+	ws.clientsMu.Lock()
+	defer ws.clientsMu.Unlock()
+	cs, ok := ws.clients[clientID]
+	if !ok {
+		return "", false
+	}
+	return cs.currentSessionID, cs.sessionReported
 }
 
 // AttachedClients returns the number of clients currently viewing

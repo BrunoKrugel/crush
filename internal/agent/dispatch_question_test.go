@@ -57,6 +57,12 @@ func (f *fakeQuestionService) Answer([]question.Answer) bool { return false }
 
 func (f *fakeQuestionService) Cancel() bool { return false }
 
+// Pending reports no open question: these tests watch Ask's recorded
+// requests rather than the active window.
+func (f *fakeQuestionService) Pending() (question.Request, bool) {
+	return question.Request{}, false
+}
+
 // requests returns a copy of the requests Ask received.
 func (f *fakeQuestionService) requests() []question.Request {
 	f.mu.Lock()

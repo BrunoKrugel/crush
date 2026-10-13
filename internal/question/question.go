@@ -167,7 +167,8 @@ const (
 // Notification is published when a question batch is resolved so
 // that non-answering clients can dismiss their open forms.
 type Notification struct {
-	BatchID string `json:"batch_id"`
+	BatchID   string `json:"batch_id"`
+	SessionID string `json:"session_id"`
 }
 
 // Service manages the lifecycle of question requests. Only one
@@ -294,6 +295,7 @@ func (s *questionService) Answer(answers []Answer) bool {
 	s.mu.Lock()
 	batchID := s.pendingID
 	ch := s.pending
+	sessionID := s.pendingReq.SessionID
 	s.mu.Unlock()
 
 	if ch == nil {
@@ -305,7 +307,8 @@ func (s *questionService) Answer(answers []Answer) bool {
 	// their open question forms.
 	if batchID != "" {
 		s.notificationBroker.Publish(pubsub.CreatedEvent, Notification{
-			BatchID: batchID,
+			SessionID: sessionID,
+			BatchID:   batchID,
 		})
 	}
 	return true
@@ -317,6 +320,7 @@ func (s *questionService) Cancel() bool {
 	s.mu.Lock()
 	batchID := s.pendingID
 	cancelCh := s.cancelled
+	sessionID := s.pendingReq.SessionID
 	s.mu.Unlock()
 
 	if cancelCh == nil {
@@ -328,7 +332,8 @@ func (s *questionService) Cancel() bool {
 	// their open question forms.
 	if batchID != "" {
 		s.notificationBroker.Publish(pubsub.CreatedEvent, Notification{
-			BatchID: batchID,
+			SessionID: sessionID,
+			BatchID:   batchID,
 		})
 	}
 	return true
