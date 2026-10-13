@@ -111,6 +111,21 @@ agent add porter --description "moves boxes"`)
 	require.Equal(t, "moves boxes", porter["description"], "second add must overlay")
 }
 
+// TestAgentToolsAcceptCommaSeparatedValues verifies --tools accepts both
+// separators: a comma-joined value that reached validation as one name
+// would fail the whole config load with an "unknown tool" error.
+func TestAgentToolsAcceptCommaSeparatedValues(t *testing.T) {
+	t.Parallel()
+
+	agents := loadAgentScript(t, `agent add tester --role dispatch --tools bash,grep,view,todos`)
+	tools := agents["tester"].(map[string]any)["tools"].(map[string]any)
+	require.Equal(t, []any{"bash", "grep", "view", "todos"}, tools["allow"])
+
+	spaced := loadAgentScript(t, `agent add tester --role dispatch --tools bash grep view todos`)
+	spacedTools := spaced["tester"].(map[string]any)["tools"].(map[string]any)
+	require.Equal(t, []any{"bash", "grep", "view", "todos"}, spacedTools["allow"])
+}
+
 // TestAgentSetRejectsRoleAndRuntime verifies `agent set` refuses the flags
 // that change what an existing agent is.
 func TestAgentSetRejectsRoleAndRuntime(t *testing.T) {

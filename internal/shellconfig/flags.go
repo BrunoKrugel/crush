@@ -212,7 +212,19 @@ func parseFlagValue(spec flagSpec, args []string, i int) (any, int, error) {
 		if len(list) == 0 {
 			return nil, 0, fmt.Errorf("%s: --%s requires at least one value", args[0], name)
 		}
-		return list, i + 1 + len(list), nil
+		// Accept comma-separated values as well as space-separated ones:
+		// "bash,grep,view" and "bash grep view" both name three tools.
+		// A single-element value containing a comma would otherwise reach
+		// validation as one unknown tool name and fail the whole config.
+		var expanded []string
+		for _, value := range list {
+			for _, part := range strings.Split(value, ",") {
+				if part = strings.TrimSpace(part); part != "" {
+					expanded = append(expanded, part)
+				}
+			}
+		}
+		return expanded, i + 1 + len(list), nil
 
 	case flagCountOrOff:
 		v, err := nextArg(args, i, name)
