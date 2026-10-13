@@ -8,7 +8,7 @@ description: Cron-driven prompts — one-shot reminders and recurring jobs the a
 # Scheduled tasks
 
 :::info[Fork feature]
-Scheduled tasks are an addition in the `joestump-agent/crush` fork.
+Scheduled tasks are an addition in this fork.
 :::
 
 Crush can re-run a prompt on a cron schedule. You ask for it in plain English —

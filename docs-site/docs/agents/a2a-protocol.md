@@ -8,7 +8,7 @@ description: What the per-process A2A host exposes — the Agent Card, endpoints
 # A2A wire reference
 
 :::info[Fork feature]
-The A2A layer is an addition in the `joestump-agent/crush` fork.
+The A2A layer is an addition in this fork.
 :::
 
 Every dispatched agent is served over the
@@ -49,7 +49,7 @@ The coordinator builds a card for each dispatch and stamps it on the
 registry entry, and one for each enabled agent definition, kept in the
 host's listing. Every route serves its card at
 `GET /agents/<id>/.well-known/agent-card.json`
-([#580](https://github.com/joestump-agent/crush/issues/580)); see
+([#580](https://github.com/brunokrugel/crush/issues/580)); see
 [Fetching a card](#fetching-a-card). The coordinator itself never fetches
 one — it reads the same object from the registry entry. A dispatch's card:
 
@@ -322,7 +322,7 @@ that names its context gets the same rejection as an unknown context:
 `no running agent for context <id>`. It can neither message, steer, answer
 nor cancel it, even with a valid credential. Agents that remote clients can
 call arrive with the peer registry
-([#334](https://github.com/joestump-agent/crush/issues/334)).
+([#334](https://github.com/brunokrugel/crush/issues/334)).
 
 ## Methods
 
@@ -753,14 +753,14 @@ restriction is the socket, layered under the credential:
   that path would overflow the unix socket length limit, the host falls
   back to `crush-a2a-<uid>/` under `$XDG_RUNTIME_DIR`, or under the temp
   directory when that is unset. Either directory is verified before the
-  bind ([#558](https://github.com/joestump-agent/crush/issues/558)): a
+  bind ([#558](https://github.com/brunokrugel/crush/issues/558)): a
   symlink or non-directory at its path, or a directory owned by another
   user, is refused with an error naming the path and the failed check,
   and a directory left wider than `0700` is tightened. The socket is
   then made `0600` without following symlinks. Other local users cannot
   connect to the socket. The host listens on TCP only when you configure
   the [TCP listener](#tcp-listener), and then only with TLS
-  ([#358](https://github.com/joestump-agent/crush/issues/358)).
+  ([#358](https://github.com/brunokrugel/crush/issues/358)).
 - **TCP callers.** A TCP connection carries no peer credentials, so a TCP
   call is never treated as the local user: it needs the bearer token or,
   with `client_ca`, a client certificate the handshake verified, checked
@@ -827,7 +827,7 @@ reconciliation, the TLS listener, and the a2a-go TCK in CI. The reasoning
 is in [Design decisions](./design-decisions.md).
 
 What remains is the peer registry
-([#334](https://github.com/joestump-agent/crush/issues/334)): the piece that
+([#334](https://github.com/brunokrugel/crush/issues/334)): the piece that
 lets a remote, authenticated caller reach a run on this host and that
 publishes the definition cards it can dial. Until it lands, a Crush host is a
 secure dead end for other agents, and the way to work with another agent is

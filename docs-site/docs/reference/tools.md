@@ -36,7 +36,7 @@ The `glob`, `grep`, and `ls` result limits are tunable under the top-level
 
 :::info[Fork feature]
 `semantic_search` and `semantic_index` are additions in the
-`joestump-agent/crush` fork.
+this fork.
 :::
 
 ## Shell and job control
@@ -107,7 +107,7 @@ Tools exposed *by* MCP servers arrive as `mcp_<server>_<tool>`.
 
 :::info[Fork feature]
 `list_mcp_prompts` and `call_mcp_prompt` are additions in the
-`joestump-agent/crush` fork. See
+this fork. See
 [MCP prompts](/features/mcp#prompts-and-resources).
 :::
 

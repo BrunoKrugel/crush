@@ -144,7 +144,7 @@ does not change them. A debug log line records the mismatch. See
 - Upstream Crush behaviour →
   [charmbracelet/crush/issues](https://github.com/charmbracelet/crush/issues)
 - A [fork addition](/introduction#about-this-fork) →
-  [joestump-agent/crush/issues](https://github.com/joestump-agent/crush/issues)
+  [brunokrugel/crush/issues](https://github.com/brunokrugel/crush/issues)
 - A missing or stale provider/model →
   [Catwalk](https://github.com/charmbracelet/catwalk)
 

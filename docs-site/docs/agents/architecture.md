@@ -9,12 +9,12 @@ description: The components behind dispatched agents as they ship on main — co
 
 :::info[Fork feature]
 Dispatched agents, the A2A layer and everything on this page are additions
-in the `joestump-agent/crush` fork.
+in this fork.
 :::
 
 This page describes the code that ships on `main`. The first cut landed in
-PRs [#317](https://github.com/joestump-agent/crush/pull/317) to
-[#339](https://github.com/joestump-agent/crush/pull/339); the 2026-10-04
+PRs [#317](https://github.com/brunokrugel/crush/pull/317) to
+[#339](https://github.com/brunokrugel/crush/pull/339); the 2026-10-04
 review re-based it on A2A as the runtime contract, and that re-base has
 shipped. The reasoning is on [Design decisions](./design-decisions.md).
 
@@ -63,26 +63,26 @@ steers and cancels agents through the host's agent index and the protocol.
 
 | Component | Source | Role |
 | --- | --- | --- |
-| Coordinator and dispatch tool | [`internal/agent/dispatch_tool.go`](https://github.com/joestump-agent/crush/blob/main/internal/agent/dispatch_tool.go) | Implements `dispatch_agent`, the concurrency cap, and owns each run's lifecycle. |
-| Decision tools | [`dispatch_cancel.go`](https://github.com/joestump-agent/crush/blob/main/internal/agent/dispatch_cancel.go), [`dispatch_apply.go`](https://github.com/joestump-agent/crush/blob/main/internal/agent/dispatch_apply.go) | `cancel_dispatch`, `apply_dispatch`, `dismiss_dispatch`. |
-| Agent definitions | [`internal/config/agent_definition.go`](https://github.com/joestump-agent/crush/blob/main/internal/config/agent_definition.go), [`internal/shellconfig/agent.go`](https://github.com/joestump-agent/crush/blob/main/internal/shellconfig/agent.go) | The `agents` block and the `agent` builtin: built-ins, overlays, validation, the `@read`/`@write` groups. |
-| Workspace provider | [`internal/dispatch/provider.go`](https://github.com/joestump-agent/crush/blob/main/internal/dispatch/provider.go) | Creates, leases and diffs git worktrees under `<data dir>/worktrees/<repo-key>/`. |
-| Dispatch registry | [`internal/dispatch/registry.go`](https://github.com/joestump-agent/crush/blob/main/internal/dispatch/registry.go) | The in-memory registry of dispatches: handles, status, endpoint, card, result. |
-| Dispatch toolchain | [`internal/agent/dispatch.go`](https://github.com/joestump-agent/crush/blob/main/internal/agent/dispatch.go) | Builds worktree-rooted tools from the definition, scoped config, LSP, permissions, hooks. |
-| A2A host and cards | [`internal/a2a/server.go`](https://github.com/joestump-agent/crush/blob/main/internal/a2a/server.go), [`agentcard.go`](https://github.com/joestump-agent/crush/blob/main/internal/a2a/agentcard.go), [`tcp.go`](https://github.com/joestump-agent/crush/blob/main/internal/a2a/tcp.go) | One JSON-RPC host per process on a `0600` unix socket, with the opt-in TLS listener; routes per definition and per dispatch. |
-| Task store | [`internal/a2a/taskstore.go`](https://github.com/joestump-agent/crush/blob/main/internal/a2a/taskstore.go), [`reconcile.go`](https://github.com/joestump-agent/crush/blob/main/internal/a2a/reconcile.go) | The SQLite task store (`a2a_tasks`) and the durable dispatch records (`a2a_dispatches`) reconciled at startup. |
-| Executor | [`internal/a2a/executor.go`](https://github.com/joestump-agent/crush/blob/main/internal/a2a/executor.go) | Maps one `SessionAgent.Run` onto A2A task states and events; parks questions and permissions. |
-| A2A client | [`internal/a2a/client.go`](https://github.com/joestump-agent/crush/blob/main/internal/a2a/client.go), [`internal/agent/dispatch_a2a.go`](https://github.com/joestump-agent/crush/blob/main/internal/agent/dispatch_a2a.go) | Sends the prompt, answers and steers; consumes the stream to a terminal state; resumes a dropped stream. |
-| External agents | [`internal/a2a/external.go`](https://github.com/joestump-agent/crush/blob/main/internal/a2a/external.go), [`internal/agent/dispatch_external.go`](https://github.com/joestump-agent/crush/blob/main/internal/agent/dispatch_external.go) | Fetches and pins a third-party card, runs the dispatch against it, scrubs and labels its output. |
-| Injection queue | [`internal/agent/dispatch_inject.go`](https://github.com/joestump-agent/crush/blob/main/internal/agent/dispatch_inject.go) | `message_agent` and the `@handle` front door for steers. |
-| Todo collector | [`internal/dispatch/todo.go`](https://github.com/joestump-agent/crush/blob/main/internal/dispatch/todo.go) | Reduces session saves and registry events into progress snapshots for the executor and the agent block. |
-| Agent surface | [`internal/a2a/agents_index.go`](https://github.com/joestump-agent/crush/blob/main/internal/a2a/agents_index.go), [`internal/workspace/agent_task_watcher.go`](https://github.com/joestump-agent/crush/blob/main/internal/workspace/agent_task_watcher.go) | Lists the host's dispatches and follows their tasks; the TUI reads, steers and cancels through it, in process or through the server. |
-| Nudge ladder and wander kill | [`internal/agent/todo_enforcement.go`](https://github.com/joestump-agent/crush/blob/main/internal/agent/todo_enforcement.go), `dispatch_tool.go` | Enforces todos and kills runaway dispatched runs. |
-| Result payload | [`internal/dispatch/result.go`](https://github.com/joestump-agent/crush/blob/main/internal/dispatch/result.go) | Defines the `DispatchResult` JSON the main agent reads. |
-| Shell | [`internal/cmd/dispatch.go`](https://github.com/joestump-agent/crush/blob/main/internal/cmd/dispatch.go) | `crush dispatch list` and `prune`. |
+| Coordinator and dispatch tool | [`internal/agent/dispatch_tool.go`](https://github.com/brunokrugel/crush/blob/fork/internal/agent/dispatch_tool.go) | Implements `dispatch_agent`, the concurrency cap, and owns each run's lifecycle. |
+| Decision tools | [`dispatch_cancel.go`](https://github.com/brunokrugel/crush/blob/fork/internal/agent/dispatch_cancel.go), [`dispatch_apply.go`](https://github.com/brunokrugel/crush/blob/fork/internal/agent/dispatch_apply.go) | `cancel_dispatch`, `apply_dispatch`, `dismiss_dispatch`. |
+| Agent definitions | [`internal/config/agent_definition.go`](https://github.com/brunokrugel/crush/blob/fork/internal/config/agent_definition.go), [`internal/shellconfig/agent.go`](https://github.com/brunokrugel/crush/blob/fork/internal/shellconfig/agent.go) | The `agents` block and the `agent` builtin: built-ins, overlays, validation, the `@read`/`@write` groups. |
+| Workspace provider | [`internal/dispatch/provider.go`](https://github.com/brunokrugel/crush/blob/fork/internal/dispatch/provider.go) | Creates, leases and diffs git worktrees under `<data dir>/worktrees/<repo-key>/`. |
+| Dispatch registry | [`internal/dispatch/registry.go`](https://github.com/brunokrugel/crush/blob/fork/internal/dispatch/registry.go) | The in-memory registry of dispatches: handles, status, endpoint, card, result. |
+| Dispatch toolchain | [`internal/agent/dispatch.go`](https://github.com/brunokrugel/crush/blob/fork/internal/agent/dispatch.go) | Builds worktree-rooted tools from the definition, scoped config, LSP, permissions, hooks. |
+| A2A host and cards | [`internal/a2a/server.go`](https://github.com/brunokrugel/crush/blob/fork/internal/a2a/server.go), [`agentcard.go`](https://github.com/brunokrugel/crush/blob/fork/internal/a2a/agentcard.go), [`tcp.go`](https://github.com/brunokrugel/crush/blob/fork/internal/a2a/tcp.go) | One JSON-RPC host per process on a `0600` unix socket, with the opt-in TLS listener; routes per definition and per dispatch. |
+| Task store | [`internal/a2a/taskstore.go`](https://github.com/brunokrugel/crush/blob/fork/internal/a2a/taskstore.go), [`reconcile.go`](https://github.com/brunokrugel/crush/blob/fork/internal/a2a/reconcile.go) | The SQLite task store (`a2a_tasks`) and the durable dispatch records (`a2a_dispatches`) reconciled at startup. |
+| Executor | [`internal/a2a/executor.go`](https://github.com/brunokrugel/crush/blob/fork/internal/a2a/executor.go) | Maps one `SessionAgent.Run` onto A2A task states and events; parks questions and permissions. |
+| A2A client | [`internal/a2a/client.go`](https://github.com/brunokrugel/crush/blob/fork/internal/a2a/client.go), [`internal/agent/dispatch_a2a.go`](https://github.com/brunokrugel/crush/blob/fork/internal/agent/dispatch_a2a.go) | Sends the prompt, answers and steers; consumes the stream to a terminal state; resumes a dropped stream. |
+| External agents | [`internal/a2a/external.go`](https://github.com/brunokrugel/crush/blob/fork/internal/a2a/external.go), [`internal/agent/dispatch_external.go`](https://github.com/brunokrugel/crush/blob/fork/internal/agent/dispatch_external.go) | Fetches and pins a third-party card, runs the dispatch against it, scrubs and labels its output. |
+| Injection queue | [`internal/agent/dispatch_inject.go`](https://github.com/brunokrugel/crush/blob/fork/internal/agent/dispatch_inject.go) | `message_agent` and the `@handle` front door for steers. |
+| Todo collector | [`internal/dispatch/todo.go`](https://github.com/brunokrugel/crush/blob/fork/internal/dispatch/todo.go) | Reduces session saves and registry events into progress snapshots for the executor and the agent block. |
+| Agent surface | [`internal/a2a/agents_index.go`](https://github.com/brunokrugel/crush/blob/fork/internal/a2a/agents_index.go), [`internal/workspace/agent_task_watcher.go`](https://github.com/brunokrugel/crush/blob/fork/internal/workspace/agent_task_watcher.go) | Lists the host's dispatches and follows their tasks; the TUI reads, steers and cancels through it, in process or through the server. |
+| Nudge ladder and wander kill | [`internal/agent/todo_enforcement.go`](https://github.com/brunokrugel/crush/blob/fork/internal/agent/todo_enforcement.go), `dispatch_tool.go` | Enforces todos and kills runaway dispatched runs. |
+| Result payload | [`internal/dispatch/result.go`](https://github.com/brunokrugel/crush/blob/fork/internal/dispatch/result.go) | Defines the `DispatchResult` JSON the main agent reads. |
+| Shell | [`internal/cmd/dispatch.go`](https://github.com/brunokrugel/crush/blob/fork/internal/cmd/dispatch.go) | `crush dispatch list` and `prune`. |
 
 The app wires the A2A host and the SQLite task store into the coordinator at
-startup ([`internal/app/app.go`](https://github.com/joestump-agent/crush/blob/main/internal/app/app.go)).
+startup ([`internal/app/app.go`](https://github.com/brunokrugel/crush/blob/fork/internal/app/app.go)).
 The coordinator publishes one card per enabled agent definition on the host
 as it starts, so the host and its optional TCP listener are listening before
 any dispatch. The cards live in the host's listing; the router answers `404`
@@ -313,7 +313,7 @@ until an entry point serves a turn on it, and the card is not served on the
 wire. The `agent` tool's sub-agent, plan mode and the main
 coder still run in process. Remote peers are authenticated by the TCP
 listener but reach no local run until the peer registry
-([#334](https://github.com/joestump-agent/crush/issues/334)).
+([#334](https://github.com/brunokrugel/crush/issues/334)).
 
 ## What changed in the re-base
 

@@ -25,8 +25,6 @@ through language servers, and extends through MCP servers and Agent Skills.
   you do.
 - **Extensible.** MCP servers over `http`, `stdio`, and `sse`; Agent Skills from
   disk.
-- **UI-fluent.** Models can speak [A2UI](https://a2ui.org) and Crush draws it —
-  cards, lists, buttons, and dashboards rendered right in the chat.
 - **Channel-ready.** MCP servers can push real-time events into your session —
   CI failures, webhooks, chat messages — and Crush acts on them without you
   typing a thing.
@@ -39,14 +37,14 @@ through language servers, and extends through MCP servers and Agent Skills.
 
 ## About this fork
 
-These docs cover **[`joestump-agent/crush`](https://github.com/joestump-agent/crush)**,
+These docs cover **[`brunokrugel/crush`](https://github.com/brunokrugel/crush)**,
 a fork that tracks [`charmbracelet/crush`](https://github.com/charmbracelet/crush)
 upstream and adds features on top. Everything upstream does, this fork does.
 
 Pages that document a fork addition are marked with a note like this one:
 
 :::info[Fork feature]
-This section documents behaviour added by the `joestump-agent/crush` fork. It is
+This section documents behaviour added by this fork. It is
 not present in upstream Crush.
 :::
 
@@ -54,7 +52,6 @@ The additions, in brief:
 
 | Addition | What it is |
 | --- | --- |
-| [A2UI](/features/a2ui) | Inline rendering of A2UI surfaces via [a2tea](https://github.com/joestump-agent/a2tea), including interactive round-trips |
 | [Scheduled tasks](/features/scheduled-tasks) | `CronCreate` / `CronList` / `CronDelete` tools that re-run prompts on a cron schedule |
 | [Semantic search](/features/semantic-search) | A local sqlite-vec index over the repo, searched by meaning |
 | [Channels](/features/channels) | The push mechanism is upstream; the fork adds the `channel_enabled` config key, the `channel_reply` tool, and deterministic reply routing |
@@ -73,7 +70,7 @@ Crush is licensed
 [FSL-1.1-MIT](https://github.com/charmbracelet/crush/raw/main/LICENSE.md).
 Bugs in upstream behaviour belong
 [upstream](https://github.com/charmbracelet/crush/issues); bugs in the additions
-above belong [here](https://github.com/joestump-agent/crush/issues).
+above belong [here](https://github.com/brunokrugel/crush/issues).
 
 ## Where to start
 

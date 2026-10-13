@@ -25,7 +25,7 @@ enough to title.
 
 :::info[Fork feature]
 The sub-agent tree in the session picker is an addition in the
-`joestump-agent/crush` fork, part of
+this fork, part of
 [multi-agent dispatch](/agents/overview).
 :::
 

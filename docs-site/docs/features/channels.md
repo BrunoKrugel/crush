@@ -10,7 +10,7 @@ description: MCP servers that push real-time events into your session — CI fai
 :::info[Partly a fork feature]
 The channel push mechanism and the `--channels` flag are upstream Crush,
 though undocumented there. The `channel_enabled` config key and
-[reply routing](#reply-routing) are additions in the `joestump-agent/crush`
+[reply routing](#reply-routing) are additions in the `brunokrugel/crush`
 fork. All of it is experimental and the shape may change.
 :::
 
@@ -170,7 +170,7 @@ clients see the injected turn arrive through the normal event stream.
 
 ## Worked example: Signal
 
-[Signal MCP](https://github.com/joestump/signal-mcp) lets Crush send and receive
+[Signal MCP](https://github.com/brunokrugel/signal-mcp) lets Crush send and receive
 Signal messages through a
 [signal-cli](https://github.com/AsamK/signal-cli) daemon.
 

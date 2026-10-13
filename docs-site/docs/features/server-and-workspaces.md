@@ -70,7 +70,7 @@ view live.
 
 :::info[Fork feature]
 The sub-agent tree and the `children` endpoint are additions in the
-`joestump-agent/crush` fork.
+this fork.
 :::
 
 Every sub-agent run — `agent`, `agentic_fetch`, and
@@ -130,7 +130,7 @@ event stream.
 
 :::info[Fork feature]
 [Multi-agent dispatch](/agents/overview) is an addition in the
-`joestump-agent/crush` fork.
+this fork.
 :::
 
 A client talking to a server — `crush --host …`, or `CRUSH_CLIENT_SERVER=1` —

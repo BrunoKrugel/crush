@@ -60,7 +60,6 @@ const sidebars: SidebarsConfig = {
         'features/lsp',
         'features/mcp',
         'features/channels',
-        'features/a2ui',
         'features/skills',
         'features/hooks',
         'features/scheduled-tasks',

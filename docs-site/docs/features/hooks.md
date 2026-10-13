@@ -351,5 +351,5 @@ semantics, and the same stdin envelope work in both.
 
 The complete hook reference — including the exact config, stdin, and output
 schemas — lives in
-[`docs/hooks/README.md`](https://github.com/joestump-agent/crush/blob/main/docs/hooks/README.md)
+[`docs/hooks/README.md`](https://github.com/brunokrugel/crush/blob/fork/docs/hooks/README.md)
 in the repo, and in the built-in `crush-hooks` skill.

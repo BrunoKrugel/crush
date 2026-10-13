@@ -69,7 +69,7 @@ example `ssh`, `curl`, `systemctl`, and various package managers.
 The blocklist itself is upstream. Selectively re-allowing commands —
 `allowed_commands`, `allow_all_commands`, `--allow-commands`,
 `--allow-all-commands`, `CRUSH_ALLOW_COMMANDS`, and `CRUSH_ALLOW_ALL_COMMANDS`
-— is an addition in the `joestump-agent/crush` fork. Upstream the blocklist is
+— is an addition in this fork. Upstream the blocklist is
 all-or-nothing.
 :::
 
@@ -138,7 +138,7 @@ approved by hand:
 
 :::info[Fork feature]
 [Multi-agent dispatch](/agents/overview) is an addition in the
-`joestump-agent/crush` fork.
+this fork.
 :::
 
 A dispatched agent's permission requests surface in the same prompt as the

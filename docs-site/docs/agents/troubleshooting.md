@@ -11,7 +11,7 @@ description: Symptoms, causes and fixes for dispatched agents, todo enforcement,
 Everything on this page concerns [dispatched agents](/agents/overview) and
 [todo enforcement](/agents/todo-enforcement), which exist only in this fork.
 Report problems to
-[joestump-agent/crush](https://github.com/joestump-agent/crush/issues).
+[brunokrugel/crush](https://github.com/brunokrugel/crush/issues).
 :::
 
 Each entry gives the symptom, its cause and the fix. Most problems leave a line
@@ -103,7 +103,7 @@ uncommitted edit to `AGENTS.md` reaches the dispatched agent at once.
 Also by design. Context files come from your checkout, never from the base
 revision, because the main agent picks that revision: an `AGENTS.md` committed
 on a branch could otherwise plant instructions in the dispatched agent's
-system prompt ([#561](https://github.com/joestump-agent/crush/issues/561)).
+system prompt ([#561](https://github.com/brunokrugel/crush/issues/561)).
 If a branch needs different conventions, put them in your request so the
 main agent passes them on.
 
@@ -400,7 +400,7 @@ and a `reason`:
 They authenticated and reached a definition route (`/agents/worker`), but
 those routes run nothing for a remote caller yet: a Crush host accepts the
 call and rejects the task until the peer registry
-([#334](https://github.com/joestump-agent/crush/issues/334)) lands. This is
+([#334](https://github.com/brunokrugel/crush/issues/334)) lands. This is
 the expected answer, and the proof that the certificates and routes line up.
 See [what works today](/agents/team#what-works-today).
 

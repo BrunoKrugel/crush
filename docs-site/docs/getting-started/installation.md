@@ -2,18 +2,17 @@
 id: installation
 title: Installation
 sidebar_position: 1
-description: Build the joestump-agent/crush fork from source — the only way to get it today.
+description: Build this fork from source — the only way to get it today.
 ---
 
 # Installation
 
 :::warning[Read this before you install anything]
 These docs cover the
-**[`joestump-agent/crush`](https://github.com/joestump-agent/crush) fork**, and
+**[`brunokrugel/crush`](https://github.com/brunokrugel/crush) fork**, and
 the fork is **not published to any package manager**. Every published Crush
 package — Homebrew, npm, winget, scoop, apt, the NUR, the GitHub releases —
 installs **upstream Charm Crush**, which does not have
-[A2UI](/features/a2ui),
 [scheduled tasks](/features/scheduled-tasks),
 [semantic search](/features/semantic-search), or the fork's
 [channel additions](/features/channels).
@@ -38,7 +37,7 @@ go version   # must be >= go1.26.5
 ## Install
 
 ```bash
-git clone https://github.com/joestump-agent/crush.git
+git clone https://github.com/brunokrugel/crush.git
 cd crush
 go install .
 ```
@@ -63,7 +62,6 @@ go build -o ~/.local/bin/crush .
 crush --version
 ```
 
-The surest check is a fork-only feature — enable [A2UI](/features/a2ui) and
 send a prompt; if the assistant emits a renderable surface, you are on the
 fork.
 

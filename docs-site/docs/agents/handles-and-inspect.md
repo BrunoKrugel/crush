@@ -10,7 +10,7 @@ description: Reference for @handles, agent cards, the @ completions, message_age
 
 :::info[Fork feature]
 @handles, agent cards, inspect mode, and the sessions tree are additions in the
-`joestump-agent/crush` fork.
+this fork.
 :::
 
 This is the reference for every surface that shows or reaches a
@@ -117,8 +117,8 @@ has the tool, and only for agents dispatched from its own session.
 `message_agent`, `cancel_dispatch`, `apply_dispatch` and `dismiss_dispatch` act
 only on agents dispatched from the calling session: another session's handle,
 dispatch ID or session ID is refused exactly like an unknown one
-([#399](https://github.com/joestump-agent/crush/issues/399),
-[#559](https://github.com/joestump-agent/crush/issues/559)).
+([#399](https://github.com/brunokrugel/crush/issues/399),
+[#559](https://github.com/brunokrugel/crush/issues/559)).
 
 ## The agent block
 

@@ -40,7 +40,7 @@ crush schema > schema.json
 ```
 
 Or read the committed copy at
-[`schema.json`](https://github.com/joestump-agent/crush/blob/main/schema.json).
+[`schema.json`](https://github.com/brunokrugel/crush/blob/fork/schema.json).
 Adding the `$schema` line above gets you completion and validation in any
 editor with JSON schema support.
 
@@ -109,15 +109,15 @@ names: `permissions deny` writes `options.disabled_tools`, and several
 
 The top-level `options` object also carries a few keys with no `crushrc`
 builtin yet: `allowed_commands`, `allow_all_commands` (see
-[Permissions](/configuration/permissions#blocked-commands)), `disable_a2ui`
-(see [A2UI](/features/a2ui)), and `todo_enforcement.inactivity_timeout` (the
+[Permissions](/configuration/permissions#blocked-commands)), and
+`todo_enforcement.inactivity_timeout` (the
 A2A backstop for dispatched runs; see
 [Todo enforcement](/agents/todo-enforcement#wander-kill)). Top-level `tools`
 tunes the `glob`, `grep`, and `ls` tool limits.
 
 :::info[Fork feature]
 These `crush.json` keys do not exist upstream: `options.allowed_commands`,
-`options.allow_all_commands`, `options.disable_a2ui`,
+`options.allow_all_commands`,
 `options.todo_enforcement` ([multi-agent](/agents/todo-enforcement)),
 `options.dispatch` (`max_concurrent`, default 4, and `default_agent`, default
 `worker`; see [multi-agent configuration](/agents/configuration)),
