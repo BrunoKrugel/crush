@@ -28,7 +28,14 @@ type runCompleteMarker struct {
 // run's terminal RunComplete. Callers read the result with
 // [RunCompletePublished]. Attaching the marker is optional: code paths
 // without one simply skip the dedup signal.
+//
+// An existing marker is kept rather than shadowed: a publish deep in the
+// call stack must stay observable to every reader up the same chain, so
+// attaching over one would hide it from the dispatcher that installed it.
 func WithRunCompleteMarker(ctx context.Context) context.Context {
+	if _, ok := ctx.Value(runCompleteMarkerKey{}).(*runCompleteMarker); ok {
+		return ctx
+	}
 	return context.WithValue(ctx, runCompleteMarkerKey{}, &runCompleteMarker{})
 }
 
@@ -49,4 +56,12 @@ func RunCompletePublished(ctx context.Context) bool {
 		return m.published.Load()
 	}
 	return false
+}
+
+// withFreshRunCompleteMarker shadows any existing marker with a new one.
+// A queue drain running several turns needs the per-turn dedup to reset per
+// turn: the first turn's terminal publish must not suppress a later turn's
+// fallback. The dispatcher's own marker, further up the chain, is untouched.
+func withFreshRunCompleteMarker(ctx context.Context) context.Context {
+	return context.WithValue(ctx, runCompleteMarkerKey{}, &runCompleteMarker{})
 }

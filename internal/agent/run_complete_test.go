@@ -87,7 +87,7 @@ func TestDrainQueueForStep_FiltersUnderDispatchLock(t *testing.T) {
 	// Cancel high-water mark at seq 2: seq <= 2 and seq == 0 are covered.
 	a.cancelMark.Set(sessionID, 2)
 
-	fold, canceledWithRunID := a.drainQueueForStep(sessionID)
+	fold, canceledWithRunID := a.drainQueueForStep(t.Context(), sessionID)
 
 	require.Len(t, fold, 1,
 		"only the follow-up queued after the cancel (seq > mark) must be folded")
@@ -117,7 +117,7 @@ func TestDrainQueueForStep_NoMarkFoldsAllNonRunID(t *testing.T) {
 		{SessionID: sessionID, Prompt: "b", acceptSeq: 5},
 	})
 
-	fold, canceledWithRunID := a.drainQueueForStep(sessionID)
+	fold, canceledWithRunID := a.drainQueueForStep(t.Context(), sessionID)
 	require.Len(t, fold, 2, "no cancel mark means all non-RunID queued calls are folded")
 	require.Empty(t, canceledWithRunID)
 }
@@ -146,7 +146,7 @@ func TestDrainQueueForStep_KeepsRunIDPromptsQueued(t *testing.T) {
 		{SessionID: sessionID, RunID: "run-b", Prompt: "keep-me-too", acceptSeq: 3},
 	})
 
-	fold, canceledWithRunID := a.drainQueueForStep(sessionID)
+	fold, canceledWithRunID := a.drainQueueForStep(t.Context(), sessionID)
 
 	require.Len(t, fold, 1, "only the non-RunID prompt is folded into the active turn")
 	require.Equal(t, "fold-me", fold[0].Prompt)
@@ -182,7 +182,7 @@ func TestDrainQueueForStep_ReportsCanceledRunIDDrops(t *testing.T) {
 	})
 	a.cancelMark.Set(sessionID, 2)
 
-	fold, canceledWithRunID := a.drainQueueForStep(sessionID)
+	fold, canceledWithRunID := a.drainQueueForStep(t.Context(), sessionID)
 
 	require.Empty(t, fold, "no uncanceled non-RunID prompts to fold")
 	require.Len(t, canceledWithRunID, 1,
@@ -321,7 +321,7 @@ func TestDrainQueueForStep_DroppedRunIDPublishesCancelledRunComplete(t *testing.
 	})
 	a.cancelMark.Set(sessionID, 2)
 
-	_, canceledWithRunID := a.drainQueueForStep(sessionID)
+	_, canceledWithRunID := a.drainQueueForStep(t.Context(), sessionID)
 	require.Len(t, canceledWithRunID, 1)
 	a.publishCanceledQueueDrops(canceledWithRunID)
 

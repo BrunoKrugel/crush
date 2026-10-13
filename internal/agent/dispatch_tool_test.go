@@ -1298,7 +1298,7 @@ func TestQueueKeepsSystemDeliveriesAcrossClearAndCancel(t *testing.T) {
 	require.Len(t, kept, 1, "Cancel must keep the delivery")
 
 	sa.cancelMark.Set(sess.ID, 100)
-	fold, canceled := sa.drainQueueForStep(sess.ID)
+	fold, canceled := sa.drainQueueForStep(t.Context(), sess.ID)
 	require.Empty(t, fold, "the delivery must never fold into the active turn")
 	require.Empty(t, canceled)
 	kept, _ = sa.messageQueue.Get(sess.ID)
