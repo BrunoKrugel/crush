@@ -23,6 +23,8 @@ func (m *mockPermissionService) Request(ctx context.Context, req permission.Crea
 	return true, nil
 }
 
+func (m *mockPermissionService) AutoApproveSession(string) {}
+
 func (m *mockPermissionService) Grant(req permission.PermissionRequest) bool { return true }
 
 func (m *mockPermissionService) Deny(req permission.PermissionRequest) bool { return true }

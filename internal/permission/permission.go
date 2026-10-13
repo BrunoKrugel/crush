@@ -213,7 +213,7 @@ func (s *permissionService) Deny(permission PermissionRequest) bool {
 }
 
 func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRequest) (bool, error) {
-	if s.skip.Load() {
+	if s.skipFn() {
 		return true, nil
 	}
 
@@ -336,6 +336,9 @@ func NewPermissionService(workingDir string, skip bool, allowedTools []string) S
 		autoApproveSessions: make(map[string]bool),
 	}
 	svc.skip.Store(skip)
+	// Consulted on every Request so a runtime toggle reaches the service
+	// without re-dialing every tool.
+	svc.skipFn = svc.skip.Load
 	return svc
 }
 

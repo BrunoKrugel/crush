@@ -48,7 +48,7 @@ func runToolWithSession(t *testing.T, sess *ClientSession, toolName string) Tool
 		Arguments: map[string]any{},
 	})
 	require.NoError(t, err)
-	return extractToolResult(result)
+	return extractToolResult(result, "")
 }
 
 func TestRunTool_A2UISurfaceExtraction(t *testing.T) {

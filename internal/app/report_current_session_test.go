@@ -19,7 +19,7 @@ func TestReportCurrentSession_NoLookupWithoutHerdr(t *testing.T) {
 	app := newTestApp(mock)
 	require.Nil(t, app.herdrClient)
 
-	app.ReportCurrentSession(t.Context(), "s1")
+	app.ReportCurrentSession("s1")
 
 	require.Empty(t, mock.gets)
 }

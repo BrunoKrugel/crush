@@ -1,6 +1,7 @@
 package proto
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"time"
@@ -13,17 +14,17 @@ import (
 // Workspace represents a running app.App workspace with its associated
 // resources and state.
 type Workspace struct {
-	ID       string         `json:"id"`
-	Path     string         `json:"path"`
-	YOLO     bool           `json:"yolo,omitempty"`
-	AllowAllCommands bool     `json:"allow_all_commands,omitempty"`
-	AllowedCommands  []string `json:"allowed_commands,omitempty"`
-	Debug    bool           `json:"debug,omitempty"`
-	DataDir  string         `json:"data_dir,omitempty"`
-	Version  string         `json:"version,omitempty"`
-	ClientID string         `json:"client_id,omitempty"`
-	Config   *config.Config `json:"config,omitempty"`
-	Env      []string       `json:"env,omitempty"`
+	ID               string         `json:"id"`
+	Path             string         `json:"path"`
+	YOLO             bool           `json:"yolo,omitempty"`
+	AllowAllCommands bool           `json:"allow_all_commands,omitempty"`
+	AllowedCommands  []string       `json:"allowed_commands,omitempty"`
+	Debug            bool           `json:"debug,omitempty"`
+	DataDir          string         `json:"data_dir,omitempty"`
+	Version          string         `json:"version,omitempty"`
+	ClientID         string         `json:"client_id,omitempty"`
+	Config           *config.Config `json:"config,omitempty"`
+	Env              []string       `json:"env,omitempty"`
 	// Channels lists the MCP servers opted in as channels for this workspace
 	// (from the --channels flag).
 	Channels []string `json:"channels,omitempty"`
@@ -397,3 +398,21 @@ func (i *LSPClientInfo) UnmarshalJSON(data []byte) error {
 	}
 	return nil
 }
+
+// ReloadModelDiscoveryResponse is the response for re-running model
+// discovery. Added reports how many models were newly discovered across all
+// providers.
+type ReloadModelDiscoveryResponse struct {
+	Added int `json:"added"`
+}
+
+// PermissionRequestPolicyFromContextOrDefault lifts the per-turn permission
+// policy off a context, defaulting to prompting.
+func PermissionRequestPolicyFromContextOrDefault(ctx context.Context) PermissionRequestPolicy {
+	if v, ok := ctx.Value(permissionPolicyKey{}).(PermissionRequestPolicy); ok {
+		return v
+	}
+	return PermissionRequestPolicyPrompt
+}
+
+type permissionPolicyKey struct{}

@@ -1839,6 +1839,22 @@ func (a *sessionAgent) runSummarize(ctx context.Context, sessionID, instructions
 	genCtx, cancel := context.WithCancel(ctx)
 	ac := &activeCancel{cancel: cancel}
 	a.activeRequests.Set(sessionID, ac)
+	// The terminal agent notification is deferred before the owner cleanup
+	// so it runs after it: observers must never see a completion for a
+	// session that still reports busy. Registered here so every exit path
+	// (success, cancel, failure) reports a finish state.
+	finishState := notify.FinishIdleUnsuccessful
+	defer func() {
+		if a.notify == nil {
+			return
+		}
+		a.notify.Publish(pubsub.CreatedEvent, notify.Notification{
+			SessionID:    sessionID,
+			SessionTitle: currentSession.Title,
+			Type:         notify.TypeAgentFinished,
+			FinishState:  finishState,
+		})
+	}()
 	defer a.activeRequests.CompareAndDelete(sessionID, ac)
 	defer cancel()
 	defer func() {
@@ -1974,8 +1990,12 @@ func (a *sessionAgent) runSummarize(ctx context.Context, sessionID, instructions
 		if isCancelErr {
 			// User cancelled summarize we need to remove the summary message.
 			outcome = "Compaction canceled"
-			deleteErr := a.messages.Delete(ctx, summaryMessage.ID)
-			return compaction.Preview{}, deleteErr
+			if deleteErr := a.messages.Delete(ctx, summaryMessage.ID); deleteErr != nil {
+				slog.Warn("Failed to delete the canceled summary message", "session_id", sessionID, "error", deleteErr)
+			}
+			// The cancellation is the summary's error: the caller (and any
+			// terminal RunComplete) must see it, not the cleanup's.
+			return compaction.Preview{}, err
 		}
 		// Mark the summary message as finished with an error so the UI
 		// stops spinning.
@@ -2089,20 +2109,73 @@ func (a *sessionAgent) runSummarize(ctx context.Context, sessionID, instructions
 		slog.Debug("Compaction hooks completed", "session_id", sessionID)
 	}
 
+	// The compaction landed: the terminal finish state is success. The
+	// queued prompt below is its own turn with its own outcome.
+	finishState = notify.FinishIdleSuccess
+
+	// A session canceled during the compaction's own bookkeeping (the save
+	// below is the classic window) makes the compaction's outcome a
+	// cancellation even though the checkpoint landed.
+	if _, canceled := a.cancelMark.Get(sessionID); canceled {
+		return compaction.Preview{}, context.Canceled
+	}
+
 	// Release the active request before processing queued messages so that
 	// Run() does not see the session as busy.
 	a.activeRequests.Del(sessionID)
-	cancel()
 
 	// Process any messages that were queued while summarizing.
 	queuedMessages, ok := a.messageQueue.Get(sessionID)
 	if !ok || len(queuedMessages) == 0 {
+		// With nothing to hand off to, the compaction's context is done.
+		cancel()
+		// A cancel that landed during the compaction is the summary's
+		// outcome even though the checkpoint itself succeeded.
+		if err := ctx.Err(); err != nil {
+			return compaction.Preview{}, err
+		}
 		return compaction.Preview{}, nil
 	}
 	firstQueuedMessage := queuedMessages[0]
 	a.messageQueue.Set(sessionID, queuedMessages[1:])
-	_, qErr := a.Run(ctx, firstQueuedMessage)
-	return compaction.Preview{}, qErr
+	// A fresh accept reservation lifts the dequeued prompt above any cancel
+	// mark recorded before it ran, so a session canceled mid-compaction
+	// still drains its queued prompt as a real turn.
+	firstQueuedMessage.Accepted = a.BeginAccepted(sessionID)
+	firstQueuedMessage.consume(true)
+	// The queued prompt reports its own terminal RunComplete, including
+	// its failure: its error is not the summarizer's to return, or a bad
+	// queued prompt would fail a compaction that succeeded.
+	// The queued prompt runs under the compaction's own context: a session
+	// canceled while the compaction ran is a canceled turn, which is what
+	// its terminal completion and this summary's outcome must say.
+	queuedCtx := context.WithValue(genCtx, tools.SessionIDContextKey, sessionID)
+	if firstQueuedMessage.RunID != "" {
+		queuedCtx = WithRunID(queuedCtx, firstQueuedMessage.RunID)
+	}
+	_, qErr := a.Run(queuedCtx, firstQueuedMessage)
+	// A cancellation of the compaction itself is the summary's outcome; a
+	// cancellation of the queued turn alone is not.
+	if genCtx.Err() != nil {
+		if qErr != nil && firstQueuedMessage.RunID != "" && !RunCompletePublished(queuedCtx) {
+			a.publishRunComplete(queuedCtx, firstQueuedMessage, notify.RunComplete{
+				SessionID: sessionID,
+				RunID:     firstQueuedMessage.RunID,
+				Error:     qErr.Error(),
+			})
+		}
+		return compaction.Preview{}, genCtx.Err()
+	}
+	if qErr != nil && firstQueuedMessage.RunID != "" && !RunCompletePublished(queuedCtx) {
+		// A failure before Run's terminal defer (preparation) leaves no
+		// completion behind; the waiter still needs one.
+		a.publishRunComplete(queuedCtx, firstQueuedMessage, notify.RunComplete{
+			SessionID: sessionID,
+			RunID:     firstQueuedMessage.RunID,
+			Error:     qErr.Error(),
+		})
+	}
+	return compaction.Preview{}, nil
 }
 
 // ConfirmSummarize adopts a previewed checkpoint, which is the moment the
@@ -2375,25 +2448,97 @@ func toolResultsForCalls(m message.Message, toolResultsByCall map[string][]fanta
 func (a *sessionAgent) getSessionMessages(ctx context.Context, session session.Session) ([]message.Message, error) {
 	// Read only the tail a compacted session actually sends. The full
 	// transcript can be tens of megabytes on the single shared connection.
-	msgs, err := a.messages.ListFromSummary(ctx, session.ID, session.SummaryMessageID)
+	//
+	// A checkpoint that kept turns verbatim sits after them in creation order
+	// but must be sent before them, so the boundary read is the cut and the
+	// checkpoint is moved back to the front afterwards.
+	boundaryID := session.SummaryMessageID
+	if session.SummaryCutMessageID != "" {
+		boundaryID = session.SummaryCutMessageID
+	}
+	msgs, err := a.messages.ListFromSummary(ctx, session.ID, boundaryID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list messages: %w", err)
 	}
+	if boundaryID == "" {
+		return msgs, nil
+	}
 
-	if session.SummaryMessageID != "" {
-		summaryMsgIndex := -1
-		for i, msg := range msgs {
-			if msg.ID == session.SummaryMessageID {
-				summaryMsgIndex = i
-				break
-			}
-		}
-		if summaryMsgIndex != -1 {
-			msgs = msgs[summaryMsgIndex:]
-			msgs[0].Role = message.User
+	summaryIndex, cutIndex := -1, -1
+	for i, msg := range msgs {
+		switch msg.ID {
+		case session.SummaryMessageID:
+			summaryIndex = i
+		case session.SummaryCutMessageID:
+			cutIndex = i
 		}
 	}
-	return msgs, nil
+
+	if session.SummaryCutMessageID == "" {
+		if summaryIndex != -1 {
+			msgs = msgs[summaryIndex:]
+			msgs[0].Role = message.User
+		}
+		return msgs, nil
+	}
+
+	if summaryIndex == -1 || cutIndex == -1 {
+		// A dangling checkpoint or cut must not silently erase history.
+		return a.messages.List(ctx, session.ID)
+	}
+
+	// The checkpoint is presented as the user turn carrying it, which is how
+	// every earlier summary was shown to the model.
+	checkpoint := msgs[summaryIndex]
+	checkpoint.Role = message.User
+	view := make([]message.Message, 0, len(msgs))
+	view = append(view, checkpoint)
+	for i, msg := range msgs {
+		if i < cutIndex || i == summaryIndex {
+			continue
+		}
+		view = append(view, msg)
+	}
+	return view, nil
+}
+
+// RestoreSummarize undoes the session's most recent compaction.
+//
+// A checkpoint never deletes the text it replaced, so undo is a pointer write
+// rather than a recovery: the region comes back exactly as it was written. The
+// checkpoint row goes away because nothing refers to it any more, and the
+// prompt counter is re-estimated from the restored transcript, since leaving
+// the compacted figure in place would tell the next check that the session
+// still has room it has just stopped having.
+func (a *sessionAgent) RestoreSummarize(ctx context.Context, sessionID string) error {
+	currentSession, err := a.sessions.Get(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to get session: %w", err)
+	}
+	checkpointID := currentSession.SummaryMessageID
+	if checkpointID == "" {
+		return errors.New("this session has no compaction to undo")
+	}
+
+	if err := a.messages.Delete(ctx, checkpointID); err != nil {
+		return fmt.Errorf("failed to remove the checkpoint: %w", err)
+	}
+	msgs, err := a.messages.List(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to list messages: %w", err)
+	}
+
+	currentSession.SummaryMessageID = ""
+	currentSession.SummaryCutMessageID = ""
+	currentSession.PromptTokens = compaction.EstimateAll(msgs)
+	currentSession.EstimatedUsage = true
+	if _, err := a.sessions.Save(ctx, currentSession); err != nil {
+		return fmt.Errorf("failed to save session: %w", err)
+	}
+
+	slog.Info("Restored a session from its checkpoint",
+		"session_id", sessionID, "messages", len(msgs))
+	return nil
 }
 
 // hasUserTextMessage reports whether any user message in msgs contains
@@ -3132,37 +3277,6 @@ func (a *sessionAgent) DiscardSummarize(ctx context.Context, sessionID, checkpoi
 	if err := a.messages.Delete(ctx, checkpointID); err != nil {
 		return fmt.Errorf("failed to discard the previewed checkpoint: %w", err)
 	}
-	return nil
-}
-
-func (a *sessionAgent) RestoreSummarize(ctx context.Context, sessionID string) error {
-	currentSession, err := a.sessions.Get(ctx, sessionID)
-	if err != nil {
-		return fmt.Errorf("failed to get session: %w", err)
-	}
-	checkpointID := currentSession.SummaryMessageID
-	if checkpointID == "" {
-		return errors.New("this session has no compaction to undo")
-	}
-
-	if err := a.messages.Delete(ctx, checkpointID); err != nil {
-		return fmt.Errorf("failed to remove the checkpoint: %w", err)
-	}
-	msgs, err := a.messages.List(ctx, sessionID)
-	if err != nil {
-		return fmt.Errorf("failed to list messages: %w", err)
-	}
-
-	currentSession.SummaryMessageID = ""
-	currentSession.SummaryCutMessageID = ""
-	currentSession.PromptTokens = compaction.EstimateAll(msgs)
-	currentSession.EstimatedUsage = true
-	if _, err := a.sessions.Save(ctx, currentSession); err != nil {
-		return fmt.Errorf("failed to save session: %w", err)
-	}
-
-	slog.Info("Restored a session from its checkpoint",
-		"session_id", sessionID, "messages", len(msgs))
 	return nil
 }
 

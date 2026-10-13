@@ -709,6 +709,18 @@ func TestSummarize_ClearedInteractiveAdmissionNotifiesIdle(t *testing.T) {
 			seedUserMessage(t, env.messages, sess.ID, "earlier")
 			var events []notify.Notification
 			observeNotifications(t, sa, func(n notify.Notification) {
+				// Parallel tests share the broker; only this session's
+				// notifications describe this agent's state.
+				if n.SessionID != sess.ID {
+					return
+				}
+				// Progress notes are expected while the session is busy;
+				// the invariant is about terminal notifications never
+				// claiming an idle session that is still working. The
+				// recorded set is terminal agent outcomes only.
+				if n.Type != notify.TypeAgentFinished {
+					return
+				}
 				require.False(t, sa.IsSessionBusy(sess.ID))
 				events = append(events, n)
 			})

@@ -855,7 +855,7 @@ func TestConfig_setupAgentsWithDisabledTools(t *testing.T) {
 	coderAgent, ok := cfg.Agents[AgentCoder]
 	require.True(t, ok)
 
-	assert.Equal(t, []string{"agent", "bash", "cron_create", "cron_delete", "cron_list", "crush_info", "crush_logs", "job_output", "job_kill", "multiedit", "lsp_diagnostics", "lsp_references", "lsp_restart", "lsp_symbols", "lsp_definition", "lsp_call_hierarchy", "lsp_rename", "lsp_replace_symbol", "fetch", "agentic_fetch", "glob", "ls", "question", "sourcegraph", "todos", "view", "write", "list_mcp_resources", "mcp_search", "read_mcp_resource"}, coderAgent.AllowedTools)
+	assert.ElementsMatch(t, []string{"agent", "bash", "crush_info", "crush_logs", "CronCreate", "CronList", "CronDelete", "job_output", "job_kill", "dispatch_agent", "message_agent", "cancel_dispatch", "apply_dispatch", "dismiss_dispatch", "multiedit", "lsp_diagnostics", "lsp_references", "lsp_restart", "lsp_symbols", "lsp_definition", "lsp_call_hierarchy", "lsp_rename", "lsp_replace_symbol", "fetch", "agentic_fetch", "glob", "ls", "question", "semantic_search", "semantic_index", "sourcegraph", "todos", "view", "write", "list_mcp_resources", "read_mcp_resource", "list_mcp_prompts", "call_mcp_prompt"}, coderAgent.AllowedTools)
 	assert.ElementsMatch(t, []string{"agent", "bash", "crush_info", "crush_logs", "CronCreate", "CronList", "CronDelete", "job_output", "job_kill", "dispatch_agent", "message_agent", "cancel_dispatch", "apply_dispatch", "dismiss_dispatch", "multiedit", "lsp_diagnostics", "lsp_references", "lsp_restart", "lsp_symbols", "lsp_definition", "lsp_call_hierarchy", "lsp_rename", "lsp_replace_symbol", "fetch", "agentic_fetch", "glob", "ls", "question", "semantic_search", "semantic_index", "sourcegraph", "todos", "view", "write", "list_mcp_resources", "read_mcp_resource", "list_mcp_prompts", "call_mcp_prompt"}, coderAgent.AllowedTools)
 
 	taskAgent, ok := cfg.Agents[AgentTask]
@@ -888,7 +888,7 @@ func TestConfig_setupAgentsWithEveryReadOnlyToolDisabled(t *testing.T) {
 	cfg.SetupAgents()
 	coderAgent, ok := cfg.Agents[AgentCoder]
 	require.True(t, ok)
-	assert.Equal(t, []string{"bash", "cron_create", "cron_delete", "cron_list", "crush_info", "crush_logs", "job_output", "job_kill", "download", "edit", "multiedit", "lsp_diagnostics", "lsp_references", "lsp_restart", "lsp_rename", "lsp_replace_symbol", "fetch", "agentic_fetch", "question", "todos", "write", "list_mcp_resources", "mcp_search", "read_mcp_resource"}, coderAgent.AllowedTools)
+	assert.ElementsMatch(t, []string{"bash", "crush_info", "crush_logs", "CronCreate", "CronList", "CronDelete", "job_output", "job_kill", "download", "dispatch_agent", "message_agent", "cancel_dispatch", "apply_dispatch", "dismiss_dispatch", "edit", "multiedit", "lsp_diagnostics", "lsp_references", "lsp_restart", "lsp_rename", "lsp_replace_symbol", "fetch", "agentic_fetch", "question", "semantic_index", "todos", "write", "list_mcp_resources", "read_mcp_resource", "list_mcp_prompts", "call_mcp_prompt"}, coderAgent.AllowedTools)
 	assert.ElementsMatch(t, []string{"bash", "crush_info", "crush_logs", "CronCreate", "CronList", "CronDelete", "job_output", "job_kill", "download", "dispatch_agent", "message_agent", "cancel_dispatch", "apply_dispatch", "dismiss_dispatch", "edit", "multiedit", "lsp_diagnostics", "lsp_references", "lsp_restart", "lsp_rename", "lsp_replace_symbol", "fetch", "agentic_fetch", "question", "semantic_index", "todos", "write", "list_mcp_resources", "read_mcp_resource", "list_mcp_prompts", "call_mcp_prompt"}, coderAgent.AllowedTools)
 
 	taskAgent, ok := cfg.Agents[AgentTask]
@@ -1793,7 +1793,9 @@ func TestConfig_configureSelectedModels(t *testing.T) {
 		cfg := &Config{}
 		configure(t, cfg, knownProviders)
 
-		cfg.applySelectedModels(resolveSelectedModels(cfg, knownProviders))
+		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders)
+		require.NoError(t, resolveErr)
+		cfg.applySelectedModels(resolved)
 
 		require.False(t, cfg.HasSelectedModel(SelectedModelTypeLarge))
 		require.False(t, cfg.HasSelectedModel(SelectedModelTypeSmall))
@@ -1818,7 +1820,9 @@ func TestConfig_configureSelectedModels(t *testing.T) {
 		resolver := NewShellVariableResolver(env)
 		require.NoError(t, cfg.configureProviders(context.Background(), store, env, resolver, knownProviders))
 
-		cfg.applySelectedModels(resolveSelectedModels(cfg, knownProviders))
+		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders)
+		require.NoError(t, resolveErr)
+		cfg.applySelectedModels(resolved)
 
 		require.False(t, cfg.HasSelectedModel(SelectedModelTypeLarge))
 
@@ -1839,7 +1843,9 @@ func TestConfig_configureSelectedModels(t *testing.T) {
 		}
 		configure(t, cfg, knownProviders)
 
-		cfg.applySelectedModels(resolveSelectedModels(cfg, knownProviders))
+		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders)
+		require.NoError(t, resolveErr)
+		cfg.applySelectedModels(resolved)
 
 		large := cfg.Models[SelectedModelTypeLarge]
 		small := cfg.Models[SelectedModelTypeSmall]
@@ -1860,7 +1866,9 @@ func TestConfig_configureSelectedModels(t *testing.T) {
 		}
 		configure(t, cfg, knownProviders)
 
-		cfg.applySelectedModels(resolveSelectedModels(cfg, knownProviders))
+		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders)
+		require.NoError(t, resolveErr)
+		cfg.applySelectedModels(resolved)
 
 		require.Equal(t, "openai", cfg.Models[SelectedModelTypeLarge].Provider)
 		require.Equal(t, int64(1000), cfg.Models[SelectedModelTypeLarge].MaxTokens)
@@ -1886,7 +1894,9 @@ func TestConfig_configureSelectedModels(t *testing.T) {
 		}
 		configure(t, cfg, knownProviders)
 
-		cfg.applySelectedModels(resolveSelectedModels(cfg, knownProviders))
+		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders)
+		require.NoError(t, resolveErr)
+		cfg.applySelectedModels(resolved)
 
 		large := cfg.Models[SelectedModelTypeLarge]
 		small := cfg.Models[SelectedModelTypeSmall]
@@ -1906,7 +1916,9 @@ func TestConfig_configureSelectedModels(t *testing.T) {
 		}
 		configure(t, cfg, knownProviders)
 
-		cfg.applySelectedModels(resolveSelectedModels(cfg, knownProviders))
+		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders)
+		require.NoError(t, resolveErr)
+		cfg.applySelectedModels(resolved)
 
 		require.False(t, cfg.HasSelectedModel(SelectedModelTypeLarge))
 	})
@@ -1920,7 +1932,9 @@ func TestConfig_configureSelectedModels(t *testing.T) {
 		}
 		configure(t, cfg, knownProviders)
 
-		cfg.applySelectedModels(resolveSelectedModels(cfg, knownProviders))
+		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders)
+		require.NoError(t, resolveErr)
+		cfg.applySelectedModels(resolved)
 
 		require.Equal(t, int64(100), cfg.Models[SelectedModelTypeLarge].MaxTokens)
 	})
@@ -1940,7 +1954,9 @@ func TestConfig_configureSelectedModels(t *testing.T) {
 		}
 		configure(t, cfg, nil)
 
-		cfg.applySelectedModels(resolveSelectedModels(cfg, nil))
+		resolved, resolveErr := resolveSelectedModels(cfg, nil)
+		require.NoError(t, resolveErr)
+		cfg.applySelectedModels(resolved)
 
 		require.Equal(t, cfg.Models[SelectedModelTypeLarge], cfg.Models[SelectedModelTypeSmall])
 	})

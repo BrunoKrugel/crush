@@ -126,13 +126,13 @@ func RunTool(ctx context.Context, cfg *config.ConfigStore, name, toolName string
 		return ToolResult{Type: "text", Content: ""}, nil
 	}
 
-	return extractToolResult(result), nil
+	return extractToolResult(result, cfg.Config().Options.DataDirectory), nil
 }
 
 // extractToolResult partitions a CallToolResult's content into model-facing
 // text, binary media, and UI-only A2UI surfaces — the extraction half of
 // RunTool, split out so tests can drive it through a live in-memory server.
-func extractToolResult(result *mcp.CallToolResult) ToolResult {
+func extractToolResult(result *mcp.CallToolResult, dataDir string) ToolResult {
 	var textParts []string
 	var surfaces []A2UISurface
 	var imageData []byte
@@ -180,7 +180,7 @@ func extractToolResult(result *mcp.CallToolResult) ToolResult {
 		}
 	}
 
-	textContent := capResult(strings.Join(textParts, "\n"), cfg.Config().Options.DataDirectory)
+	textContent := capResult(strings.Join(textParts, "\n"), dataDir)
 
 	// We need to make sure the data is base64
 	// when using something like docker + playwright the data was not returned correctly.

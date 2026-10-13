@@ -353,6 +353,10 @@ type TUIOptions struct {
 	// the header. Supported placeholders: {cwd}, {user}, {host}.
 	WorkingDirFormat string     `json:"working_dir_format,omitempty" jsonschema:"description=Format for the working directory shown in the header. Supported placeholders: {cwd} for the path\\, {user} for the current user\\, {host} for the hostname.,default={user}@{host}:{cwd},example={cwd},example={host}:{cwd}"`
 	ExitBanner       ExitBanner `json:"exit_banner,omitempty" jsonschema:"description=Exit banner style after quitting Crush,enum=default,enum=compact,enum=none,default=default"`
+	// NerdFonts overrides Nerd Font glyph detection for the TUI.
+	// ScrollSpeed overrides the TUI scroll step in lines per wheel tick.
+	ScrollSpeed *float64 `json:"scroll_speed,omitempty" jsonschema:"description=Multiplier applied to mouse wheel scroll distance in the TUI,default=1"`
+	NerdFonts   *bool    `json:"nerd_fonts,omitempty" jsonschema:"description=Override Nerd Font glyph detection for the TUI: true forces glyphs on, false forces them off, and unset keeps automatic detection"`
 }
 
 // IsTransparent reports whether the TUI draws a transparent background. The
@@ -1844,12 +1848,21 @@ func (c *Config) applySelectedModels(resolved resolvedModels) {
 	if c.Models == nil {
 		c.Models = make(map[SelectedModelType]SelectedModel)
 	}
+	// A type is only kept when the user actually selected it: resolution
+	// fills defaults for everything else, and a default is not a choice.
+	explicit := func(t SelectedModelType) bool {
+		s, ok := c.Models[t]
+		return ok && s.Model != ""
+	}
 	for modelType, entry := range map[SelectedModelType]struct {
 		model SelectedModel
 		ok    bool
 	}{
-		SelectedModelTypeLarge: {resolved.Large, !resolved.LargeFallback},
-		SelectedModelTypeSmall: {resolved.Small, !resolved.SmallFallback},
+		SelectedModelTypeLarge: {resolved.Large, explicit(SelectedModelTypeLarge) && !resolved.LargeFallback},
+		// Small follows large when the user did not name it: deriving the
+		// small model from the provider's large pick is resolution, not a
+		// fallback, so it counts as selected.
+		SelectedModelTypeSmall: {resolved.Small, (explicit(SelectedModelTypeSmall) || explicit(SelectedModelTypeLarge)) && !resolved.SmallFallback},
 	} {
 		if entry.ok {
 			c.Models[modelType] = entry.model
@@ -1917,4 +1930,29 @@ func (c *Config) providerForModel(knownProviders []catwalk.Provider, modelID str
 		}
 	}
 	return "", false
+}
+
+// HasSelectedModel reports whether a usable model is selected for the
+// given type. It is false on a fresh install even when credentials are
+// present in the environment, since Crush no longer guesses a provider.
+func (c *Config) HasSelectedModel(modelType SelectedModelType) bool {
+	selected, ok := c.Models[modelType]
+	if !ok || selected.Provider == "" || selected.Model == "" {
+		return false
+	}
+	return c.GetModel(selected.Provider, selected.Model) != nil
+}
+
+// DefaultScrollSpeed is the wheel-to-lines multiplier used when the user has
+// not configured one.
+const DefaultScrollSpeed = 1.0
+
+// ScrollSpeedValue returns the configured scroll speed multiplier. The nil
+// receiver and the unset pointer both mean the default. Values are clamped to
+// a small positive minimum so scrolling never inverts or stalls.
+func (t *TUIOptions) ScrollSpeedValue() float64 {
+	if t == nil || t.ScrollSpeed == nil {
+		return DefaultScrollSpeed
+	}
+	return max(*t.ScrollSpeed, 0.1)
 }

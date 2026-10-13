@@ -14,6 +14,7 @@ import (
 	"charm.land/fantasy/providers/anthropic"
 	"charm.land/fantasy/providers/bedrock"
 	"charm.land/fantasy/providers/openaicompat"
+	"github.com/charmbracelet/crush/internal/compaction"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/discover"
 	"github.com/charmbracelet/crush/internal/session"
@@ -65,7 +66,23 @@ func (m *mockSessionAgent) IsBusy() bool                                { return
 func (m *mockSessionAgent) QueuedPrompts(sessionID string) int          { return 0 }
 func (m *mockSessionAgent) QueuedPromptsList(sessionID string) []string { return nil }
 func (m *mockSessionAgent) ClearQueue(sessionID string)                 {}
-func (m *mockSessionAgent) Summarize(context.Context, string, fantasy.ProviderOptions, func(context.Context, *fantasy.ProviderError) error) error {
+func (m *mockSessionAgent) Summarize(context.Context, string, string, fantasy.ProviderOptions, func(context.Context, *fantasy.ProviderError) error) error {
+	return nil
+}
+
+func (m *mockSessionAgent) SummarizePreview(context.Context, string, string, fantasy.ProviderOptions, func(context.Context, *fantasy.ProviderError) error) (compaction.Preview, error) {
+	return compaction.Preview{}, nil
+}
+
+func (m *mockSessionAgent) ConfirmSummarize(context.Context, string, compaction.Preview) error {
+	return nil
+}
+
+func (m *mockSessionAgent) DiscardSummarize(context.Context, string, string) error {
+	return nil
+}
+
+func (m *mockSessionAgent) RestoreSummarize(context.Context, string) error {
 	return nil
 }
 func (m *mockSessionAgent) GenerateTitle(context.Context, string, string) {}

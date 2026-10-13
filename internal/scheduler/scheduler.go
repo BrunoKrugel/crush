@@ -8,6 +8,7 @@
 package scheduler
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -20,6 +21,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/charmbracelet/crush/internal/lock"
 )
 
 // MaxTasksPerSession caps the number of scheduled tasks a single session
@@ -62,74 +65,239 @@ var ErrTooManyTasks = errors.New("session already has the maximum of 50 schedule
 // match, such as "0 0 30 2 *" (February 30th).
 var ErrNeverFires = errors.New("cron expression is valid but will never fire")
 
-// ErrOneShotInPast is returned when a one-shot (non-recurring) task's
-// schedule matched within the last day and does not match again within
-// the next one. The intended fire time is then unrecoverable: the
-// schedule's next match has jumped to tomorrow, next month, or next
-// year, which is never what a one-shot means. The usual cause is an
-// agent computing the cron fields against a stale clock (e.g. the
-// session-start time in its prompt rather than the actual current
-// time), so the error names both the match that slipped by and the
-// next one.
-var ErrOneShotInPast = errors.New("one-shot schedule's fire time has already passed")
+// ErrOneShotDateInPast narrows ErrOneShotInPast to a one-shot whose
+// calendar date has already passed.
+var ErrOneShotDateInPast = fmt.Errorf("%w: date is in the past", ErrOneShotInPast)
 
-// ErrOneShotDateInPast is the same rejection for a one-shot whose
-// slipped match was on an EARLIER DAY: the cron fields name a calendar
-// date that is already behind us, so the next match is a month or a
-// year out. It is a distinct sentinel because the remedy differs — the
-// caller must recompute the day-of-month/month fields, not just the
-// minute — and because the two are easy to confuse from the message
-// alone (both report a far-future next match).
-//
-// It wraps ErrOneShotInPast, so callers that only care that a one-shot
-// was rejected as stale can keep matching the single sentinel.
-var ErrOneShotDateInPast = fmt.Errorf("%w: its day-of-month/month name a date that is already behind us", ErrOneShotInPast)
+// ErrOneShotInPast is returned when a one-shot (non-recurring) task's
+// schedule already matched at an earlier minute today. The intended
+// fire time is then unrecoverable: the schedule's next match has jumped
+// to tomorrow, next month, or next year, which is never what a one-shot
+// means. The usual cause is an agent computing the cron fields against
+// a stale clock (e.g. the session-start time in its prompt rather than
+// the actual current time), so the error names the next match to make
+// the discrepancy visible.
+var ErrOneShotInPast = errors.New("one-shot schedule's fire time has already passed today")
+
+// fileLockTimeout bounds the wait on the scheduled-tasks file lock. The
+// lock is only ever held for the duration of one read-modify-write, so
+// a healthy peer releases it in milliseconds; anything longer is a
+// wedged process and is better reported as a persist failure than
+// blocked on.
+const fileLockTimeout = 5 * time.Second
+
+// claimWindow is how far a durable task's next run is pushed out when a
+// process claims its fire. The claim is an atomic compare-and-advance
+// under the file lock, so exactly one serving process wins a given fire;
+// the window buys the winner time to actually run the prompt before
+// MarkFired / MarkError / Retry replaces it with the real next run. If
+// the winner dies first, the task simply comes due again at the end of
+// the window in whichever process then serves the session — a missed
+// fire, never a lost task or a double fire.
+const claimWindow = 2 * time.Minute
 
 // Store keeps scheduled tasks for all sessions. Session tasks live only
 // in memory; durable tasks are additionally persisted to a JSON file so
 // they survive restarts.
+//
+// The file is shared by every Crush process working on the same
+// project. A short-held file lock serializes every read-modify-write so
+// concurrent processes merge their changes instead of overwriting each
+// other's, and a due durable task must be claimed — its next run
+// advanced on disk under that same lock — before it is fired, so a fire
+// happens exactly once no matter how many processes are running.
 type Store struct {
 	mu       sync.RWMutex
 	tasks    map[string]*Task // keyed by ID
 	filePath string           // durable persistence path; "" disables durable tasks
 	now      func() time.Time // for tests
+
+	// removedSinceSync tracks durable task IDs deleted in this process
+	// since the last successful on-disk sync, so a merge write removes
+	// them even if another process rewrote the file in between.
+	removedSinceSync map[string]bool
+	// dirtySinceSync tracks durable task IDs this process has modified
+	// since the last successful on-disk sync, so a merge write only
+	// overwrites a task's disk entry when this process actually changed
+	// it. A process holding a stale in-memory copy (loaded at startup,
+	// advanced on disk by another process since) must not let that copy
+	// win over the newer NextRunAt / RunCount / LastError on disk.
+	dirtySinceSync map[string]bool
+	// lastDiskIDs holds the task IDs present on disk as of the last
+	// successful sync, so a durable task another process deleted from
+	// the file is not resurrected by this process's next write.
+	lastDiskIDs map[string]bool
+	// lastModTime is the persistence file's mtime as of the last read,
+	// gating refreshes to one stat call per tick when nothing changed.
+	lastModTime time.Time
 }
 
 // NewStore returns a Store persisting durable tasks at filePath. An
 // empty filePath keeps every task in memory only.
 func NewStore(filePath string) *Store {
 	return &Store{
-		tasks:    make(map[string]*Task),
-		filePath: filePath,
-		now:      time.Now,
+		tasks:            make(map[string]*Task),
+		filePath:         filePath,
+		now:              time.Now,
+		removedSinceSync: make(map[string]bool),
+		dirtySinceSync:   make(map[string]bool),
+		lastDiskIDs:      make(map[string]bool),
 	}
 }
 
-// Load reads durable tasks from the store's persistence file. Missing
-// files are not an error. Tasks whose next run is far in the past are
-// rescheduled from now rather than firing a backlog of missed runs —
-// there is no catch-up for missed fires.
+// opLockPath is the short-held lock file serializing file access.
+func (s *Store) opLockPath() string { return s.filePath + ".lock" }
+
+// Load reads durable tasks from the persistence file. Missing files are
+// not an error. Tasks whose next run is far in the past are rescheduled
+// from now rather than firing a backlog of missed runs — there is no
+// catch-up for missed fires.
 func (s *Store) Load() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.loadLocked()
+}
 
-	data, err := os.ReadFile(s.filePath)
-	if errors.Is(err, os.ErrNotExist) {
+func (s *Store) loadLocked() error {
+	if s.filePath == "" {
 		return nil
 	}
-	if err != nil {
-		return fmt.Errorf("failed to read scheduled tasks: %w", err)
+	if err := os.MkdirAll(filepath.Dir(s.filePath), 0o755); err != nil {
+		return fmt.Errorf("failed to create scheduled tasks directory: %w", err)
 	}
 
 	var durable []Task
-	if err := json.Unmarshal(data, &durable); err != nil {
-		return fmt.Errorf("failed to parse scheduled tasks: %w", err)
+	err := s.withOpLock(func() error {
+		var err error
+		durable, err = readDurableFile(s.filePath)
+		return err
+	})
+	if err != nil {
+		return err
 	}
+	s.adoptDurableLocked(durable)
+	if fi, err := os.Stat(s.filePath); err == nil {
+		s.lastModTime = fi.ModTime()
+		s.rememberDiskIDsLocked(durable)
+	}
+	return nil
+}
 
+// withOpLock runs f while holding the short-lived file lock that
+// serializes every scheduled-tasks read-modify-write across processes.
+func (s *Store) withOpLock(f func() error) error {
+	ctx, cancel := context.WithTimeout(context.Background(), fileLockTimeout)
+	defer cancel()
+	release, err := lock.File(ctx, s.opLockPath())
+	if err != nil {
+		return fmt.Errorf("failed to lock scheduled tasks file: %w", err)
+	}
+	defer release()
+	return f()
+}
+
+// refreshDurableLocked adopts durable tasks other processes added to the
+// file, forgets ones they deleted, and takes the disk version of durable
+// tasks this process has not modified since its last sync, so CronList
+// and DueTasks do not act on tasks that already fired or were deleted
+// elsewhere. It costs one stat call when the file has not changed.
+// Callers must hold s.mu.
+func (s *Store) refreshDurableLocked() {
+	if s.filePath == "" {
+		return
+	}
+	fi, err := os.Stat(s.filePath)
+	if err != nil || !fi.ModTime().After(s.lastModTime) {
+		return
+	}
+	modTime := fi.ModTime()
+	var durable []Task
+	err = s.withOpLock(func() error {
+		var err error
+		durable, err = readDurableFile(s.filePath)
+		return err
+	})
+	if err != nil {
+		slog.Error("Failed to refresh scheduled tasks", "error", err)
+		return
+	}
+	for id, t := range s.tasks {
+		if !t.Durable {
+			continue
+		}
+		if _, onDisk := lookupTask(durable, id); !onDisk && !s.removedSinceSync[id] {
+			// Another process deleted it from the file.
+			delete(s.tasks, id)
+		}
+	}
+	// Adopt the disk version of durable tasks this process has not
+	// modified since its last sync: another process may have fired, rescheduled,
+	// or errored them since, and a stale local copy would otherwise win in
+	// this process's next merge write and show up in CronList.
+	for i := range durable {
+		dt := durable[i]
+		if !dt.Durable || dt.ID == "" {
+			continue
+		}
+		cur, ok := s.tasks[dt.ID]
+		if !ok || !cur.Durable || s.dirtySinceSync[dt.ID] {
+			continue
+		}
+		if _, err := Parse(dt.Cron); err != nil {
+			continue
+		}
+		// A zero next run is always "due", so a task carrying one would
+		// fire on every tick forever. Keep the local copy over a corrupt
+		// disk entry; the next persist drops it.
+		if dt.NextRunAt.IsZero() {
+			continue
+		}
+		s.tasks[dt.ID] = &dt
+	}
+	s.adoptDurableLocked(durable)
+	s.lastModTime = modTime
+	s.rememberDiskIDsLocked(durable)
+}
+
+// lookupTask finds a task by ID in a slice.
+func lookupTask(tasks []Task, id string) (Task, bool) {
+	for _, t := range tasks {
+		if t.ID == id {
+			return t, true
+		}
+	}
+	return Task{}, false
+}
+
+// rememberDiskIDsLocked records which task IDs the file held as of the
+// last read, so a later persist can tell "new task of mine" from
+// "another process removed it". Callers must hold s.mu.
+func (s *Store) rememberDiskIDsLocked(durable []Task) {
+	clear(s.lastDiskIDs)
+	for _, t := range durable {
+		if t.ID != "" {
+			s.lastDiskIDs[t.ID] = true
+		}
+	}
+}
+
+// adoptDurableLocked validates durable tasks read from disk and merges
+// the ones this store does not already hold into memory. Tasks already
+// present are left alone: this process's view of its own tasks wins.
+// Callers must hold s.mu.
+func (s *Store) adoptDurableLocked(durable []Task) {
 	perSession := make(map[string]int)
+	for _, t := range s.tasks {
+		if t.Durable {
+			perSession[t.SessionID]++
+		}
+	}
 	for i := range durable {
 		t := durable[i]
 		if !t.Durable || t.ID == "" {
+			continue
+		}
+		if _, exists := s.tasks[t.ID]; exists {
 			continue
 		}
 		sched, err := Parse(t.Cron)
@@ -151,10 +319,18 @@ func (s *Store) Load() error {
 			continue
 		}
 		perSession[t.SessionID]++
-		task := t
-		s.tasks[task.ID] = &task
+		s.tasks[t.ID] = &t
 	}
-	return nil
+}
+
+// deleteTaskLocked removes a task and, when it was durable, records the
+// removal so the next merge write also drops it from the file even if
+// another process rewrote the file in between. Callers must hold s.mu.
+func (s *Store) deleteTaskLocked(id string) {
+	if t, ok := s.tasks[id]; ok && t.Durable {
+		s.removedSinceSync[id] = true
+	}
+	delete(s.tasks, id)
 }
 
 // Create validates and registers a new task for sessionID.
@@ -197,19 +373,11 @@ func (s *Store) Create(sessionID, cronExpr, prompt string, recurring, durable bo
 	// that so users are not confused by sub-minute firing.
 	nextRun = nextRun.Truncate(time.Minute)
 
-	// A one-shot whose intended moment has already slipped by pinned a
-	// fire time that is now unrecoverable; accepting it would store a
-	// task firing next month or next year when the caller meant "in a
-	// few minutes".
-	if !recurring {
-		if slipped, ok := oneShotSlipped(sched, now, nextRun); ok {
-			kind := ErrOneShotInPast
-			if !sameDay(slipped, now) {
-				kind = ErrOneShotDateInPast
-			}
-			return Task{}, fmt.Errorf("%w: %q matched %s, which has passed, and does not match again until %s",
-				kind, cronExpr, slipped.Format(time.RFC3339), nextRun.Format(time.RFC3339))
-		}
+	// A one-shot whose schedule already matched earlier today pinned a
+	// fire time that has passed; accepting it would store a task firing
+	// tomorrow or next year when the caller meant "in a few minutes".
+	if !recurring && matchedEarlierToday(sched, now) {
+		return Task{}, fmt.Errorf("%w: %q next matches %s", ErrOneShotInPast, cronExpr, nextRun.Format(time.RFC3339))
 	}
 
 	id, err := NewTaskID()
@@ -227,81 +395,43 @@ func (s *Store) Create(sessionID, cronExpr, prompt string, recurring, durable bo
 		NextRunAt: nextRun,
 	}
 	s.tasks[id] = task
-	if err := s.persistLocked(); err != nil {
-		delete(s.tasks, id)
-		return Task{}, err
+	// Session-only tasks never touch the file: a disk or lock problem
+	// must not be able to block creating (or later deleting) a task that
+	// needs no persistence at all.
+	if durable {
+		if err := s.persistLocked(); err != nil {
+			delete(s.tasks, id)
+			return Task{}, err
+		}
 	}
 	return *task, nil
 }
 
-// oneShotWindow is how far back a slipped match still counts as the
-// moment the caller meant, and how far ahead the next match may be
-// before the schedule is treated as unrecoverable. A one-shot is a
-// pinned instant, so both sides ask the same question: is there a
-// matching moment in the last day, and is the next one further off
-// than a day?
-const oneShotWindow = 24 * time.Hour
-
-// oneShotSlipped reports whether a one-shot's intended fire time has
-// already gone by, returning the match that slipped.
-//
-// Both halves are required, and each rules out a different false
-// positive:
-//
-//   - A match within the last day. Without it, "0 9 25 12 *" created in
-//     August — a legitimate one-shot four months out — looks identical
-//     to a stale one.
-//   - A next match more than a day out. Without it, "*/5 * * * *"
-//     created at 06:29 is rejected even though it fires at 06:30: a
-//     match did just slip by, but the caller loses nothing.
-//
-// Together they say: the fields describe a moment that just passed, and
-// the schedule will not come back around in time to be what the caller
-// asked for. That is the signature of cron fields computed against a
-// stale clock, and it holds across midnight — the previous form of this
-// check looked back only to midnight, so a schedule pinned to
-// yesterday's date sailed through and was stored to fire a year later
-// (issue #272).
-//
-// Next returns the first match strictly after its argument, so a match
-// landing exactly on the current minute counts as slipped: robfig
-// treats the current minute as consumed, and the stored next run would
-// jump a full period.
-func oneShotSlipped(sched *Schedule, now, next time.Time) (time.Time, bool) {
-	if next.IsZero() || next.Sub(now) <= oneShotWindow {
-		return time.Time{}, false
-	}
-	minute := now.Truncate(time.Minute)
-	slipped := sched.Next(now.Add(-oneShotWindow))
-	if slipped.IsZero() || slipped.After(minute) {
-		return time.Time{}, false
-	}
-	// Next walks forward, so land on the LAST match in the window rather
-	// than the first: "0 22,23 19 8 *" matched twice yesterday, and the
-	// message should name 23:00, the moment the caller most likely meant.
-	// Bounded by construction — the loop only advances through matches
-	// inside a 24h window that the schedule has already left behind.
-	for {
-		after := sched.Next(slipped)
-		if after.IsZero() || after.After(minute) {
-			return slipped, true
-		}
-		slipped = after
-	}
-}
-
-// sameDay reports whether a and b fall on the same calendar day. Both
-// come from the same clock, so they share a location.
-func sameDay(a, b time.Time) bool {
-	ay, am, ad := a.Date()
-	by, bm, bd := b.Date()
-	return ay == by && am == bm && ad == bd
+// matchedEarlierToday reports whether the schedule's most recent match
+// is at or before the current minute today. A one-shot created after
+// such a match can only fire on a later day than its fields suggest —
+// the signature of cron fields computed against a stale clock. The
+// current minute counts as "already passed": robfig treats it as
+// consumed, so a schedule matching it next fires tomorrow or beyond.
+// Next returns the first match strictly after its argument, so the
+// cursor starts a second before midnight to include a "0 0 ..."
+// schedule firing exactly at midnight.
+func matchedEarlierToday(sched *Schedule, now time.Time) bool {
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	today := now.Truncate(time.Minute)
+	next := sched.Next(midnight.Add(-time.Second))
+	return !next.IsZero() && !next.After(today)
 }
 
 // List returns the tasks belonging to sessionID, ordered by next run.
+// Durable tasks are refreshed from disk first (mtime-gated, one stat call
+// when nothing changed) so a process does not list tasks that
+// fired or were deleted elsewhere since its last sync.
 func (s *Store) List(sessionID string) []Task {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.refreshDurableLocked()
 
 	var out []Task
 	for _, t := range s.tasks {
@@ -315,8 +445,10 @@ func (s *Store) List(sessionID string) []Task {
 
 // ListAll returns every task in the store, ordered by next run.
 func (s *Store) ListAll() []Task {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.refreshDurableLocked()
 
 	out := make([]Task, 0, len(s.tasks))
 	for _, t := range s.tasks {
@@ -337,12 +469,14 @@ func (s *Store) Delete(sessionID, id string) (Task, error) {
 		return Task{}, ErrTaskNotFound
 	}
 	deleted := *t
-	delete(s.tasks, id)
-	if err := s.persistLocked(); err != nil {
-		// Put it back so memory and disk stay in agreement; otherwise the
-		// task is gone from this process but returns on the next restart.
-		s.tasks[id] = t
-		return Task{}, err
+	s.deleteTaskLocked(id)
+	if t.Durable {
+		if err := s.persistLocked(); err != nil {
+			// Put it back so memory and disk stay in agreement; otherwise the
+			// task is gone from this process but returns on the next restart.
+			s.tasks[id] = t
+			return Task{}, err
+		}
 	}
 	return deleted, nil
 }
@@ -354,33 +488,114 @@ func (s *Store) Remove(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.tasks[id]; !ok {
+	t, ok := s.tasks[id]
+	if !ok {
 		return
 	}
-	delete(s.tasks, id)
-	if err := s.persistLocked(); err != nil {
-		slog.Error("Failed to persist scheduled tasks after removal", "id", id, "error", err)
+	s.deleteTaskLocked(id)
+	if t.Durable {
+		if err := s.persistLocked(); err != nil {
+			slog.Error("Failed to persist scheduled tasks after removal", "id", id, "error", err)
+		}
 	}
 }
 
 // DueTasks returns every task whose next run time has passed as of now.
-func (s *Store) DueTasks() []Task {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+//
+// A durable task is shared by every process on the project, but a fire
+// should happen where somebody can see it, so a due durable task is
+// returned only to a process that is actively serving its session (a nil
+// serves predicate means every session counts). Exactly-once is then
+// guaranteed by a claim: the task's next run is advanced on disk under
+// the file lock before it is handed back, so a second serving process
+// sees a future next run and skips it. A durable task whose session is
+// served by no process is left due — it fires when some process serves
+// the session again. Session-only tasks live in one process and are
+// returned as usual.
+func (s *Store) DueTasks(serves func(sessionID string) bool) []Task {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.filePath != "" {
+		s.refreshDurableLocked()
+	}
+	if serves == nil {
+		serves = func(string) bool { return true }
+	}
 
 	now := s.now()
 	var out []Task
 	for _, t := range s.tasks {
-		if !t.NextRunAt.After(now) {
-			out = append(out, *t)
+		if t.NextRunAt.After(now) {
+			continue
 		}
+		if t.Durable && (!serves(t.SessionID) || !s.claimDurableLocked(t, now)) {
+			continue
+		}
+		out = append(out, *t)
 	}
 	sortTasks(out)
 	return out
 }
 
+// claimDurableLocked atomically reserves a durable task's fire. It reads
+// the shared file under the op-lock, and only if the task is still due
+// there advances its next run by claimWindow and writes it back — the
+// compare-and-advance is what keeps a fire exactly-once across every
+// serving process. The in-memory copy is advanced to match so later
+// MarkFired / MarkError / Retry calls operate on the claimed state; they
+// replace the claim with the real next run. Callers must hold s.mu.
+func (s *Store) claimDurableLocked(t *Task, now time.Time) bool {
+	if s.filePath == "" {
+		// In-memory stores cannot hold durable tasks (Create rejects
+		// them), so there is nothing to guard against.
+		return true
+	}
+	claimed := false
+	err := s.withOpLock(func() error {
+		disk, err := readDurableFile(s.filePath)
+		if err != nil {
+			return err
+		}
+		for i := range disk {
+			if disk[i].ID != t.ID {
+				continue
+			}
+			if disk[i].NextRunAt.After(now) {
+				// Another process already claimed (or advanced) this fire.
+				return nil
+			}
+			disk[i].NextRunAt = now.Add(claimWindow)
+			if err := writeDurableFile(s.filePath, disk); err != nil {
+				return err
+			}
+			claimed = true
+			return nil
+		}
+		// Deleted from the file elsewhere: nothing left to fire.
+		return nil
+	})
+	if err != nil {
+		// A lock or disk failure must not turn into a double fire: treat
+		// it as a lost claim. The task stays due in memory and is retried
+		// on a later tick.
+		slog.Error("Failed to claim scheduled task", "id", t.ID, "error", err)
+		return false
+	}
+	if claimed {
+		t.NextRunAt = now.Add(claimWindow)
+		if fi, err := os.Stat(s.filePath); err == nil {
+			s.lastModTime = fi.ModTime()
+		}
+	}
+	return claimed
+}
+
 // MarkFired records a successful firing: recurring tasks reschedule
-// themselves, one-shots delete themselves.
+// themselves, one-shots delete themselves. Durable mutations are
+// tracked as dirty so this process's next merge write overwrites the
+// disk entry (a fire is exactly the kind of change a stale copy in
+// another process must not clobber).
 func (s *Store) MarkFired(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -389,17 +604,25 @@ func (s *Store) MarkFired(id string) {
 	if !ok {
 		return
 	}
+	durable := t.Durable
+	if durable {
+		s.dirtySinceSync[id] = true
+	}
 	now := s.now()
 	t.LastRunAt = &now
 	t.RunCount++
 	t.LastError = ""
 	if !t.Recurring {
-		delete(s.tasks, id)
-		s.persistBestEffort(id)
+		s.deleteTaskLocked(id)
+		if durable {
+			s.persistBestEffort(id)
+		}
 		return
 	}
 	s.rescheduleLocked(t, now)
-	s.persistBestEffort(id)
+	if durable {
+		s.persistBestEffort(id)
+	}
 }
 
 // rescheduleLocked advances a recurring task to its next fire time,
@@ -412,13 +635,13 @@ func (s *Store) rescheduleLocked(t *Task, now time.Time) {
 	sched, err := Parse(t.Cron)
 	if err != nil {
 		slog.Warn("Deleting scheduled task with unparseable cron expression", "id", t.ID, "cron", t.Cron, "error", err)
-		delete(s.tasks, t.ID)
+		s.deleteTaskLocked(t.ID)
 		return
 	}
 	next := sched.Next(now)
 	if next.IsZero() {
 		slog.Warn("Deleting scheduled task that can never fire again", "id", t.ID, "cron", t.Cron)
-		delete(s.tasks, t.ID)
+		s.deleteTaskLocked(t.ID)
 		return
 	}
 	t.NextRunAt = next.Truncate(time.Minute)
@@ -442,14 +665,40 @@ func (s *Store) MarkError(id string, fireErr error) {
 	if !ok {
 		return
 	}
+	durable := t.Durable
+	if durable {
+		s.dirtySinceSync[id] = true
+	}
 	now := s.now()
 	t.LastError = fireErr.Error()
 	if t.Recurring {
 		s.rescheduleLocked(t, now)
 	} else {
-		delete(s.tasks, id)
+		s.deleteTaskLocked(id)
 	}
-	s.persistBestEffort(id)
+	if durable {
+		s.persistBestEffort(id)
+	}
+}
+
+// SetLastError records a failure that happened after the fire itself was
+// accepted: the scheduler already called MarkFired (rescheduling the
+// task), so unlike MarkError this must not touch the schedule or delete
+// a one-shot that has already run — it only stamps LastError so
+// CronList surfaces what happened to the run.
+func (s *Store) SetLastError(id string, runErr error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	t, ok := s.tasks[id]
+	if !ok {
+		return
+	}
+	t.LastError = runErr.Error()
+	if t.Durable {
+		s.dirtySinceSync[id] = true
+		s.persistBestEffort(id)
+	}
 }
 
 // DropSession removes every task belonging to a session, durable ones
@@ -463,41 +712,108 @@ func (s *Store) DropSession(sessionID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	dropped := false
+	droppedDurable := false
 	for id, t := range s.tasks {
 		if t.SessionID == sessionID {
-			delete(s.tasks, id)
-			dropped = true
+			s.deleteTaskLocked(id)
+			if t.Durable {
+				droppedDurable = true
+			}
 		}
 	}
-	if dropped {
+	if droppedDurable {
 		s.persistBestEffort("")
 	}
 }
 
 // persistLocked writes durable tasks to disk. Callers must hold s.mu.
+//
+// The write is a read-modify-write under the short-held file lock:
+// durable tasks belonging to other Crush processes on the same project
+// are preserved rather than clobbered, tasks this process deleted are
+// dropped, and this process's version of a task wins only when it has
+// actually modified that task since its last successful sync — a stale
+// copy must not overwrite the newer NextRunAt / RunCount /
+// LastError. Without the merge, two windows on one project would each
+// write their own view and the last rename would silently discard the
+// other's tasks.
 func (s *Store) persistLocked() error {
 	if s.filePath == "" {
 		return nil
 	}
 
-	var durable []Task
-	for _, t := range s.tasks {
-		if t.Durable {
-			durable = append(durable, *t)
+	if err := s.withOpLock(func() error {
+		disk, err := readDurableFile(s.filePath)
+		if err != nil {
+			return err
 		}
+		merged := make([]Task, 0, len(disk)+len(s.tasks))
+		onDisk := make(map[string]bool, len(disk))
+		for _, t := range disk {
+			onDisk[t.ID] = true
+			if s.removedSinceSync[t.ID] {
+				continue
+			}
+			if cur, ok := s.tasks[t.ID]; ok && cur.Durable && s.dirtySinceSync[t.ID] {
+				merged = append(merged, *cur)
+				continue
+			}
+			merged = append(merged, t)
+		}
+		for _, t := range s.tasks {
+			// A task absent from the file that the file never held is
+			// new here; one the file used to hold was removed by
+			// another process, so honor the removal instead of
+			// resurrecting it.
+			if t.Durable && !onDisk[t.ID] && !s.lastDiskIDs[t.ID] {
+				merged = append(merged, *t)
+			}
+		}
+		sortTasks(merged)
+		if err := writeDurableFile(s.filePath, merged); err != nil {
+			return err
+		}
+		if fi, err := os.Stat(s.filePath); err == nil {
+			s.lastModTime = fi.ModTime()
+		}
+		s.rememberDiskIDsLocked(merged)
+		clear(s.removedSinceSync)
+		clear(s.dirtySinceSync)
+		return nil
+	}); err != nil {
+		return err
 	}
-	sortTasks(durable)
+	return nil
+}
 
-	data, err := json.MarshalIndent(durable, "", "  ")
+// readDurableFile reads and parses the persistence file. A missing file
+// is an empty task list, not an error.
+func readDurableFile(path string) ([]Task, error) {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read scheduled tasks: %w", err)
+	}
+	var durable []Task
+	if err := json.Unmarshal(data, &durable); err != nil {
+		return nil, fmt.Errorf("failed to parse scheduled tasks: %w", err)
+	}
+	return durable, nil
+}
+
+// writeDurableFile atomically replaces the persistence file.
+func writeDurableFile(path string, tasks []Task) error {
+	data, err := json.MarshalIndent(tasks, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to encode scheduled tasks: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(s.filePath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("failed to create scheduled tasks directory: %w", err)
 	}
 
-	tmp, err := os.CreateTemp(filepath.Dir(s.filePath), ".scheduled_tasks-*.json")
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".scheduled_tasks-*.json")
 	if err != nil {
 		return fmt.Errorf("failed to create scheduled tasks temp file: %w", err)
 	}
@@ -515,7 +831,7 @@ func (s *Store) persistLocked() error {
 		os.Remove(tmpName)
 		return fmt.Errorf("failed to secure scheduled tasks file: %w", err)
 	}
-	if err := os.Rename(tmpName, s.filePath); err != nil {
+	if err := os.Rename(tmpName, path); err != nil {
 		os.Remove(tmpName)
 		return fmt.Errorf("failed to replace scheduled tasks file: %w", err)
 	}

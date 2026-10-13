@@ -415,6 +415,17 @@ func (c *Client) HandleEvent(ev Event) {
 // message, which is transient and self-healing. Blocks survive the
 // switch: they are not session-scoped, and a dialog raised by any
 // session still waits on the user.
+// SetSessionID switches the current session, preserving its title.
+func (c *Client) SetSessionID(id string) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	title := c.pres.title
+	c.mu.Unlock()
+	c.SetSession(id, title)
+}
+
 func (c *Client) SetSession(id, title string) {
 	if c == nil {
 		return

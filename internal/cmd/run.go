@@ -74,6 +74,7 @@ crush run --continue "Follow up on your last response"
 			reasoningEffort, _ = cmd.Flags().GetString("reasoning-effort")
 			sessionID, _       = cmd.Flags().GetString("session")
 			useLast, _         = cmd.Flags().GetBool("continue")
+			showEvents, _      = cmd.Flags().GetBool("show-events")
 		)
 
 		// Cancel on SIGINT or SIGTERM.
@@ -131,7 +132,7 @@ crush run --continue "Follow up on your last response"
 				slog.SetDefault(slog.New(log.New(os.Stderr)))
 			}
 
-			return runNonInteractive(ctx, c, ws, prompt, largeModel, smallModel, reasoningEffort, quiet || verbose, sessionID, useLast)
+			return runNonInteractive(ctx, c, ws, prompt, largeModel, smallModel, reasoningEffort, quiet || verbose, sessionID, useLast, showEvents)
 		}
 
 		ws, cleanup, err := setupLocalWorkspace(cmd)
@@ -165,7 +166,7 @@ crush run --continue "Follow up on your last response"
 			sessionID = sess.ID
 		}
 
-		return appWs.App().RunNonInteractive(ctx, os.Stdout, prompt, largeModel, smallModel, reasoningEffort, quiet || verbose, sessionID, useLast)
+		return appWs.App().RunNonInteractive(ctx, os.Stdout, prompt, largeModel, smallModel, reasoningEffort, quiet || verbose, sessionID, useLast, showEvents)
 	},
 }
 
@@ -190,6 +191,7 @@ func runNonInteractive(
 	hideSpinner bool,
 	continueSessionID string,
 	useLast bool,
+	showEvents bool,
 ) error {
 	slog.Info("Running in non-interactive mode")
 
@@ -290,15 +292,17 @@ func runNonInteractive(
 	// loop would exit on whichever RunComplete arrived first for
 	// the same session and drop the queued prompt's output.
 	runID := uuid.New().String()
-	if err := c.SendMessage(ctx, ws.ID, sess.ID, runID, "", 0, prompt); err != nil {
+	if err := c.SendMessage(ctx, ws.ID, sess.ID, runID, "", prompt, proto.PermissionRequestPolicyPrompt); err != nil {
 		return fmt.Errorf("failed to send message: %w", err)
 	}
 
 	stream := &runStream{
-		sessionID: sess.ID,
-		runID:     runID,
-		out:       os.Stdout,
-		read:      make(map[string]int),
+		showEvents: showEvents,
+		events:     format.NewEventPrinter(os.Stdout),
+		sessionID:  sess.ID,
+		runID:      runID,
+		out:        os.Stdout,
+		read:       make(map[string]int),
 	}
 
 	// Start herdr integration when running inside a herdr pane.
@@ -361,11 +365,13 @@ func runNonInteractive(
 // and live message streaming, which is still correct for the
 // single-turn case.
 type runStream struct {
-	sessionID string
-	runID     string
-	out       io.Writer
-	read      map[string]int
-	printed   bool
+	sessionID  string
+	runID      string
+	out        io.Writer
+	read       map[string]int
+	printed    bool
+	showEvents bool
+	events     *format.EventPrinter
 }
 
 // handle processes one SSE event. Returns done=true when the run

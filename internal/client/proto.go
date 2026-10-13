@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/proto"
@@ -504,14 +505,16 @@ func (c *Client) SetMainAgent(ctx context.Context, id, agentID string) error {
 // for completion detection. Pass "" when the caller does not need
 // to distinguish its own turn's terminal event from any concurrent
 // turn on the same session (e.g. interactive TUI usage).
-func (c *Client) SendMessage(ctx context.Context, id string, sessionID, runID, channel string, contentWidth int, prompt string, attachments ...message.Attachment) error {
+func (c *Client) SendMessage(ctx context.Context, id string, sessionID, runID, channel, prompt string, policy proto.PermissionRequestPolicy, attachments ...message.Attachment) error {
 	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/agent", id), nil, jsonBody(proto.AgentMessage{
+		OperatorSteering:  message.OperatorSteering(ctx),
 		HiddenUserMessage: message.HiddenUserMessage(ctx),
 		SessionID:         sessionID,
 		RunID:             runID,
 		Channel:           channel,
-		ContentWidth:      contentWidth,
 		Prompt:            prompt,
+		ContentWidth:      agent.ContentWidthFromContext(ctx),
+		PermissionPolicy:  policy,
 		Attachments:       proto.AttachmentsFromMessage(attachments),
 	}), http.Header{"Content-Type": []string{"application/json"}})
 	if err != nil {
@@ -578,12 +581,22 @@ func (c *Client) GetAgentSessionInfo(ctx context.Context, id string, sessionID s
 }
 
 // AgentSummarizeSession requests a session summarization.
-func (c *Client) AgentSummarizeSession(ctx context.Context, id string, sessionID string) error {
-	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/agent/sessions/%s/summarize", id, sessionID), nil, nil, nil)
+func (c *Client) AgentSummarizeSession(ctx context.Context, id string, sessionID string, instructions string) error {
+	body := jsonBody(proto.SessionSummarizeRequest{Instructions: instructions})
+	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/agent/sessions/%s/summarize", id, sessionID), nil, body, nil)
 	if err != nil {
 		return fmt.Errorf("failed to summarize session: %w", err)
 	}
 	defer rsp.Body.Close()
+	if rsp.StatusCode == http.StatusConflict {
+		var outcome proto.SummaryResponse
+		if err := json.NewDecoder(rsp.Body).Decode(&outcome); err != nil {
+			return fmt.Errorf("failed to decode summary conflict: %w", err)
+		}
+		if outcome.Cancelled {
+			return context.Canceled
+		}
+	}
 	if rsp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to summarize session: status code %d", rsp.StatusCode)
 	}
@@ -1028,6 +1041,19 @@ func (c *Client) LSPStopAll(ctx context.Context, id string) error {
 	defer rsp.Body.Close()
 	if rsp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to stop LSPs: status code %d", rsp.StatusCode)
+	}
+	return nil
+}
+
+// AgentRestoreSummarizeSession undoes a session's most recent compaction.
+func (c *Client) AgentRestoreSummarizeSession(ctx context.Context, id string, sessionID string) error {
+	rsp, err := c.delete(ctx, fmt.Sprintf("/workspaces/%s/agent/sessions/%s/summarize", id, sessionID), nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to restore session: %w", err)
+	}
+	defer rsp.Body.Close()
+	if rsp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to restore session: status code %d", rsp.StatusCode)
 	}
 	return nil
 }

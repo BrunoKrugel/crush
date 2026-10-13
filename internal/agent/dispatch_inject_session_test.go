@@ -681,7 +681,7 @@ func TestOnConsumedTrueOnSummarizeDequeue(t *testing.T) {
 		OnConsumed:        rec.record,
 	})
 
-	require.NoError(t, sa.Summarize(t.Context(), sess.ID, nil, nil))
+	require.NoError(t, sa.Summarize(t.Context(), sess.ID, "", nil, nil))
 
 	require.Equal(t, []bool{true}, rec.verdicts(),
 		"a call Summarize dequeues must report consumed exactly once, with true")

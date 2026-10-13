@@ -492,7 +492,7 @@ description: Skill reachable via symlink.
 	discovered, states := DiscoverWithStates([]string{
 		filepath.Join(tmpDir, "real-skills"),
 		linkDir,
-	})
+	}, "")
 
 	// Should find exactly one skill (not two).
 	require.Len(t, discovered, 1, "symlinked duplicate should be deduped")

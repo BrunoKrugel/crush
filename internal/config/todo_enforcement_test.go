@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func boolPtr(b bool) *bool             { return &b }
 func intPtr(i int) *int                { return &i }
 func intOrOffPtr(v IntOrOff) *IntOrOff { return &v }
 func durationPtr(d Duration) *Duration { return &d }

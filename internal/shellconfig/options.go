@@ -285,7 +285,7 @@ var a2aOptions = map[string]string{
 // that live under options.tui rather than as top-level options.
 func optionUI(options map[string]any, args []string, stderr io.Writer) error {
 	if len(args) != 4 {
-		return usage(stderr, "usage: option ui <compact|diff|transparent|mouse|scrollbar|working-dir-format|completions-max-depth|completions-max-items|exit-banner> <value>")
+		return usage(stderr, "usage: option ui <compact|diff|transparent|mouse|nerd-fonts|scroll-speed|scrollbar|working-dir-format|completions-max-depth|completions-max-items|exit-banner> <value>")
 	}
 
 	key := args[2]
@@ -293,6 +293,18 @@ func optionUI(options map[string]any, args []string, stderr io.Writer) error {
 	ui := childMap(options, "tui")
 
 	switch key {
+	case "nerd-fonts":
+		parsed, err := parseBool(value)
+		if err != nil {
+			return usage(stderr, fmt.Sprintf("option ui nerd-fonts expects true/false, got %q", value))
+		}
+		ui["nerd_fonts"] = parsed
+	case "scroll-speed":
+		parsed, err := strconv.ParseFloat(value, 64)
+		if err != nil || parsed <= 0 {
+			return usage(stderr, fmt.Sprintf("option ui scroll-speed expects a positive number, got %q", value))
+		}
+		ui["scroll_speed"] = parsed
 	case "compact", "transparent", "mouse":
 		parsed, err := parseBool(value)
 		if err != nil {

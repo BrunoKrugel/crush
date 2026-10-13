@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/pubsub"
@@ -98,7 +99,7 @@ func TestSendMessageAcceptsStatusAccepted(t *testing.T) {
 	defer srv.Close()
 
 	c := captureClient(t, srv)
-	require.NoError(t, c.SendMessage(context.Background(), "ws1", "sess1", "", "", 0, "hello"))
+	require.NoError(t, c.SendMessage(context.Background(), "ws1", "sess1", "", "", "hello", proto.PermissionRequestPolicyPrompt))
 }
 
 func TestSendMessageIncludesChannelOrigin(t *testing.T) {
@@ -112,7 +113,7 @@ func TestSendMessageIncludesChannelOrigin(t *testing.T) {
 	defer srv.Close()
 
 	c := captureClient(t, srv)
-	require.NoError(t, c.SendMessage(context.Background(), "ws1", "sess1", "", "signal", 0, "hello"))
+	require.NoError(t, c.SendMessage(context.Background(), "ws1", "sess1", "", "signal", "hello", proto.PermissionRequestPolicyPrompt))
 	require.Equal(t, "signal", got.Channel)
 }
 
@@ -129,7 +130,8 @@ func TestSendMessageIncludesContentWidth(t *testing.T) {
 	defer srv.Close()
 
 	c := captureClient(t, srv)
-	require.NoError(t, c.SendMessage(context.Background(), "ws1", "sess1", "", "", 114, "hello"))
+	ctx := agent.WithContentWidth(context.Background(), 114)
+	require.NoError(t, c.SendMessage(ctx, "ws1", "sess1", "", "", "hello", proto.PermissionRequestPolicyPrompt))
 	require.Equal(t, 114, got.ContentWidth)
 }
 
@@ -142,7 +144,7 @@ func TestSendMessageAcceptsStatusOK(t *testing.T) {
 	defer srv.Close()
 
 	c := captureClient(t, srv)
-	require.NoError(t, c.SendMessage(context.Background(), "ws1", "sess1", "", "", 0, "hello"))
+	require.NoError(t, c.SendMessage(context.Background(), "ws1", "sess1", "", "", "hello", proto.PermissionRequestPolicyPrompt))
 }
 
 func TestSendMessageDecodesErrorBody(t *testing.T) {
@@ -155,7 +157,7 @@ func TestSendMessageDecodesErrorBody(t *testing.T) {
 	defer srv.Close()
 
 	c := captureClient(t, srv)
-	err := c.SendMessage(context.Background(), "ws1", "", "", "", 0, "hello")
+	err := c.SendMessage(context.Background(), "ws1", "", "", "", "hello", proto.PermissionRequestPolicyPrompt)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "status code 400")
 	require.Contains(t, err.Error(), "session id is required")
@@ -171,7 +173,7 @@ func TestSendMessageFallsBackOnMalformedErrorBody(t *testing.T) {
 	defer srv.Close()
 
 	c := captureClient(t, srv)
-	err := c.SendMessage(context.Background(), "ws1", "sess1", "", "", 0, "hello")
+	err := c.SendMessage(context.Background(), "ws1", "sess1", "", "", "hello", proto.PermissionRequestPolicyPrompt)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "status code 500")
 	require.NotContains(t, err.Error(), "not json")
@@ -186,7 +188,7 @@ func TestSendMessageFallsBackOnEmptyErrorBody(t *testing.T) {
 	defer srv.Close()
 
 	c := captureClient(t, srv)
-	err := c.SendMessage(context.Background(), "ws1", "sess1", "", "", 0, "hello")
+	err := c.SendMessage(context.Background(), "ws1", "sess1", "", "", "hello", proto.PermissionRequestPolicyPrompt)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "status code 500")
 }
@@ -256,7 +258,7 @@ func TestSendHiddenContinuation(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := captureClient(t, srv)
-	require.NoError(t, c.SendMessage(message.WithHiddenUserMessage(t.Context()), "ws1", "sess1", "", "", 0, "Implement the plan."))
+	require.NoError(t, c.SendMessage(message.WithHiddenUserMessage(t.Context()), "ws1", "sess1", "", "", "Implement the plan.", proto.PermissionRequestPolicyPrompt))
 	msg := <-requests
 	require.True(t, msg.HiddenUserMessage)
 	require.Equal(t, "Implement the plan.", msg.Prompt)

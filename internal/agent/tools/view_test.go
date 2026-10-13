@@ -216,6 +216,8 @@ func (m *mockViewPermissionService) Request(ctx context.Context, req permission.
 	return true, nil
 }
 
+func (m *mockViewPermissionService) AutoApproveSession(string) {}
+
 func (m *mockViewPermissionService) Grant(req permission.PermissionRequest) bool { return true }
 
 func (m *mockViewPermissionService) Deny(req permission.PermissionRequest) bool { return true }

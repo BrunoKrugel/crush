@@ -12,6 +12,7 @@ import (
 	"charm.land/fantasy"
 	"charm.land/fantasy/providers/openaicompat"
 	"charm.land/x/vcr"
+	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/agent/prompt"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/config"
@@ -19,9 +20,11 @@ import (
 	"github.com/charmbracelet/crush/internal/db"
 	"github.com/charmbracelet/crush/internal/filetracker"
 	"github.com/charmbracelet/crush/internal/history"
+	"github.com/charmbracelet/crush/internal/ledger"
 	"github.com/charmbracelet/crush/internal/lsp"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/permission"
+	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/stretchr/testify/require"
 
@@ -37,6 +40,9 @@ type fakeEnv struct {
 	history     history.Service
 	filetracker *filetracker.Service
 	lspClients  *csync.Map[string, *lsp.Client]
+	// ledger is the session-memory sink tests install to exercise the
+	// observer; nil disables observation.
+	ledger ledger.Service
 	// cleanup is the owning test's t.Cleanup.
 	cleanup func(func())
 }
@@ -117,6 +123,7 @@ func testEnvAtDir(t *testing.T, workingDir string) fakeEnv {
 		history,
 		&filetrackerService,
 		lspClients,
+		ledger.NewService(q),
 		t.Cleanup,
 	}
 }
@@ -239,4 +246,40 @@ func main() {
 `
 	err = os.WriteFile(dir+"/main.go", []byte(mainGo), 0o644)
 	require.NoError(t, err)
+}
+
+// testSessionAgentWithNotifier is testSessionAgent with an agent notification
+// sink, so tests can observe events such as compaction.
+func testSessionAgentWithNotifier(
+	env fakeEnv,
+	large, small fantasy.LanguageModel,
+	systemPrompt string,
+	notifier pubsub.Publisher[notify.Notification],
+	tools ...fantasy.AgentTool,
+) SessionAgent {
+	largeModel := Model{
+		Model: large,
+		CatwalkCfg: catwalk.Model{
+			ContextWindow:    200000,
+			DefaultMaxTokens: 10000,
+		},
+	}
+	smallModel := Model{
+		Model: small,
+		CatwalkCfg: catwalk.Model{
+			ContextWindow:    200000,
+			DefaultMaxTokens: 10000,
+		},
+	}
+	agent := NewSessionAgent(SessionAgentOptions{
+		LargeModel:   largeModel,
+		SmallModel:   smallModel,
+		SystemPrompt: systemPrompt,
+		IsYolo:       true,
+		Sessions:     env.sessions,
+		Messages:     env.messages,
+		Tools:        tools,
+		Notify:       notifier,
+	})
+	return agent
 }
