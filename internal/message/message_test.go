@@ -86,25 +86,21 @@ func (c *eventCollector) snapshot() []pubsub.Event[Message] {
 	return out
 }
 
+// dropCreated waits for the CreatedEvent that Create publishes, then clears
+// it, so it cannot land after the reset and be mistaken for a later event.
+func (c *eventCollector) dropCreated(t *testing.T) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		return len(c.snapshot()) >= 1
+	}, time.Second, time.Millisecond)
+	require.Equal(t, pubsub.CreatedEvent, c.snapshot()[0].Type)
+	c.reset()
+}
+
 func (c *eventCollector) reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.events = nil
-}
-
-// waitForEvents blocks until the collector has seen at least n events.
-//
-// Use this instead of sleeping before reset(): the publish path is
-// asynchronous, so a fixed sleep is a bet on scheduler latency that a loaded
-// CI runner will eventually lose. When it does, reset() clears an empty slice
-// and the straggler shows up in the next snapshot, so the failure surfaces as
-// a wrong event count in an unrelated assertion.
-func waitForEvents(t *testing.T, c *eventCollector, n int) {
-	t.Helper()
-	require.Eventually(t, func() bool {
-		return len(c.snapshot()) >= n
-	}, 5*time.Second, time.Millisecond,
-		"expected at least %d event(s) before continuing", n)
 }
 
 func TestUpdate_DebouncesTextDeltas(t *testing.T) {
@@ -122,12 +118,7 @@ func TestUpdate_DebouncesTextDeltas(t *testing.T) {
 		Role: Assistant,
 	})
 	require.NoError(t, err)
-	// Drop the CreatedEvent emitted by Create — but wait for it to actually
-	// arrive first. A fixed sleep is a guess about scheduler latency: when it
-	// loses, reset() clears nothing, the create event lands afterwards, and
-	// the assertion below counts it alongside the event under test.
-	waitForEvents(t, collector, 1)
-	collector.reset()
+	collector.dropCreated(t)
 
 	// Push 5 deltas inside a single debounce window.
 	for i := 0; i < 5; i++ {
@@ -166,8 +157,7 @@ func TestUpdate_TerminalUpdatesFlushSynchronously(t *testing.T) {
 
 	msg, err := svc.Create(t.Context(), sessionID, CreateMessageParams{Role: Assistant})
 	require.NoError(t, err)
-	waitForEvents(t, collector, 1)
-	collector.reset()
+	collector.dropCreated(t)
 
 	// AddFinish makes the message terminal; Update must flush
 	// synchronously even with a 1-hour debounce.
