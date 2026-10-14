@@ -1491,6 +1491,11 @@ func (c *coordinator) buildModelFromSelected(ctx context.Context, selected confi
 	// applied per request, so retries get a fresh budget each attempt.
 	model = newRequestTimeoutModel(model, c.cfg.Config().Options.GetRequestTimeout())
 
+	// Cancelling a turn must stop its stream even with the timeout disabled.
+	// Both model slots build through here, so one wrapper covers large and
+	// small.
+	model = newStopOnCancelModel(model)
+
 	// Hyper completions no longer report the hypercredit balance, so wrap
 	// the Hyper models to fetch it from /v1/credits on every request.
 	if selected.Provider == hyper.Name {
