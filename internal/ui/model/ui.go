@@ -7676,6 +7676,21 @@ func (m *UI) handleAgentNotification(n notify.Notification) tea.Cmd {
 
 		// The turn is over; retire the placeholder and its clock.
 		m.endPendingTurn(n.SessionID)
+		cmds = append(cmds, m.sendNotification(notification.Notification{
+			Title:   "Crush is waiting...",
+			Message: fmt.Sprintf("Agent's turn completed in \"%s\"", n.SessionTitle),
+		}))
+		// Show what the stored balance says right away, and fetch again:
+		// the refresh for the turn's last response is only kicked off once
+		// its request finishes, so it may still be in flight here.
+		m.updateHyperCredits()
+		if m.com.IsHyper() {
+			cmds = append(cmds, m.fetchHyperCredits())
+		}
+	case notify.TypeAgentError:
+		if n.SessionID == m.currentSessionID() {
+			m.turnOutcome = tea.ProgramStateError
+		}
 		// Terminal edge like TypeAgentFinished; fall through to the
 		// busy/queue refresh below.
 		m.endPendingTurn(n.SessionID)

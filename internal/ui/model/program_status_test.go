@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -9,6 +10,7 @@ import (
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/question"
 	"github.com/charmbracelet/crush/internal/session"
+	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/dialog"
 	"github.com/stretchr/testify/require"
 )
@@ -196,7 +198,7 @@ func TestProgramStatusIgnoresOtherSessionOutcomes(t *testing.T) {
 
 	u.turnOutcome = tea.ProgramStateDone
 	u.sendMessage("new work")
-	t.Cleanup(common.StopTurn)
+	t.Cleanup(func() { common.StopTurn("s1") })
 	require.Empty(t, u.turnOutcome)
 	_, cmd := u.Update(agentRunSubmittedMsg{sessionID: "s1", gen: u.submissionGen})
 	runCmds(u, cmd)
