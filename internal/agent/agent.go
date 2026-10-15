@@ -903,6 +903,9 @@ func (a *sessionAgent) runQueued(ctx context.Context, call SessionAgentCall, own
 		if call.RunID != "" {
 			queuedCtx = WithRunID(queuedCtx, call.RunID)
 		}
+		// The fallback below owns this turn's terminal completion: mark the
+		// context so the run's own deferred publish defers to it.
+		queuedCtx = WithQueuedDispatch(queuedCtx)
 		_, queuedErr := a.run(queuedCtx, call, owner, retain)
 		// The promoted caller's runAgent already returned once the prompt
 		// was accepted into the queue, so a failure in the promoted turn
@@ -1109,12 +1112,22 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		if call.OnComplete != nil && call.turn == nil {
 			return
 		}
+		// A queue-promoted run has its own fallback that publishes the
+		// completion and the error notification; do not race it.
+		if queuedDispatch(ctx) {
+			return
+		}
 		a.publishRunComplete(ctx, call, notify.RunComplete{
 			SessionID: call.SessionID,
 			RunID:     call.RunID,
 			Error:     retErr.Error(),
 			Cancelled: errors.Is(retErr, context.Canceled),
 		})
+		// Record that this context's RunID has seen its terminal event so
+		// queue-handoff paths do not emit a second one for it.
+		if call.RunID != "" {
+			MarkRunCompletePublished(ctx)
+		}
 	}()
 	owner.interactive = owner.interactive || !call.NonInteractive
 	// The call's policy wins over the owner's: a queued turn runs with the

@@ -65,3 +65,20 @@ func RunCompletePublished(ctx context.Context) bool {
 func withFreshRunCompleteMarker(ctx context.Context) context.Context {
 	return context.WithValue(ctx, runCompleteMarkerKey{}, &runCompleteMarker{})
 }
+
+type queuedDispatchKey struct{}
+
+// WithQueuedDispatch marks ctx as carrying a run promoted off the message
+// queue by runQueued. That path publishes the promoted turn's terminal
+// completion (and its error notification) itself when the turn fails before
+// its own terminal defer is installed, so the run's own deferred publish must
+// stay out of its way.
+func WithQueuedDispatch(ctx context.Context) context.Context {
+	return context.WithValue(ctx, queuedDispatchKey{}, true)
+}
+
+// queuedDispatch reports whether ctx carries a queue-promoted run.
+func queuedDispatch(ctx context.Context) bool {
+	v, _ := ctx.Value(queuedDispatchKey{}).(bool)
+	return v
+}
