@@ -7945,9 +7945,12 @@ func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {
 		}
 	}
 
-	// Attempt to parse pasted content as file paths. If possible to parse,
-	// all files exist and are valid, add as attachments.
-	// Otherwise, paste as text.
+	// Attempt to parse pasted content as file paths. A copied path should
+	// land in the editor as text, not become an attachment: auto-attach
+	// applies only to image paths, where the model needs the bytes rather
+	// than the name. Everything else — source files, configs, documents —
+	// is pasted as text, and the file picker is the deliberate way to
+	// attach any of them.
 	paths := fsext.ParsePastedFiles(msg.Content)
 	allExistsAndValid := func() bool {
 		if len(paths) == 0 {
@@ -7957,8 +7960,7 @@ func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {
 			if _, err := os.Stat(path); os.IsNotExist(err) {
 				return false
 			}
-
-			if !common.IsAllowedAttachmentType(path) {
+			if !common.IsImagePath(path) {
 				return false
 			}
 		}
@@ -8095,7 +8097,7 @@ func (m *UI) pasteImageFromClipboard() tea.Msg {
 		return nil // Clipboard does not contain an image or valid file path
 	}
 
-	if !common.IsAllowedAttachmentType(path) {
+	if !common.IsImagePath(path) {
 		return util.NewInfoMsg("File type is not supported")
 	}
 

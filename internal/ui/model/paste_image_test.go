@@ -2,6 +2,8 @@ package model
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -9,6 +11,7 @@ import (
 	"charm.land/catwalk/pkg/catwalk"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/csync"
+	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/ui/attachments"
 	"github.com/charmbracelet/crush/internal/ui/dialog"
 	"github.com/charmbracelet/crush/internal/ui/util"
@@ -310,4 +313,80 @@ func TestHandlePasteMsg_NonEmptyContentInsertsText(t *testing.T) {
 		require.NotEqual(t, clipboardCmdPointer(u), reflect.ValueOf(cmd).Pointer(),
 			"non-empty paste must not route to clipboard image fallback")
 	}
+}
+
+// TestHandlePasteMsg_PastedPathInsertsText pins the model's path-paste
+// contract: a copied non-image file path lands in the editor as text rather
+// than becoming an attachment, whatever the model's vision. The fork once
+// widened auto-attach to every allowed attachment type, which both attached
+// plain paths as files and made vision-less models refuse their own pastes.
+func TestHandlePasteMsg_PastedPathInsertsText(t *testing.T) {
+	t.Parallel()
+
+	u := newTestUIWithImageSupport()
+	u.dialog = dialog.NewOverlay()
+	u.attachments = attachments.New(nil, attachments.Keymap{})
+	u.textarea.SetValue("")
+
+	path := filepath.Join(t.TempDir(), "main.go")
+	require.NoError(t, os.WriteFile(path, []byte("package main"), 0o644))
+
+	cmd := u.handlePasteMsg(tea.PasteMsg{Content: path})
+
+	require.Contains(t, u.textarea.Value(), path,
+		"a non-image path must be pasted as text")
+	require.Empty(t, u.attachments.List(),
+		"a non-image path must not become an attachment")
+	_ = cmd
+}
+
+// TestHandlePasteMsg_ImagePathOnImageCapableModelAttaches covers the one
+// case auto-attach keeps: an image path on a model that can see it.
+func TestHandlePasteMsg_ImagePathOnImageCapableModelAttaches(t *testing.T) {
+	t.Parallel()
+
+	u := newTestUIWithImageSupport()
+	u.dialog = dialog.NewOverlay()
+	u.attachments = attachments.New(nil, attachments.Keymap{})
+
+	path := filepath.Join(t.TempDir(), "shot.png")
+	require.NoError(t, os.WriteFile(path, []byte("\x89PNG fake"), 0o644))
+
+	cmd := u.handlePasteMsg(tea.PasteMsg{Content: path})
+	require.NotNil(t, cmd, "an image path paste must produce the attach command")
+	// The attachment application is a separate message: run the command and
+	// feed its message back through Update the way the runtime would.
+	for _, msg := range []tea.Msg{cmd()} {
+		if att, ok := msg.(message.Attachment); ok {
+			if m, _ := u.Update(att); m != nil {
+				_ = m
+			}
+		}
+	}
+
+	require.NotEmpty(t, u.attachments.List(),
+		"an image path on a vision-capable model attaches")
+}
+
+// TestHandlePasteMsg_ImagePathOnImageIncapableModelWarns: the same paste
+// on a text-only model warns instead of attaching or warning about the
+// paste itself.
+func TestHandlePasteMsg_ImagePathOnImageIncapableModelWarns(t *testing.T) {
+	t.Parallel()
+
+	u := newSidebarTestUI()
+	u.com.Workspace = &testWorkspace{cfg: &config.Config{
+		Providers: csync.NewMap[string, config.ProviderConfig](),
+		Agents:    map[string]config.Agent{},
+	}}
+	u.attachments = attachments.New(nil, attachments.Keymap{})
+	u.dialog = dialog.NewOverlay()
+	require.False(t, u.currentModelSupportsImages(),
+		"test precondition: the stub config must be image-incapable")
+
+	path := filepath.Join(t.TempDir(), "shot.png")
+	require.NoError(t, os.WriteFile(path, []byte("\x89PNG fake"), 0o644))
+
+	cmd := u.handlePasteMsg(tea.PasteMsg{Content: path})
+	require.NotNil(t, cmd, "an image paste on a vision-less model must warn")
 }
