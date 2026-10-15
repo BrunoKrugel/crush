@@ -3,6 +3,7 @@ package model
 import (
 	"context"
 	"image"
+	"reflect"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -912,4 +913,118 @@ func TestRefreshMCPStates(t *testing.T) {
 	changed, ok := msg.(mcpStateChangedMsg)
 	require.True(t, ok, "refreshMCPStates should return a mcpStateChangedMsg")
 	require.Equal(t, states, changed.states)
+}
+
+// cmdStages runs a command to completion, flattening bubbletea's sequence
+// and batch wrappers, and returns the messages each leaf produced.
+func cmdStages(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if msg == nil {
+		return nil
+	}
+	// tea.Sequence yields an unexported []tea.Cmd wrapper, so slice kinds
+	// are handled by reflection rather than a type switch.
+	if rv := reflect.ValueOf(msg); rv.Kind() == reflect.Slice {
+		var out []tea.Msg
+		for i := range rv.Len() {
+			if c, ok := rv.Index(i).Interface().(tea.Cmd); ok {
+				out = append(out, cmdStages(c)...)
+			}
+		}
+		return out
+	}
+	if c, ok := msg.(tea.Cmd); ok {
+		return cmdStages(c)
+	}
+	return []tea.Msg{msg}
+}
+
+// toggleDispatchWorkspace records toggle side effects so the dialog action
+// dispatch can be asserted without a live workspace.
+type toggleDispatchWorkspace struct {
+	workspace.Workspace
+	skillDisabled map[string]bool
+	mcpDisabled   map[string]bool
+}
+
+func (w *toggleDispatchWorkspace) SkillSetDisabled(_ context.Context, name string, disabled bool) error {
+	if w.skillDisabled == nil {
+		w.skillDisabled = map[string]bool{}
+	}
+	w.skillDisabled[name] = disabled
+	return nil
+}
+
+func (w *toggleDispatchWorkspace) SkillsDisabled(_ context.Context) ([]string, error) {
+	return nil, nil
+}
+
+func (w *toggleDispatchWorkspace) SkillsEnabled(_ context.Context) ([]string, error) {
+	return nil, nil
+}
+
+func (w *toggleDispatchWorkspace) MCPSetServerDisabled(_ context.Context, name string, disabled bool) error {
+	if w.mcpDisabled == nil {
+		w.mcpDisabled = map[string]bool{}
+	}
+	w.mcpDisabled[name] = disabled
+	return nil
+}
+
+func (w *toggleDispatchWorkspace) Config() *config.Config { return &config.Config{} }
+
+// TestDialogToggleActionsAreDispatched pins the routing of the two toggle
+// dialog actions through handleDialogMsg: the dialogs emit the actions, but
+// only the model turns them into workspace calls. A merge once dropped these
+// cases and left both toggles dead while the dialogs kept their optimistic
+// state, so the drift was invisible until a user toggled for real.
+func TestDialogToggleActionsAreDispatched(t *testing.T) {
+	t.Parallel()
+
+	t.Run("mcp toggle", func(t *testing.T) {
+		ws := &toggleDispatchWorkspace{}
+		u := newSidebarTestUI()
+		u.com.Workspace = ws
+		u.attachments = attachments.New(nil, attachments.Keymap{})
+		u.session = &session.Session{ID: "s1"}
+
+		u.dialog.OpenDialog(dialog.NewMCPToggles(u.com, []dialog.MCPToggleItem{
+			{Name: "datadog", Status: "connected"},
+		}))
+
+		cmd := u.handleDialogMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+		require.NotNil(t, cmd, "the toggle action must produce a command")
+		for _, c := range []tea.Cmd{cmd} {
+			if msg := c(); msg != nil {
+				_ = msg // the InfoMsg is the toast; the effect is what we assert
+			}
+		}
+		require.Equal(t, true, ws.mcpDisabled["datadog"],
+			"the MCP toggle's action must reach the workspace")
+	})
+
+	t.Run("skill toggle", func(t *testing.T) {
+		ws := &toggleDispatchWorkspace{}
+		u := newSidebarTestUI()
+		u.com.Workspace = ws
+		u.attachments = attachments.New(nil, attachments.Keymap{})
+		u.session = &session.Session{ID: "s1"}
+
+		u.dialog.OpenDialog(dialog.NewSkillsToggles(u.com, []dialog.SkillToggleItem{
+			{Name: "go-testing"},
+		}))
+
+		cmd := u.handleDialogMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+		require.NotNil(t, cmd, "the toggle action must produce a command")
+		// tea.Sequence's cmd returns a []tea.Cmd under the hood: run every
+		// stage in order so the apply lands before the assertion.
+		for _, stage := range cmdStages(cmd) {
+			_ = stage
+		}
+		require.Equal(t, true, ws.skillDisabled["go-testing"],
+			"the skill toggle's action must reach the workspace")
+	})
 }

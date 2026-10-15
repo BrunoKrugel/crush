@@ -3062,6 +3062,15 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	case dialog.ActionDisableDockerMCP:
 		m.dialog.CloseDialog(dialog.CommandsID)
 		cmds = append(cmds, m.disableDockerMCP)
+	case dialog.ActionToggleSkill:
+		// Sequence apply then refresh: the refresh must read the
+		// overrides after the toggle commits, or the dialog shows stale
+		// state.
+		cmds = append(cmds, tea.Sequence(m.applySkillToggle(msg), m.refreshSkillOverrides()))
+	case dialog.ActionSetMCPServerSetting:
+		// Keep the dialog open: it holds its own optimistic state, and the
+		// conversation about which servers to cycle is a multi-step one.
+		cmds = append(cmds, m.applyMCPServerSetting(msg))
 	case dialog.ActionMCPReconnect:
 		m.dialog.CloseDialog(dialog.ChannelsID)
 		cmds = append(cmds, func() tea.Msg {
