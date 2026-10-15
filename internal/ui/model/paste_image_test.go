@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
@@ -135,11 +136,109 @@ func TestHandlePasteMsg_EmptyContentOnImageIncapableModelWarns(t *testing.T) {
 		"empty paste must not modify textarea content")
 }
 
-// TestPasteImageKeyOnImageIncapableModelWarns exercises the key-bound path
-// (ctrl+v / super+v): on a text-only model it must not attach an image, but
-// must surface a warning instead of silently doing nothing.
-func TestPasteImageKeyOnImageIncapableModelWarns(t *testing.T) {
-	t.Parallel()
+// runKeyCmd runs a command the way the Bubble Tea runtime would, flattening
+// a batch so tests can look for whichever message a path produced.
+func runKeyCmd(msg tea.Msg) []tea.Msg {
+	var out []tea.Msg
+	switch m := msg.(type) {
+	case tea.Cmd:
+		if m == nil {
+			return nil
+		}
+		out = append(out, runKeyCmd(m())...)
+	case tea.BatchMsg:
+		for _, c := range m {
+			if c == nil {
+				continue
+			}
+			out = append(out, runKeyCmd(c())...)
+		}
+	case nil:
+		return nil
+	default:
+		out = append(out, m)
+	}
+	return out
+}
+
+// TestPasteKeyOnImageIncapableModelWarnsOnlyForAnImage exercises the
+// key-bound path (ctrl+v / super+v) on a text-only model: a clipboard image
+// must warn instead of attaching, and a clipboard that holds text must still
+// paste it. The gate used to fire on the key alone, which refused every paste
+// on a vision-less model, text included.
+func TestPasteKeyOnImageIncapableModelWarnsOnlyForAnImage(t *testing.T) {
+	// Not parallel: these stub the package-level clipboard seam, which is
+	// process-global state shared by every paste test.
+
+	imageOnClipboard := func(t *testing.T) {
+		t.Helper()
+		orig := readClipboardImage
+		readClipboardImage = func() ([]byte, error) { return []byte("png-bytes"), nil }
+		t.Cleanup(func() { readClipboardImage = orig })
+	}
+
+	t.Run("image on the clipboard warns", func(t *testing.T) {
+		// No t.Parallel: the clipboard seam is process-global.
+		u := newSidebarTestUI()
+		u.com.Workspace = &testWorkspace{cfg: &config.Config{
+			Providers: csync.NewMap[string, config.ProviderConfig](),
+			Agents:    map[string]config.Agent{},
+		}}
+		u.attachments = attachments.New(nil, attachments.Keymap{})
+		require.False(t, u.currentModelSupportsImages(),
+			"test precondition: the stub config must be image-incapable")
+		imageOnClipboard(t)
+
+		cmd := u.handleKeyPressMsg(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+		require.NotNil(t, cmd, "an image paste on a vision-less model must warn")
+		var infoMsg util.InfoMsg
+		for _, got := range runKeyCmd(cmd()) {
+			if im, ok := got.(util.InfoMsg); ok {
+				infoMsg = im
+				break
+			}
+		}
+		require.Equal(t, util.InfoTypeWarn, infoMsg.Type)
+		require.Contains(t, infoMsg.Msg, "doesn't support images")
+		require.Empty(t, u.textarea.Value(), "the refused image must not land as text")
+	})
+
+	t.Run("text on the clipboard pastes", func(t *testing.T) {
+		// No t.Parallel: the clipboard seam is process-global.
+		u := newSidebarTestUI()
+		u.com.Workspace = &testWorkspace{cfg: &config.Config{
+			Providers: csync.NewMap[string, config.ProviderConfig](),
+			Agents:    map[string]config.Agent{},
+		}}
+		u.attachments = attachments.New(nil, attachments.Keymap{})
+		u.textarea.SetValue("existing text")
+		require.False(t, u.currentModelSupportsImages(),
+			"test precondition: the stub config must be image-incapable")
+
+		origImage, origText := readClipboardImage, readClipboardText
+		readClipboardImage = func() ([]byte, error) { return nil, errors.New("no image") }
+		readClipboardText = func() ([]byte, error) { return []byte("pasted text"), nil }
+		t.Cleanup(func() { readClipboardImage, readClipboardText = origImage, origText })
+
+		cmd := u.handleKeyPressMsg(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+		require.NotNil(t, cmd)
+		var paste tea.PasteMsg
+		for _, got := range runKeyCmd(cmd()) {
+			if pm, ok := got.(tea.PasteMsg); ok {
+				paste = pm
+				break
+			}
+		}
+		require.Equal(t, "pasted text", paste.Content,
+			"a text paste must not be gated on the model's vision")
+	})
+}
+
+// TestPasteTextKeyPastesClipboardText covers the dedicated text-paste key,
+// which reads the clipboard as text on every model.
+func TestPasteTextKeyPastesClipboardText(t *testing.T) {
+	// Not parallel: these stub the package-level clipboard seam, which is
+	// process-global state shared by every paste test.
 
 	u := newSidebarTestUI()
 	u.com.Workspace = &testWorkspace{cfg: &config.Config{
@@ -147,36 +246,21 @@ func TestPasteImageKeyOnImageIncapableModelWarns(t *testing.T) {
 		Agents:    map[string]config.Agent{},
 	}}
 	u.attachments = attachments.New(nil, attachments.Keymap{})
-	require.False(t, u.currentModelSupportsImages(),
-		"test precondition: the stub config must be image-incapable")
 
-	cmd := u.handleKeyPressMsg(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	orig := readClipboardText
+	readClipboardText = func() ([]byte, error) { return []byte("  spaced  "), nil }
+	t.Cleanup(func() { readClipboardText = orig })
 
-	require.NotNil(t, cmd,
-		"paste-image key on an image-incapable model must return a warning command, not nil")
-	msg := cmd()
-	// The editor path batches commands; unwrap to find the warning.
-	var infoMsg util.InfoMsg
-	found := false
-	if batch, ok := msg.(tea.BatchMsg); ok {
-		for _, c := range batch {
-			if c == nil {
-				continue
-			}
-			if im, ok := c().(util.InfoMsg); ok {
-				infoMsg = im
-				found = true
-				break
-			}
+	cmd := u.handleKeyPressMsg(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl | tea.ModShift})
+	require.NotNil(t, cmd)
+	var paste tea.PasteMsg
+	for _, got := range runKeyCmd(cmd()) {
+		if pm, ok := got.(tea.PasteMsg); ok {
+			paste = pm
+			break
 		}
-	} else if im, ok := msg.(util.InfoMsg); ok {
-		infoMsg = im
-		found = true
 	}
-	require.True(t, found, "expected a util.InfoMsg warning, got %T", msg)
-	require.Equal(t, util.InfoTypeWarn, infoMsg.Type,
-		"paste-image key on an image-incapable model must warn the user")
-	require.Contains(t, infoMsg.Msg, "doesn't support images")
+	require.Equal(t, "  spaced  ", paste.Content)
 }
 
 // TestHandlePasteMsg_WhitespaceOnlyContentInsertsText ensures that a

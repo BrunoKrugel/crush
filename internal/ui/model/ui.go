@@ -3858,11 +3858,9 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 				}
 
 			case key.Matches(msg, m.keyMap.Editor.PasteImage):
-				if !m.currentModelSupportsImages() {
-					cmds = append(cmds, util.ReportWarn(fmt.Sprintf("%s doesn't support images", m.currentModelName())))
-					break
-				}
-				cmds = append(cmds, m.pasteImageFromClipboard)
+				cmds = append(cmds, m.pasteFromClipboard)
+			case key.Matches(msg, m.keyMap.Editor.PasteText):
+				cmds = append(cmds, m.pasteTextFromClipboard)
 
 			case key.Matches(msg, m.keyMap.Editor.SendMessage):
 				if m.modeSwitching {
@@ -4837,6 +4835,8 @@ func (m *UI) FullHelp() [][]key.Binding {
 			if m.currentModelSupportsImages() {
 				editorBinds = append(editorBinds, k.Editor.PasteImage)
 			}
+			// Text paste works on every model, so it is always advertised.
+			editorBinds = append(editorBinds, k.Editor.PasteText)
 			binds = append(binds, editorBinds)
 			if hasAttachments {
 				binds = append(
@@ -4907,6 +4907,8 @@ func (m *UI) FullHelp() [][]key.Binding {
 			if m.currentModelSupportsImages() {
 				editorBinds = append(editorBinds, k.Editor.PasteImage)
 			}
+			// Text paste works on every model, so it is always advertised.
+			editorBinds = append(editorBinds, k.Editor.PasteText)
 			binds = append(binds, editorBinds)
 			if hasAttachments {
 				binds = append(
@@ -6428,6 +6430,13 @@ var readyPlaceholders = [...]string{
 	"Ready?",
 	"Ready for instructions",
 }
+
+// readClipboardImage and readClipboardText wrap the system clipboard so
+// tests can drive both paste branches without touching the real clipboard.
+var (
+	readClipboardImage = func() ([]byte, error) { return clipboard.Read(clipboard.FormatImage) }
+	readClipboardText  = func() ([]byte, error) { return clipboard.Read(clipboard.FormatText) }
+)
 
 var workingPlaceholders = [...]string{
 	"Working!",
@@ -8015,6 +8024,33 @@ func (m *UI) handleFilePathPaste(path string) tea.Cmd {
 	}
 }
 
+// pasteFromClipboard serves the paste key, which carries either an image or
+// text. The clipboard decides: an image takes the attachment path and is
+// gated on the model's vision, while anything else is pasted as text. Gating
+// on the key alone refused every paste on a vision-less model, text included.
+func (m *UI) pasteFromClipboard() tea.Msg {
+	if m.currentModelSupportsImages() {
+		return m.pasteImageFromClipboard()
+	}
+	if imageData, err := readClipboardImage(); err == nil && len(imageData) > 0 {
+		return util.ReportWarn(fmt.Sprintf("%s doesn't support images", m.currentModelName()))
+	}
+	return m.pasteTextFromClipboard()
+}
+
+// pasteTextFromClipboard reads text from the system clipboard and returns a
+// tea.PasteMsg so it flows through the same paste logic as bracketed paste.
+func (m *UI) pasteTextFromClipboard() tea.Msg {
+	textData, err := readClipboardText()
+	if err != nil || len(textData) == 0 {
+		return util.InfoMsg{
+			Type: util.InfoTypeError,
+			Msg:  "Clipboard is empty or does not contain text",
+		}
+	}
+	return tea.PasteMsg{Content: string(textData)}
+}
+
 // pasteImageFromClipboard reads image data from the system clipboard and
 // creates an attachment. If no image data is found, it falls back to
 // interpreting clipboard text as a file path.
@@ -8022,7 +8058,7 @@ func (m *UI) pasteImageFromClipboard() tea.Msg {
 	if !m.currentModelSupportsImages() {
 		return util.NewWarnMsg("The current model does not support image attachments")
 	}
-	imageData, err := clipboard.Read(clipboard.FormatImage)
+	imageData, err := readClipboardImage()
 	if int64(len(imageData)) > common.MaxAttachmentSize {
 		return util.InfoMsg{
 			Type: util.InfoTypeError,
@@ -8039,7 +8075,7 @@ func (m *UI) pasteImageFromClipboard() tea.Msg {
 		}
 	}
 
-	textData, textErr := clipboard.Read(clipboard.FormatText)
+	textData, textErr := readClipboardText()
 	if textErr != nil || len(textData) == 0 {
 		return nil // Clipboard is empty or does not contain an image
 	}
