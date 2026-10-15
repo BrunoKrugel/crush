@@ -439,6 +439,14 @@ func (m *MCPToggles) itemStatus(item MCPToggleItem) string {
 	return item.Status
 }
 
+// SetItems replaces the dialog's items wholesale, restoring the rows to
+// the configured source of truth. A failed toggle leaves the optimistic
+// row state pointing somewhere the backend rejected, so the model rebuilds
+// the view from the override lists after any failure.
+func (m *MCPToggles) SetItems(items []MCPToggleItem) {
+	m.items = items
+}
+
 // SetItemStatus refreshes one item's live connection status without
 // touching its Disabled override, so an open dialog updates as servers
 // finish connecting.

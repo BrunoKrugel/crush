@@ -348,22 +348,46 @@ func (m *UI) mcpToggleItems() ([]dialog.MCPToggleItem, error) {
 // dialog keeps its own optimistic state meanwhile.
 func (m *UI) applyMCPServerSetting(msg dialog.ActionSetMCPServerSetting) tea.Cmd {
 	name := msg.Name
+	op := "update"
+	switch msg.Setting {
+	case dialog.MCPServerSettingDisabled:
+		op = "disable"
+	case dialog.MCPServerSettingLazy:
+		op = "set lazy loading on"
+	default:
+		op = "enable"
+	}
 	return func() tea.Msg {
+		fail := func(err error) tea.Msg {
+			// The dialog applied the choice optimistically; a failure
+			// leaves its rows pointing somewhere the backend rejected, so
+			// rebuild them from the override lists before surfacing the
+			// error. Without this the next enter computes from the stale
+			// row and cycles to the wrong setting.
+			if dia := m.dialog.Dialog(dialog.MCPTogglesID); dia != nil {
+				if toggles, ok := dia.(*dialog.MCPToggles); ok {
+					if items, err := m.mcpToggleItems(); err == nil {
+						toggles.SetItems(items)
+					}
+				}
+			}
+			return util.NewErrorMsg(fmt.Errorf("failed to %s MCP %q: %w", op, name, err))
+		}
 		switch msg.Setting {
 		case dialog.MCPServerSettingDisabled:
 			// Take the server offline for this scope; the lazy placement is
 			// preserved for when it is cycled back to a connected setting.
 			if err := m.setMCPServerConnected(name, false, msg.Global); err != nil {
-				return util.NewErrorMsg(err)
+				return fail(err)
 			}
 			return util.NewInfoMsg(fmt.Sprintf("MCP %q disabled", name))
 		default:
 			if err := m.setMCPServerConnected(name, true, msg.Global); err != nil {
-				return util.NewErrorMsg(err)
+				return fail(err)
 			}
 			lazy := msg.Setting == dialog.MCPServerSettingLazy
 			if err := m.com.Workspace.MCPSetLazy(context.TODO(), name, lazy); err != nil {
-				return util.NewErrorMsg(err)
+				return fail(err)
 			}
 			if msg.Setting == dialog.MCPServerSettingLazy {
 				return util.NewInfoMsg(fmt.Sprintf("MCP %q lazy loading: tools served on demand", name))
