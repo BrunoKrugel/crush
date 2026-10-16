@@ -10,8 +10,9 @@ description: MCP servers that push real-time events into your session — CI fai
 :::info[Partly a fork feature]
 The channel push mechanism and the `--channels` flag are upstream Crush,
 though undocumented there. The `channel_enabled` config key and
-[reply routing](#reply-routing) are additions in the `brunokrugel/crush`
-fork. All of it is experimental and the shape may change.
+[reply routing](#reply-routing) are additions in
+[`joestump-agent/crush`](https://github.com/joestump-agent/crush), carried by
+this fork. All of it is experimental and the shape may change.
 :::
 
 An MCP server can act as a **channel**: instead of only exposing tools that

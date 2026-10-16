@@ -136,7 +136,7 @@ from a fixed list of worktree-rooted tools (see
   `unknown skills: …`.
 - **`context_paths`.** Replaces `options.context_paths` for that agent. For
   a dispatched agent, relative paths resolve against your checkout, not the
-  worktree ([#561](https://github.com/brunokrugel/crush/issues/561)).
+  worktree ([#561](https://github.com/joestump-agent/crush/issues/561)).
 - **`workspace`.** A `runtime: a2a` agent always runs with `none`. A builtin
   dispatch agent always runs in a `worktree`: `none` is accepted but ignored
   for it.
@@ -363,7 +363,7 @@ executed.
   them, uncommitted edits included. They are never read from the worktree:
   the base revision is the main agent's choice, so an `AGENTS.md` committed
   there is as untrusted as a `.crushrc` would be
-  ([#561](https://github.com/brunokrugel/crush/issues/561)). The same
+  ([#561](https://github.com/joestump-agent/crush/issues/561)). The same
   goes for a dispatch agent's `context_paths` and for relative
   `global_context_paths`. Skills are resolved inside the worktree.
 - The data directory is shared with your session, so logs and the database

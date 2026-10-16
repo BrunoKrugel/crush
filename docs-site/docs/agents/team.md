@@ -24,7 +24,7 @@ errors mean. The wire details are on [A2A protocol](/agents/a2a-protocol).
 | Dispatch work to a third-party A2A agent — a reviewer service your team runs, a vendor's agent, anything that serves an Agent Card | **Yes** | Define it as a `runtime: a2a` dispatch agent; see [External agents](/agents/configuration#external-agents). The main agent dispatches to it like any other, its findings come back labeled untrusted, and it can be canceled but not steered |
 | Expose your Crush on the network with TLS and authenticate callers by client certificate | **Yes** | The [TCP listener](#the-tcp-listener) below. An authenticated peer reaches every agent's route |
 | Let a teammate fetch your agents' cards | **Not yet** | The host builds one card per agent definition, but its router answers `404` for the well-known card path, so nothing serves them over the wire; see [below](#what-a-teammate-can-reach) |
-| Let a teammate's Crush run a task on your Crush | **Not yet** | A TCP caller is authenticated but reaches no run: every route answers `no running agent for context …`. Cross-Crush delegation arrives with the peer registry ([#334](https://github.com/brunokrugel/crush/issues/334)) |
+| Let a teammate's Crush run a task on your Crush | **Not yet** | A TCP caller is authenticated but reaches no run: every route answers `no running agent for context …`. Cross-Crush delegation arrives with the peer registry ([#334](https://github.com/joestump-agent/crush/issues/334)) |
 | Point your `--card` at a teammate's Crush | **Not yet** | The card fetch gets `404`, so the dispatch fails with `resolve agent card <url>: HTTP status 404`. Point `--card` at a non-Crush A2A agent instead |
 
 So the one cross-machine workflow that runs end to end today is **consume a

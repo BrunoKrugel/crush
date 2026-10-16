@@ -28,9 +28,9 @@ own copy of these changes, the duplicate history drops out cleanly.
 | --- | --- | --- |
 | **[Scheduled tasks](/features/scheduled-tasks)** | `CronCreate`, `CronList`, and `CronDelete` tools that re-run a prompt on a cron schedule, with a scheduler, one-shot support, and a command-palette entry showing what is queued. | upstream PR #3466 |
 | **[Context compaction with checkpoints](/features/sessions)** | Automatic compaction ledgers for long-running sessions, with preview/accept/discard checkpoints, an undo path, and inline checkpoint handoff in the TUI; recorded session memory rides beside every summary instead of replacing it, and the checkpoint accepts an emphasis instruction. | `gurnben/crush:feat/context-compaction`, upstream PR #4059 (28 commits) |
-| **[Multi-agent dispatch](/agents/overview)** | A `dispatch_agent` tool that starts independent agents in the background, each in its own git worktree on a fresh `crush-dispatch-*` branch, while the main agent keeps working. Steer a running agent with a leading `@handle` (the model uses `message_agent`), read its live transcript in inspect mode, cancel it with <kbd>ctrl+x</kbd> or `cancel_dispatch`, and settle its work with `apply_dispatch` (merge, squash or cherry-pick) or `dismiss_dispatch` — Crush never merges on its own. Every agent is an agent definition: override `coder`, `plan`, `task` and `worker` or add your own with the `agent` builtin in `crushrc`. `crush dispatch list` and `prune` manage workspaces from the shell. On by default inside a git repository. | `brunokrugel/crush` |
-| **[Semantic search](/features/semantic-search)** | A local vector index over the repo — chunked by symbol, embedded through any OpenAI-compatible endpoint, stored in the project's own SQLite via `sqlite-vec`. Adds the `semantic_search` and `semantic_index` tools and a symbol-extraction package. | `brunokrugel/crush` |
-| **[Channel reply routing](/features/channels)** | The channel *push* mechanism is upstream. This fork adds the `channel_enabled` config key, a `channel_reply` tool, server-side routing that delivers each event exactly once per workspace, auto-creation of a session for an inbound event, and replies that go back only to the channel they came from. | `brunokrugel/crush` |
+| **[Multi-agent dispatch](/agents/overview)** | A `dispatch_agent` tool that starts independent agents in the background, each in its own git worktree on a fresh `crush-dispatch-*` branch, while the main agent keeps working. Steer a running agent with a leading `@handle` (the model uses `message_agent`), read its live transcript in inspect mode, cancel it with <kbd>ctrl+x</kbd> or `cancel_dispatch`, and settle its work with `apply_dispatch` (merge, squash or cherry-pick) or `dismiss_dispatch` — Crush never merges on its own. Every agent is an agent definition: override `coder`, `plan`, `task` and `worker` or add your own with the `agent` builtin in `crushrc`. `crush dispatch list` and `prune` manage workspaces from the shell. On by default inside a git repository. | `joestump-agent/crush` |
+| **[Semantic search](/features/semantic-search)** | A local vector index over the repo — chunked by symbol, embedded through any OpenAI-compatible endpoint, stored in the project's own SQLite via `sqlite-vec`. Adds the `semantic_search` and `semantic_index` tools and a symbol-extraction package. | `joestump-agent/crush` |
+| **[Channel reply routing](/features/channels)** | The channel *push* mechanism is upstream. This fork adds the `channel_enabled` config key, a `channel_reply` tool, server-side routing that delivers each event exactly once per workspace, auto-creation of a session for an inbound event, and replies that go back only to the channel they came from. | `joestump-agent/crush` |
 | **[Herdr compat](/features/notifications)** | Overhauled agent state reporting and pane integration for the herdr multiplexer, including compaction state reporting. | upstream PR #3541 |
 | **[Lazy MCP loading](/features/mcp)** | MCP tool schemas stay out of the model's context until explicitly pulled with `mcp_search`; per-server tri-state settings in the MCP dialog, plus `list_mcp_prompts` and `call_mcp_prompt` tools and prompts offered in the inline `/` completions. | upstream PR #3983, `brunokrugel/crush` |
 | **[Skill scoping and caching](/features/skills)** | Deduplicated symlinked skills, skill discovery cached across prompt builds, repo-scoped enable/disable toggles over the global config. | upstream PRs #3830, #3813, plus the skill-toggle upstream work |
@@ -45,9 +45,9 @@ Smaller things you notice in the terminal rather than in a config file.
 
 | Improvement | Detail | Source |
 | --- | --- | --- |
-| Click-to-copy | Finished assistant *and* user messages carry a right-aligned `⎘` icon that copies the message. Shown on focus, pinned to the item's right edge. | `brunokrugel/crush` |
-| Clickable hyperlinks | A plain click on a link in the transcript opens it in your browser. | `brunokrugel/crush` |
-| Channel message styling | Channel-originated messages render with a `sender / via / at` metadata line below the body, so you can tell a webhook from a human. | `brunokrugel/crush` |
+| Click-to-copy | Finished assistant *and* user messages carry a right-aligned `⎘` icon that copies the message. Shown on focus, pinned to the item's right edge. | `joestump-agent/crush` |
+| Clickable hyperlinks | A plain click on a link in the transcript opens it in your browser. | `joestump-agent/crush` |
+| Channel message styling | Channel-originated messages render with a `sender / via / at` metadata line below the body, so you can tell a webhook from a human. | `joestump-agent/crush` |
 | Text copy performance | Faster text copy path in the message renderer. | merged PR #3945 |
 | Tool-call elapsed time | Each running tool call shows its own elapsed timer instead of an aggregate one. | merged PR #3600 |
 
@@ -55,11 +55,11 @@ Smaller things you notice in the terminal rather than in a config file.
 
 | Improvement | Detail | Source |
 | --- | --- | --- |
-| Syntax-highlighted composer | A vendored textarea with a highlighter, so `@file`, `/skill`, and MCP-prompt tokens are visibly distinct as you type. | `brunokrugel/crush` |
-| Atomic token editing | Backspace over a completed token deletes the whole token — and drops its attachment, if it had one — instead of eating one character at a time. | `brunokrugel/crush` |
-| Text-file attachments | Attach JSON, YAML, Markdown, and source files, not just images. One shared text predicate everywhere, with binary sniffing to reject the rest. | `brunokrugel/crush` |
-| Attachment chips | A clickable remove button on each chip, correct hit zones, and chips that survive sending. | `brunokrugel/crush` |
-| `/skill` completions | Skills complete inline from `/`, alongside commands and MCP prompts. | `brunokrugel/crush` |
+| Syntax-highlighted composer | A vendored textarea with a highlighter, so `@file`, `/skill`, and MCP-prompt tokens are visibly distinct as you type. | `joestump-agent/crush` |
+| Atomic token editing | Backspace over a completed token deletes the whole token — and drops its attachment, if it had one — instead of eating one character at a time. | `joestump-agent/crush` |
+| Text-file attachments | Attach JSON, YAML, Markdown, and source files, not just images. One shared text predicate everywhere, with binary sniffing to reject the rest. | `joestump-agent/crush` |
+| Attachment chips | A clickable remove button on each chip, correct hit zones, and chips that survive sending. | `joestump-agent/crush` |
+| `/skill` completions | Skills complete inline from `/`, alongside commands and MCP prompts. | `joestump-agent/crush` |
 | Paste as text | A copied file path pastes as text; auto-attach applies only to image paths, and <kbd>ctrl+shift+v</kbd> always pastes the clipboard as text. | `brunokrugel/crush` |
 
 ### Dialogs and palette
@@ -68,29 +68,29 @@ Smaller things you notice in the terminal rather than in a config file.
 | --- | --- | --- |
 | **Toggle Skills dialog** | Palette entry **Toggle Skills** — every discovered skill with its error state, toggled per repository or globally. | merged PR #3994, `brunokrugel/crush` |
 | **Toggle MCPs dialog** | Palette entry **Toggle MCPs** — per-server tri-state (enabled / lazy / disabled) for this repository or the global config. | upstream PR #3983, `brunokrugel/crush` |
-| **Channels dialog** | Palette entry **Channels** — see and manage active channels. | `brunokrugel/crush` |
-| Hierarchical sub-menus | The command palette nests related commands instead of one flat list, with `back`/`backspace` navigation. | `brunokrugel/crush` |
-| Model discovery reload | Re-run provider/model discovery from the `/models` dialog without restarting. | `brunokrugel/crush` |
+| **Channels dialog** | Palette entry **Channels** — see and manage active channels. | `joestump-agent/crush` |
+| Hierarchical sub-menus | The command palette nests related commands instead of one flat list, with `back`/`backspace` navigation. | `joestump-agent/crush` |
+| Model discovery reload | Re-run provider/model discovery from the `/models` dialog without restarting. | `joestump-agent/crush` |
 
 ### Sidebar and header
 
 | Improvement | Detail | Source |
 | --- | --- | --- |
-| Focusable sidebar | Three-state <kbd>tab</kbd> focus, mouse scrolling, a scrollbar instead of a focus border, and irrelevant keybindings hidden while it is focused. | `brunokrugel/crush` |
-| Channels column | Active channels shown on the landing page and in the sidebar. | `brunokrugel/crush` |
+| Focusable sidebar | Three-state <kbd>tab</kbd> focus, mouse scrolling, a scrollbar instead of a focus border, and irrelevant keybindings hidden while it is focused. | `joestump-agent/crush` |
+| Channels column | Active channels shown on the landing page and in the sidebar. | `joestump-agent/crush` |
 | MCP sidebar seeding | A periodic re-seed of MCP client states in the TUI, so a server whose only state event fired before the TUI subscribed no longer sticks on "None". | merged PR #3289 |
-| `user@host:cwd` header | On by default, mirroring the familiar shell prompt — useful when you have sessions open on several machines. | `brunokrugel/crush` |
-| Pills panel | <kbd>ctrl+t</kbd> expands *every* section, and scheduled tasks get their own pill with a stopwatch glyph that distinguishes recurring from one-shot. | `brunokrugel/crush` |
+| `user@host:cwd` header | On by default, mirroring the familiar shell prompt — useful when you have sessions open on several machines. | `joestump-agent/crush` |
+| Pills panel | <kbd>ctrl+t</kbd> expands *every* section, and scheduled tasks get their own pill with a stopwatch glyph that distinguishes recurring from one-shot. | `joestump-agent/crush` |
 
 ### Configuration
 
 | Improvement | Detail | Source |
 | --- | --- | --- |
-| `allowed_commands` | Re-allow specific commands the [blocklist](/configuration/permissions#blocked-commands) normally denies, without disabling the blocklist. Still subject to permission approval. | `brunokrugel/crush` |
-| `channel_enabled` | Turn an MCP server into a channel from `crush.json`, rather than only via the `--channels` flag. | `brunokrugel/crush` |
-| `embeddings` block | Configure the semantic-search embedding provider from `crush.json` or `crushrc`. | `brunokrugel/crush` |
-| Config reload on reconnect | Reconnecting an MCP server re-reads config from disk, so an edit takes effect without a restart. | `brunokrugel/crush` |
-| Current time in the prompt | The system prompt carries the current time, which is what makes relative scheduling ("every weekday at 9") work. | `brunokrugel/crush` |
+| `allowed_commands` | Re-allow specific commands the [blocklist](/configuration/permissions#blocked-commands) normally denies, without disabling the blocklist. Still subject to permission approval. | `joestump-agent/crush` |
+| `channel_enabled` | Turn an MCP server into a channel from `crush.json`, rather than only via the `--channels` flag. | `joestump-agent/crush` |
+| `embeddings` block | Configure the semantic-search embedding provider from `crush.json` or `crushrc`. | `joestump-agent/crush` |
+| Config reload on reconnect | Reconnecting an MCP server re-reads config from disk, so an edit takes effect without a restart. | `joestump-agent/crush` |
+| Current time in the prompt | The system prompt carries the current time, which is what makes relative scheduling ("every weekday at 9") work. | `joestump-agent/crush` |
 
 ## Fixes this fork carries
 

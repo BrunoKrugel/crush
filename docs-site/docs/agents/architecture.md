@@ -13,8 +13,8 @@ in this fork.
 :::
 
 This page describes the code that ships on `main`. The first cut landed in
-PRs [#317](https://github.com/brunokrugel/crush/pull/317) to
-[#339](https://github.com/brunokrugel/crush/pull/339); the 2026-10-04
+PRs [#317](https://github.com/joestump-agent/crush/pull/317) to
+[#339](https://github.com/joestump-agent/crush/pull/339); the 2026-10-04
 review re-based it on A2A as the runtime contract, and that re-base has
 shipped. The reasoning is on [Design decisions](./design-decisions.md).
 
@@ -313,7 +313,7 @@ until an entry point serves a turn on it, and the card is not served on the
 wire. The `agent` tool's sub-agent, plan mode and the main
 coder still run in process. Remote peers are authenticated by the TCP
 listener but reach no local run until the peer registry
-([#334](https://github.com/brunokrugel/crush/issues/334)).
+([#334](https://github.com/joestump-agent/crush/issues/334)).
 
 ## What changed in the re-base
 

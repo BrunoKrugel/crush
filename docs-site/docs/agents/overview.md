@@ -51,9 +51,9 @@ a self-contained prompt finishes faster than one that has to ask.
 
 Dispatched agents get your context files (`AGENTS.md`, `CRUSH.md`,
 `CLAUDE.md`, and the global ones)
-([#386](https://github.com/brunokrugel/crush/issues/386)), read from your
+([#386](https://github.com/joestump-agent/crush/issues/386)), read from your
 checkout rather than from the branch they were dispatched to
-([#561](https://github.com/brunokrugel/crush/issues/561)). A convention
+([#561](https://github.com/joestump-agent/crush/issues/561)). A convention
 that lives only on that branch has to go in your request.
 
 ## Requirements
@@ -112,7 +112,7 @@ it) and press <kbd>ctrl+x</kbd> — the run ends killed with reason
 stay for review or a re-dispatch. You can also ask the main agent, which
 cancels by handle through its `cancel_dispatch` tool; like steering, it
 reaches only agents dispatched from its own session
-([#559](https://github.com/brunokrugel/crush/issues/559)). The main agent's
+([#559](https://github.com/joestump-agent/crush/issues/559)). The main agent's
 own cancel is unchanged: <kbd>esc</kbd> twice cancels only the parent's turn.
 
 ## What happens to the work
@@ -137,7 +137,7 @@ dispatched session's cost is added to the parent session's.
 
 You record your decision with two tools, each of which asks your permission
 before it changes anything. Both act only on dispatches from the calling
-session ([#559](https://github.com/brunokrugel/crush/issues/559)), and the
+session ([#559](https://github.com/joestump-agent/crush/issues/559)), and the
 permission prompt names the agent's `@handle`, branch and dispatching session:
 
 - **`apply_dispatch`** brings the work into your checkout — `merge` (the
@@ -186,7 +186,7 @@ The host can also listen on TCP, TLS only, as an opt-in. A remote peer with
 the right client certificate is authenticated and reaches your agents'
 routes, but it cannot run anything on your host — every task is rejected —
 until the peer registry
-([#334](https://github.com/brunokrugel/crush/issues/334)) lands, and the
+([#334](https://github.com/joestump-agent/crush/issues/334)) lands, and the
 cards themselves are not yet served over the wire.
 What a team can do today is on [Working with other agents](/agents/team);
 the wire is on [A2A protocol](/agents/a2a-protocol) and the components on
