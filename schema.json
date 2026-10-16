@@ -1053,6 +1053,15 @@
             0
           ]
         },
+        "max_background_jobs": {
+          "type": "integer",
+          "description": "How many background shell jobs may run at once. Jobs that have finished never count against it. 0 or negative restores the default.",
+          "default": 50,
+          "examples": [
+            10,
+            200
+          ]
+        },
         "lazy_mcp": {
           "type": "boolean",
           "description": "Keep MCP tools out of the model context until the agent loads them with mcp_search. Individual servers override it with mcp.\u003cname\u003e.lazy",

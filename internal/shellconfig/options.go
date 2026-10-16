@@ -35,6 +35,7 @@ import (
 //	option request-timeout 300
 //	option request-timeout 0
 //	option a2a-listen 127.0.0.1:7443
+//	option max-background-jobs 200
 //
 // Boolean shortcuts: for boolean fields, omitting the value sets it to true.
 func handleOption(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
@@ -260,8 +261,9 @@ var optionSpecs = map[string]optionSpec{
 	"data-directory": {jsonKey: "data_directory", kind: optString},
 	"initialize-as":  {jsonKey: "initialize_as", kind: optString},
 
-	// Integer fields, in seconds.
-	"request-timeout": {jsonKey: "request_timeout", kind: optInt},
+	// Integer fields.
+	"request-timeout":     {jsonKey: "request_timeout", kind: optInt},
+	"max-background-jobs": {jsonKey: "max_background_jobs", kind: optInt},
 
 	// List fields. Keys are singular because each call appends one value.
 	"context-path":        {jsonKey: "context_paths", kind: optList},

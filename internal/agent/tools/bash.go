@@ -241,7 +241,7 @@ func blockFuncs(allowedCommands []string, allowAllCommands bool) []shell.BlockFu
 	}
 }
 
-func NewBashTool(permissions permission.Service, workingDir, spillDir string, attribution *config.Attribution, modelID string, allowedCommands []string, allowAllCommands bool) fantasy.AgentTool {
+func NewBashTool(permissions permission.Service, workingDir, spillDir string, attribution *config.Attribution, modelID string, allowedCommands []string, allowAllCommands bool, maxBackgroundJobs int) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		BashToolName,
 		string(bashDescription(attribution, modelID, allowedCommands, allowAllCommands)),
@@ -284,11 +284,11 @@ func NewBashTool(permissions permission.Service, workingDir, spillDir string, at
 			if params.RunInBackground {
 				startTime := time.Now()
 				bgManager := shell.GetBackgroundShellManager()
-				bgManager.Cleanup()
 				// Use background context so it continues after tool returns;
 				// tag the job with the calling session so the session's
-				// teardown kills it (#385).
-				bgShell, err := bgManager.Start(context.Background(), sessionID, execWorkingDir, blockFuncs(allowedCommands, allowAllCommands), params.Command, params.Description)
+				// teardown kills it (#385). The prune in Start makes finished
+				// jobs never count against the cap.
+				bgShell, err := bgManager.Start(context.Background(), sessionID, execWorkingDir, blockFuncs(allowedCommands, allowAllCommands), params.Command, params.Description, maxBackgroundJobs)
 				if err != nil {
 					return fantasy.ToolResponse{}, fmt.Errorf("error starting background shell: %w", err)
 				}
@@ -344,8 +344,9 @@ func NewBashTool(permissions permission.Service, workingDir, spillDir string, at
 			// background; tag the job with the calling session so the
 			// session's teardown kills it (#385).
 			bgManager := shell.GetBackgroundShellManager()
-			bgManager.Cleanup()
-			bgShell, err := bgManager.Start(context.Background(), sessionID, execWorkingDir, blockFuncs(allowedCommands, allowAllCommands), params.Command, params.Description)
+			// The prune in Start makes finished jobs never count against
+			// the cap.
+			bgShell, err := bgManager.Start(context.Background(), sessionID, execWorkingDir, blockFuncs(allowedCommands, allowAllCommands), params.Command, params.Description, maxBackgroundJobs)
 			if err != nil {
 				return fantasy.ToolResponse{}, fmt.Errorf("error starting shell: %w", err)
 			}

@@ -509,10 +509,11 @@ type Options struct {
 	// allowing the agent to execute any command via the bash tool. Unlike
 	// allowed_commands, this also removes the package-manager argument blocks.
 	// This is a dangerous option and should be used with caution.
-	AllowAllCommands bool               `json:"allow_all_commands,omitempty" jsonschema:"description=Remove all command restrictions from the bash tool, including package-manager argument blocks (dangerous). Commands still require permission approval unless yolo mode is enabled.,default=false"`
-	RequestTimeout   *int               `json:"request_timeout,omitempty" jsonschema:"description=Timeout in seconds for each LLM API request. Streaming responses are aborted only after this much inactivity\\, so slow but active streams are never killed. 0 disables it\\, negative values are invalid.,default=60,example=120,example=300,example=0"`
-	LazyMCP          *bool              `json:"lazy_mcp,omitempty" jsonschema:"description=Keep MCP tools out of the model context until the agent loads them with mcp_search. Individual servers override it with mcp.<name>.lazy,default=true"`
-	Compaction       *CompactionOptions `json:"compaction,omitempty" jsonschema:"description=Context compaction settings"`
+	AllowAllCommands  bool               `json:"allow_all_commands,omitempty" jsonschema:"description=Remove all command restrictions from the bash tool, including package-manager argument blocks (dangerous). Commands still require permission approval unless yolo mode is enabled.,default=false"`
+	RequestTimeout    *int               `json:"request_timeout,omitempty" jsonschema:"description=Timeout in seconds for each LLM API request. Streaming responses are aborted only after this much inactivity\\, so slow but active streams are never killed. 0 disables it\\, negative values are invalid.,default=60,example=120,example=300,example=0"`
+	MaxBackgroundJobs *int               `json:"max_background_jobs,omitempty" jsonschema:"description=How many background shell jobs may run at once. Jobs that have finished never count against it. 0 or negative restores the default.,default=50,example=10,example=200"`
+	LazyMCP           *bool              `json:"lazy_mcp,omitempty" jsonschema:"description=Keep MCP tools out of the model context until the agent loads them with mcp_search. Individual servers override it with mcp.<name>.lazy,default=true"`
+	Compaction        *CompactionOptions `json:"compaction,omitempty" jsonschema:"description=Context compaction settings"`
 
 	// TodoEnforcement carries the global todo enforcement defaults
 	// (#315); per agent type overrides live on the agent definitions.
@@ -521,6 +522,18 @@ type Options struct {
 	Dispatch *DispatchOptions `json:"dispatch,omitempty" jsonschema:"description=Dispatched agent options"`
 	// A2A carries the A2A host's optional TCP listener (#358).
 	A2A *A2AOptions `json:"a2a,omitempty" jsonschema:"description=A2A host options: an optional TLS-only TCP listener beside the per-process unix socket"`
+}
+
+// DefaultMaxBackgroundJobs is how many background shell jobs may run at once
+// when the user has not set max_background_jobs.
+const DefaultMaxBackgroundJobs = 50
+
+// GetMaxBackgroundJobs returns the running-job ceiling, always positive.
+func (o *Options) GetMaxBackgroundJobs() int {
+	if o == nil || o.MaxBackgroundJobs == nil || *o.MaxBackgroundJobs <= 0 {
+		return DefaultMaxBackgroundJobs
+	}
+	return *o.MaxBackgroundJobs
 }
 
 // DefaultDispatchMaxConcurrent bounds how many dispatched agents run at

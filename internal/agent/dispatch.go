@@ -281,7 +281,7 @@ func (c *coordinator) buildDispatchTools(workerCfg config.Agent, t *DispatchTool
 	logFile := filepath.Join(dataDir, "logs", "crush.log")
 
 	allTools := []fantasy.AgentTool{
-		tools.NewBashTool(t.permissions, dir, dataDir, scoped.Options.Attribution, modelID, allowedCommands, allowAllCommands),
+		tools.NewBashTool(t.permissions, dir, dataDir, scoped.Options.Attribution, modelID, allowedCommands, allowAllCommands, scoped.Options.GetMaxBackgroundJobs()),
 		tools.NewCrushLogsTool(logFile),
 		tools.NewJobOutputTool(dataDir),
 		tools.NewJobKillTool(),
