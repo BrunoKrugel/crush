@@ -39,31 +39,79 @@ own copy of these changes, the duplicate history drops out cleanly.
 
 ## Quality-of-life improvements
 
+Smaller things you notice in the terminal rather than in a config file.
+
+### Chat
+
 | Improvement | Detail | Source |
 | --- | --- | --- |
-| Provider selection rework | Providers are no longer picked just because their API key sits in the environment; a usable model must be explicitly selected, with stable catalog-order resolution. | upstream PR #3487 |
-| Pretty `crush run` output | `--show-events` renders tool calls and results during non-interactive runs. | upstream PR #3440 |
-| Nerd Font detection | Terminal nerd-font autodetection (PR #4006), and LSP severity indicators — error, warning, information, hint — render as glyphs with letter fallbacks for plain terminals. | upstream PR #4006 |
-| Plan-mode fixes | Raw-markdown copy on selection and table support in plan output. | merged PR #3745, `fix/sort-configured` |
-| MCP sidebar seeding | A periodic re-seed of MCP client states in the TUI, so a server whose only state event fired before the TUI subscribed no longer sticks on "None". | merged PR #3289 |
-| Subagent permissions | Non-interactive permission propagation applies to subagents too. | merged PR #3365 |
-| Sentry known-sessionless | `https://mcp.sentry.dev/mcp` ships pre-registered in `knownSessionlessMCPs`; known sessionless servers skip the subscriptions stream that stalls them. | merged PR #4038 |
-| Skill toggles | Repo-scoped skill enable/disable dialogs, on top of the upstream toggle work this fork already carried. | merged PR #3994 |
-| Scroll speed | Configurable TUI scroll speed (`tui.scroll_speed`). | merged PR #3946 |
+| Click-to-copy | Finished assistant *and* user messages carry a right-aligned `⎘` icon that copies the message. Shown on focus, pinned to the item's right edge. | `brunokrugel/crush` |
+| Clickable hyperlinks | A plain click on a link in the transcript opens it in your browser. | `brunokrugel/crush` |
+| Channel message styling | Channel-originated messages render with a `sender / via / at` metadata line below the body, so you can tell a webhook from a human. | `brunokrugel/crush` |
 | Text copy performance | Faster text copy path in the message renderer. | merged PR #3945 |
 | Tool-call elapsed time | Each running tool call shows its own elapsed timer instead of an aggregate one. | merged PR #3600 |
-| `@handle` completions and routing | `@` completes live dispatched agents — role, status, current todo — alongside files. A prompt that *starts* with `@handle` steers that agent instead of going to the main agent; a mid-sentence `@handle` attaches the agent's status card. | `brunokrugel/crush` |
-| Inspect mode | <kbd>ctrl+]</kbd> on an agent block opens that sub-agent's full transcript in the chat window, following it live; <kbd>ctrl+]</kbd> again cycles live agents and <kbd>esc</kbd> or <kbd>ctrl+[</kbd> returns with the scroll position restored. The parent stays the active session. | `brunokrugel/crush` |
-| Sub-agent session tree | The session picker shows a `▸N` count on sessions that started sub-agents; <kbd>ctrl+]</kbd> lists them, and each opens read-only in inspect mode. | `brunokrugel/crush` |
-| Click-to-copy | Finished assistant *and* user messages carry a right-aligned `⎘` icon that copies the message. Shown on focus, pinned to the item's right edge. | `brunokrugel/crush` |
-| Text-file attachments | Attach JSON, YAML, Markdown, and source files, not just images, with chips that survive sending and a clickable remove button. | `brunokrugel/crush` |
+
+### Composer
+
+| Improvement | Detail | Source |
+| --- | --- | --- |
+| Syntax-highlighted composer | A vendored textarea with a highlighter, so `@file`, `/skill`, and MCP-prompt tokens are visibly distinct as you type. | `brunokrugel/crush` |
+| Atomic token editing | Backspace over a completed token deletes the whole token — and drops its attachment, if it had one — instead of eating one character at a time. | `brunokrugel/crush` |
+| Text-file attachments | Attach JSON, YAML, Markdown, and source files, not just images. One shared text predicate everywhere, with binary sniffing to reject the rest. | `brunokrugel/crush` |
+| Attachment chips | A clickable remove button on each chip, correct hit zones, and chips that survive sending. | `brunokrugel/crush` |
+| `/skill` completions | Skills complete inline from `/`, alongside commands and MCP prompts. | `brunokrugel/crush` |
+| Paste as text | A copied file path pastes as text; auto-attach applies only to image paths, and <kbd>ctrl+shift+v</kbd> always pastes the clipboard as text. | `brunokrugel/crush` |
+
+### Dialogs and palette
+
+| Improvement | Detail | Source |
+| --- | --- | --- |
+| **Toggle Skills dialog** | Palette entry **Toggle Skills** — every discovered skill with its error state, toggled per repository or globally. | merged PR #3994, `brunokrugel/crush` |
+| **Toggle MCPs dialog** | Palette entry **Toggle MCPs** — per-server tri-state (enabled / lazy / disabled) for this repository or the global config. | upstream PR #3983, `brunokrugel/crush` |
+| **Channels dialog** | Palette entry **Channels** — see and manage active channels. | `brunokrugel/crush` |
+| Hierarchical sub-menus | The command palette nests related commands instead of one flat list, with `back`/`backspace` navigation. | `brunokrugel/crush` |
+| Model discovery reload | Re-run provider/model discovery from the `/models` dialog without restarting. | `brunokrugel/crush` |
+
+### Sidebar and header
+
+| Improvement | Detail | Source |
+| --- | --- | --- |
+| Focusable sidebar | Three-state <kbd>tab</kbd> focus, mouse scrolling, a scrollbar instead of a focus border, and irrelevant keybindings hidden while it is focused. | `brunokrugel/crush` |
+| Channels column | Active channels shown on the landing page and in the sidebar. | `brunokrugel/crush` |
+| MCP sidebar seeding | A periodic re-seed of MCP client states in the TUI, so a server whose only state event fired before the TUI subscribed no longer sticks on "None". | merged PR #3289 |
 | `user@host:cwd` header | On by default, mirroring the familiar shell prompt — useful when you have sessions open on several machines. | `brunokrugel/crush` |
-| `allowed_commands` | Re-allow specific commands the blocklist normally denies, without disabling the blocklist. Still subject to permission approval. | `brunokrugel/crush` |
+| Pills panel | <kbd>ctrl+t</kbd> expands *every* section, and scheduled tasks get their own pill with a stopwatch glyph that distinguishes recurring from one-shot. | `brunokrugel/crush` |
+
+### Configuration
+
+| Improvement | Detail | Source |
+| --- | --- | --- |
+| `allowed_commands` | Re-allow specific commands the [blocklist](/configuration/permissions#blocked-commands) normally denies, without disabling the blocklist. Still subject to permission approval. | `brunokrugel/crush` |
+| `channel_enabled` | Turn an MCP server into a channel from `crush.json`, rather than only via the `--channels` flag. | `brunokrugel/crush` |
+| `embeddings` block | Configure the semantic-search embedding provider from `crush.json` or `crushrc`. | `brunokrugel/crush` |
+| Config reload on reconnect | Reconnecting an MCP server re-reads config from disk, so an edit takes effect without a restart. | `brunokrugel/crush` |
 | Current time in the prompt | The system prompt carries the current time, which is what makes relative scheduling ("every weekday at 9") work. | `brunokrugel/crush` |
-| Channels dialog and sidebar column | Palette entry **Channels** to see and manage active channels, and a sidebar column showing them. | `brunokrugel/crush` |
-| In-process run dispatch serialized | Two turns could run concurrently in one session. | `brunokrugel/crush` |
-| Bounded MCP init waits | A wedged MCP server could blank the whole app at startup. Tool lists wait for init, with a bound. | `brunokrugel/crush` |
-| Per-server MCP lifecycle serialized, stdio process groups reaped, MCP OAuth persistence | Concurrent connect/disconnect races, orphaned stdio servers, and OAuth tokens that did not survive a restart. | `brunokrugel/crush` |
+
+## Fixes this fork carries
+
+Fixes to **upstream** behaviour that live here and are not upstream. Fixes to
+the fork's own features are part of those features and are not listed
+separately.
+
+| Fix | Symptom it removes |
+| --- | --- |
+| Bounded MCP init waits | A wedged MCP server could blank the whole app at startup. Tool lists now wait for init, with a bound. |
+| Per-server MCP lifecycle serialized | Concurrent connect/disconnect on one server raced; an error on one session tore down others. |
+| stdio process groups reaped | Killed stdio MCP servers left orphan processes behind. |
+| MCP OAuth persistence | Tokens did not actually survive a restart; the store now does atomic writes and validates state. |
+| In-process run dispatch serialized | Two turns could run concurrently in one session. |
+| Provider base URL resolved before validation | A custom provider with an expanded `base_url` failed validation that should have passed. |
+| Empty paste routes to the clipboard image | An empty bracketed paste dropped the image instead of attaching it — and now warns instead of silently failing on a model that cannot take images. |
+| Command filter matches shortcuts | Typing a command's shortcut in the `/` menu filtered it out. |
+| Tied project timestamps ordered by recency | Projects registered in the same instant sorted arbitrarily. |
+| Backspace in the commands filter | Backspace was swallowed in the top-level commands filter. |
+| Sub-agent permissions | Non-interactive permission propagation applied only to the main agent, so a subagent's runs prompted from scratch. | (upstream PR #3365 is merged upstream; the fork's port predates it) |
+| Sentry known-sessionless | `https://mcp.sentry.dev/mcp` ships pre-registered in `knownSessionlessMCPs`; known sessionless servers skip the subscriptions stream that stalls them. | (merged PR #4038) |
 
 ## Proposed but not yet merged
 

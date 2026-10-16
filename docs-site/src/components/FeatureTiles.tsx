@@ -72,16 +72,16 @@ const TILES: Tile[] = [
   },
   {
     icon: '▣',
-    title: 'A2UI surfaces',
+    title: 'Multi-agent dispatch',
     body: (
       <>
-        Models speak the A2UI protocol and Crush draws it:
-        cards, lists, buttons and dashboards rendered inline in the chat instead
-        of raw JSON.
+        Fan work out to independent agents in their own git worktrees while the
+        main agent keeps going; steer them, read their transcripts, and merge or
+        dismiss their results.
       </>
     ),
-    href: '/features/a2ui',
-    more: 'A2UI',
+    href: '/agents/overview',
+    more: 'Dispatch',
   },
   {
     icon: '◇',

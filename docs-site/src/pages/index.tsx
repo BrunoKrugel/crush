@@ -123,10 +123,6 @@ function Fork(): ReactNode {
                 deterministic replies back through the pushing server
               </li>
               <li>
-                <Link to="/features/a2ui">A2UI rendering</Link> via{' '}
-                <a href="https://github.com/joestump-agent/a2tea">a2tea</a>
-              </li>
-              <li>
                 <Link to="/features/scheduled-tasks">Scheduled tasks</Link> —
                 cron-driven prompts
               </li>

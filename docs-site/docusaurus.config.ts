@@ -121,7 +121,6 @@ const config: Config = {
           items: [
             {label: 'MCP', to: '/features/mcp'},
             {label: 'Channels', to: '/features/channels'},
-            {label: 'A2UI', to: '/features/a2ui'},
             {label: 'Skills', to: '/features/skills'},
           ],
         },
