@@ -246,3 +246,7 @@ func (c *blockingCoordinator) DeliverAgentMessage(ctx context.Context, msg agent
 func (c *blockingCoordinator) DispatchLive(sessionID string) []dispatch.TodoSnapshot {
 	return nil
 }
+
+func (*blockingCoordinator) ListSettledMessages(context.Context, string) ([]message.Message, error) {
+	return nil, nil
+}

@@ -184,3 +184,7 @@ func (c *errorCoordinator) DeliverAgentMessage(ctx context.Context, msg agent.Ag
 func (c *errorCoordinator) DispatchLive(sessionID string) []dispatch.TodoSnapshot {
 	return nil
 }
+
+func (*errorCoordinator) ListSettledMessages(context.Context, string) ([]message.Message, error) {
+	return nil, nil
+}

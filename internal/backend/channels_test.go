@@ -364,3 +364,7 @@ func (c *recordingCoordinator) DeliverAgentMessage(ctx context.Context, msg agen
 func (c *recordingCoordinator) DispatchLive(sessionID string) []dispatch.TodoSnapshot {
 	return nil
 }
+
+func (*recordingCoordinator) ListSettledMessages(context.Context, string) ([]message.Message, error) {
+	return nil, nil
+}

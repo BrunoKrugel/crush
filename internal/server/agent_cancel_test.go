@@ -294,3 +294,7 @@ func (s *runCoordinator) DeliverAgentMessage(ctx context.Context, msg agent.Agen
 func (s *runCoordinator) DispatchLive(sessionID string) []dispatch.TodoSnapshot {
 	return nil
 }
+
+func (*runCoordinator) ListSettledMessages(context.Context, string) ([]message.Message, error) {
+	return nil, nil
+}

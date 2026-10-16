@@ -755,3 +755,7 @@ func (c *scriptedCoordinator) DeliverAgentMessage(ctx context.Context, msg agent
 func (c *scriptedCoordinator) DispatchLive(sessionID string) []dispatch.TodoSnapshot {
 	return nil
 }
+
+func (*scriptedCoordinator) ListSettledMessages(context.Context, string) ([]message.Message, error) {
+	return nil, nil
+}

@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/crush/internal/compaction"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/discover"
+	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -87,6 +88,9 @@ func (m *mockSessionAgent) RestoreSummarize(context.Context, string) error {
 }
 func (m *mockSessionAgent) GenerateTitle(context.Context, string, string) {}
 func (m *mockSessionAgent) EnqueueWhenBusy(call SessionAgentCall) bool    { return false }
+func (m *mockSessionAgent) ListSettledMessages(context.Context, string) ([]message.Message, error) {
+	return nil, nil
+}
 
 // newTestCoordinator creates a minimal coordinator for unit testing runSubAgent.
 func newTestCoordinator(t *testing.T, env fakeEnv, providerID string, providerCfg config.ProviderConfig) *coordinator {

@@ -143,6 +143,9 @@ type Coordinator interface {
 	CancelAll()
 	IsSessionBusy(sessionID string) bool
 	IsBusy() bool
+	// ListSettledMessages reads a session's transcript, first settling any
+	// tool calls a dead process left without a reply.
+	ListSettledMessages(ctx context.Context, sessionID string) ([]message.Message, error)
 	QueuedPrompts(sessionID string) int
 	QueuedPromptsList(sessionID string) []string
 	ClearQueue(sessionID string)
@@ -1892,6 +1895,10 @@ func (c *coordinator) IsBusy() bool {
 
 func (c *coordinator) IsSessionBusy(sessionID string) bool {
 	return c.currentAgent().IsSessionBusy(sessionID)
+}
+
+func (c *coordinator) ListSettledMessages(ctx context.Context, sessionID string) ([]message.Message, error) {
+	return c.currentAgent().ListSettledMessages(ctx, sessionID)
 }
 
 func (c *coordinator) Model() Model {

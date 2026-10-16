@@ -148,6 +148,7 @@ type SessionAgent interface {
 	CancelAll()
 	IsSessionBusy(sessionID string) bool
 	IsBusy() bool
+	ListSettledMessages(ctx context.Context, sessionID string) ([]message.Message, error)
 	QueuedPrompts(sessionID string) int
 	QueuedPromptsList(sessionID string) []string
 	ClearQueue(sessionID string)
@@ -1166,6 +1167,8 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 	// Stream returns, where sendChannelReply uses it to tell whether the
 	// model already replied on the originating channel.
 	completedToolCalls := make(map[string]struct{})
+	// Calls that got a reply this turn; the rest are settled when it ends.
+	answeredToolCalls := csync.NewMap[string, struct{}]()
 	// Don't send MaxOutputTokens if 0 — some providers (e.g. LM Studio) reject it
 	var maxOutputTokens *int64
 	if call.MaxOutputTokens > 0 {
@@ -1385,6 +1388,9 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 					toolResult,
 				},
 			})
+			if createMsgErr == nil {
+				answeredToolCalls.Set(result.ToolCallID, struct{}{})
+			}
 			return createMsgErr
 		},
 		OnStepFinish: func(stepResult fantasy.StepResult) error {
@@ -1478,6 +1484,22 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 
 	a.eventPromptResponded(call.SessionID, time.Since(startTime).Truncate(time.Second))
 
+	// Final writes use a context detached from the run: workspace shutdown
+	// cancels ctx before agent goroutines finish, and the turn's ending
+	// must still land.
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cleanupCancel()
+	if currentAssistant != nil {
+		answered := func(id string) bool {
+			_, ok := answeredToolCalls.Get(id)
+			return ok
+		}
+		if settleErr := a.settleTurn(cleanupCtx, currentAssistant, answered, err); settleErr != nil {
+			slog.Error("Failed to settle unanswered tool calls",
+				"session_id", call.SessionID, "error", settleErr)
+		}
+	}
+
 	if err != nil {
 		isHyper := largeModel.ModelCfg.Provider == hyper.Name
 		isCancelErr := errors.Is(err, context.Canceled)
@@ -1501,71 +1523,8 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 			}
 			return result, err
 		}
-		// Persist final state with a context detached from the run
-		// context. The run context (ctx) is derived from the
-		// workspace context, which workspace shutdown cancels before
-		// agent goroutines finish; using ctx here would drop the
-		// final assistant state. WithoutCancel keeps the values
-		// (e.g. session ID) while ignoring cancellation, and a short
-		// timeout bounds the cleanup writes.
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cleanupCancel()
 		// Ensure we finish thinking on error to close the reasoning state.
 		currentAssistant.FinishThinking()
-		toolCalls := currentAssistant.ToolCalls()
-		// INFO: we use the cleanup context here because the genCtx has been cancelled.
-		msgs, createErr := a.messages.List(cleanupCtx, currentAssistant.SessionID)
-		if createErr != nil {
-			return nil, createErr
-		}
-		for _, tc := range toolCalls {
-			if !tc.Finished {
-				tc.Finished = true
-				tc.Input = "{}"
-				currentAssistant.AddToolCall(tc)
-				updateErr := a.messages.Update(cleanupCtx, *currentAssistant)
-				if updateErr != nil {
-					return nil, updateErr
-				}
-			}
-
-			found := false
-			for _, msg := range msgs {
-				if msg.Role == message.Tool {
-					for _, tr := range msg.ToolResults() {
-						if tr.ToolCallID == tc.ID {
-							found = true
-							break
-						}
-					}
-				}
-				if found {
-					break
-				}
-			}
-			if found {
-				continue
-			}
-			content := "There was an error while executing the tool"
-			if isCancelErr {
-				content = "Error: user cancelled assistant tool calling"
-			}
-			toolResult := message.ToolResult{
-				ToolCallID: tc.ID,
-				Name:       tc.Name,
-				Content:    content,
-				IsError:    true,
-			}
-			_, createErr = a.messages.Create(cleanupCtx, currentAssistant.SessionID, message.CreateMessageParams{
-				Role: message.Tool,
-				Parts: []message.ContentPart{
-					toolResult,
-				},
-			})
-			if createErr != nil {
-				return nil, createErr
-			}
-		}
 		var providerErr *fantasy.ProviderError
 		const defaultTitle = "Provider Error"
 		linkStyle := lipgloss.NewStyle().Foreground(charmtone.Guac).Underline(true)
@@ -1597,8 +1556,6 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		} else {
 			currentAssistant.AddFinish(message.FinishReasonError, defaultTitle, err.Error())
 		}
-		// Note: we use the cleanup context here because the genCtx has been
-		// cancelled.
 		updateErr := a.messages.Update(cleanupCtx, *currentAssistant)
 		if updateErr != nil {
 			return nil, updateErr
@@ -2501,42 +2458,6 @@ func filterFileParts(parts []fantasy.MessagePart) []fantasy.MessagePart {
 		filtered = append(filtered, part)
 	}
 	return filtered
-}
-
-// toolResultsForCalls builds the tool message that must immediately follow
-// an assistant message with tool calls. LLM APIs require every tool call to
-// be followed by its results before any other message; strict-adjacency
-// providers reject the request otherwise. Results are taken from
-// toolResultsByCall and consumed, so a result stored in a message that also
-// holds results for calls of other assistant messages is emitted exactly
-// once, next to the assistant that requested it. Tool calls without any
-// stored result (e.g. an interrupted session) receive a synthetic error
-// response so the conversation keeps working.
-func toolResultsForCalls(m message.Message, toolResultsByCall map[string][]fantasy.MessagePart) fantasy.Message {
-	content := make([]fantasy.MessagePart, 0, len(m.ToolCalls()))
-	for _, tc := range m.ToolCalls() {
-		parts := toolResultsByCall[tc.ID]
-		delete(toolResultsByCall, tc.ID)
-		if len(parts) > 0 {
-			content = append(content, parts...)
-			continue
-		}
-		slog.Warn(
-			"Injecting synthetic tool result for orphaned tool call",
-			"tool_call_id", tc.ID,
-			"tool_name", tc.Name,
-		)
-		content = append(content, fantasy.ToolResultPart{
-			ToolCallID: tc.ID,
-			Output: fantasy.ToolResultOutputContentError{
-				Error: errors.New("tool call was interrupted and did not produce a result, you may retry this call if the result is still needed"),
-			},
-		})
-	}
-	return fantasy.Message{
-		Role:    fantasy.MessageRoleTool,
-		Content: content,
-	}
 }
 
 func (a *sessionAgent) getSessionMessages(ctx context.Context, session session.Session) ([]message.Message, error) {

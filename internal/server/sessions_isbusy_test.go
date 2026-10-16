@@ -366,3 +366,7 @@ func (s *stubCoordinator) DeliverAgentMessage(ctx context.Context, msg agent.Age
 func (s *stubCoordinator) DispatchLive(sessionID string) []dispatch.TodoSnapshot {
 	return nil
 }
+
+func (*stubCoordinator) ListSettledMessages(context.Context, string) ([]message.Message, error) {
+	return nil, nil
+}

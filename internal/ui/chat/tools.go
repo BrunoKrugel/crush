@@ -500,7 +500,8 @@ func (t *baseToolMessageItem) computeStatus() ToolStatus {
 	return t.status
 }
 
-// isSpinning returns true if the tool should show animation.
+// isSpinning returns true if the tool should show animation. A recorded
+// result stops it too, for calls stored before settling marked them finished.
 func (t *baseToolMessageItem) isSpinning() bool {
 	if t.spinningFunc != nil {
 		return t.spinningFunc(SpinningState{
@@ -509,7 +510,7 @@ func (t *baseToolMessageItem) isSpinning() bool {
 			Status:   t.status,
 		})
 	}
-	return !t.toolCall.Finished && t.status != ToolStatusCanceled
+	return !t.toolCall.Finished && t.result == nil && t.status != ToolStatusCanceled
 }
 
 // SetSpinningFunc sets a custom function to determine if the tool should spin.
