@@ -34,6 +34,8 @@ own copy of these changes, the duplicate history drops out cleanly.
 | **[Herdr compat](/features/notifications)** | Overhauled agent state reporting and pane integration for the herdr multiplexer, including compaction state reporting. | upstream PR #3541 |
 | **[Lazy MCP loading](/features/mcp)** | MCP tool schemas stay out of the model's context until explicitly pulled with `mcp_search`; per-server tri-state settings in the MCP dialog, plus `list_mcp_prompts` and `call_mcp_prompt` tools and prompts offered in the inline `/` completions. | upstream PR #3983, `brunokrugel/crush` |
 | **[Skill scoping and caching](/features/skills)** | Deduplicated symlinked skills, skill discovery cached across prompt builds, repo-scoped enable/disable toggles over the global config. | upstream PRs #3830, #3813, plus the skill-toggle upstream work |
+| **Session-scoped prompts** | Permission and question prompts are scoped to the session the client is actually viewing: clients report their current session, pending prompts re-publish when a client switches to the session that raised them, and sub-agent prompts surface on the top-level session. | upstream PRs #4044, `brunokrugel/crush` |
+| **Turn and paste UX** | The turn spinner runs from the moment a prompt is sent (not when the first assistant message lands), a setup failure still publishes RunComplete, copied file paths paste as text rather than attaching, and <kbd>ctrl+shift+v</kbd> pastes the clipboard as text on every model. | upstream PRs #4046, #4070, #4071, `brunokrugel/crush` |
 
 ## Quality-of-life improvements
 
