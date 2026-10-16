@@ -1548,6 +1548,11 @@ func hasUsableToken(tok *oauth.Token) bool {
 // is missing, no longer valid, or cannot be refreshed. This covers:
 //   - invalid_grant: expired or revoked refresh tokens
 //   - invalid_client: deleted or deactivated client registrations
+//   - any token-endpoint rejection: with an expired access token the
+//     refresh grant is the only path forward, so any rejection —
+//     including gateways answering with a bare HTTP 500 and no OAuth
+//     error code — leaves no working credential and needs a fresh
+//     interactive authorization
 //   - "no token available": the handler had no cached token to use
 //   - interactive authorization was required but withheld during startup
 func isOAuthInitErr(err error) bool {
@@ -1556,10 +1561,11 @@ func isOAuthInitErr(err error) bool {
 	}
 	var rErr *oauth2.RetrieveError
 	if errors.As(err, &rErr) {
-		return rErr.ErrorCode == "invalid_grant" || rErr.ErrorCode == "invalid_client"
+		return true
 	}
 	msg := err.Error()
-	return strings.Contains(msg, "invalid_grant") ||
+	return strings.Contains(msg, "cannot fetch token") ||
+		strings.Contains(msg, "invalid_grant") ||
 		strings.Contains(msg, "invalid_client") ||
 		strings.Contains(msg, "no token available")
 }

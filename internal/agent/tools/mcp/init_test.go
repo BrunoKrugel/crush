@@ -12,6 +12,9 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"fmt"
+	"golang.org/x/oauth2"
+
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/env"
 	"github.com/charmbracelet/crush/internal/oauth"
@@ -927,4 +930,55 @@ func TestCreateSession_Sessionless(t *testing.T) {
 		require.Contains(t, err.Error(), "session not found")
 		require.GreaterOrEqual(t, listenTotal.Load(), int64(1), "expected the listen stream attempt")
 	})
+}
+
+// TestIsOAuthInitErrTokenEndpointRejections pins the detector's contract for
+// token-endpoint failures: a gateway that answers the refresh grant with a
+// bare HTTP 500 (no OAuth error code in the body) must still count as an
+// init-OAuth failure, because with an expired access token the refresh grant
+// was the only path forward — the token has to be cleared and a fresh
+// interactive auth demanded instead of leaving the server stuck in StateError.
+func TestIsOAuthInitErrTokenEndpointRejections(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "bare 500 with no oauth error code",
+			err: fmt.Errorf("calling %q: sending %q: rejected by transport: %w",
+				"initialize", "initialize",
+				&oauth2.RetrieveError{
+					Response: &http.Response{StatusCode: 500, Status: "500 Internal Server Error"},
+					Body:     []byte("Internal Server Error"),
+				}),
+			want: true,
+		},
+		{
+			name: "wrapped plain-500 text without a typed error",
+			err:  fmt.Errorf("initialize failed: oauth2: cannot fetch token: 500 Internal Server Error"),
+			want: true,
+		},
+		{
+			name: "invalid_grant stays recognized",
+			err: &oauth2.RetrieveError{
+				Response:  &http.Response{StatusCode: 400, Status: "400 Bad Request"},
+				ErrorCode: "invalid_grant",
+			},
+			want: true,
+		},
+		{
+			name: "unrelated transport failure is not an oauth error",
+			err:  fmt.Errorf("connection refused"),
+			want: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.want, isOAuthInitErr(tc.err))
+		})
+	}
 }
