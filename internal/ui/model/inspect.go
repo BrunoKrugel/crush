@@ -295,7 +295,8 @@ func (m *UI) handleInspectDrill() tea.Cmd {
 		return util.ReportInfo("No live sub-agents to inspect")
 	}
 	m.chat.SetSelected(liveRefs[0].index)
-	return tea.Batch(m.chat.ScrollToSelected(), m.enterInspect(liveRefs[0]))
+	m.chat.ScrollToSelected()
+	return m.enterInspect(liveRefs[0])
 }
 
 // enterInspect captures the parent's scroll position and live-agent ring
@@ -461,11 +462,11 @@ func (m *UI) handleInspectRestore(msg inspectRestoreMsg) tea.Cmd {
 		}
 	}
 	if msg.follow {
-		cmds = append(cmds, m.chat.ScrollToBottom())
+		m.chat.ScrollToBottom()
 	} else {
-		cmds = append(cmds, m.chat.ScrollToIndex(msg.scrollIdx))
+		m.chat.ScrollToIndex(msg.scrollIdx)
 		if msg.scrollLine > 0 {
-			cmds = append(cmds, m.chat.ScrollBy(msg.scrollLine))
+			m.chat.ScrollBy(msg.scrollLine)
 		}
 	}
 	m.invalidateFrames()

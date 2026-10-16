@@ -135,25 +135,16 @@ func RunTool(ctx context.Context, cfg *config.ConfigStore, name, toolName string
 func extractToolResult(result *mcp.CallToolResult, dataDir string) ToolResult {
 	var textParts []string
 	var surfaces []A2UISurface
-	var imageData []byte
-	var imageMimeType string
-	var audioData []byte
-	var audioMimeType string
+	var image, audio mediaPayload
 
 	for _, v := range result.Content {
 		switch content := v.(type) {
 		case *mcp.TextContent:
 			textParts = append(textParts, content.Text)
 		case *mcp.ImageContent:
-			if imageData == nil {
-				imageData = content.Data
-				imageMimeType = content.MIMEType
-			}
+			image.offer(content.Data, content.MIMEType)
 		case *mcp.AudioContent:
-			if audioData == nil {
-				audioData = content.Data
-				audioMimeType = content.MIMEType
-			}
+			audio.offer(content.Data, content.MIMEType)
 		case *mcp.EmbeddedResource:
 			// A2UI surfaces arrive as embedded resources — pull them
 			// aside for the UI instead of stringifying them into the
@@ -182,33 +173,49 @@ func extractToolResult(result *mcp.CallToolResult, dataDir string) ToolResult {
 
 	textContent := capResult(strings.Join(textParts, "\n"), dataDir)
 
-	// We need to make sure the data is base64
-	// when using something like docker + playwright the data was not returned correctly.
-	if imageData != nil {
+	// A seen-but-empty payload must not put an empty media block on the
+	// wire: some providers fail the whole request for it. A non-empty
+	// image wins over audio; an image with nothing but empty payloads and
+	// no audio stays text.
+	switch {
+	case image.seen && (len(image.data) > 0 || !audio.seen):
 		return ToolResult{
 			Type:      "image",
 			Content:   textContent,
-			Data:      ensureRawBytes(imageData),
-			MediaType: imageMimeType,
+			Data:      image.data,
+			MediaType: image.mimeType,
 			Surfaces:  surfaces,
 		}
-	}
-
-	if audioData != nil {
+	case audio.seen:
 		return ToolResult{
 			Type:      "media",
 			Content:   textContent,
-			Data:      ensureRawBytes(audioData),
-			MediaType: audioMimeType,
+			Data:      audio.data,
+			MediaType: audio.mimeType,
 			Surfaces:  surfaces,
 		}
+	default:
+		return ToolResult{
+			Type:     "text",
+			Content:  textContent,
+			Surfaces: surfaces,
+		}
 	}
+}
 
-	return ToolResult{
-		Type:     "text",
-		Content:  textContent,
-		Surfaces: surfaces,
+// mediaPayload keeps the first non-empty payload offered, or the first one
+// if they are all empty, decoded to raw bytes.
+type mediaPayload struct {
+	data     []byte
+	mimeType string
+	seen     bool
+}
+
+func (m *mediaPayload) offer(data []byte, mimeType string) {
+	if m.seen && len(m.data) > 0 {
+		return
 	}
+	*m = mediaPayload{data: ensureRawBytes(data), mimeType: mimeType, seen: true}
 }
 
 // a2uiAudience resolves an A2UI embedded resource's audience annotations
