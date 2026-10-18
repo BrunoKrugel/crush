@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"uuid"
 
 	"github.com/charmbracelet/crush/internal/a2a"
 	"github.com/charmbracelet/crush/internal/agent/tools"
@@ -25,7 +26,6 @@ import (
 	"github.com/charmbracelet/crush/internal/skills"
 	"github.com/charmbracelet/crush/internal/ui/util"
 	"github.com/charmbracelet/crush/internal/version"
-	"github.com/google/uuid"
 )
 
 // Common errors returned by backend operations.

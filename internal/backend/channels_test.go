@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"uuid"
 
 	"charm.land/fantasy"
 	"github.com/bytedance/sonic"
@@ -19,7 +20,6 @@ import (
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/scheduler"
 	"github.com/charmbracelet/crush/internal/session"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 

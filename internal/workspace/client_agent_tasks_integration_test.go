@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"charm.land/fantasy"
-	"github.com/google/uuid"
+	"uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charmbracelet/crush/internal/a2a"

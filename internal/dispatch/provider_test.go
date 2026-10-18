@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/google/uuid"
+	"uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charmbracelet/crush/internal/lock"
@@ -55,7 +55,7 @@ func newProvider(t *testing.T, repo string) (*GitWorktreeProvider, error) {
 // performs. It returns the registered entry for Diff and Release.
 func provisionEntry(t *testing.T, p *GitWorktreeProvider, opts ProvisionOptions) Entry {
 	t.Helper()
-	id := uuid.NewString()
+	id := uuid.NewV4().String()
 	placement, err := p.Provision(t.Context(), id, opts)
 	require.NoError(t, err)
 	entry := Entry{
@@ -588,7 +588,7 @@ func TestWorkspaceProvisionRejectsBadBases(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.base, func(t *testing.T) {
-			_, err := p.Provision(ctx, uuid.NewString(), ProvisionOptions{Base: tt.base})
+			_, err := p.Provision(ctx, uuid.NewV4().String(), ProvisionOptions{Base: tt.base})
 			require.ErrorContains(t, err, tt.err)
 		})
 	}
@@ -718,7 +718,7 @@ func TestProvisionConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			id := uuid.NewString()
+			id := uuid.NewV4().String()
 			placement, err := p.Provision(ctx, id, ProvisionOptions{Base: "origin/main"})
 			if err == nil {
 				p.reg.Register(Entry{
@@ -771,7 +771,7 @@ func TestProvisionFailureCleansUp(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(path, "stuck.txt"), []byte("x"), 0o644))
 	}
 
-	_, err = p.Provision(ctx, uuid.NewString(), ProvisionOptions{})
+	_, err = p.Provision(ctx, uuid.NewV4().String(), ProvisionOptions{})
 	require.Error(t, err)
 
 	require.False(t, branchExists(t, repo, failedBranch), "failed provision left its branch")

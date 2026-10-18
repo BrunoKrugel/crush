@@ -20,7 +20,7 @@ import (
 	"github.com/charmbracelet/crush/internal/hooks"
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/scheduler"
-	"github.com/google/uuid"
+	"uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -337,7 +337,7 @@ func serveDispatchRun(t *testing.T, c *coordinator, run dispatchRun) {
 // built themselves.
 func provisionProviderEntry(t *testing.T, provider *dispatch.GitWorktreeProvider, reg *dispatch.AgentRegistry, opts dispatch.ProvisionOptions) dispatch.Entry {
 	t.Helper()
-	id := uuid.NewString()
+	id := uuid.NewV4().String()
 	placement, err := provider.Provision(t.Context(), id, opts)
 	require.NoError(t, err)
 	entry := dispatch.Entry{

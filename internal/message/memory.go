@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/crush/internal/pubsub"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // memoryService is an in-memory implementation of [Service] for

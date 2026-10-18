@@ -17,7 +17,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/lock"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // BranchPrefix namespaces every branch and directory a dispatched

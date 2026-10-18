@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"uuid"
 
 	"charm.land/fantasy"
 	"github.com/bytedance/sonic"
@@ -18,7 +19,6 @@ import (
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/scheduler"
 	"github.com/charmbracelet/crush/internal/session"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 

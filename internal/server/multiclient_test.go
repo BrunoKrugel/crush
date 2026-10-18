@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"uuid"
 
 	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/backend"
 	"github.com/charmbracelet/crush/internal/proto"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 

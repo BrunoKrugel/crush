@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"sync"
 	"time"
+	"uuid"
 
 	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/db"
 	"github.com/charmbracelet/crush/internal/pubsub"
-	"github.com/google/uuid"
 )
 
 // defaultUpdateDebounce is the default debounce window for [Service.Update].

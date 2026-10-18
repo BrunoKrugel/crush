@@ -14,7 +14,7 @@ import (
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/scheduler"
-	"github.com/google/uuid"
+	"uuid"
 	"github.com/stretchr/testify/require"
 )
 

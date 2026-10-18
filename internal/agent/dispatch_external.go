@@ -13,7 +13,7 @@ import (
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/dispatch"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // External agents (#434): a runtime a2a agent definition replaces the
@@ -209,7 +209,7 @@ func (c *coordinator) dispatchExternal(ctx context.Context, params DispatchAgent
 	// The none workspace (#391): no directory, branch, or base, so the
 	// entry carries none and nothing is ever created on disk.
 	var provider dispatch.WorkspaceProvider = dispatch.NoneProvider{}
-	id := uuid.NewString()
+	id := uuid.NewV4().String()
 	placement, err := provider.Provision(ctx, id, dispatch.ProvisionOptions{})
 	if err != nil {
 		c.releaseDispatchSlot()

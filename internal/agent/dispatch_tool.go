@@ -19,7 +19,7 @@ import (
 	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/shell"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 //go:embed templates/dispatch_tool.md
@@ -676,7 +676,7 @@ func (c *coordinator) dispatchTool() fantasy.AgentTool {
 			// background failures. The provider owns the directory; the
 			// registry owns the entry, registered here so every setup
 			// failure below tears both down.
-			id := uuid.NewString()
+			id := uuid.NewV4().String()
 			placement, err := provider.Provision(ctx, id, dispatch.ProvisionOptions{Base: params.Branch})
 			if err != nil {
 				c.releaseDispatchSlot()

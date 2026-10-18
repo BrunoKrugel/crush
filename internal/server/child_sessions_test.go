@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/backend"
 	"github.com/charmbracelet/crush/internal/proto"
-	"github.com/google/uuid"
+	"uuid"
 	"github.com/stretchr/testify/require"
 )
 
