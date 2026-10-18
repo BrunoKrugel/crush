@@ -193,6 +193,7 @@ Flags:
       --oauth-client-id string      pre-registered OAuth client ID
       --oauth-client-secret string  pre-registered OAuth client secret
       --oauth-callback-port int     fixed localhost port for the OAuth callback
+      --oauth-client-id-metadata string  OAuth Client ID Metadata Document URL (SEP-991), for servers like Home Assistant that advertise client_id_metadata_document_supported instead of dynamic registration
 ```
 
 ```bash

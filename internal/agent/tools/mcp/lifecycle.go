@@ -184,6 +184,7 @@ func mcpConfigEqual(a, b config.MCPConfig) bool {
 		a.OAuth == b.OAuth &&
 		a.OAuthClientID == b.OAuthClientID &&
 		a.OAuthClientSecret == b.OAuthClientSecret &&
+		a.OAuthClientIDMetadata == b.OAuthClientIDMetadata &&
 		a.OAuthCallbackPort == b.OAuthCallbackPort &&
 		// Channel opt-in is baked into the session at creation time
 		// (createSession takes channelOptIn), so flipping it has to restart

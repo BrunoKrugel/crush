@@ -127,6 +127,33 @@ authenticates as that client. `oauth_callback_port` pins the localhost port the
 callback lands on, which matters when the provider requires a fixed redirect
 URI.
 
+### Client ID Metadata Documents
+
+Home Assistant and similar servers don't support dynamic registration either;
+they register clients by fetching a Client ID Metadata Document (SEP-991) — a
+public JSON file that names the client and lists its redirect URIs. Host the
+document on any HTTPS URL that returns 200 directly (no redirects), and point
+`oauth_client_id_metadata` at it. The `client_id` inside the document must
+equal its hosting URL exactly:
+
+```json
+{
+  "mcp": {
+    "home-assistant": {
+      "type": "http",
+      "url": "https://home.example.dev/api/mcp",
+      "oauth": true,
+      "oauth_client_id_metadata": "https://brunokrugel.github.io/crush/oauth-client.json"
+    }
+  }
+}
+```
+
+The document this build of Crush uses lives at
+`https://brunokrugel.github.io/crush/oauth-client.json`. It lists the loopback
+callback, and the server may redirect to any localhost port because Crush
+always sends PKCE S256.
+
 ## Prompts and resources
 
 Beyond tools, Crush surfaces the other two MCP primitives.
