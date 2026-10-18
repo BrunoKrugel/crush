@@ -88,6 +88,7 @@ Smaller things you notice in the terminal rather than in a config file.
 | --- | --- | --- |
 | `allowed_commands` | Re-allow specific commands the [blocklist](/configuration/permissions#blocked-commands) normally denies, without disabling the blocklist. Still subject to permission approval. | `joestump-agent/crush` |
 | `channel_enabled` | Turn an MCP server into a channel from `crush.json`, rather than only via the `--channels` flag. | `joestump-agent/crush` |
+| `oauth_client_id_metadata` | OAuth Client ID Metadata Documents (SEP-991): the URL is sent as the `client_id` for servers that advertise `client_id_metadata_document_supported` but have no registration endpoint (Home Assistant). Crush's own document is hosted on this docs site. | `brunokrugel/crush` |
 | `embeddings` block | Configure the semantic-search embedding provider from `crush.json` or `crushrc`. | `joestump-agent/crush` |
 | Config reload on reconnect | Reconnecting an MCP server re-reads config from disk, so an edit takes effect without a restart. | `joestump-agent/crush` |
 | Current time in the prompt | The system prompt carries the current time, which is what makes relative scheduling ("every weekday at 9") work. | `joestump-agent/crush` |

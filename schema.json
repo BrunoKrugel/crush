@@ -647,6 +647,11 @@
     },
     "MCPConfig": {
       "properties": {
+        "lazy": {
+          "type": "boolean",
+          "description": "Keep this server's tools out of the model context until the agent loads them with mcp_search",
+          "default": true
+        },
         "command": {
           "type": "string",
           "description": "Command to execute for stdio MCP servers",
@@ -754,6 +759,10 @@
         "oauth_client_secret": {
           "type": "string",
           "description": "Pre-registered OAuth client secret paired with oauth_client_id"
+        },
+        "oauth_client_id_metadata": {
+          "type": "string",
+          "description": "URL of an OAuth Client ID Metadata Document (SEP-991) sent as the client_id for servers that advertise client_id_metadata_document_supported but have no registration endpoint"
         },
         "oauth_callback_port": {
           "type": "integer",
@@ -931,10 +940,6 @@
           "description": "Disable automatic conversation summarization",
           "default": false
         },
-        "compaction": {
-          "$ref": "#/$defs/CompactionOptions",
-          "description": "Context compaction options"
-        },
         "data_directory": {
           "type": "string",
           "description": "Directory for storing application data. Relative paths are resolved against the working directory; absolute paths are used as-is.",
@@ -1001,10 +1006,9 @@
             "native",
             "osc",
             "bell",
-            "herdr",
             "disabled"
           ],
-          "description": "Notification style to use. Options: auto (default), native, osc, bell, herdr, disabled. Auto selects based on environment: native for local sessions, osc for SSH (with automatic OSC 99/777 detection). Herdr surfaces toasts in herdr's own UI and only works when Crush runs inside a herdr pane; outside one it falls back to OSC.",
+          "description": "Notification style to use. Options: auto (default), native, osc, bell, disabled. Auto selects based on environment: native for local sessions, osc for SSH (with automatic OSC 99/777 detection).",
           "default": "auto"
         },
         "disabled_skills": {
@@ -1048,6 +1052,15 @@
             300,
             0
           ]
+        },
+        "lazy_mcp": {
+          "type": "boolean",
+          "description": "Keep MCP tools out of the model context until the agent loads them with mcp_search. Individual servers override it with mcp.\u003cname\u003e.lazy",
+          "default": true
+        },
+        "compaction": {
+          "$ref": "#/$defs/CompactionOptions",
+          "description": "Context compaction settings"
         },
         "todo_enforcement": {
           "$ref": "#/$defs/TodoEnforcementConfig",
@@ -1333,6 +1346,15 @@
           ],
           "description": "Exit banner style after quitting Crush",
           "default": "default"
+        },
+        "scroll_speed": {
+          "type": "number",
+          "description": "Multiplier applied to mouse wheel scroll distance in the TUI",
+          "default": 1
+        },
+        "nerd_fonts": {
+          "type": "boolean",
+          "description": "Override Nerd Font glyph detection for the TUI: true forces glyphs on"
         }
       },
       "additionalProperties": false,
