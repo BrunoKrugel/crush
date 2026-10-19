@@ -2,7 +2,6 @@ package a2a
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"iter"
@@ -182,7 +181,7 @@ func TestStatusEventTimestampIsUTC(t *testing.T) {
 	ev := statusEvent(newExecCtx(a2aspec.NewMessage(a2aspec.MessageRoleUser, a2aspec.NewTextPart("hi"))), a2aspec.TaskStateWorking, nil)
 	require.NotNil(t, ev.Status.Timestamp)
 	require.Equal(t, time.UTC, ev.Status.Timestamp.Location())
-	data, err := json.Marshal(ev)
+	data, err := sonic.Marshal(ev)
 	require.NoError(t, err)
 	var wire struct {
 		Status struct {

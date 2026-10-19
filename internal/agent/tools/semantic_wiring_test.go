@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/csync"
@@ -76,7 +77,7 @@ func embeddingServer(t *testing.T) *httptest.Server {
 
 func runTool[T any](t *testing.T, tool fantasy.AgentTool, params T) (string, error) {
 	t.Helper()
-	input, err := json.Marshal(params)
+	input, err := sonic.Marshal(params)
 	require.NoError(t, err)
 	call := fantasy.ToolCall{ID: "test-call", Name: tool.Info().Name, Input: string(input)}
 	resp, err := tool.Run(t.Context(), call)

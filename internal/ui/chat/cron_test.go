@@ -1,12 +1,12 @@
 package chat
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/scheduler"
@@ -36,7 +36,7 @@ func cronTestTask(id, cron, prompt string, next time.Time) scheduler.Task {
 // whose result carries the given tasks as metadata.
 func cronTestOpts(t *testing.T, input string, tasks []scheduler.Task) *ToolRenderOpts {
 	t.Helper()
-	meta, err := json.Marshal(tools.CronTasksResponseMetadata{Tasks: tasks})
+	meta, err := sonic.Marshal(tools.CronTasksResponseMetadata{Tasks: tasks})
 	require.NoError(t, err)
 	return &ToolRenderOpts{
 		ToolCall: message.ToolCall{ID: "call-1", Name: tools.CronListToolName, Input: input, Finished: true},

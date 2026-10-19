@@ -3,7 +3,6 @@ package session
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -503,7 +502,7 @@ func marshalTodos(todos []Todo) (string, error) {
 	if len(todos) == 0 {
 		return "", nil
 	}
-	data, err := json.Marshal(todos)
+	data, err := sonic.Marshal(todos)
 	if err != nil {
 		return "", err
 	}

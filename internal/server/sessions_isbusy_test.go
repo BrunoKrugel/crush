@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -196,7 +195,7 @@ func TestProtoSessionIsBusyBackwardCompat(t *testing.T) {
 	t.Parallel()
 
 	wire := proto.Session{ID: "s1", Title: "t", IsBusy: true}
-	raw, err := json.Marshal(wire)
+	raw, err := sonic.Marshal(wire)
 	require.NoError(t, err)
 
 	// Old client shape: same struct minus IsBusy. We model this by

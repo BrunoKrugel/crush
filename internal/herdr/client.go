@@ -11,8 +11,9 @@
 package herdr
 
 import (
+	"github.com/bytedance/sonic"
+
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -935,7 +936,7 @@ func dialSend(socketPath string, req reportRequest) error {
 
 	_ = conn.SetDeadline(time.Now().Add(500 * time.Millisecond))
 
-	data, err := json.Marshal(req)
+	data, err := sonic.Marshal(req)
 	if err != nil {
 		return err
 	}

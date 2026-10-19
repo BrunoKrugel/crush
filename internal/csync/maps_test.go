@@ -377,7 +377,7 @@ func TestMap_MarshalJSON(t *testing.T) {
 	m.Set("key1", 1)
 	m.Set("key2", 2)
 
-	data, err := json.Marshal(m)
+	data, err := sonic.Marshal(m)
 	require.NoError(t, err)
 
 	result := &Map[string, int]{}
@@ -395,7 +395,7 @@ func TestMap_MarshalJSON_EmptyMap(t *testing.T) {
 
 	m := NewMap[string, int]()
 
-	data, err := json.Marshal(m)
+	data, err := sonic.Marshal(m)
 	require.NoError(t, err)
 	require.Equal(t, "{}", string(data))
 }
@@ -467,7 +467,7 @@ func TestMap_JSONRoundTrip(t *testing.T) {
 	original.Set("key2", 2)
 	original.Set("key3", 3)
 
-	data, err := json.Marshal(original)
+	data, err := sonic.Marshal(original)
 	require.NoError(t, err)
 
 	restored := NewMap[string, int]()

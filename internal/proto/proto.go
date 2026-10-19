@@ -2,7 +2,6 @@ package proto
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -322,7 +321,7 @@ type LSPEvent struct {
 // MarshalJSON implements the [json.Marshaler] interface.
 func (e LSPEvent) MarshalJSON() ([]byte, error) {
 	type Alias LSPEvent
-	return json.Marshal(&struct {
+	return sonic.Marshal(&struct {
 		Error string `json:"error,omitempty"`
 		Alias
 	}{
@@ -367,7 +366,7 @@ type LSPClientInfo struct {
 // MarshalJSON implements the [json.Marshaler] interface.
 func (i LSPClientInfo) MarshalJSON() ([]byte, error) {
 	type Alias LSPClientInfo
-	return json.Marshal(&struct {
+	return sonic.Marshal(&struct {
 		Error string `json:"error,omitempty"`
 		Alias
 	}{

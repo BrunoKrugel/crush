@@ -1,7 +1,6 @@
 package proto_test
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/bytedance/sonic"
@@ -216,7 +215,7 @@ func TestPermissionRequestParamsTypeAssertable(t *testing.T) {
 				Path:       "/tmp",
 				Params:     tc.params,
 			}
-			data, err := json.Marshal(outbound)
+			data, err := sonic.Marshal(outbound)
 			require.NoError(t, err)
 
 			var inbound proto.PermissionRequest

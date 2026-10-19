@@ -2,13 +2,13 @@ package backend
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/bytedance/sonic"
 	mcptools "github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/proto"
@@ -229,7 +229,7 @@ func writeReconnectConfig(t *testing.T, path string, mcp map[string]any) {
 	if mcp != nil {
 		cfg["mcp"] = mcp
 	}
-	data, err := json.Marshal(cfg)
+	data, err := sonic.Marshal(cfg)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, data, 0o644))
 }

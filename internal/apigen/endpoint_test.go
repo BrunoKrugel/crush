@@ -1,12 +1,12 @@
 package apigen
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -201,7 +201,7 @@ func TestErrorSchemaShape(t *testing.T) {
 	t.Parallel()
 	// The shared error schema must stay aligned with the error JSON
 	// handlers actually write: {"error": "..."}.
-	data, err := json.Marshal(errorSchema)
+	data, err := sonic.Marshal(errorSchema)
 	require.NoError(t, err)
 	require.Contains(t, string(data), `"error"`)
 }

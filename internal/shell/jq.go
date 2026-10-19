@@ -336,7 +336,7 @@ func writeValue(w io.Writer, v any, raw, compact, join bool) error {
 	if compact {
 		bs, err = gojq.Marshal(v)
 	} else {
-		bs, err = json.MarshalIndent(v, "", "  ")
+		bs, err = sonic.MarshalIndent(v, "", "  ")
 	}
 	if err != nil {
 		return err

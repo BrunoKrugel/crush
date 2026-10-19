@@ -1,8 +1,9 @@
 package apigen
 
 import (
+	"github.com/bytedance/sonic"
+
 	_ "embed"
-	"encoding/json"
 	"html/template"
 	"io"
 	"sort"
@@ -81,7 +82,7 @@ func newDocsModel(info Info, base string, endpoints []Endpoint) docsModel {
 }
 
 func schemaJSON(s *Schema) string {
-	data, err := json.MarshalIndent(s, "", "  ")
+	data, err := sonic.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return ""
 	}

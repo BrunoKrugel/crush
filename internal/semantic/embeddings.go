@@ -4,6 +4,8 @@
 package semantic
 
 import (
+	"github.com/bytedance/sonic"
+
 	"bytes"
 	"context"
 	"encoding/json"
@@ -82,7 +84,7 @@ func (c *Client) Embed(ctx context.Context, texts []string) ([][]float32, error)
 		Dimensions: c.cfg.Dimension,
 	}
 
-	body, err := json.Marshal(reqBody)
+	body, err := sonic.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("marshal embedding request: %w", err)
 	}

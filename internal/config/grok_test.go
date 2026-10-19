@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -185,7 +184,7 @@ func TestRefetchGrokModelsRefreshesExpiredToken(t *testing.T) {
 // grokLoginConfig is a project config for a Grok login whose persisted
 // model catalog has gone stale.
 func grokLoginConfig(token *oauth.Token) string {
-	tokenJSON, err := json.Marshal(token)
+	tokenJSON, err := sonic.Marshal(token)
 	if err != nil {
 		panic(err)
 	}

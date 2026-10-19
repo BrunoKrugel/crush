@@ -481,7 +481,7 @@ func repairA2UIBody(body string) string {
 
 	out := make([]string, 0, len(vals))
 	for _, v := range vals {
-		enc, err := json.Marshal(v)
+		enc, err := sonic.Marshal(v)
 		if err != nil {
 			return body
 		}
@@ -947,7 +947,7 @@ func A2UISubmissionPrompt(clicked event.ButtonClicked, values map[string]any) st
 	if len(values) > 0 {
 		b.WriteString("\nField values:")
 		for _, k := range slices.Sorted(maps.Keys(values)) {
-			enc, err := json.Marshal(values[k])
+			enc, err := sonic.Marshal(values[k])
 			if err != nil {
 				enc = fmt.Appendf(nil, "%q", fmt.Sprintf("%v", values[k]))
 			}

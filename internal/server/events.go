@@ -2,11 +2,11 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/app"
@@ -207,7 +207,7 @@ func (c *controllerV1) deliverToClient(ctx context.Context, workspaceID, clientI
 // envelope marshals the inner event and wraps it in a pubsub.Payload.
 // envelope marshals the inner event and wraps it in a pubsub.Payload.
 func envelope(payloadType pubsub.PayloadType, inner any) *pubsub.Payload {
-	raw, err := json.Marshal(inner)
+	raw, err := sonic.Marshal(inner)
 	if err != nil {
 		slog.Error("Failed to marshal event payload", "error", err)
 		return nil

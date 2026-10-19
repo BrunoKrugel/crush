@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -11,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,7 +47,7 @@ func createTestLogFile(t *testing.T, entries []map[string]any) string {
 	defer file.Close()
 
 	for _, entry := range entries {
-		line, err := json.Marshal(entry)
+		line, err := sonic.Marshal(entry)
 		require.NoError(t, err)
 		_, err = file.WriteString(string(line) + "\n")
 		require.NoError(t, err)
@@ -168,13 +168,13 @@ func TestCrushLogs_MalformedLines(t *testing.T) {
 
 	// Write some valid and some invalid lines.
 	validEntry := makeLogEntry("INFO", "Valid entry", "app.go", 1, nil)
-	line, _ := json.Marshal(validEntry)
+	line, _ := sonic.Marshal(validEntry)
 	file.WriteString(string(line) + "\n")
 	file.WriteString("this is not json\n")
 	file.WriteString(`{"incomplete": "json` + "\n")
 
 	validEntry2 := makeLogEntry("INFO", "Another valid entry", "app.go", 2, nil)
-	line2, _ := json.Marshal(validEntry2)
+	line2, _ := sonic.Marshal(validEntry2)
 	file.WriteString(string(line2) + "\n")
 
 	file.Close()
@@ -327,7 +327,7 @@ func TestCrushLogs_OversizedLines(t *testing.T) {
 
 	// Create a valid entry first.
 	validEntry := makeLogEntry("INFO", "Valid entry", "app.go", 1, nil)
-	line, _ := json.Marshal(validEntry)
+	line, _ := sonic.Marshal(validEntry)
 	file.WriteString(string(line) + "\n")
 
 	// Create an oversized line (more than 1 MB).
@@ -339,12 +339,12 @@ func TestCrushLogs_OversizedLines(t *testing.T) {
 		"source": map[string]any{"file": "big.go", "line": 1},
 		"data":   bigValue,
 	}
-	bigLine, _ := json.Marshal(bigEntry)
+	bigLine, _ := sonic.Marshal(bigEntry)
 	file.WriteString(string(bigLine) + "\n")
 
 	// Create another valid entry.
 	validEntry2 := makeLogEntry("INFO", "Second valid entry", "app.go", 2, nil)
-	line2, _ := json.Marshal(validEntry2)
+	line2, _ := sonic.Marshal(validEntry2)
 	file.WriteString(string(line2) + "\n")
 
 	file.Close()
@@ -369,7 +369,7 @@ func TestCrushLogs_PartialTrailingLine(t *testing.T) {
 	// Create valid entries.
 	for i := range 5 {
 		entry := makeLogEntry("INFO", fmt.Sprintf("Entry %d", i), "app.go", i, nil)
-		line, _ := json.Marshal(entry)
+		line, _ := sonic.Marshal(entry)
 		file.WriteString(string(line) + "\n")
 	}
 

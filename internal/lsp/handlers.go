@@ -38,7 +38,7 @@ func HandleRegisterCapability(_ context.Context, _ string, params json.RawMessag
 		switch reg.Method {
 		case "workspace/didChangeWatchedFiles":
 			// Parse the registration options
-			optionsJSON, err := json.Marshal(reg.RegisterOptions)
+			optionsJSON, err := sonic.Marshal(reg.RegisterOptions)
 			if err != nil {
 				slog.Error("Error marshaling registration options", "error", err)
 				continue

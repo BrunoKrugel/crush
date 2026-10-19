@@ -1,12 +1,12 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/x/term"
@@ -51,7 +51,7 @@ crush dispatch list --json
 		}
 
 		if jsonOutput {
-			data, err := json.Marshal(infos)
+			data, err := sonic.Marshal(infos)
 			if err != nil {
 				return fmt.Errorf("marshal workspaces: %w", err)
 			}

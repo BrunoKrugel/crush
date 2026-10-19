@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -70,7 +69,7 @@ func TestTokenAccountIDRoundTrip(t *testing.T) {
 		ExpiresAt:    4102444800,
 	}
 
-	data, err := json.Marshal(token)
+	data, err := sonic.Marshal(token)
 	require.NoError(t, err)
 
 	var restored oauth.Token
@@ -289,7 +288,7 @@ func TestRefetchOpenAIModelsRefreshesExpiredToken(t *testing.T) {
 // chatGPTLoginConfig is a project config for a ChatGPT login whose
 // persisted model catalog has gone stale.
 func chatGPTLoginConfig(token *oauth.Token) string {
-	tokenJSON, err := json.Marshal(token)
+	tokenJSON, err := sonic.Marshal(token)
 	if err != nil {
 		panic(err)
 	}
@@ -322,7 +321,7 @@ func chatGPTLoginToken() *oauth.Token {
 func newCatwalkStub(t *testing.T, status int, catalog []catwalk.Provider) {
 	t.Helper()
 
-	catalogJSON, err := json.Marshal(catalog)
+	catalogJSON, err := sonic.Marshal(catalog)
 	require.NoError(t, err)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

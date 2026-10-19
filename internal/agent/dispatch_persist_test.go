@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -19,7 +18,7 @@ import (
 // tool result the way the real agent loop does.
 func runDispatchToolCallInSession(t *testing.T, tool fantasy.AgentTool, sessionID string, params any) fantasy.ToolResponse {
 	t.Helper()
-	input, err := json.Marshal(params)
+	input, err := sonic.Marshal(params)
 	require.NoError(t, err)
 	ctx := context.WithValue(context.Background(), tools.SessionIDContextKey, sessionID)
 	ctx = context.WithValue(ctx, tools.MessageIDContextKey, "dispatch-parent-message")

@@ -8,7 +8,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"slices"
 	"sync"
@@ -269,7 +268,7 @@ func NewDispatchHarness(t *testing.T, model fantasy.LanguageModel, settings conf
 // tool and returns its running handle.
 func (h *DispatchHarness) Dispatch(t *testing.T, prompt string) dispatch.DispatchResult {
 	t.Helper()
-	input, err := json.Marshal(DispatchAgentParams{Prompt: prompt, Branch: "main", Handle: "tester"})
+	input, err := sonic.Marshal(DispatchAgentParams{Prompt: prompt, Branch: "main", Handle: "tester"})
 	require.NoError(t, err)
 	ctx := context.WithValue(context.Background(), tools.SessionIDContextKey, h.parentID)
 	ctx = context.WithValue(ctx, tools.MessageIDContextKey, "dispatch-parent-message")
@@ -366,7 +365,7 @@ func (h *DispatchHarness) SetAgentDefinitions(t *testing.T, agents string) {
 // handle. callID keys the dispatch's task session.
 func (h *DispatchHarness) DispatchTo(t *testing.T, agentID, prompt, handle, callID string) dispatch.DispatchResult {
 	t.Helper()
-	input, err := json.Marshal(DispatchAgentParams{Prompt: prompt, Agent: agentID, Handle: handle})
+	input, err := sonic.Marshal(DispatchAgentParams{Prompt: prompt, Agent: agentID, Handle: handle})
 	require.NoError(t, err)
 	ctx := context.WithValue(context.Background(), tools.SessionIDContextKey, h.parentID)
 	ctx = context.WithValue(ctx, tools.MessageIDContextKey, "dispatch-parent-message")

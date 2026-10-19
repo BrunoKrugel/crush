@@ -70,7 +70,7 @@ func LoadThemeFile(path string) (*ThemeFile, error) {
 // SaveThemeFile writes a theme file to disk with indented JSON. Parent
 // directories are created automatically.
 func SaveThemeFile(path string, tf *ThemeFile) error {
-	data, err := json.MarshalIndent(tf, "", "  ")
+	data, err := sonic.MarshalIndent(tf, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode theme file: %w", err)
 	}

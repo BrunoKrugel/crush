@@ -1,11 +1,11 @@
 package workspace
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	mcptools "github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/stretchr/testify/require"
@@ -182,7 +182,7 @@ func TestMCPReconnect_ReloadFailsThenServerNotInConfig(t *testing.T) {
 
 func writeJSON(t *testing.T, path string, v any) {
 	t.Helper()
-	data, err := json.Marshal(v)
+	data, err := sonic.Marshal(v)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, data, 0o644))
 }

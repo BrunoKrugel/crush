@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy"
 	"charm.land/fantasy/providers/openaicompat"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/permission"
@@ -77,7 +77,7 @@ func TestBuildDispatchToolchainIgnoresWorkspaceConfig(t *testing.T) {
 	}
 	outcome := make(chan bashOutcome, 1)
 	go func() {
-		input, err := json.Marshal(map[string]any{
+		input, err := sonic.Marshal(map[string]any{
 			// Not a safe read-only command, so the tool requests
 			// permission instead of running it silently.
 			"command":     "touch forwarded.txt",

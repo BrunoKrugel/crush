@@ -1,7 +1,6 @@
 package chat
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -59,7 +58,7 @@ func (d *DockerMCPToolRenderContext) RenderTool(sty *styles.Styles, width int, o
 			if k == "query" {
 				continue
 			}
-			data, _ := json.Marshal(v)
+			data, _ := sonic.Marshal(v)
 			extraArgs[k] = string(data)
 		}
 	case "mcp-add":
@@ -72,7 +71,7 @@ func (d *DockerMCPToolRenderContext) RenderTool(sty *styles.Styles, width int, o
 			if k == "name" {
 				continue
 			}
-			data, _ := json.Marshal(v)
+			data, _ := sonic.Marshal(v)
 			extraArgs[k] = string(data)
 		}
 	case "mcp-remove":
@@ -85,7 +84,7 @@ func (d *DockerMCPToolRenderContext) RenderTool(sty *styles.Styles, width int, o
 			if k == "name" {
 				continue
 			}
-			data, _ := json.Marshal(v)
+			data, _ := sonic.Marshal(v)
 			extraArgs[k] = string(data)
 		}
 	case "mcp-exec":

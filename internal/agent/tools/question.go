@@ -177,7 +177,7 @@ func formatAnswer(answer *question.Answer, _ question.Type) (fantasy.ToolRespons
 		// report both so the model sees the complete answer.
 		var parts []string
 		if len(answer.SelectedIDs) > 0 {
-			data, _ := json.Marshal(answer.SelectedIDs)
+			data, _ := sonic.Marshal(answer.SelectedIDs)
 			parts = append(parts, fmt.Sprintf("User selected: %s", string(data)))
 		}
 		if answer.FillInText != "" {

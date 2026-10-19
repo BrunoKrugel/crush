@@ -8,11 +8,11 @@ package model
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charmbracelet/crush/internal/config"
@@ -76,7 +76,7 @@ func dispatchCardItem(t *testing.T, childSessionID string, status dispatch.Statu
 		SessionID:     childSessionID,
 		Status:        status,
 	}
-	b, err := json.Marshal(handle)
+	b, err := sonic.Marshal(handle)
 	require.NoError(t, err)
 	sty := styles.CharmtonePantera()
 	item := chat.NewDispatchToolMessageItem(&sty, message.ToolCall{

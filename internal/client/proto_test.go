@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/proto"
@@ -228,7 +229,7 @@ func TestSetMainAgentPropagatesServerError(t *testing.T) {
 func marshalSSEPayload(t *testing.T) []byte {
 	t.Helper()
 
-	eventPayload, err := json.Marshal(pubsub.Event[proto.AgentEvent]{
+	eventPayload, err := sonic.Marshal(pubsub.Event[proto.AgentEvent]{
 		Type: pubsub.CreatedEvent,
 		Payload: proto.AgentEvent{
 			Type: proto.AgentEventTypeResponse,
@@ -236,7 +237,7 @@ func marshalSSEPayload(t *testing.T) []byte {
 	})
 	require.NoError(t, err)
 
-	payload, err := json.Marshal(pubsub.Payload{
+	payload, err := sonic.Marshal(pubsub.Payload{
 		Type:    pubsub.PayloadTypeAgentEvent,
 		Payload: eventPayload,
 	})

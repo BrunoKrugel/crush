@@ -11,7 +11,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -806,7 +805,7 @@ func readDurableFile(path string) ([]Task, error) {
 
 // writeDurableFile atomically replaces the persistence file.
 func writeDurableFile(path string, tasks []Task) error {
-	data, err := json.MarshalIndent(tasks, "", "  ")
+	data, err := sonic.MarshalIndent(tasks, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to encode scheduled tasks: %w", err)
 	}

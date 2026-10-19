@@ -2,11 +2,11 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/hooks"
 	"github.com/charmbracelet/crush/internal/permission"
@@ -116,7 +116,7 @@ func buildHookMetadata(result hooks.AggregateResult) hooks.HookMetadata {
 // hookMetadataJSON builds a JSON string containing only the hook metadata.
 func hookMetadataJSON(result hooks.AggregateResult) string {
 	meta := buildHookMetadata(result)
-	data, err := json.Marshal(meta)
+	data, err := sonic.Marshal(meta)
 	if err != nil {
 		return ""
 	}
@@ -129,7 +129,7 @@ func mergeHookMetadata(existing string, result hooks.AggregateResult) string {
 		return existing
 	}
 	meta := buildHookMetadata(result)
-	data, err := json.Marshal(meta)
+	data, err := sonic.Marshal(meta)
 	if err != nil {
 		return existing
 	}

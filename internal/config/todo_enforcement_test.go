@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -290,7 +289,7 @@ func TestTodoEnforcementKnobRoundTrip(t *testing.T) {
 		{"int count", IntOrOff(8), `8`},
 	}
 	for _, tc := range cases {
-		got, err := json.Marshal(tc.in)
+		got, err := sonic.Marshal(tc.in)
 		require.NoError(t, err, tc.name)
 		assert.Equal(t, tc.want, string(got), tc.name)
 	}

@@ -13,7 +13,6 @@ package a2a
 
 import (
 	"cmp"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"reflect"
@@ -101,7 +100,7 @@ func Lookup(uri string) (Extension, bool) {
 // slices/maps): a typed Go value is silently valid to SetMeta and fatal one
 // layer down, failing the task-state save and the whole task.
 func Encode(ext Extension, v any) (any, error) {
-	b, err := json.Marshal(v)
+	b, err := sonic.Marshal(v)
 	if err != nil {
 		return nil, fmt.Errorf("a2a: encode %s extension value: %w", ext.URI, err)
 	}
@@ -116,7 +115,7 @@ func Encode(ext Extension, v any) (any, error) {
 // pointer to the extension's Type. Use it when the concrete type is not
 // known at compile time; [Decode] is the typed path.
 func DecodeValue(ext Extension, raw any) (any, error) {
-	b, err := json.Marshal(raw)
+	b, err := sonic.Marshal(raw)
 	if err != nil {
 		return nil, fmt.Errorf("a2a: re-encode %s extension value: %w", ext.URI, err)
 	}
@@ -301,7 +300,7 @@ func cardExtensions() []a2aspec.AgentExtension {
 // params map the card stores. A schema that fails to round trip is a bug,
 // logged and skipped rather than failing card construction.
 func schemaParams(ext Extension) (map[string]any, bool) {
-	b, err := json.Marshal(ext.Schema)
+	b, err := sonic.Marshal(ext.Schema)
 	if err != nil {
 		slog.Warn("A2A extension schema failed to marshal; card params skipped", "uri", ext.URI, "err", err)
 		return nil, false

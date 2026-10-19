@@ -43,7 +43,7 @@ type CompactionDetail struct {
 // BuildCompactionPayload renders detail as the JSON a compaction hook reads on
 // stdin.
 func BuildCompactionPayload(detail CompactionDetail) string {
-	data, err := json.Marshal(detail)
+	data, err := sonic.Marshal(detail)
 	if err != nil {
 		return "{}"
 	}
@@ -63,7 +63,7 @@ func BuildPayload(eventName, sessionID, cwd, toolName, toolInputJSON string) []b
 		ToolName:  toolName,
 		ToolInput: toolInput,
 	}
-	data, err := json.Marshal(p)
+	data, err := sonic.Marshal(p)
 	if err != nil {
 		return []byte("{}")
 	}

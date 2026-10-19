@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -260,9 +259,9 @@ func (m *AgentModel) UnmarshalJSON(data []byte) error {
 // MarshalJSON writes the slot as a string, or the pin as an object.
 func (m AgentModel) MarshalJSON() ([]byte, error) {
 	if m.Ref != nil {
-		return json.Marshal(*m.Ref)
+		return sonic.Marshal(*m.Ref)
 	}
-	return json.Marshal(string(m.Type))
+	return sonic.Marshal(string(m.Type))
 }
 
 // JSONSchema describes the accepted forms: the named slot or an

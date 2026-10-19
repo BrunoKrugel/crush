@@ -1,7 +1,6 @@
 package shellconfig_test
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/bytedance/sonic"
@@ -73,7 +72,7 @@ func TestAgentGoldenScript(t *testing.T) {
 	t.Parallel()
 
 	agents := loadAgentScript(t, goldenAgentScript)
-	out, err := json.Marshal(agents)
+	out, err := sonic.Marshal(agents)
 	require.NoError(t, err)
 	require.JSONEq(t, goldenAgentJSON, string(out))
 }

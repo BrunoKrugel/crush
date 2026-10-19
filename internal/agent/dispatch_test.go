@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/dispatch"
@@ -371,7 +371,7 @@ func provisionProviderEntry(t *testing.T, provider *dispatch.GitWorktreeProvider
 func runTool(t *testing.T, tool fantasy.AgentTool, name string, params any) fantasy.ToolResponse {
 	t.Helper()
 
-	input, err := json.Marshal(params)
+	input, err := sonic.Marshal(params)
 	require.NoError(t, err)
 	ctx := context.WithValue(context.Background(), tools.SessionIDContextKey, "dispatch-parent-session")
 	resp, err := tool.Run(ctx, fantasy.ToolCall{

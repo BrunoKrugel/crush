@@ -1061,7 +1061,7 @@ func serveAgentCard(w http.ResponseWriter, r *http.Request, card *a2aspec.AgentC
 		http.Error(w, "a2a: the agent card answers GET", http.StatusMethodNotAllowed)
 		return
 	}
-	data, err := json.Marshal(card)
+	data, err := sonic.Marshal(card)
 	if err != nil {
 		http.Error(w, "a2a: encode agent card", http.StatusInternalServerError)
 		return
@@ -1104,11 +1104,15 @@ func writeVersionNotSupported(w http.ResponseWriter, r *http.Request) {
 	}{JSONRPC: "2.0", ID: id}
 	envelope.Error.Code = -32009
 	envelope.Error.Message = a2aspec.ErrVersionNotSupported.Error()
-	if data, err := json.Marshal(info); err == nil {
+	if data, err := sonic.Marshal(info); err == nil {
 		envelope.Error.Data = []json.RawMessage{data}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(envelope)
+	if data, err := sonic.Marshal(envelope); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	} else {
+		_, _ = w.Write(data)
+	}
 }
 
 // register adds the dispatch's route — its JSON-RPC handler and its card

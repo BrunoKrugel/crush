@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -146,7 +145,7 @@ func newDispatchToolEnv(t *testing.T, agent *dispatchTestAgent) (*coordinator, f
 // provides in production.
 func runDispatchToolCall(t *testing.T, tool fantasy.AgentTool, params any) fantasy.ToolResponse {
 	t.Helper()
-	input, err := json.Marshal(params)
+	input, err := sonic.Marshal(params)
 	require.NoError(t, err)
 	ctx := context.WithValue(context.Background(), tools.SessionIDContextKey, "dispatch-parent-session")
 	ctx = context.WithValue(ctx, tools.MessageIDContextKey, "dispatch-parent-message")
@@ -374,7 +373,7 @@ func TestDispatchAgentToolRequiresCallContext(t *testing.T) {
 	c, _ := newDispatchToolEnv(t, agent)
 	tool := c.dispatchTool()
 
-	input, err := json.Marshal(DispatchAgentParams{Prompt: "do work"})
+	input, err := sonic.Marshal(DispatchAgentParams{Prompt: "do work"})
 	require.NoError(t, err)
 	_, err = tool.Run(context.Background(), fantasy.ToolCall{ID: "c1", Name: DispatchAgentToolName, Input: string(input)})
 	require.ErrorContains(t, err, "session id missing from context")
@@ -686,7 +685,7 @@ func TestReleaseDispatchesKeepsWork(t *testing.T) {
 	// IDs, so both must be unique per dispatch.
 	dispatchOnce := func(messageID string) dispatch.DispatchResult {
 		t.Helper()
-		input, err := json.Marshal(DispatchAgentParams{Prompt: "do work"})
+		input, err := sonic.Marshal(DispatchAgentParams{Prompt: "do work"})
 		require.NoError(t, err)
 		ctx := context.WithValue(context.Background(), tools.SessionIDContextKey, "dispatch-parent-session")
 		ctx = context.WithValue(ctx, tools.MessageIDContextKey, messageID)
@@ -1443,7 +1442,7 @@ func TestDispatchAgentToolRefusedWhenAllWriteToolsDenied(t *testing.T) {
 // call ID, so tests that dispatch several times need distinct IDs.
 func runDispatchToolCallAs(t *testing.T, tool fantasy.AgentTool, params any, callID string) fantasy.ToolResponse {
 	t.Helper()
-	input, err := json.Marshal(params)
+	input, err := sonic.Marshal(params)
 	require.NoError(t, err)
 	ctx := context.WithValue(context.Background(), tools.SessionIDContextKey, "dispatch-parent-session")
 	ctx = context.WithValue(ctx, tools.MessageIDContextKey, "dispatch-parent-message")
@@ -1552,7 +1551,7 @@ func TestDispatchAgentToolParallelCallsNeverOvershootCap(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			input, err := json.Marshal(DispatchAgentParams{Prompt: fmt.Sprintf("work %d", i), Branch: "main"})
+			input, err := sonic.Marshal(DispatchAgentParams{Prompt: fmt.Sprintf("work %d", i), Branch: "main"})
 			if err != nil {
 				errs[i] = err
 				return

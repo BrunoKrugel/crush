@@ -2,13 +2,13 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/dispatch"
@@ -157,7 +157,7 @@ func setGatedBuilder(c *coordinator, agents ...*shutdownDispatchAgent) {
 // and parent session so a test can dispatch more than once.
 func runShutdownDispatchCall(t *testing.T, tool fantasy.AgentTool, callID, parentSessionID string, params DispatchAgentParams) fantasy.ToolResponse {
 	t.Helper()
-	input, err := json.Marshal(params)
+	input, err := sonic.Marshal(params)
 	require.NoError(t, err)
 	ctx := context.WithValue(context.Background(), tools.SessionIDContextKey, parentSessionID)
 	ctx = context.WithValue(ctx, tools.MessageIDContextKey, "shutdown-parent-message")

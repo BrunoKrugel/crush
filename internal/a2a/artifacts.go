@@ -7,7 +7,6 @@ package a2a
 
 import (
 	"encoding/gob"
-	"encoding/json"
 	"strings"
 
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
@@ -94,7 +93,7 @@ func decodeDispatchOutcome(part *a2aspec.Part) (DispatchOutcome, bool) {
 	case DispatchOutcome:
 		return v, true
 	case map[string]any:
-		b, err := json.Marshal(v)
+		b, err := sonic.Marshal(v)
 		if err != nil {
 			return DispatchOutcome{}, false
 		}

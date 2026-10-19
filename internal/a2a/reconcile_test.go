@@ -2,7 +2,6 @@ package a2a
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -34,7 +33,7 @@ func seedTask(t *testing.T, q *db.Queries, id, hostID, state string) a2aspec.Tas
 		ContextID: "ctx-" + id,
 		Status:    a2aspec.TaskStatus{State: a2aspec.TaskState(state)},
 	}
-	data, err := json.Marshal(task)
+	data, err := sonic.Marshal(task)
 	require.NoError(t, err)
 	require.NoError(t, q.CreateA2ATask(context.Background(), db.CreateA2ATaskParams{
 		ID:        id,

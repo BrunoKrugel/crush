@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 
 	"charm.land/catwalk/pkg/catwalk"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/hyper"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/discover"
@@ -35,7 +35,7 @@ var schemaCmd = &cobra.Command{
 		reflector.Namer = schemaNamer
 		schema := reflector.Reflect(&config.Config{})
 		setProviderTypeEnum(schema)
-		bts, err := json.MarshalIndent(schema, "", "  ")
+		bts, err := sonic.MarshalIndent(schema, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal schema: %w", err)
 		}

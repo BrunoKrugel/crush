@@ -15,7 +15,7 @@ func TestSchemaNoBrokenRefs(t *testing.T) {
 	t.Parallel()
 
 	reflector := new(jsonschema.Reflector)
-	bts, err := json.Marshal(reflector.Reflect(&config.Config{}))
+	bts, err := sonic.Marshal(reflector.Reflect(&config.Config{}))
 	require.NoError(t, err)
 
 	var schema struct {
@@ -33,7 +33,7 @@ func TestSchemaProvidersHasAdditionalProperties(t *testing.T) {
 	t.Parallel()
 
 	reflector := new(jsonschema.Reflector)
-	bts, err := json.Marshal(reflector.Reflect(&config.Config{}))
+	bts, err := sonic.Marshal(reflector.Reflect(&config.Config{}))
 	require.NoError(t, err)
 
 	var schema struct {
@@ -65,7 +65,7 @@ func TestSchemaConfigHasAgentsProperty(t *testing.T) {
 	t.Parallel()
 
 	reflector := new(jsonschema.Reflector)
-	bts, err := json.Marshal(reflector.Reflect(&config.Config{}))
+	bts, err := sonic.Marshal(reflector.Reflect(&config.Config{}))
 	require.NoError(t, err)
 
 	var schema struct {

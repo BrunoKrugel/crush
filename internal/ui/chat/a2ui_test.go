@@ -1,7 +1,6 @@
 package chat
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -42,7 +41,7 @@ func TestA2UIBodyTextCodeFenceSyntaxHighlights(t *testing.T) {
 
 	const code = "func Verify() error {\n\treturn nil\n}"
 	surface := func(text string) string {
-		body, err := json.Marshal(text)
+		body, err := sonic.Marshal(text)
 		require.NoError(t, err)
 		return `<a2ui-json>{"version":"v0.9","updateComponents":{"surfaceId":"s","components":[` +
 			`{"component":"Card","id":"root","child":"t"},` +

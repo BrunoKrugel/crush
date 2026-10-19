@@ -1,10 +1,10 @@
 package chat
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/ui/styles"
@@ -40,7 +40,7 @@ func genericToolOptsFor(t *testing.T, name string, result *message.ToolResult) *
 func TestGenericToolRendersA2UIFromMetadata(t *testing.T) {
 	t.Parallel()
 
-	meta, err := json.Marshal(tools.ReadMCPResourceResponseMetadata{
+	meta, err := sonic.Marshal(tools.ReadMCPResourceResponseMetadata{
 		A2UISurfaces: []string{a2uiSurface},
 	})
 	require.NoError(t, err)
@@ -80,7 +80,7 @@ func TestGenericToolNoMetadataRendersText(t *testing.T) {
 func TestGenericToolMetadataMixedContentShowsText(t *testing.T) {
 	t.Parallel()
 
-	meta, err := json.Marshal(tools.ReadMCPResourceResponseMetadata{
+	meta, err := sonic.Marshal(tools.ReadMCPResourceResponseMetadata{
 		A2UISurfaces: []string{a2uiSurface},
 	})
 	require.NoError(t, err)
@@ -103,7 +103,7 @@ func TestGenericToolMetadataMixedContentShowsText(t *testing.T) {
 func TestGenericToolMetadataAllFailShowsAlert(t *testing.T) {
 	t.Parallel()
 
-	meta, err := json.Marshal(tools.ReadMCPResourceResponseMetadata{
+	meta, err := sonic.Marshal(tools.ReadMCPResourceResponseMetadata{
 		A2UISurfaces: []string{"<a2ui-json>{malformed</a2ui-json>"},
 	})
 	require.NoError(t, err)
@@ -125,7 +125,7 @@ func TestGenericToolMetadataAllFailShowsAlert(t *testing.T) {
 func TestGenericToolMetadataPartialFailShowsAlert(t *testing.T) {
 	t.Parallel()
 
-	meta, err := json.Marshal(tools.ReadMCPResourceResponseMetadata{
+	meta, err := sonic.Marshal(tools.ReadMCPResourceResponseMetadata{
 		A2UISurfaces: []string{a2uiSurface, "<a2ui-json>{malformed</a2ui-json>"},
 	})
 	require.NoError(t, err)
@@ -218,7 +218,7 @@ func tallA2UISurface(t *testing.T) string {
 func TestGenericToolA2UICollapse(t *testing.T) {
 	t.Parallel()
 
-	meta, err := json.Marshal(tools.ReadMCPResourceResponseMetadata{
+	meta, err := sonic.Marshal(tools.ReadMCPResourceResponseMetadata{
 		A2UISurfaces: []string{tallA2UISurface(t)},
 	})
 	require.NoError(t, err)
@@ -250,7 +250,7 @@ func TestGenericToolA2UICollapse(t *testing.T) {
 func TestGenericToolModelOnlyTextIsHidden(t *testing.T) {
 	t.Parallel()
 
-	meta, err := json.Marshal(tools.ReadMCPResourceResponseMetadata{
+	meta, err := sonic.Marshal(tools.ReadMCPResourceResponseMetadata{
 		A2UISurfaces:    []string{a2uiSurface},
 		TextIsModelOnly: true,
 	})
@@ -274,7 +274,7 @@ func TestGenericToolModelOnlyTextIsHidden(t *testing.T) {
 func TestGenericToolTextShownWhenNotModelOnly(t *testing.T) {
 	t.Parallel()
 
-	meta, err := json.Marshal(tools.ReadMCPResourceResponseMetadata{
+	meta, err := sonic.Marshal(tools.ReadMCPResourceResponseMetadata{
 		A2UISurfaces: []string{a2uiSurface},
 	})
 	require.NoError(t, err)

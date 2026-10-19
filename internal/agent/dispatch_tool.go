@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	_ "embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/prompt"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/config"
@@ -1129,7 +1129,7 @@ func (c *coordinator) persistDispatchTerminalResult(ctx context.Context, parentS
 		slog.Warn("Cannot persist dispatch terminal result: session is not an agent tool session", "session_id", sessionID, "dispatch_id", terminal.DispatchID)
 		return
 	}
-	b, err := json.Marshal(terminal)
+	b, err := sonic.Marshal(terminal)
 	if err != nil {
 		slog.Warn("Failed to encode dispatch terminal result", "dispatch_id", terminal.DispatchID, "error", err)
 		return
@@ -1379,7 +1379,7 @@ func (c *coordinator) dispatchTodosFingerprint(ctx context.Context, sessionID st
 	if err != nil || len(sess.Todos) == 0 {
 		return "", false
 	}
-	b, err := json.Marshal(sess.Todos)
+	b, err := sonic.Marshal(sess.Todos)
 	if err != nil {
 		return "", false
 	}

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -258,7 +257,7 @@ func TestBashTool_PeeledWrappersStayAutoApproved(t *testing.T) {
 func runBashTool(t *testing.T, tool fantasy.AgentTool, ctx context.Context, params BashParams) fantasy.ToolResponse {
 	t.Helper()
 
-	input, err := json.Marshal(params)
+	input, err := sonic.Marshal(params)
 	require.NoError(t, err)
 
 	call := fantasy.ToolCall{

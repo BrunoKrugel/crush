@@ -2,7 +2,6 @@ package a2a
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -65,7 +64,7 @@ func withoutInterfaces(t *testing.T, card *a2aspec.AgentCard) string {
 	t.Helper()
 	cp := *card
 	cp.SupportedInterfaces = nil
-	data, err := json.Marshal(&cp)
+	data, err := sonic.Marshal(&cp)
 	require.NoError(t, err)
 	return string(data)
 }
@@ -89,7 +88,7 @@ func TestHostServesDefinitionCardOverSocket(t *testing.T) {
 	require.Equal(t, "application/json", header.Get("Content-Type"))
 	cards := factory.AgentCards()
 	require.Len(t, cards, 1)
-	want, err := json.Marshal(cards[0])
+	want, err := sonic.Marshal(cards[0])
 	require.NoError(t, err)
 	require.JSONEq(t, string(want), body, "the definition's own card, as the listing holds it")
 
@@ -131,7 +130,7 @@ func TestHostServesDispatchCardOverSocket(t *testing.T) {
 
 	status, _, body := fetchCard(t, client, url, "", nil)
 	require.Equal(t, http.StatusOK, status)
-	want, err := json.Marshal(server.Card)
+	want, err := sonic.Marshal(server.Card)
 	require.NoError(t, err)
 	require.JSONEq(t, string(want), body, "the dispatch's own card, the registry entry's object")
 	require.Equal(t, "tester", decodeCard(t, body).Name)

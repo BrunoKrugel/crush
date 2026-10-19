@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/backend"
@@ -283,7 +283,7 @@ func newAgentE2EHarness(t *testing.T) *agentE2EHarness {
 // httptest server and returns the status code.
 func (h *agentE2EHarness) postAgentHTTP(t *testing.T, ctx context.Context, sessionID string) int {
 	t.Helper()
-	body, err := json.Marshal(proto.AgentMessage{SessionID: sessionID, Prompt: "hi"})
+	body, err := sonic.Marshal(proto.AgentMessage{SessionID: sessionID, Prompt: "hi"})
 	require.NoError(t, err)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		h.httpSrv.URL+"/v1/workspaces/"+h.workspace.ID+"/agent", bytes.NewReader(body))

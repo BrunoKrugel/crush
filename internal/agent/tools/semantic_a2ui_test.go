@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -304,7 +303,7 @@ func TestSemanticSearchDivert(t *testing.T) {
 
 	run := func(ctx context.Context, cfg *config.ConfigStore) fantasy.ToolResponse {
 		tool := NewSemanticSearchTool(cfg, store, client)
-		input, err := json.Marshal(SemanticSearchParams{Query: "hello"})
+		input, err := sonic.Marshal(SemanticSearchParams{Query: "hello"})
 		require.NoError(t, err)
 		resp, err := tool.Run(ctx, fantasy.ToolCall{ID: "c", Name: SemanticSearchToolName, Input: string(input)})
 		require.NoError(t, err)

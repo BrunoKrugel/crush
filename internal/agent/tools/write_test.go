@@ -2,13 +2,13 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,7 +32,7 @@ func TestWriteToolWritesEmptyNewFile(t *testing.T) {
 
 	tool := NewWriteTool(nil, &mockPermissionService{}, &mockHistoryService{}, mockFileTrackerService{}, workingDir)
 
-	input, err := json.Marshal(WriteParams{FilePath: "empty.txt", Content: ""})
+	input, err := sonic.Marshal(WriteParams{FilePath: "empty.txt", Content: ""})
 	require.NoError(t, err)
 
 	resp, err := tool.Run(ctx, fantasy.ToolCall{

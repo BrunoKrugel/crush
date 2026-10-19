@@ -53,7 +53,7 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 	if seconds >= 0 && seconds == math.Trunc(seconds) {
 		return strconv.AppendInt(nil, int64(seconds), 10), nil
 	}
-	return json.Marshal(time.Duration(d).String())
+	return sonic.Marshal(time.Duration(d).String())
 }
 
 // JSONSchema describes the accepted forms: a non-negative integer number

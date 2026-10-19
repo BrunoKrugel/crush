@@ -4,7 +4,6 @@ package hyper
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -156,7 +155,7 @@ func ExchangeToken(ctx context.Context, refreshToken string) (*oauth.Token, erro
 		"refresh_token": refreshToken,
 	}
 
-	data, err := json.Marshal(reqBody)
+	data, err := sonic.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
@@ -213,7 +212,7 @@ func IntrospectToken(ctx context.Context, accessToken string) (*IntrospectTokenR
 		"token": accessToken,
 	}
 
-	data, err := json.Marshal(reqBody)
+	data, err := sonic.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}

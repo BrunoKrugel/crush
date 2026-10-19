@@ -9,13 +9,13 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
@@ -26,7 +26,7 @@ import (
 // the shape a call from outside the agent loop would have.
 func runToolWithoutSession(t *testing.T, tool fantasy.AgentTool, name string, params any) fantasy.ToolResponse {
 	t.Helper()
-	input, err := json.Marshal(params)
+	input, err := sonic.Marshal(params)
 	require.NoError(t, err)
 	resp, err := tool.Run(context.Background(), fantasy.ToolCall{
 		ID:    "dispatch-test-call-no-session",

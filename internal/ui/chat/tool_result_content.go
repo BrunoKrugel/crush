@@ -44,7 +44,7 @@ func looksLikeMarkdown(content string) bool {
 func renderToolResultTextContent(sty *styles.Styles, content string, widths toolResultContentWidths, expanded bool) string {
 	var result json.RawMessage
 	if err := sonic.Unmarshal([]byte(content), &result); err == nil {
-		prettyResult, err := json.MarshalIndent(result, "", "  ")
+		prettyResult, err := sonic.MarshalIndent(result, "", "  ")
 		if err == nil {
 			return sty.Tool.Body.Render(toolOutputCodeContent(sty, "result.json", string(prettyResult), 0, widths.Body, expanded))
 		}

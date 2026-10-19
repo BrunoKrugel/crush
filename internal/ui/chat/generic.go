@@ -1,7 +1,6 @@
 package chat
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -50,7 +49,7 @@ func (g *GenericToolRenderContext) RenderTool(sty *styles.Styles, width int, opt
 
 	var toolParams []string
 	if len(params) > 0 {
-		parsed, _ := json.Marshal(params)
+		parsed, _ := sonic.Marshal(params)
 		toolParams = append(toolParams, string(parsed))
 	}
 

@@ -2,7 +2,6 @@
 package styles
 
 import (
-	"encoding/json"
 	"fmt"
 	"image/color"
 	"log/slog"
@@ -786,7 +785,7 @@ func (s *Styles) Clone() Styles {
 // If the glamour library adds non-serializable fields, this approach will
 // need to be replaced with a reflect-based deep copy.
 func cloneStyleConfig(src ansi.StyleConfig) ansi.StyleConfig {
-	data, err := json.Marshal(src)
+	data, err := sonic.Marshal(src)
 	if err != nil {
 		slog.Error("Failed to marshal markdown styles for theme preview", "error", err)
 		return src

@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -511,7 +510,7 @@ func TestLoadSkipsUnusableTasks(t *testing.T) {
 		{ID: "notdurab", SessionID: "s1", Prompt: "not durable", Cron: "* * * * *", Recurring: true, Durable: false, NextRunAt: time.Now().Add(time.Hour)},
 		{ID: "", SessionID: "s1", Prompt: "no id", Cron: "* * * * *", Recurring: true, Durable: true, NextRunAt: time.Now().Add(time.Hour)},
 	}
-	data, err := json.Marshal(stored)
+	data, err := sonic.Marshal(stored)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, data, 0o600))
 
@@ -544,7 +543,7 @@ func TestLoadEnforcesSessionLimit(t *testing.T) {
 			NextRunAt: time.Now().Add(time.Hour),
 		})
 	}
-	data, err := json.Marshal(stored)
+	data, err := sonic.Marshal(stored)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, data, 0o600))
 

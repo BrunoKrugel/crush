@@ -2,12 +2,12 @@ package config
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"testing"
 
 	"charm.land/catwalk/pkg/catwalk"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -77,7 +77,7 @@ func TestCatwalkSync_GetWithAutoUpdateDisabledUsesCache(t *testing.T) {
 	cachedProviders := []catwalk.Provider{
 		{Name: "Cached Manual Update", ID: "cached-manual"},
 	}
-	data, err := json.Marshal(cachedProviders)
+	data, err := sonic.Marshal(cachedProviders)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, data, 0o644))
 
@@ -130,7 +130,7 @@ func TestCatwalkSync_GetNotModifiedUsesCached(t *testing.T) {
 	cachedProviders := []catwalk.Provider{
 		{Name: "Cached Provider", ID: "cached"},
 	}
-	data, err := json.Marshal(cachedProviders)
+	data, err := sonic.Marshal(cachedProviders)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, data, 0o644))
 
@@ -158,7 +158,7 @@ func TestCatwalkSync_GetEmptyResultFallbackToCached(t *testing.T) {
 	cachedProviders := []catwalk.Provider{
 		{Name: "Cached Provider", ID: "cached"},
 	}
-	data, err := json.Marshal(cachedProviders)
+	data, err := sonic.Marshal(cachedProviders)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, data, 0o644))
 
@@ -184,7 +184,7 @@ func TestCatwalkSync_GetEmptyCacheDefaultsToEmbedded(t *testing.T) {
 
 	// Create empty cache file.
 	emptyProviders := []catwalk.Provider{}
-	data, err := json.Marshal(emptyProviders)
+	data, err := sonic.Marshal(emptyProviders)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, data, 0o644))
 

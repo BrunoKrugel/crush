@@ -2,10 +2,10 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
@@ -31,7 +31,7 @@ func promptSessionCtx() context.Context {
 
 func runPromptTool(t *testing.T, tool fantasy.AgentTool, ctx context.Context, name string, params any) (fantasy.ToolResponse, error) {
 	t.Helper()
-	input, err := json.Marshal(params)
+	input, err := sonic.Marshal(params)
 	require.NoError(t, err)
 	return tool.Run(ctx, fantasy.ToolCall{ID: "test-call", Name: name, Input: string(input)})
 }

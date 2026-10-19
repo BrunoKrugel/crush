@@ -201,7 +201,7 @@ func (m Message) MarshalJSON() ([]byte, error) {
 	}
 
 	type Alias Message
-	return json.Marshal(&struct {
+	return sonic.Marshal(&struct {
 		Parts json.RawMessage `json:"parts"`
 		*Alias
 	}{
@@ -564,7 +564,7 @@ func MarshalParts(parts []ContentPart) ([]byte, error) {
 			Data: part,
 		}
 	}
-	return json.Marshal(wrappedParts)
+	return sonic.Marshal(wrappedParts)
 }
 
 // UnmarshalParts unmarshals content parts from JSON.
@@ -705,7 +705,7 @@ func AttachmentsFromMessage(as []message.Attachment) []Attachment {
 // MarshalJSON implements the [json.Marshaler] interface.
 func (a Attachment) MarshalJSON() ([]byte, error) {
 	type Alias Attachment
-	return json.Marshal(&struct {
+	return sonic.Marshal(&struct {
 		Content string `json:"content"`
 		*Alias
 	}{

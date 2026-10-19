@@ -1,7 +1,6 @@
 package projects
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -71,7 +70,7 @@ func Save(list *ProjectList) error {
 		return err
 	}
 
-	data, err := json.MarshalIndent(list, "", "  ")
+	data, err := sonic.MarshalIndent(list, "", "  ")
 	if err != nil {
 		return err
 	}

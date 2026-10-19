@@ -1,7 +1,6 @@
 package proto
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -102,7 +101,7 @@ type MCPEvent struct {
 // MarshalJSON implements the [json.Marshaler] interface.
 func (e MCPEvent) MarshalJSON() ([]byte, error) {
 	type Alias MCPEvent
-	return json.Marshal(&struct {
+	return sonic.Marshal(&struct {
 		Error string `json:"error,omitempty"`
 		Alias
 	}{
@@ -172,7 +171,7 @@ type MCPPrompt struct {
 // MarshalJSON implements the [json.Marshaler] interface.
 func (i MCPClientInfo) MarshalJSON() ([]byte, error) {
 	type Alias MCPClientInfo
-	return json.Marshal(&struct {
+	return sonic.Marshal(&struct {
 		Error string `json:"error,omitempty"`
 		Alias
 	}{

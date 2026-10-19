@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -102,7 +101,7 @@ func NewSourcegraphTool(client *http.Client) fantasy.AgentTool {
 			}
 			request.Variables.Query = params.Query
 
-			graphqlQueryBytes, err := json.Marshal(request)
+			graphqlQueryBytes, err := sonic.Marshal(request)
 			if err != nil {
 				return fantasy.ToolResponse{}, fmt.Errorf("failed to marshal GraphQL request: %w", err)
 			}

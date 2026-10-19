@@ -465,7 +465,7 @@ func formatValue(value any, key string) string {
 		return "null"
 	case map[string]any, []any:
 		// Objects and arrays are JSON-encoded and quoted.
-		jsonBytes, err := json.Marshal(v)
+		jsonBytes, err := sonic.Marshal(v)
 		if err != nil {
 			return quoteString(fmt.Sprintf("%v", v))
 		}

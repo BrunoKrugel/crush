@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"encoding/json"
 	"testing"
 
 	"charm.land/catwalk/pkg/catwalk"
@@ -41,7 +40,7 @@ func TestTitleProviderOptions(t *testing.T) {
 		require.True(t, ok, "options should parse as openai-compat provider options")
 		require.NotNil(t, parsed.ExtraBody)
 
-		body, err := json.Marshal(parsed.ExtraBody)
+		body, err := sonic.Marshal(parsed.ExtraBody)
 		require.NoError(t, err)
 
 		var extra map[string]any

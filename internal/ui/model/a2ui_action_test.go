@@ -2,9 +2,9 @@ package model
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/ui/textarea"
 
 	"github.com/charmbracelet/crush/internal/agent/tools"
@@ -113,7 +113,7 @@ func newA2UIActionUIItem(t *testing.T, ws *a2uiActionWorkspace, mcpName string) 
 		session:  &session.Session{ID: "sess-1"},
 	}
 
-	meta, err := json.Marshal(tools.ReadMCPResourceResponseMetadata{
+	meta, err := sonic.Marshal(tools.ReadMCPResourceResponseMetadata{
 		A2UISurfaces:         []string{"<a2ui-json>" + a2uiActionForm + "</a2ui-json>"},
 		MCPSurfaceProvenance: []string{mcpName},
 	})

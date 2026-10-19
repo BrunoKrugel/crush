@@ -1,7 +1,6 @@
 package chat
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -57,7 +56,7 @@ func (b *MCPToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *T
 
 	var toolParams []string
 	if len(params) > 0 {
-		parsed, _ := json.Marshal(params)
+		parsed, _ := sonic.Marshal(params)
 		toolParams = append(toolParams, string(parsed))
 	}
 

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -167,9 +166,7 @@ func runSessionList(cmd *cobra.Command, _ []string) error {
 				Modified: time.Unix(s.UpdatedAt, 0).Format(time.RFC3339),
 			}
 		}
-		enc := json.NewEncoder(out)
-		enc.SetEscapeHTML(false)
-		return enc.Encode(output)
+		return writeJSONLine(out, output)
 	}
 
 	w, cleanup, usingPager := sessionWriter(ctx, len(list))
@@ -313,9 +310,7 @@ func runSessionDelete(cmd *cobra.Command, args []string) error {
 
 	out := cmd.OutOrStdout()
 	if sessionDeleteJSON {
-		enc := json.NewEncoder(out)
-		enc.SetEscapeHTML(false)
-		return enc.Encode(sessionMutationResult{
+		return writeJSONLine(out, sessionMutationResult{
 			ID:      session.HashID(sess.ID),
 			UUID:    sess.ID,
 			Title:   sess.Title,
@@ -350,9 +345,7 @@ func runSessionRename(cmd *cobra.Command, args []string) error {
 
 	out := cmd.OutOrStdout()
 	if sessionRenameJSON {
-		enc := json.NewEncoder(out)
-		enc.SetEscapeHTML(false)
-		return enc.Encode(sessionMutationResult{
+		return writeJSONLine(out, sessionMutationResult{
 			ID:      session.HashID(sess.ID),
 			UUID:    sess.ID,
 			Title:   newTitle,
@@ -440,9 +433,7 @@ func outputSessionJSON(w io.Writer, sess session.Session, msgs []*message.Messag
 		}
 	}
 
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	return enc.Encode(output)
+	return writeJSONLine(w, output)
 }
 
 func outputSessionHuman(ctx context.Context, cfg *config.ConfigStore, sess session.Session, msgs []*message.Message) error {
@@ -726,4 +717,19 @@ func convertParts(parts []message.ContentPart) []sessionShowPart {
 type sessionShowOutput struct {
 	Meta     sessionShowMeta      `json:"meta"`
 	Messages []sessionShowMessage `json:"messages"`
+}
+
+// writeJSONLine encodes v without HTML escaping and writes it as a single
+// line, the way a json.Encoder with SetEscapeHTML(false) does. Decode goes
+// through sonic like the rest of the tree.
+func writeJSONLine(w io.Writer, v any) error {
+	data, err := sonic.Marshal(v)
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(data); err != nil {
+		return err
+	}
+	_, err = w.Write([]byte("\n"))
+	return err
 }

@@ -1,9 +1,9 @@
 package chat
 
 import (
-	"encoding/json"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/ui/styles"
@@ -21,7 +21,7 @@ const a2uiToolSurface = `<a2ui-json>{"version":"v0.9","updateComponents":{"surfa
 // results produce.
 func newA2UIToolItem(t *testing.T, surfaces, provenance []string, toolName string) *baseToolMessageItem {
 	t.Helper()
-	meta, err := json.Marshal(tools.ReadMCPResourceResponseMetadata{
+	meta, err := sonic.Marshal(tools.ReadMCPResourceResponseMetadata{
 		A2UISurfaces:         surfaces,
 		MCPSurfaceProvenance: provenance,
 	})
@@ -132,7 +132,7 @@ func TestToolA2UISurfaces(t *testing.T) {
 func TestMCPToolRendersA2UIFromMetadata(t *testing.T) {
 	t.Parallel()
 
-	meta, err := json.Marshal(tools.ReadMCPResourceResponseMetadata{
+	meta, err := sonic.Marshal(tools.ReadMCPResourceResponseMetadata{
 		A2UISurfaces: []string{a2uiToolSurface},
 	})
 	require.NoError(t, err)

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -231,7 +230,7 @@ func TestTCPGateRefusesEveryMethod(t *testing.T) {
 	url := server.Card.SupportedInterfaces[1].URL
 
 	rpc := func(method string, params map[string]any) []byte {
-		body, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+		body, err := sonic.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
 		require.NoError(t, err)
 		return body
 	}

@@ -847,7 +847,7 @@ func (c *Client) GetConfig(ctx context.Context, id string) (*config.Config, erro
 
 func jsonBody(v any) *bytes.Buffer {
 	b := new(bytes.Buffer)
-	m, _ := json.Marshal(v)
+	m, _ := sonic.Marshal(v)
 	b.Write(m)
 	return b
 }

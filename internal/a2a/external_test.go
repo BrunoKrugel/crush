@@ -1222,7 +1222,7 @@ func TestExternalAgentRefusesBadTaskID(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			es, _ := newExternalServer(t, func(context.Context, *a2asrv.ExecutorContext, func(a2aspec.Event, error) bool) {})
-			event, err := json.Marshal(a2aspec.StreamResponse{Event: &a2aspec.Task{
+			event, err := sonic.Marshal(a2aspec.StreamResponse{Event: &a2aspec.Task{
 				ID:        a2aspec.TaskID(id),
 				ContextID: "ctx-1",
 				Status:    a2aspec.TaskStatus{State: a2aspec.TaskStateWorking},

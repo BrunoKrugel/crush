@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/backend"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/session"
@@ -282,7 +283,7 @@ func (c *controllerV1) handleGetWorkspaceEvents(w http.ResponseWriter, r *http.R
 			if wrapped == nil {
 				continue
 			}
-			data, err := json.Marshal(wrapped)
+			data, err := sonic.Marshal(wrapped)
 			if err != nil {
 				c.server.logError(r, "Failed to marshal event", "error", err)
 				continue
@@ -925,12 +926,19 @@ func (c *controllerV1) handleError(w http.ResponseWriter, r *http.Request, err e
 }
 
 func jsonEncode(w http.ResponseWriter, v any) {
+	data, err := sonic.Marshal(v)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(v)
+	_, _ = w.Write(data)
 }
 
 func jsonError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(proto.Error{Message: message})
+	if data, err := sonic.Marshal(proto.Error{Message: message}); err == nil {
+		_, _ = w.Write(data)
+	}
 }

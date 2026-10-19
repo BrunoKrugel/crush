@@ -26,6 +26,7 @@ import (
 	"time"
 
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charmbracelet/crush/internal/agent"
@@ -457,7 +458,7 @@ func TestTCPListenerMutualTLS(t *testing.T) {
 
 	// The task belongs to the certificate's identity: the same holder
 	// lists it.
-	listBody, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 2, "method": "ListTasks", "params": map[string]any{}})
+	listBody, err := sonic.Marshal(map[string]any{"jsonrpc": "2.0", "id": 2, "method": "ListTasks", "params": map[string]any{}})
 	require.NoError(t, err)
 	resp, err := postJSONRPC(t, client, url, listBody)
 	require.NoError(t, err)
@@ -605,7 +606,7 @@ func TestTCPListenerMutualTLSSeparatesCAs(t *testing.T) {
 	require.NotNil(t, task)
 
 	listTasks := func(client *http.Client) []*a2aspec.Task {
-		body, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 2, "method": "ListTasks", "params": map[string]any{}})
+		body, err := sonic.Marshal(map[string]any{"jsonrpc": "2.0", "id": 2, "method": "ListTasks", "params": map[string]any{}})
 		require.NoError(t, err)
 		resp, err := postJSONRPC(t, client, url, body)
 		require.NoError(t, err)
@@ -623,7 +624,7 @@ func TestTCPListenerMutualTLSSeparatesCAs(t *testing.T) {
 	require.Len(t, listTasks(first), 1, "the holder sees its own task")
 	require.Empty(t, listTasks(second), "the same subject from another CA sees nothing")
 
-	getBody, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 3, "method": "GetTask", "params": map[string]any{"id": task.ID}})
+	getBody, err := sonic.Marshal(map[string]any{"jsonrpc": "2.0", "id": 3, "method": "GetTask", "params": map[string]any{"id": task.ID}})
 	require.NoError(t, err)
 	resp, err := postJSONRPC(t, second, url, getBody)
 	require.NoError(t, err)

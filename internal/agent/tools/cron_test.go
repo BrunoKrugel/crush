@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -15,7 +14,7 @@ import (
 func runCronTool(t *testing.T, tool fantasy.AgentTool, name string, ctx context.Context, params any) (fantasy.ToolResponse, error) {
 	t.Helper()
 
-	input, err := json.Marshal(params)
+	input, err := sonic.Marshal(params)
 	require.NoError(t, err)
 
 	call := fantasy.ToolCall{

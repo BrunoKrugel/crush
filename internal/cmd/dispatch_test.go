@@ -3,7 +3,6 @@ package cmd
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -114,7 +113,7 @@ func addDispatchFixture(t *testing.T, repo, wtDir, name, disposition, handle str
 	if disposition != "" {
 		marker["disposition"] = disposition
 	}
-	data, err := json.Marshal(marker)
+	data, err := sonic.Marshal(marker)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path+".owner.json", data, 0o644))
 	require.NoError(t, os.WriteFile(path+".lock", nil, 0o600))

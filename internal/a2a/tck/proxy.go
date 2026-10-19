@@ -197,16 +197,16 @@ func withDispatchContext(body []byte, contextID string) []byte {
 	}
 
 	var err error
-	if message["contextId"], err = json.Marshal(contextID); err != nil {
+	if message["contextId"], err = sonic.Marshal(contextID); err != nil {
 		return body
 	}
-	if params["message"], err = json.Marshal(message); err != nil {
+	if params["message"], err = sonic.Marshal(message); err != nil {
 		return body
 	}
-	if envelope["params"], err = json.Marshal(params); err != nil {
+	if envelope["params"], err = sonic.Marshal(params); err != nil {
 		return body
 	}
-	stamped, err := json.Marshal(envelope)
+	stamped, err := sonic.Marshal(envelope)
 	if err != nil {
 		return body
 	}
@@ -283,7 +283,7 @@ func ifacePath(raw string) string {
 // in internal/a2a/doc.go.
 func normalizeCardJSON(card *a2aspec.AgentCard) ([]byte, error) {
 	var raw map[string]any
-	encoded, err := json.Marshal(card)
+	encoded, err := sonic.Marshal(card)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +292,7 @@ func normalizeCardJSON(card *a2aspec.AgentCard) ([]byte, error) {
 	}
 	requirements, ok := raw["securityRequirements"].([]any)
 	if !ok {
-		return json.MarshalIndent(raw, "", "  ")
+		return sonic.MarshalIndent(raw, "", "  ")
 	}
 	for i, req := range requirements {
 		obj, ok := req.(map[string]any)
@@ -310,5 +310,5 @@ func normalizeCardJSON(card *a2aspec.AgentCard) ([]byte, error) {
 		}
 		requirements[i] = obj
 	}
-	return json.MarshalIndent(raw, "", "  ")
+	return sonic.MarshalIndent(raw, "", "  ")
 }

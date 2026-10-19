@@ -2,13 +2,13 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,7 +18,7 @@ func runFetchTool(t *testing.T, client *http.Client, url string) (fantasy.ToolRe
 	ctx := context.WithValue(context.Background(), SessionIDContextKey, "test-session")
 	tool := NewFetchTool(&mockPermissionService{}, t.TempDir(), client)
 
-	input, err := json.Marshal(FetchParams{URL: url, Format: "text"})
+	input, err := sonic.Marshal(FetchParams{URL: url, Format: "text"})
 	require.NoError(t, err)
 
 	return tool.Run(ctx, fantasy.ToolCall{

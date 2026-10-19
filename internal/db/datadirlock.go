@@ -1,7 +1,6 @@
 package db
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -95,7 +94,7 @@ func writeOwnerInfo(path string) error {
 		Version:   version.Version,
 		StartedAt: time.Now().UTC().Format(time.RFC3339),
 	}
-	payload, err := json.MarshalIndent(info, "", "  ")
+	payload, err := sonic.MarshalIndent(info, "", "  ")
 	if err != nil {
 		return err
 	}

@@ -3,12 +3,12 @@ package a2a
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
 
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
+	"github.com/bytedance/sonic"
 
 	"github.com/charmbracelet/crush/internal/db"
 	"github.com/charmbracelet/crush/internal/dispatch"
@@ -88,7 +88,7 @@ func ReconcileOrphanedTasks(ctx context.Context, database *sql.DB, currentHostID
 		task.Status.State = a2aspec.TaskStateFailed
 		msg := reconcileRestartMessage
 		task.Status.Message = a2aspec.NewMessageForTask(a2aspec.MessageRoleAgent, task, a2aspec.NewTextPart(msg))
-		data, err := json.Marshal(task)
+		data, err := sonic.Marshal(task)
 		if err != nil {
 			slog.Warn("A2A reconcile skipped an orphaned task that failed to encode", "task_id", row.ID, "error", err)
 			continue
@@ -130,7 +130,7 @@ func ReconcileOrphanedTasks(ctx context.Context, database *sql.DB, currentHostID
 			result.Source = dispatch.SourceExternalUnknown
 			result.Error = reconcileRestartMessage + "; the external agent's run was abandoned with the process, and nothing was written to disk"
 		}
-		data, err := json.Marshal(result)
+		data, err := sonic.Marshal(result)
 		if err != nil {
 			slog.Warn("A2A reconcile skipped an orphaned dispatch that failed to encode", "dispatch_id", row.DispatchID, "error", err)
 			continue

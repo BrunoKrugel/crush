@@ -1,7 +1,6 @@
 package proto
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/bytedance/sonic"
@@ -21,7 +20,7 @@ func TestMCPClientInfo_ChannelRoundTrip(t *testing.T) {
 		Channel:   true,
 	}
 
-	data, err := json.Marshal(src)
+	data, err := sonic.Marshal(src)
 	require.NoError(t, err)
 
 	var got MCPClientInfo
@@ -41,7 +40,7 @@ func TestMCPEvent_ChannelMessageRoundTrip(t *testing.T) {
 		ChannelMessage: `<channel source="webhook">hi</channel>`,
 	}
 
-	data, err := json.Marshal(src)
+	data, err := sonic.Marshal(src)
 	require.NoError(t, err)
 
 	var got MCPEvent

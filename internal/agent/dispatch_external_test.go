@@ -3,7 +3,6 @@ package agent
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -35,7 +34,7 @@ func TestSecretNeverPrints(t *testing.T) {
 	var logs bytes.Buffer
 	slog.New(slog.NewJSONHandler(&logs, nil)).Info("Resolving", "token", secret, "params", params)
 	slog.New(slog.NewTextHandler(&logs, nil)).Info("Resolving", "token", secret, "params", params)
-	encoded, err := json.Marshal(params)
+	encoded, err := sonic.Marshal(params)
 	require.NoError(t, err)
 
 	outputs := []string{

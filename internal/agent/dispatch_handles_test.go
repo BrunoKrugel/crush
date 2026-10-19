@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/stretchr/testify/require"
@@ -21,7 +21,7 @@ import (
 // messageID$$toolCallID and must not repeat).
 func runUniqueDispatchToolCall(t *testing.T, tool fantasy.AgentTool, params DispatchAgentParams, seq int) fantasy.ToolResponse {
 	t.Helper()
-	input, err := json.Marshal(params)
+	input, err := sonic.Marshal(params)
 	require.NoError(t, err)
 	ctx := context.WithValue(context.Background(), tools.SessionIDContextKey, "dispatch-parent-session")
 	ctx = context.WithValue(ctx, tools.MessageIDContextKey, fmt.Sprintf("dispatch-parent-message-%d", seq))
@@ -173,7 +173,7 @@ func TestDeliverByHandleRoutesAndToolAcceptsHandle(t *testing.T) {
 // (#399), so tests must be able to pick it.
 func runToolAsSession(t *testing.T, tool fantasy.AgentTool, name string, params any, sessionID string) fantasy.ToolResponse {
 	t.Helper()
-	input, err := json.Marshal(params)
+	input, err := sonic.Marshal(params)
 	require.NoError(t, err)
 	ctx := context.WithValue(context.Background(), tools.SessionIDContextKey, sessionID)
 	resp, err := tool.Run(ctx, fantasy.ToolCall{

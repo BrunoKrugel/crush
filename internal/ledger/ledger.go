@@ -7,7 +7,6 @@ package ledger
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -211,7 +210,7 @@ func encodeJSON(v any) (string, error) {
 	if v == nil {
 		return "[]", nil
 	}
-	b, err := json.Marshal(v)
+	b, err := sonic.Marshal(v)
 	if err != nil {
 		return "", err
 	}

@@ -3,7 +3,6 @@ package tools
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -165,12 +164,10 @@ func FormatJSON(content string) (string, error) {
 		return "", err
 	}
 
-	var buf bytes.Buffer
-	encoder := json.NewEncoder(&buf)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(data); err != nil {
+	encoded, err := sonic.MarshalIndent(data, "", "  ")
+	if err != nil {
 		return "", err
 	}
 
-	return buf.String(), nil
+	return string(encoded), nil
 }

@@ -3,7 +3,6 @@ package agent
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/config"
 )
@@ -290,7 +290,7 @@ func (a *sessionAgent) sendChannelReply(ctx context.Context, call SessionAgentCa
 			"channel", call.Channel, "tool", tool)
 		return
 	}
-	input, err := json.Marshal(args)
+	input, err := sonic.Marshal(args)
 	if err != nil {
 		slog.Error("Channel reply skipped: failed to encode tool arguments", "channel", call.Channel, "tool", tool, "error", err)
 		return

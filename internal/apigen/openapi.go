@@ -1,7 +1,8 @@
 package apigen
 
 import (
-	"encoding/json"
+	"github.com/bytedance/sonic"
+
 	"net/http"
 	"sort"
 	"strconv"
@@ -127,7 +128,7 @@ func SpecJSON(info Info, base string, endpoints []Endpoint) ([]byte, error) {
 		}
 		item[strings.ToLower(e.method)] = op
 	}
-	return json.MarshalIndent(doc, "", "  ")
+	return sonic.MarshalIndent(doc, "", "  ")
 }
 
 // Tags returns the sorted set of tags across endpoints.

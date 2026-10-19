@@ -3,7 +3,6 @@ package dispatch
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -99,7 +98,7 @@ func (s *SQLiteRecordStore) RecordTask(dispatchID, taskID string) error {
 
 // RecordTerminal implements [DispatchRecords].
 func (s *SQLiteRecordStore) RecordTerminal(result DispatchResult) error {
-	data, err := json.Marshal(result)
+	data, err := sonic.Marshal(result)
 	if err != nil {
 		return fmt.Errorf("record terminal encode: %w", err)
 	}

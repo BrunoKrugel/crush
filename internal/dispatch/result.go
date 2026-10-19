@@ -1,7 +1,8 @@
 package dispatch
 
 import (
-	"encoding/json"
+	"github.com/bytedance/sonic"
+
 	"fmt"
 	"strings"
 )
@@ -120,7 +121,7 @@ type DispatchResult struct {
 // Render returns the result as indented JSON, the stable wire shape the
 // model sees for both the running handle and the terminal payload.
 func (r DispatchResult) Render() string {
-	b, err := json.MarshalIndent(r, "", "  ")
+	b, err := sonic.MarshalIndent(r, "", "  ")
 	if err != nil {
 		// DispatchResult is all strings; marshaling cannot fail.
 		return "{}"

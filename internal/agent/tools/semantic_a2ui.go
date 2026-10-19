@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 	"strings"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/x/ansi"
 	a2ui "github.com/tmc/a2ui"
@@ -132,7 +132,7 @@ func withSemanticSurface(resp fantasy.ToolResponse, surfaceID string, components
 			Components: components,
 		},
 	}
-	payload, err := json.Marshal(msg)
+	payload, err := sonic.Marshal(msg)
 	if err != nil {
 		return resp
 	}

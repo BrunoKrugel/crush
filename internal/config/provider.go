@@ -3,7 +3,6 @@ package config
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -283,7 +282,7 @@ func (c cache[T]) Store(v T) error {
 		return fmt.Errorf("failed to create directory for provider cache: %w", err)
 	}
 
-	data, err := json.Marshal(v)
+	data, err := sonic.Marshal(v)
 	if err != nil {
 		return fmt.Errorf("failed to marshal provider data: %w", err)
 	}

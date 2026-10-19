@@ -12,6 +12,7 @@ import (
 
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2asrv/taskstore"
+	"github.com/bytedance/sonic"
 	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/require"
 
@@ -421,11 +422,11 @@ func TestServerPersistsTasksThroughSQLiteStore(t *testing.T) {
 
 	msg := a2aspec.NewMessage(a2aspec.MessageRoleUser, a2aspec.NewTextPart("run the task"))
 	msg.ContextID = "dispatch-session"
-	params, err := json.Marshal(&a2aspec.SendMessageRequest{
+	params, err := sonic.Marshal(&a2aspec.SendMessageRequest{
 		Message: msg,
 	})
 	require.NoError(t, err)
-	body, err := json.Marshal(map[string]any{
+	body, err := sonic.Marshal(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      1,
 		"method":  "SendMessage",

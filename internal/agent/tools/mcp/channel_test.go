@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -124,7 +125,7 @@ func TestParseChannelParams(t *testing.T) {
 func TestParseChannelParamsOversizedContentRejected(t *testing.T) {
 	t.Parallel()
 	big := strings.Repeat("a", maxChannelContentBytes+1)
-	raw, err := json.Marshal(channelParams{Content: big})
+	raw, err := sonic.Marshal(channelParams{Content: big})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +139,7 @@ func TestParseChannelParamsMetaLimits(t *testing.T) {
 
 	// Oversized meta value: the entry is dropped, the payload survives.
 	bigVal := strings.Repeat("b", maxChannelMetaValueBytes+1)
-	raw, _ := json.Marshal(map[string]any{
+	raw, _ := sonic.Marshal(map[string]any{
 		"content": "hi",
 		"meta":    map[string]string{"big": bigVal, "small": "ok"},
 	})
@@ -158,7 +159,7 @@ func TestParseChannelParamsMetaLimits(t *testing.T) {
 	for i := 0; i < maxChannelMetaEntries+10; i++ {
 		meta["k"+strings.Repeat("x", i)] = "v"
 	}
-	raw2, _ := json.Marshal(map[string]any{"content": "hi", "meta": meta})
+	raw2, _ := sonic.Marshal(map[string]any{"content": "hi", "meta": meta})
 	got2, ok2 := parseChannelParams(raw2)
 	if !ok2 {
 		t.Fatal("payload should survive excess meta entries")
@@ -375,7 +376,7 @@ func (c *fakeConn) SessionID() string                            { return "fake"
 
 func channelNotification(t *testing.T, content string) *jsonrpc.Request {
 	t.Helper()
-	raw, err := json.Marshal(channelParams{Content: content})
+	raw, err := sonic.Marshal(channelParams{Content: content})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -523,7 +524,7 @@ func TestPublishChannelMessageUsesMustDeliver(t *testing.T) {
 		}
 	}()
 
-	raw, _ := json.Marshal(channelParams{Content: "channel msg"})
+	raw, _ := sonic.Marshal(channelParams{Content: "channel msg"})
 	publishChannelMessage(ctx, "webhook", raw)
 
 	// The first drain picks up the fill event; the channel event is now in

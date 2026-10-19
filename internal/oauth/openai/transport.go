@@ -2,7 +2,6 @@ package openai
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -88,7 +87,7 @@ func codexRequestBody(body io.ReadCloser, length int64) (io.ReadCloser, int64) {
 	}
 	delete(raw, "max_output_tokens")
 
-	cleaned, err := json.Marshal(raw)
+	cleaned, err := sonic.Marshal(raw)
 	if err != nil {
 		cleaned = data
 	}

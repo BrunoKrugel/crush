@@ -40,7 +40,7 @@ func TestA2UIInitConnRewritesInitialize(t *testing.T) {
 	fc := &a2uiFakeConn{}
 	conn := &a2uiInitConn{Connection: fc}
 
-	initParams, err := json.Marshal(map[string]any{
+	initParams, err := sonic.Marshal(map[string]any{
 		"protocolVersion": "2025-11-25",
 		"capabilities":    map[string]any{"roots": map[string]any{"listChanged": true}},
 		"clientInfo":      map[string]any{"name": "crush", "version": "1.0.0"},
@@ -179,7 +179,7 @@ func TestA2UIHandshakeReachesRealServer(t *testing.T) {
 			A2UIExtensionID, params.Capabilities.Extensions)
 
 		// The payload survives intact, version key and catalog included.
-		raw, err := json.Marshal(ext)
+		raw, err := sonic.Marshal(ext)
 		require.NoError(t, err)
 		var payload map[string]any
 		require.NoError(t, sonic.Unmarshal(raw, &payload))

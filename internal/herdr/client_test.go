@@ -1,12 +1,12 @@
 package herdr
 
 import (
-	"encoding/json"
 	"strings"
 	"sync"
 	"testing"
 	"unicode/utf8"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -735,12 +735,12 @@ func TestReportRequestAlwaysIncludesMessageKey(t *testing.T) {
 	// snapshot, so herdr never has to guess whether a missing key
 	// means "clear" or "keep the last value".
 	c.HandleEvent(AssistantMessage{SessionID: "sess-1"})
-	raw, err := json.Marshal(lastRequest(c))
+	raw, err := sonic.Marshal(lastRequest(c))
 	assert.NoError(t, err)
 	assert.Contains(t, string(raw), `"message":""`)
 
 	c.HandleEvent(QuestionAsked{Text: "Proceed?"})
-	raw, err = json.Marshal(lastRequest(c))
+	raw, err = sonic.Marshal(lastRequest(c))
 	assert.NoError(t, err)
 	assert.Contains(t, string(raw), `"message":"Proceed?"`)
 }
@@ -959,7 +959,7 @@ func TestSetSessionClearRemovesPresentation(t *testing.T) {
 	assert.Empty(t, meta[1].Title)
 	assert.Nil(t, meta[1].Tokens["session"])
 
-	raw, err := json.Marshal(lastRequest(c))
+	raw, err := sonic.Marshal(lastRequest(c))
 	assert.NoError(t, err)
 	assert.NotContains(t, string(raw), `"title"`)
 	assert.Contains(t, string(raw), `"session":null`)
@@ -1176,7 +1176,7 @@ func TestNotifyOmitsEmptyBody(t *testing.T) {
 
 	c.Notify("Done", "")
 
-	data, err := json.Marshal(lastRequest(c).Params)
+	data, err := sonic.Marshal(lastRequest(c).Params)
 	assert.NoError(t, err)
 	assert.NotContains(t, string(data), "body")
 }

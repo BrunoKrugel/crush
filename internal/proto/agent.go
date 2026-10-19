@@ -1,7 +1,6 @@
 package proto
 
 import (
-	"encoding/json"
 	"errors"
 
 	"github.com/bytedance/sonic"
@@ -68,7 +67,7 @@ type AgentEvent struct {
 // MarshalJSON implements the [json.Marshaler] interface.
 func (e AgentEvent) MarshalJSON() ([]byte, error) {
 	type Alias AgentEvent
-	return json.Marshal(&struct {
+	return sonic.Marshal(&struct {
 		Error string `json:"error,omitempty"`
 		Alias
 	}{

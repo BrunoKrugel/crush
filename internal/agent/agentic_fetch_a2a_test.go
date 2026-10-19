@@ -9,7 +9,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"strings"
 	"sync"
@@ -18,6 +17,7 @@ import (
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy"
 	"charm.land/fantasy/providers/openaicompat"
+	"github.com/bytedance/sonic"
 
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/config"
@@ -108,7 +108,7 @@ func TestAgenticFetchRunsOverA2A(t *testing.T) {
 	tool, err := c.agenticFetchTool(t.Context(), nil)
 	require.NoError(t, err)
 
-	input, err := json.Marshal(tools.AgenticFetchParams{Prompt: "what is new in a2a land"})
+	input, err := sonic.Marshal(tools.AgenticFetchParams{Prompt: "what is new in a2a land"})
 	require.NoError(t, err)
 	ctx := context.WithValue(context.Background(), tools.SessionIDContextKey, parent.ID)
 	ctx = context.WithValue(ctx, tools.MessageIDContextKey, "msg-1")
@@ -169,7 +169,7 @@ func TestAgenticFetchRequiresA2AHost(t *testing.T) {
 	tool, err := c.agenticFetchTool(t.Context(), nil)
 	require.NoError(t, err)
 
-	input, err := json.Marshal(tools.AgenticFetchParams{Prompt: "look it up"})
+	input, err := sonic.Marshal(tools.AgenticFetchParams{Prompt: "look it up"})
 	require.NoError(t, err)
 	ctx := context.WithValue(context.Background(), tools.SessionIDContextKey, parent.ID)
 	ctx = context.WithValue(ctx, tools.MessageIDContextKey, "msg-1")

@@ -2,7 +2,6 @@ package backend
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent"
 	mcptools "github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/app"
@@ -228,7 +228,7 @@ func insertChannelWorkspaceCfg(t *testing.T, b *Backend, srvName string, enabled
 	if configEnabled {
 		mcpEntry["channel_enabled"] = true
 	}
-	cfgJSON, err := json.Marshal(map[string]any{
+	cfgJSON, err := sonic.Marshal(map[string]any{
 		"mcp": map[string]any{srvName: mcpEntry},
 	})
 	require.NoError(t, err)

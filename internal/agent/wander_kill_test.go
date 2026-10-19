@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1026,7 +1025,7 @@ func TestDispatchResult_KilledRoundTrips(t *testing.T) {
 		Status:       dispatch.StatusKilled,
 		KilledReason: dispatch.ReasonStalledTodos,
 	}
-	b, err := json.Marshal(res)
+	b, err := sonic.Marshal(res)
 	require.NoError(t, err)
 	assert.Contains(t, string(b), `"killed_reason":"stalled todos"`)
 

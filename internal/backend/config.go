@@ -2,11 +2,11 @@ package backend
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent"
 	mcptools "github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/commands"
@@ -365,7 +365,7 @@ func (b *Backend) CallMCPTool(ctx context.Context, workspaceID, name, toolName s
 	if err != nil {
 		return MCPToolCallResult{}, err
 	}
-	input, err := json.Marshal(args)
+	input, err := sonic.Marshal(args)
 	if err != nil {
 		return MCPToolCallResult{}, fmt.Errorf("failed to encode tool arguments: %w", err)
 	}

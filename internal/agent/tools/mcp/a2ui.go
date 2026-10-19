@@ -209,7 +209,7 @@ func injectA2UICapability(raw json.RawMessage) json.RawMessage {
 		caps[k] = v
 	}
 	params["capabilities"] = caps
-	out, err := json.Marshal(params)
+	out, err := sonic.Marshal(params)
 	if err != nil {
 		slog.Warn("A2UI capability not advertised: re-encoding initialize params failed", "error", err)
 		return nil

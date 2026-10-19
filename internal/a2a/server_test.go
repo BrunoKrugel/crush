@@ -745,7 +745,7 @@ func TestHostAuthenticatesBearerAndServesTasks(t *testing.T) {
 	require.Equal(t, a2aspec.TaskStateCompleted, rpcResp.Result.Task.Status.State)
 	require.True(t, runner.ran)
 
-	listBody, err := json.Marshal(map[string]any{
+	listBody, err := sonic.Marshal(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      2,
 		"method":  "ListTasks",
@@ -878,7 +878,7 @@ func TestHostExtendedCardUnsupportedOperation(t *testing.T) {
 	t.Cleanup(func() { _ = factory.Close(context.Background()) })
 	require.False(t, server.Card.Capabilities.ExtendedAgentCard)
 
-	body, err := json.Marshal(map[string]any{
+	body, err := sonic.Marshal(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      1,
 		"method":  "GetExtendedAgentCard",
@@ -1023,9 +1023,9 @@ func sendMessageBody(t *testing.T, contextID, prompt string) []byte {
 	t.Helper()
 	msg := a2aspec.NewMessage(a2aspec.MessageRoleUser, a2aspec.NewTextPart(prompt))
 	msg.ContextID = contextID
-	params, err := json.Marshal(&a2aspec.SendMessageRequest{Message: msg})
+	params, err := sonic.Marshal(&a2aspec.SendMessageRequest{Message: msg})
 	require.NoError(t, err)
-	body, err := json.Marshal(map[string]any{
+	body, err := sonic.Marshal(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      1,
 		"method":  "SendMessage",

@@ -1,7 +1,6 @@
 package styles
 
 import (
-	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -100,7 +99,7 @@ func TestPalette_JSON_Serialization(t *testing.T) {
 		BgBase:    "#1A1A2E",
 	}
 
-	data, err := json.Marshal(p)
+	data, err := sonic.Marshal(p)
 	require.NoError(t, err)
 
 	var decoded Palette
@@ -128,7 +127,7 @@ func TestPalette_JSON_DiffFields(t *testing.T) {
 	require.NoError(t, palette.Validate())
 
 	recovered := PaletteFromOpts(palette.ToQuickStyleOpts(quickStyleOpts{}))
-	data, err := json.Marshal(recovered)
+	data, err := sonic.Marshal(recovered)
 	require.NoError(t, err)
 	require.JSONEq(t, input, string(data))
 
@@ -150,7 +149,7 @@ func TestPalette_JSON_OmitsEmpty(t *testing.T) {
 	t.Parallel()
 	p := Palette{Primary: "#FF0000"}
 
-	data, err := json.Marshal(p)
+	data, err := sonic.Marshal(p)
 	require.NoError(t, err)
 
 	var m map[string]any

@@ -7,7 +7,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/json"
 	"encoding/pem"
 	"math/big"
 	"os"
@@ -270,7 +269,7 @@ option a2a-client-ca '`+cert+`'`)
 	require.NoError(t, err)
 	require.NoError(t, os.Remove(filepath.Join(workDir, "crushrc")))
 
-	body, err := json.Marshal(map[string]any{"options": map[string]any{"a2a": map[string]any{
+	body, err := sonic.Marshal(map[string]any{"options": map[string]any{"a2a": map[string]any{
 		"listen":    "127.0.0.1:7443",
 		"tls_cert":  cert,
 		"tls_key":   key,
@@ -307,7 +306,7 @@ option a2a-tls-key `+filepath.ToSlash(key))
 	require.Contains(t, err.Error(), "is a relative path")
 	require.NoError(t, os.Remove(filepath.Join(workDir, "crushrc")))
 
-	body, err := json.Marshal(map[string]any{"options": map[string]any{"a2a": map[string]any{
+	body, err := sonic.Marshal(map[string]any{"options": map[string]any{"a2a": map[string]any{
 		"listen":   "127.0.0.1:7443",
 		"tls_cert": filepath.Join(workDir, cert),
 		"tls_key":  filepath.Join(workDir, key),

@@ -1,7 +1,6 @@
 package dialog
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -729,7 +728,7 @@ func (p *Permissions) renderDefaultContent(width int) string {
 
 		var parsed any
 		if err := sonic.Unmarshal([]byte(paramStr), &parsed); err == nil {
-			if b, err := json.MarshalIndent(parsed, "", "  "); err == nil {
+			if b, err := sonic.MarshalIndent(parsed, "", "  "); err == nil {
 				jsonContent := string(b)
 				highlighted, err := common.SyntaxHighlight(t, jsonContent, "params.json", t.Dialog.Permissions.ParamsBg)
 				if err == nil {

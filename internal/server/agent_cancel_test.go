@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/backend"
@@ -175,7 +175,7 @@ func TestSummaryOutcome(t *testing.T) {
 
 func postAgent(t *testing.T, c *controllerV1, ctx context.Context, wsID, sessionID string) *httptest.ResponseRecorder {
 	t.Helper()
-	body, err := json.Marshal(proto.AgentMessage{SessionID: sessionID, Prompt: "hi"})
+	body, err := sonic.Marshal(proto.AgentMessage{SessionID: sessionID, Prompt: "hi"})
 	require.NoError(t, err)
 	req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/workspaces/"+wsID+"/agent", bytes.NewReader(body))
 	req.SetPathValue("id", wsID)

@@ -1,13 +1,13 @@
 package chat
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 	"unicode"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/message"
@@ -69,7 +69,7 @@ func runningHandle(t *testing.T, status dispatch.Status) *message.ToolResult {
 		SessionID:     "msg$$call-dispatch-1",
 		Status:        status,
 	}
-	b, err := json.Marshal(handle)
+	b, err := sonic.Marshal(handle)
 	require.NoError(t, err)
 	return &message.ToolResult{ToolCallID: "call-dispatch-1", Content: string(b)}
 }
@@ -79,7 +79,7 @@ func runningHandle(t *testing.T, status dispatch.Status) *message.ToolResult {
 // stays in Content.
 func terminalStamp(t *testing.T, terminal dispatch.DispatchResult) *message.ToolResult {
 	t.Helper()
-	b, err := json.Marshal(terminal)
+	b, err := sonic.Marshal(terminal)
 	require.NoError(t, err)
 	result := runningHandle(t, dispatch.StatusRunning)
 	result.Metadata = string(b)
@@ -223,7 +223,7 @@ func TestDispatchCardPrefersTerminalMetadata(t *testing.T) {
 		Status:      dispatch.StatusCompleted,
 		KeyFindings: "Added validation and two tests.",
 	}
-	b, err := json.Marshal(terminal)
+	b, err := sonic.Marshal(terminal)
 	require.NoError(t, err)
 
 	result := runningHandle(t, dispatch.StatusRunning)
@@ -465,7 +465,7 @@ func TestDispatchCardShowsHandle(t *testing.T) {
 
 	result := runningHandle(t, dispatch.StatusRunning)
 	handle := dispatch.DispatchResult{DispatchID: "dispatch-1", Handle: "tester", SessionID: "msg$$call-dispatch-1", Status: dispatch.StatusRunning}
-	b, err := json.Marshal(handle)
+	b, err := sonic.Marshal(handle)
 	require.NoError(t, err)
 	result.Content = string(b)
 

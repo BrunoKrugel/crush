@@ -661,7 +661,7 @@ func marshalParts(parts []ContentPart) ([]byte, error) {
 			Data: part,
 		}
 	}
-	return json.Marshal(wrappedParts)
+	return sonic.Marshal(wrappedParts)
 }
 
 // rawPartWrapper is [partWrapper] for decoding: the payload stays encoded

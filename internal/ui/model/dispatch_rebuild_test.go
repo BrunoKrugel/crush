@@ -6,10 +6,10 @@ package model
 // stamped terminal record flips the card terminal on live events.
 
 import (
-	"encoding/json"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 
@@ -124,7 +124,7 @@ func TestUpdatedToolEventFlipsDispatchCardTerminal(t *testing.T) {
 		SessionID:  inspectChildID,
 		Status:     dispatch.StatusRunning,
 	}
-	handleJSON, err := json.Marshal(handle)
+	handleJSON, err := sonic.Marshal(handle)
 	require.NoError(t, err)
 	m.Update(pubsub.Event[message.Message]{
 		Type:    pubsub.CreatedEvent,
@@ -144,7 +144,7 @@ func TestUpdatedToolEventFlipsDispatchCardTerminal(t *testing.T) {
 		Status:      dispatch.StatusCompleted,
 		KeyFindings: "Added validation and two tests.",
 	}
-	terminalJSON, err := json.Marshal(terminal)
+	terminalJSON, err := sonic.Marshal(terminal)
 	require.NoError(t, err)
 	m.Update(pubsub.Event[message.Message]{
 		Type: pubsub.UpdatedEvent,

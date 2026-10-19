@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -70,7 +69,7 @@ func (s *SQLiteStore) Create(ctx context.Context, task *a2aspec.Task) (taskstore
 	if err != nil {
 		return taskstore.TaskVersionMissing, fmt.Errorf("taskstore auth failed: %w", err)
 	}
-	data, err := json.Marshal(task)
+	data, err := sonic.Marshal(task)
 	if err != nil {
 		return taskstore.TaskVersionMissing, fmt.Errorf("taskstore encode failed: %w", err)
 	}
@@ -105,7 +104,7 @@ func (s *SQLiteStore) Update(ctx context.Context, req *taskstore.UpdateRequest) 
 	if err != nil {
 		return taskstore.TaskVersionMissing, fmt.Errorf("taskstore auth failed: %w", err)
 	}
-	data, err := json.Marshal(req.Task)
+	data, err := sonic.Marshal(req.Task)
 	if err != nil {
 		return taskstore.TaskVersionMissing, fmt.Errorf("taskstore encode failed: %w", err)
 	}

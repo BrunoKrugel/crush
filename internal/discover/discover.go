@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"charm.land/catwalk/pkg/catwalk"
+	"github.com/bytedance/sonic"
 )
 
 // RequestTimeout is the backstop on every discovery and enrichment
@@ -44,7 +45,7 @@ func doRequest(ctx context.Context, method, baseURL, path, apiKey string, extraH
 
 	var reqBody *bytes.Reader
 	if body != nil {
-		data, err := json.Marshal(body)
+		data, err := sonic.Marshal(body)
 		if err != nil {
 			return nil, fmt.Errorf("marshaling request body: %w", err)
 		}

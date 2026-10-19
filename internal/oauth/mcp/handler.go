@@ -3,7 +3,6 @@ package mcpoauth
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -748,7 +747,7 @@ func (rt *metadataFixupRoundTripper) RoundTrip(req *http.Request) (*http.Respons
 	}
 
 	raw["issuer"] = strings.TrimSuffix(issuer, "/")
-	fixed, err := json.Marshal(raw)
+	fixed, err := sonic.Marshal(raw)
 	if err != nil {
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 		return resp, nil

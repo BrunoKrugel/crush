@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"encoding/json/v2"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +13,7 @@ import (
 
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy/providers/openaicompat"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/backend"
@@ -36,11 +36,11 @@ func TestSendMessagePermissionPolicyIntegration(t *testing.T) {
 	defer cancel()
 	outside := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(outside, "proof.txt"), []byte("test"), 0o600))
-	arguments, err := json.Marshal(struct {
+	arguments, err := sonic.Marshal(struct {
 		Path string `json:"path"`
 	}{outside})
 	require.NoError(t, err)
-	encodedArguments, err := json.Marshal(string(arguments))
+	encodedArguments, err := sonic.Marshal(string(arguments))
 	require.NoError(t, err)
 	var requests atomic.Int32
 	var toolSent atomic.Bool

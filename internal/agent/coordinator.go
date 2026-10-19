@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -804,21 +803,21 @@ func getProviderOptions(model Model, providerCfg config.ProviderConfig) fantasy.
 	catwalkOpts := []byte("{}")
 
 	if model.ModelCfg.ProviderOptions != nil {
-		data, err := json.Marshal(model.ModelCfg.ProviderOptions)
+		data, err := sonic.Marshal(model.ModelCfg.ProviderOptions)
 		if err == nil {
 			cfgOpts = data
 		}
 	}
 
 	if providerCfg.ProviderOptions != nil {
-		data, err := json.Marshal(providerCfg.ProviderOptions)
+		data, err := sonic.Marshal(providerCfg.ProviderOptions)
 		if err == nil {
 			providerCfgOpts = data
 		}
 	}
 
 	if model.CatwalkCfg.Options.ProviderOptions != nil {
-		data, err := json.Marshal(model.CatwalkCfg.Options.ProviderOptions)
+		data, err := sonic.Marshal(model.CatwalkCfg.Options.ProviderOptions)
 		if err == nil {
 			catwalkOpts = data
 		}

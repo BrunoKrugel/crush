@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"maps"
 	"net/http"
@@ -863,7 +862,7 @@ func TestCreateSession_Sessionless(t *testing.T) {
 
 			writeResult := func(result any) {
 				w.Header().Set("Content-Type", "application/json")
-				resp, _ := json.Marshal(map[string]any{
+				resp, _ := sonic.Marshal(map[string]any{
 					"jsonrpc": "2.0",
 					"id":      req.ID,
 					"result":  result,

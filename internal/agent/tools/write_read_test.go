@@ -2,13 +2,13 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/stretchr/testify/require"
 )
@@ -58,7 +58,7 @@ func TestWriteToolRefusesToWriteAFileItCannotRead(t *testing.T) {
 	tool := NewWriteTool(nil, perm, &mockHistoryService{}, mockFileTrackerService{}, workingDir)
 
 	ctx := context.WithValue(context.Background(), SessionIDContextKey, "test-session")
-	input, err := json.Marshal(WriteParams{FilePath: "secret.txt", Content: "new body"})
+	input, err := sonic.Marshal(WriteParams{FilePath: "secret.txt", Content: "new body"})
 	require.NoError(t, err)
 
 	_, runErr := tool.Run(ctx, fantasy.ToolCall{ID: "c", Name: WriteToolName, Input: string(input)})
@@ -81,7 +81,7 @@ func TestWriteToolPreviewCarriesTheRealPreviousContent(t *testing.T) {
 	tool := NewWriteTool(nil, perm, &mockHistoryService{}, mockFileTrackerService{}, workingDir)
 
 	ctx := context.WithValue(context.Background(), SessionIDContextKey, "test-session")
-	input, err := json.Marshal(WriteParams{FilePath: "readable.txt", Content: "second version\n"})
+	input, err := sonic.Marshal(WriteParams{FilePath: "readable.txt", Content: "second version\n"})
 	require.NoError(t, err)
 
 	_, runErr := tool.Run(ctx, fantasy.ToolCall{ID: "c", Name: WriteToolName, Input: string(input)})
@@ -107,7 +107,7 @@ func TestWriteToolStillCreatesANewFile(t *testing.T) {
 	tool := NewWriteTool(nil, perm, &mockHistoryService{}, mockFileTrackerService{}, workingDir)
 
 	ctx := context.WithValue(context.Background(), SessionIDContextKey, "test-session")
-	input, err := json.Marshal(WriteParams{FilePath: "fresh.txt", Content: "brand new\n"})
+	input, err := sonic.Marshal(WriteParams{FilePath: "fresh.txt", Content: "brand new\n"})
 	require.NoError(t, err)
 
 	resp, runErr := tool.Run(ctx, fantasy.ToolCall{ID: "c", Name: WriteToolName, Input: string(input)})

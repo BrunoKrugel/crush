@@ -2,13 +2,13 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"sync"
 	"testing"
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/dispatch"
@@ -121,7 +121,7 @@ func newLiveDispatchFixture(t *testing.T) *liveDispatchFixture {
 	ctx = context.WithValue(ctx, tools.SessionIDContextKey, "dispatch-parent-session")
 	ctx = context.WithValue(ctx, tools.MessageIDContextKey, "dispatch-parent-message")
 	ctx = context.WithValue(ctx, tools.ContentWidthContextKey, 80)
-	input, err := json.Marshal(DispatchAgentParams{Prompt: "do work"})
+	input, err := sonic.Marshal(DispatchAgentParams{Prompt: "do work"})
 	require.NoError(t, err)
 	resp, err := c.dispatchTool().Run(ctx, fantasy.ToolCall{
 		ID:    "dispatch-tool-call",
@@ -291,7 +291,7 @@ func TestDispatchSetupFailureCancelsRoot(t *testing.T) {
 	ctx = context.WithValue(ctx, tools.SessionIDContextKey, "dispatch-parent-session")
 	ctx = context.WithValue(ctx, tools.MessageIDContextKey, "dispatch-parent-message")
 	ctx = context.WithValue(ctx, tools.ContentWidthContextKey, 80)
-	input, err := json.Marshal(DispatchAgentParams{Prompt: "do work"})
+	input, err := sonic.Marshal(DispatchAgentParams{Prompt: "do work"})
 	require.NoError(t, err)
 	resp, err := c.dispatchTool().Run(ctx, fantasy.ToolCall{
 		ID:    "dispatch-tool-call",

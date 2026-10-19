@@ -8,7 +8,6 @@ package a2a
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -22,6 +21,7 @@ import (
 
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2asrv/taskstore"
+	"github.com/bytedance/sonic"
 
 	"github.com/charmbracelet/crush/internal/agent"
 )
@@ -400,7 +400,11 @@ func (f *ServerFactory) serveAgentsIndex(w http.ResponseWriter, r *http.Request)
 
 	if !AcceptsEventStream(r) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(f.index.snapshot())
+		if data, err := sonic.Marshal(f.index.snapshot()); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		} else {
+			_, _ = w.Write(data)
+		}
 		return
 	}
 
@@ -444,7 +448,7 @@ func (f *ServerFactory) serveAgentsIndex(w http.ResponseWriter, r *http.Request)
 				// the watcher reconnects to a fresh snapshot.
 				return
 			}
-			data, err := json.Marshal(ev)
+			data, err := sonic.Marshal(ev)
 			if err != nil {
 				slog.Warn("A2A agent index event failed to encode", "err", err)
 				continue

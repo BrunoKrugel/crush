@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -45,7 +44,7 @@ func TestPostWorkspaces_RejectsMissingClientID(t *testing.T) {
 	t.Parallel()
 	c := newTestController()
 
-	body, err := json.Marshal(proto.Workspace{Path: t.TempDir()})
+	body, err := sonic.Marshal(proto.Workspace{Path: t.TempDir()})
 	require.NoError(t, err)
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/workspaces", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -63,7 +62,7 @@ func TestPostWorkspaces_RejectsMalformedClientID(t *testing.T) {
 	t.Parallel()
 	c := newTestController()
 
-	body, err := json.Marshal(proto.Workspace{Path: t.TempDir(), ClientID: "not-a-uuid"})
+	body, err := sonic.Marshal(proto.Workspace{Path: t.TempDir(), ClientID: "not-a-uuid"})
 	require.NoError(t, err)
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/workspaces", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -85,7 +84,7 @@ func TestPostWorkspaces_RefusesParentReferences(t *testing.T) {
 	post := func(t *testing.T, ws proto.Workspace) *httptest.ResponseRecorder {
 		t.Helper()
 		c := newTestController()
-		body, err := json.Marshal(ws)
+		body, err := sonic.Marshal(ws)
 		require.NoError(t, err)
 		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/workspaces", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
@@ -242,7 +241,7 @@ func TestSubscribeEvents_RejectsMalformedClientID(t *testing.T) {
 // recorder. It does not require a real listener.
 func postCurrentSession(t *testing.T, c *controllerV1, wsID, clientID, sessionID string) *httptest.ResponseRecorder {
 	t.Helper()
-	body, err := json.Marshal(proto.CurrentSession{SessionID: sessionID})
+	body, err := sonic.Marshal(proto.CurrentSession{SessionID: sessionID})
 	require.NoError(t, err)
 	url := "/v1/workspaces/" + wsID + "/current-session"
 	if clientID != "" {
@@ -260,7 +259,7 @@ func TestPostCurrentSession_RejectsMissingClientID(t *testing.T) {
 	t.Parallel()
 	c := newTestController()
 
-	body, err := json.Marshal(proto.CurrentSession{SessionID: "S1"})
+	body, err := sonic.Marshal(proto.CurrentSession{SessionID: "S1"})
 	require.NoError(t, err)
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/workspaces/abc/current-session", bytes.NewReader(body))
 	req.SetPathValue("id", "abc")

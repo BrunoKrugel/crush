@@ -172,5 +172,5 @@ func (m *Map[K, V]) UnmarshalJSON(data []byte) error {
 func (m *Map[K, V]) MarshalJSON() ([]byte, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return json.Marshal(m.inner)
+	return sonic.Marshal(m.inner)
 }

@@ -2820,7 +2820,7 @@ func titleProviderOptions(m Model) fantasy.ProviderOptions {
 		return nil
 	}
 	merged := map[string]any{}
-	data, err := json.Marshal(m.ModelCfg.ProviderOptions)
+	data, err := sonic.Marshal(m.ModelCfg.ProviderOptions)
 	if err == nil {
 		err = sonic.Unmarshal(data, &merged)
 	}

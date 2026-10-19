@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/oauth"
 	"github.com/charmbracelet/crush/internal/proto"
@@ -89,7 +90,7 @@ func (c *Client) SetProviderAPIKey(ctx context.Context, id string, scope config.
 	switch v := apiKey.(type) {
 	case string:
 		kind = proto.APIKeyKindString
-		b, err := json.Marshal(v)
+		b, err := sonic.Marshal(v)
 		if err != nil {
 			return fmt.Errorf("failed to marshal api key string: %w", err)
 		}
@@ -99,7 +100,7 @@ func (c *Client) SetProviderAPIKey(ctx context.Context, id string, scope config.
 			return fmt.Errorf("oauth token is nil")
 		}
 		kind = proto.APIKeyKindOAuth
-		b, err := json.Marshal(v)
+		b, err := sonic.Marshal(v)
 		if err != nil {
 			return fmt.Errorf("failed to marshal oauth token: %w", err)
 		}

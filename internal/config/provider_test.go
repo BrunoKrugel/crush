@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 	"testing"
 
 	"charm.land/catwalk/pkg/catwalk"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -114,7 +114,7 @@ func TestProviders_Integration_WithCachedData(t *testing.T) {
 		{Name: "Cached1", ID: "c1"},
 		{Name: "Cached2", ID: "c2"},
 	}
-	data, err := json.Marshal(catwalkProviders)
+	data, err := sonic.Marshal(catwalkProviders)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(catwalkPath, data, 0o644))
 
@@ -123,7 +123,7 @@ func TestProviders_Integration_WithCachedData(t *testing.T) {
 		Name: "Cached Hyper",
 		ID:   "hyper",
 	}
-	data, err = json.Marshal(hyperProvider)
+	data, err = sonic.Marshal(hyperProvider)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(hyperPath, data, 0o644))
 

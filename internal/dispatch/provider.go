@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -439,7 +438,7 @@ func (p *GitWorktreeProvider) updateOwnerMarker(id string, mutate func(*ownerMar
 // writeMarkerFile atomically writes branch's owner marker into dir,
 // the same temp-and-rename writeOwnerMarker has always used.
 func writeMarkerFile(dir, branch string, m ownerMarker) error {
-	data, err := json.Marshal(m)
+	data, err := sonic.Marshal(m)
 	if err != nil {
 		return err
 	}

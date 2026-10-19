@@ -1,8 +1,9 @@
 package shellconfig
 
 import (
+	"github.com/bytedance/sonic"
+
 	"context"
-	"encoding/json"
 	"fmt"
 )
 
@@ -46,7 +47,7 @@ func (b *ConfigBuilder) empty() bool {
 
 // JSON marshals the accumulated config to a single JSON object.
 func (b *ConfigBuilder) JSON() ([]byte, error) {
-	return json.Marshal(b.root)
+	return sonic.Marshal(b.root)
 }
 
 // childMap returns/creates the nested object parent[key].

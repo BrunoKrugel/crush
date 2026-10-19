@@ -2,13 +2,13 @@ package workspace
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/a2a"
 	"github.com/charmbracelet/crush/internal/agent"
 	mcptools "github.com/charmbracelet/crush/internal/agent/tools/mcp"
@@ -611,7 +611,7 @@ func (w *AppWorkspace) ListMCPPrompts(context.Context) ([]commands.MCPPrompt, er
 // CallMCPTool invokes a tool on a named MCP server and returns its text
 // content plus any A2UI surface payload it embedded.
 func (w *AppWorkspace) CallMCPTool(ctx context.Context, name, toolName string, args map[string]any) (MCPToolCallResult, error) {
-	input, err := json.Marshal(args)
+	input, err := sonic.Marshal(args)
 	if err != nil {
 		return MCPToolCallResult{}, fmt.Errorf("failed to encode tool arguments: %w", err)
 	}

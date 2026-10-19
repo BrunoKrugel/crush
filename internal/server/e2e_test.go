@@ -193,7 +193,7 @@ func newRealCreateHarness(t *testing.T) *e2eHarness {
 // workspace ID.
 func (h *e2eHarness) postWorkspace(t *testing.T, args proto.Workspace) proto.Workspace {
 	t.Helper()
-	body, err := json.Marshal(args)
+	body, err := sonic.Marshal(args)
 	require.NoError(t, err)
 	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost,
 		h.httpSrv.URL+"/v1/workspaces", bytes.NewReader(body))
@@ -316,7 +316,7 @@ func decodeSSEEnvelope(p pubsub.Payload) (any, bool) {
 // would create an import cycle from this in-package test).
 func (h *e2eHarness) grantPermission(t *testing.T, ctx context.Context, workspaceID string, req proto.PermissionGrant) bool {
 	t.Helper()
-	body, err := json.Marshal(req)
+	body, err := sonic.Marshal(req)
 	require.NoError(t, err)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		h.httpSrv.URL+"/v1/workspaces/"+workspaceID+"/permissions/grant",

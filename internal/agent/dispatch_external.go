@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/dispatch"
@@ -55,7 +55,7 @@ func (Secret) GoString() string { return redactedSecret }
 func (Secret) LogValue() slog.Value { return slog.StringValue(redactedSecret) }
 
 // MarshalJSON renders the redacted form, never the credential.
-func (Secret) MarshalJSON() ([]byte, error) { return json.Marshal(redactedSecret) }
+func (Secret) MarshalJSON() ([]byte, error) { return sonic.Marshal(redactedSecret) }
 
 // ExternalAgentParams names one external agent to resolve (#434).
 type ExternalAgentParams struct {

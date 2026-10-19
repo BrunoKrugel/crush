@@ -244,7 +244,7 @@ func Load(ctx context.Context, workingDir, dataDir string, debug bool) (*ConfigS
 // mustMarshalConfig marshals the config to JSON bytes, returning empty JSON on
 // error.
 func mustMarshalConfig(cfg *Config) []byte {
-	data, err := json.Marshal(cfg)
+	data, err := sonic.Marshal(cfg)
 	if err != nil {
 		return []byte("{}")
 	}
