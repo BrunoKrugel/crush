@@ -93,6 +93,12 @@ Smaller things you notice in the terminal rather than in a config file.
 | Config reload on reconnect | Reconnecting an MCP server re-reads config from disk, so an edit takes effect without a restart. | `joestump-agent/crush` |
 | Current time in the prompt | The system prompt carries the current time, which is what makes relative scheduling ("every weekday at 9") work. | `joestump-agent/crush` |
 
+### Performance
+
+| Improvement | Detail | Source |
+| --- | --- | --- |
+| Sonic JSON codec | Both halves of the JSON wire path run through [`bytedance/sonic`](https://github.com/bytedance/sonic)'s JIT-compiled codec: every `Unmarshal`/`Marshal` call in the tree, plus the HTTP handlers (server, A2A, proto), the CLI's session output, and the streaming message deltas and session-row decodes. `encoding/json` remains only where sonic has no equivalent (`RawMessage`, the `Marshaler`/`Unmarshaler` interfaces sonic dispatches through, and streaming decode). | `brunokrugel/crush` |
+
 ## Fixes this fork carries
 
 Fixes to **upstream** behaviour that live here and are not upstream. Fixes to
