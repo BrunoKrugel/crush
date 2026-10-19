@@ -1072,3 +1072,45 @@ func TestWrapTodoGate_ClassifiesThroughHookWrapper(t *testing.T) {
 	require.True(t, ok)
 	assert.Same(t, mcpNoHint, gate.inner, "the gate must wrap the hooked tool the model calls")
 }
+
+// TestTodoNudge_MutatingWorkWithStaleListReArms pins the freshness contract
+// behind the stale todo pill: once a run has a todo list, mutating work
+// without a todos call makes the list stale and the nudge re-arms — the same
+// contract as working without a list. Without this, a model that creates the
+// list and then grinds through later steps without updating it leaves the
+// UI's pill frozen on the first step for the whole run.
+func TestTodoNudge_MutatingWorkWithStaleListReArms(t *testing.T) {
+	t.Parallel()
+	env := testEnv(t)
+	model := &scriptedModel{steps: []scriptedStep{
+		// Step one creates the list.
+		{toolCalls: []scriptedToolCall{{name: tools.TodosToolName, input: `{"todos":[{"content":"step one","status":"in_progress","active_form":"Doing step one"}]}`}}},
+		// Step two is read-only: the list stays fresh.
+		{toolCalls: []scriptedToolCall{{name: "probe", input: "{}"}}},
+		// Step three mutates without updating the list: stale.
+		{toolCalls: []scriptedToolCall{{name: "probe_mutating", input: `{"path":"x"}`}}},
+	}}
+	sa := newTodoTestAgent(t, env, model, config.TodoEnforcementSettings{
+		Enabled:        true,
+		NudgeThreshold: 2,
+	}, probeTool(), mutatingTool("bash"))
+
+	_, err := sa.Run(t.Context(), SessionAgentCall{
+		SessionID: func() string {
+			sess, err := env.sessions.Create(t.Context(), "session")
+			require.NoError(t, err)
+			return sess.ID
+		}(),
+		Prompt: "do the work",
+	})
+	require.NoError(t, err)
+
+	calls := model.promptTexts()
+	require.Len(t, calls, 4)
+	assert.NotContains(t, strings.Join(calls[0], "\n"), todoNudgeMessage,
+		"the list-creating step carries no nudge")
+	assert.NotContains(t, strings.Join(calls[1], "\n"), todoNudgeMessage,
+		"a read-only step right after a todos call carries no nudge")
+	assert.Contains(t, strings.Join(calls[3], "\n"), todoNudgeMessage,
+		"a mutating step with a stale list carries the nudge")
+}

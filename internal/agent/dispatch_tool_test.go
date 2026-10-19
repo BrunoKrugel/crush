@@ -27,6 +27,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// testMaxJobs is the background job ceiling the tests run under.
+const testMaxJobs = 50
+
 // dispatchTestAgent is a fake dispatched agent: it satisfies the
 // SessionAgent surface runDispatch and the tool handler use, embedding
 // the interface so only the exercised methods are implemented.
@@ -583,7 +586,7 @@ func TestRunDispatchKillsBackgroundJobsOnCompletion(t *testing.T) {
 		model:  dispatchTestModel(),
 		result: &fantasy.AgentResult{Response: fantasy.Response{Content: fantasy.ResponseContent{fantasy.TextContent{Text: "done"}}}},
 		onRun: func(call SessionAgentCall) {
-			bgShell, err := shell.GetBackgroundShellManager().Start(context.Background(), call.SessionID, env.workingDir, nil, "sleep 30", "dispatch job")
+			bgShell, err := shell.GetBackgroundShellManager().Start(context.Background(), call.SessionID, env.workingDir, nil, "sleep 30", "dispatch job", testMaxJobs)
 			require.NoError(t, err)
 			jobID = bgShell.ID
 		},
@@ -630,7 +633,7 @@ func TestRunDispatchKillsBackgroundJobsOnKill(t *testing.T) {
 		err:   context.Canceled,
 		onRun: func(call SessionAgentCall) {
 			kill.kill("test kill")
-			bgShell, err := shell.GetBackgroundShellManager().Start(context.Background(), call.SessionID, env.workingDir, nil, "sleep 30", "dispatch job")
+			bgShell, err := shell.GetBackgroundShellManager().Start(context.Background(), call.SessionID, env.workingDir, nil, "sleep 30", "dispatch job", testMaxJobs)
 			require.NoError(t, err)
 			jobID = bgShell.ID
 		},

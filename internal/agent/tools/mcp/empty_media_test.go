@@ -26,7 +26,7 @@ func TestBlankMediaDecodesToEmpty(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := toolResultFromCall(&mcp.CallToolResult{Content: []mcp.Content{tt.content}})
+			got := extractToolResult(&mcp.CallToolResult{Content: []mcp.Content{tt.content}}, "")
 			require.Equal(t, tt.kind, got.Type)
 			require.Empty(t, got.Data)
 		})
@@ -36,12 +36,12 @@ func TestBlankMediaDecodesToEmpty(t *testing.T) {
 func TestEmptyImageKeepsAccompanyingText(t *testing.T) {
 	t.Parallel()
 
-	got := toolResultFromCall(&mcp.CallToolResult{
+	got := extractToolResult(&mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: "scrolled to the bottom"},
 			&mcp.ImageContent{Data: []byte{}, MIMEType: "image/png"},
 		},
-	})
+	}, "")
 	require.Empty(t, got.Data)
 	require.Equal(t, "scrolled to the bottom", got.Content)
 }
@@ -50,12 +50,12 @@ func TestLaterNonEmptyImageWins(t *testing.T) {
 	t.Parallel()
 
 	real := []byte{0x89, 'P', 'N', 'G'}
-	got := toolResultFromCall(&mcp.CallToolResult{
+	got := extractToolResult(&mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.ImageContent{Data: []byte{}, MIMEType: "image/gif"},
 			&mcp.ImageContent{Data: real, MIMEType: "image/png"},
 		},
-	})
+	}, "")
 	require.Equal(t, "image", got.Type)
 	require.Equal(t, real, got.Data)
 	require.Equal(t, "image/png", got.MediaType)
@@ -65,12 +65,12 @@ func TestEmptyImageDoesNotHideRealAudio(t *testing.T) {
 	t.Parallel()
 
 	wav := []byte{0xff, 0xf3, 0x44, 0xc4}
-	got := toolResultFromCall(&mcp.CallToolResult{
+	got := extractToolResult(&mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.ImageContent{Data: []byte{}, MIMEType: "image/png"},
 			&mcp.AudioContent{Data: wav, MIMEType: "audio/wav"},
 		},
-	})
+	}, "")
 	require.Equal(t, "media", got.Type)
 	require.Equal(t, wav, got.Data)
 }
@@ -79,9 +79,9 @@ func TestGoodImageStillPasses(t *testing.T) {
 	t.Parallel()
 
 	real := []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a}
-	got := toolResultFromCall(&mcp.CallToolResult{
+	got := extractToolResult(&mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.ImageContent{Data: real, MIMEType: "image/png"}},
-	})
+	}, "")
 	require.Equal(t, "image", got.Type)
 	require.Equal(t, real, got.Data)
 }

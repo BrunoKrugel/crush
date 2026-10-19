@@ -214,12 +214,18 @@ func (r *todoEnforcementRun) recordToolCall(toolName, input string) {
 	defer r.mu.Unlock()
 	if toolName == tools.TodosToolName {
 		r.todosSatisfied = true
+		r.mutatingCall = false
 		return
 	}
 	r.toolCalls++
 	tool, ok := r.tools[toolName]
 	if !ok || isMutatingCall(tool, input) {
 		r.mutatingCall = true
+		// A mutating call also makes the run's existing list stale: the
+		// next step must either update the list or carry the nudge, the
+		// same contract as working without one. Read-only calls leave the
+		// list's freshness alone.
+		r.todosSatisfied = false
 	}
 }
 
