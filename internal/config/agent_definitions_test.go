@@ -55,7 +55,7 @@ func loadAgentsJSONErr(t *testing.T, agentsJSON string) (*config.ConfigStore, er
 		body = agentsBaseConfig[:len(agentsBaseConfig)-1] + `,"agents":` + agentsJSON + `}`
 	}
 	require.NoError(t, os.WriteFile(configPath, []byte(body), 0o600))
-	return config.Load(workDir, dataDir, false)
+	return config.Load(t.Context(), workDir, dataDir, false)
 }
 
 // TestAgentDefinitions_BuiltinsResolveLikeToday pins the no-agents-section
@@ -178,7 +178,7 @@ func TestAgentDefinitions_DisabledToolsBeatAllows(t *testing.T) {
 	}`
 	require.NoError(t, os.WriteFile(configPath, []byte(body), 0o600))
 
-	store, err := config.Load(workDir, dataDir, false)
+	store, err := config.Load(t.Context(), workDir, dataDir, false)
 	require.NoError(t, err)
 	cfg := store.Config()
 
@@ -665,7 +665,7 @@ func TestAgentDefinitions_ReloadPicksUpAndRollsBack(t *testing.T) {
 		`,"agents":{"coder":{"tools":{"deny":["sourcegraph"]}}}}`
 	require.NoError(t, os.WriteFile(configPath, []byte(valid), 0o600))
 
-	store, err := config.Load(workDir, dataDir, false)
+	store, err := config.Load(t.Context(), workDir, dataDir, false)
 	require.NoError(t, err)
 	require.NotContains(t, store.Config().Agents[config.AgentCoder].AllowedTools, "sourcegraph")
 
@@ -713,7 +713,7 @@ func loadTodoJSON(t *testing.T, optionsJSON, agentsJSON string) *config.ConfigSt
 		body += `}`
 	}
 	require.NoError(t, os.WriteFile(configPath, []byte(body), 0o600))
-	store, err := config.Load(workDir, dataDir, false)
+	store, err := config.Load(t.Context(), workDir, dataDir, false)
 	require.NoError(t, err)
 	return store
 }
@@ -870,7 +870,7 @@ func TestAgentDefinitions_RelativePromptFileResolvesAgainstWorkingDir(t *testing
 		`,"agents":{"worker":{"prompt_append":"file:prompts/worker.md"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "crush.json"), []byte(body), 0o600))
 
-	store, err := config.Load(workDir, dataDir, false)
+	store, err := config.Load(t.Context(), workDir, dataDir, false)
 	require.NoError(t, err)
 	require.Equal(t, "file:prompts/worker.md", store.Config().Agents[config.AgentWorker].PromptAppend)
 }
@@ -908,7 +908,7 @@ func TestAgentDefinitions_LoadTimeSanityChecks(t *testing.T) {
 			`,"options":{"dispatch":{"default_agent":"reviewer"}}}`
 		require.NoError(t, os.WriteFile(filepath.Join(globalDir, "crush.json"), []byte(body), 0o600))
 
-		_, err := config.Load(workDir, dataDir, false)
+		_, err := config.Load(t.Context(), workDir, dataDir, false)
 		require.ErrorContains(t, err, "invalid dispatch configuration:")
 		require.ErrorContains(t, err, `options.dispatch.default_agent: agent "reviewer" is disabled`)
 	})
@@ -925,7 +925,7 @@ func TestAgentDefinitions_LoadTimeSanityChecks(t *testing.T) {
 			`,"options":{"dispatch":{"default_agent":"reviewer"}}}`
 		require.NoError(t, os.WriteFile(filepath.Join(globalDir, "crush.json"), []byte(body), 0o600))
 
-		_, err := config.Load(workDir, dataDir, false)
+		_, err := config.Load(t.Context(), workDir, dataDir, false)
 		require.ErrorContains(t, err, "invalid dispatch configuration:")
 		require.ErrorContains(t, err, `options.dispatch.default_agent: agent "reviewer" cannot be dispatched: agents.reviewer.card: a runtime a2a agent needs the URL of its Agent Card`)
 	})

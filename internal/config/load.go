@@ -454,29 +454,24 @@ func (c *Config) configureProviders(ctx context.Context, store *ConfigStore, env
 		c.Providers.Set(string(p.ID), prepared)
 	}
 
-	// Discover models concurrently for custom providers that need it.
-	// A provider needs discovery when discover_models is explicitly true,
-	// or when the models list is empty (auto-trigger, unless opted out).
-	// The same helper backs the interactive reload; see discovery.go.
-	//
 	// Record each custom provider's user-configured models first, before
 	// discovery merges endpoint models into the live config: the reload
 	// seeds re-discovery from this set so endpoint-removed models get
 	// pruned while user-specified ones survive.
 	store.userConfiguredModels = make(map[string][]catwalk.Model)
 	store.failedDiscoveryProviders = make(map[string]ProviderConfig)
-	candidates := maps.Collect(c.Providers.Seq2())
-	for id, pc := range candidates {
+	for id, pc := range c.Providers.Seq2() {
 		if knownProviderNames[id] {
 			continue
 		}
 		store.userConfiguredModels[id] = slices.Clone(pc.Models)
 	}
 
-	// Per-provider errors are logged by the helper; providers that fail
-	// with no user models to fall back on are recorded below so the
-	// interactive reload can retry them.
-	discoveryResults, discoveryErrs := discoverProviderModels(ctx, candidates, knownProviderNames, resolver, loadModelDiscoveryTimeout)
+	// Cache-first discovery: a provider with a cache entry is served from
+	// disk without touching the network; misses are probed inline, bounded
+	// by discoveryProbeTimeout. The cache is refreshed in the background
+	// after startup (see app.refreshDiscoveredModels).
+	discovered := store.resolveDiscoveredModels(ctx, discoveryJobs(c, knownProviderNames), resolver)
 
 	// Validate the custom providers.
 	for id, providerConfig := range c.Providers.Seq2() {
@@ -513,16 +508,11 @@ func (c *Config) configureProviders(ctx context.Context, store *ConfigStore, env
 			continue
 		}
 
-		// Apply discovery results if available. A failed discovery logs a
-		// warning; both failures and empty results fall through to the
-		// no-models check below, which drops the provider when it has no
-		// user-specified models to fall back on.
-		if models, ok := discoveryResults[id]; ok && len(models) > 0 {
-			providerConfig.Models = models
-			slog.Info("Discovered models for provider", "provider", id, "count", len(models))
-		}
-		if err, ok := discoveryErrs[id]; ok && err != nil {
-			slog.Warn("Model discovery failed", "provider", id, "error", err)
+		// Merge the discovered models; the user's own models win. A
+		// provider whose discovery came back empty falls through to the
+		// no-models check below.
+		if models, ok := discovered[id]; ok {
+			providerConfig.Models = mergeModels(providerConfig.Models, models)
 		}
 
 		if len(providerConfig.Models) == 0 {

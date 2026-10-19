@@ -249,7 +249,7 @@ func loadA2AConfig(t *testing.T, workDir, name, content string) (*config.ConfigS
 	path := filepath.Join(workDir, name)
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
 	t.Cleanup(func() { _ = os.Remove(path) })
-	return config.Load(workDir, t.TempDir(), false)
+	return config.Load(t.Context(), workDir, t.TempDir(), false)
 }
 
 // The crushrc options produce the same options.a2a as the JSON keys

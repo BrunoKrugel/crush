@@ -30,7 +30,7 @@ func newLoadedAppWorkspace(t *testing.T, workingDir string) *AppWorkspace {
 	globalDir := t.TempDir()
 	t.Setenv("CRUSH_GLOBAL_CONFIG", globalDir)
 	t.Setenv("CRUSH_GLOBAL_DATA", globalDir)
-	store, err := config.Load(workingDir, workingDir, false)
+	store, err := config.Load(t.Context(), workingDir, workingDir, false)
 	require.NoError(t, err)
 	return &AppWorkspace{store: store}
 }

@@ -248,7 +248,7 @@ func TestMCPReconnect_ReloadsConfigFromDisk(t *testing.T) {
 
 	// Load the store from a config that has no MCP servers yet.
 	writeReconnectConfig(t, configPath, nil)
-	cfg, err := config.Init(wd, "", false)
+	cfg, err := config.Init(t.Context(), wd, "", false)
 	require.NoError(t, err)
 
 	ws := &Workspace{

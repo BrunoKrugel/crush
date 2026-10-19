@@ -241,7 +241,7 @@ func TestCoordinatorPublishesAgentDefinitionCards(t *testing.T) {
 	co, _, factory := newSubAgentCoordinator(t)
 	_ = co
 
-	cfg, err := config.Init(t.TempDir(), "", false)
+	cfg, err := config.Init(t.Context(), t.TempDir(), "", false)
 	require.NoError(t, err)
 	cfg.SetupAgents()
 	definitions := cfg.Config().Agents

@@ -16,7 +16,7 @@ func TestConfigInitIsolatedFromUserConfig(t *testing.T) {
 	t.Parallel()
 	env := testEnv(t)
 
-	cfg, err := config.Init(env.workingDir, "", false)
+	cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 	require.NoError(t, err)
 	require.Empty(t, cfg.Config().MCP,
 		"the ambient user config leaked into the test config: TestMain must isolate CRUSH_GLOBAL_CONFIG and CRUSH_GLOBAL_DATA")

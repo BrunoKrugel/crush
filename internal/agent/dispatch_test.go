@@ -39,7 +39,7 @@ func newDispatchTestCoordinator(t *testing.T, env fakeEnv) *coordinator {
 func newDispatchTestCoordinatorAt(t *testing.T, env fakeEnv, workingDir, dataDir string) *coordinator {
 	t.Helper()
 
-	cfg, err := config.Init(workingDir, dataDir, false)
+	cfg, err := config.Init(t.Context(), workingDir, dataDir, false)
 	require.NoError(t, err)
 	cfg.SetupAgents()
 

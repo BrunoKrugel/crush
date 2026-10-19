@@ -18,7 +18,7 @@ import (
 func newCronTestCoordinator(t *testing.T, env fakeEnv) (*coordinator, config.Agent) {
 	t.Helper()
 
-	cfg, err := config.Init(env.workingDir, "", false)
+	cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 	require.NoError(t, err)
 	cfg.SetupAgents()
 
@@ -109,7 +109,7 @@ func TestCronToolsEndToEnd(t *testing.T) {
 func TestFireScheduledTask(t *testing.T) {
 	env := testEnv(t)
 
-	cfg, err := config.Init(env.workingDir, "", false)
+	cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 	require.NoError(t, err)
 
 	c := &coordinator{
@@ -145,7 +145,7 @@ func TestFireScheduledTask(t *testing.T) {
 func TestFireScheduledTaskDropsDurableTaskForDeletedSession(t *testing.T) {
 	env := testEnv(t)
 
-	cfg, err := config.Init(env.workingDir, "", false)
+	cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 	require.NoError(t, err)
 
 	path := filepath.Join(t.TempDir(), "scheduled_tasks.json")

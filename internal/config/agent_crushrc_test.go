@@ -81,7 +81,7 @@ func TestAgentDefinitionsCrushrcMatchesJson(t *testing.T) {
 			require.NoError(t, os.WriteFile(filepath.Join(workDir, "crushrc"), []byte(rc), 0o644))
 		}
 
-		store, err := config.Load(workDir, dataDir, false)
+		store, err := config.Load(t.Context(), workDir, dataDir, false)
 		require.NoError(t, err)
 		return store.Config().Agents
 	}

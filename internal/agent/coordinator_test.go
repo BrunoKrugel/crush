@@ -566,7 +566,7 @@ func TestUpdateParentSessionCost(t *testing.T) {
 
 	t.Run("concurrent child cost updates sum exactly", func(t *testing.T) {
 		env := testEnv(t)
-		cfg, err := config.Init(env.workingDir, "", false)
+		cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 		require.NoError(t, err)
 		coord := &coordinator{cfg: cfg, sessions: env.sessions}
 
@@ -605,7 +605,7 @@ func TestUpdateParentSessionCost(t *testing.T) {
 
 	t.Run("parent fields written after child creation survive the cost update", func(t *testing.T) {
 		env := testEnv(t)
-		cfg, err := config.Init(env.workingDir, "", false)
+		cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 		require.NoError(t, err)
 		coord := &coordinator{cfg: cfg, sessions: env.sessions}
 

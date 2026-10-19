@@ -34,7 +34,7 @@ func TestLoadDiagnosticString(t *testing.T) {
 // LoadDiagnostics, in the stable order (#578).
 func TestAddLoadDiagnostic(t *testing.T) {
 	workDir, dataDir := isolateReloadEnv(t)
-	store, err := config.Load(workDir, dataDir, false)
+	store, err := config.Load(t.Context(), workDir, dataDir, false)
 	require.NoError(t, err)
 	require.Empty(t, store.LoadDiagnostics())
 

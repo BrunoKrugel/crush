@@ -81,7 +81,7 @@ func isolateEnv(t *testing.T) (workDir, dataDir string) {
 func TestWarnUnknownAllowedCommands(t *testing.T) {
 	// Not parallel: isolateEnv uses t.Setenv.
 	workDir, dataDir := isolateEnv(t)
-	store, err := config.Init(workDir, dataDir, false)
+	store, err := config.Init(t.Context(), workDir, dataDir, false)
 	require.NoError(t, err)
 
 	warnUnknownAllowedCommands(store, []string{"ssh", "shh"}, []string{"curl"})
@@ -102,7 +102,7 @@ func TestWarnUnknownAllowedCommands(t *testing.T) {
 func TestWarnKnownAllowedCommandsSilent(t *testing.T) {
 	// Not parallel: isolateEnv uses t.Setenv.
 	workDir, dataDir := isolateEnv(t)
-	store, err := config.Init(workDir, dataDir, false)
+	store, err := config.Init(t.Context(), workDir, dataDir, false)
 	require.NoError(t, err)
 
 	warnUnknownAllowedCommands(store, []string{"ssh"}, []string{"curl"})

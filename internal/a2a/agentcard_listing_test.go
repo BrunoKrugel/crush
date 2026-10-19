@@ -19,7 +19,7 @@ import (
 // a live protocol surface that rejects runs until the definition's entry
 // point serves a turn on it.
 func TestPublishAgentDefinitionCardListing(t *testing.T) {
-	cfg, err := config.Init(t.TempDir(), "", false)
+	cfg, err := config.Init(t.Context(), t.TempDir(), "", false)
 	require.NoError(t, err)
 	cfg.SetupAgents()
 	definitions := cfg.Config().Agents

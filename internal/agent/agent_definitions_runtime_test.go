@@ -57,7 +57,7 @@ func writeDefinitionConfig(t *testing.T, dir, agentsJSON, optionsJSON string) {
 func newDefinitionCoordinator(t *testing.T, env fakeEnv, agentsJSON, optionsJSON string) *coordinator {
 	t.Helper()
 	writeDefinitionConfig(t, env.workingDir, agentsJSON, optionsJSON)
-	cfg, err := config.Init(env.workingDir, "", false)
+	cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 	require.NoError(t, err)
 	cfg.SetupAgents()
 	return &coordinator{

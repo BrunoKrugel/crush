@@ -156,7 +156,7 @@ func TestSendMessage_PreparationFailureCompletion(t *testing.T) {
 				sessions.ready.Store(!promoted)
 
 				workingDir := t.TempDir()
-				cfg, err := config.Init(workingDir, "", false)
+				cfg, err := config.Init(t.Context(), workingDir, "", false)
 				require.NoError(t, err)
 				cfg.Config().Providers.Set("test", config.ProviderConfig{
 					ID: "test", Name: "Test", Type: openaicompat.Name,

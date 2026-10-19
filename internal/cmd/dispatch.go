@@ -204,7 +204,7 @@ func resolveDispatchWorkspaces(cmd *cobra.Command) (*config.ConfigStore, string,
 	cwd, _ := cmd.Flags().GetString("cwd")
 	dataDir, _ := cmd.Flags().GetString("data-dir")
 
-	cfg, err := config.Load(cwd, dataDir, false)
+	cfg, err := config.Load(cmd.Context(), cwd, dataDir, false)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("failed to load configuration: %w", err)
 	}

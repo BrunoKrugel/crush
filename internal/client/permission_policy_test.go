@@ -55,7 +55,7 @@ func TestSendMessagePermissionPolicyIntegration(t *testing.T) {
 	}))
 	defer provider.Close()
 	workingDir := t.TempDir()
-	cfg, err := config.Init(workingDir, "", false)
+	cfg, err := config.Init(t.Context(), workingDir, "", false)
 	require.NoError(t, err)
 	cfg.Config().Providers.Set("test", config.ProviderConfig{
 		ID: "test", Name: "Test", Type: openaicompat.Name, BaseURL: provider.URL + "/v1", APIKey: "test",

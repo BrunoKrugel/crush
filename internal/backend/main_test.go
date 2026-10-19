@@ -97,7 +97,7 @@ func TestGlobalConfigIsolated(t *testing.T) {
 	// An empty working dir plus the isolated globals means an empty
 	// config. A non-zero count here is the host's crush.json leaking
 	// in, which is what makes MCP servers get spawned for real.
-	cfg, err := config.Init(t.TempDir(), "", false)
+	cfg, err := config.Init(t.Context(), t.TempDir(), "", false)
 	require.NoError(t, err)
 	require.Empty(t, cfg.Config().MCP, "host MCP servers leaked into the test config")
 	require.Empty(t, cfg.Config().LSP, "host LSP servers leaked into the test config")

@@ -29,7 +29,7 @@ option dispatch-stall 5m
 option dispatch-timeout 1h`
 	require.NoError(t, os.WriteFile(filepath.Join(workDir, "crushrc"), []byte(script), 0o644))
 
-	store, err := config.Load(workDir, dataDir, false)
+	store, err := config.Load(t.Context(), workDir, dataDir, false)
 	require.NoError(t, err)
 
 	settings := config.ResolveTodoEnforcement(store.Config().Options.TodoEnforcement, nil)
@@ -56,7 +56,7 @@ func TestTodoEnforcementCrushrcMatchesJson(t *testing.T) {
 		dataDir := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(workDir, name), []byte(content), 0o644))
 
-		store, err := config.Load(workDir, dataDir, false)
+		store, err := config.Load(t.Context(), workDir, dataDir, false)
 		require.NoError(t, err)
 		return config.ResolveTodoEnforcement(store.Config().Options.TodoEnforcement, nil)
 	}

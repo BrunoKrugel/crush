@@ -31,7 +31,7 @@ func TestWithContextPaths(t *testing.T) {
     "base_url": "http://127.0.0.1:9/v1", "api_key": "test-key",
     "models": [{"id": "mock-model", "name": "Mock", "context_window": 8192, "default_max_tokens": 128}]}}
 }`), 0o644))
-	store, err := config.Init(dir, "", false)
+	store, err := config.Init(t.Context(), dir, "", false)
 	require.NoError(t, err)
 
 	render := func(opts ...Option) string {
@@ -81,7 +81,7 @@ func TestWithContextRoot(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(parentDir, "AGENTS.md"), []byte("parent"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(parentDir, "NOTES.md"), []byte("parent-notes"), 0o644))
 
-	store, err := config.Init(storeDir, "", false)
+	store, err := config.Init(t.Context(), storeDir, "", false)
 	require.NoError(t, err)
 	// A relative global context path resolves against the same root.
 	store.Config().Options.GlobalContextPaths = []string{"NOTES.md"}

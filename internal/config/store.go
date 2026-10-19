@@ -117,6 +117,7 @@ type ConfigStore struct {
 	overrides          RuntimeOverrides
 	trackedConfigPaths []string                // unique, normalized config file paths
 	snapshots          map[string]fileSnapshot // path -> snapshot at last capture
+	cachedDiscovery    []discoveryJob          // providers whose models came from the discovery cache; guarded by writeMu
 
 	// userConfiguredModels records, per custom provider, the models the
 	// user explicitly listed in config, captured by configureProviders

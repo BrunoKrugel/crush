@@ -781,7 +781,7 @@ func TestBuildDispatchedAgent(t *testing.T) {
 	env := testEnv(t)
 	initGitRepo(t, env.workingDir)
 
-	cfg, err := config.Init(env.workingDir, "", false)
+	cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 	require.NoError(t, err)
 	const (
 		largeProviderID = "test-openai-compat"
@@ -1048,7 +1048,7 @@ func newDeliveryEnv(t *testing.T) (*coordinator, *fakeMainAgent, string) {
 	env := testEnv(t)
 	initGitRepo(t, env.workingDir)
 
-	cfg, err := config.Init(env.workingDir, "", false)
+	cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 	require.NoError(t, err)
 	const providerID = "test-openai-compat"
 	cfg.Config().Providers.Set(providerID, config.ProviderConfig{
