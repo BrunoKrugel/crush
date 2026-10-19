@@ -38,13 +38,13 @@ const defaultCatwalkURL = "https://catwalk.charm.land"
 
 // Load loads the configuration from the default paths and returns a
 // ConfigStore that owns both the pure-data Config and all runtime state.
-func Load(workingDir, dataDir string, debug bool) (*ConfigStore, error) {
+func Load(ctx context.Context, workingDir, dataDir string, debug bool) (*ConfigStore, error) {
 	// Migrate deprecated disable_notifications before loading config.
 	migrateDisableNotifications()
 
 	configPaths := lookupConfigs(workingDir)
 
-	cfg, loadedPaths, err := loadFromConfigPaths(context.Background(), configPaths)
+	cfg, loadedPaths, err := loadFromConfigPaths(ctx, configPaths)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config from paths %v: %w", configPaths, err)
 	}
@@ -133,9 +133,12 @@ func Load(workingDir, dataDir string, debug bool) (*ConfigStore, error) {
 	// list is fatal: starting up without providers is worse than starting
 	// up with slightly stale ones. Pass a Hyper token refresher so the
 	// catalog fetch can retry on 401.
-	providers, err := Providers(cfg, func(ctx context.Context) error {
+	providers, err := LoadProviders(ctx, cfg, func(ctx context.Context) error {
 		return store.RefreshOAuthToken(ctx, ScopeGlobal, "hyper")
 	})
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
 	if err != nil {
 		if len(providers) == 0 {
 			return nil, err
@@ -154,7 +157,7 @@ func Load(workingDir, dataDir string, debug bool) (*ConfigStore, error) {
 	// afterwards: the mutations below must land on the live config rather
 	// than a snapshot the store has already replaced.
 	if CatwalkUpdated() {
-		fetchCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		fetchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		store.refetchOpenAIModels(fetchCtx, ScopeGlobal)
 		store.refetchGrokModels(fetchCtx, ScopeGlobal)
 		cancel()
@@ -177,8 +180,11 @@ func Load(workingDir, dataDir string, debug bool) (*ConfigStore, error) {
 
 	cfg.resolveEmbeddings(valueResolver)
 
-	if err := cfg.configureProviders(context.Background(), store, env, valueResolver, store.knownProviders); err != nil {
+	if err := cfg.configureProviders(ctx, store, env, valueResolver, store.knownProviders); err != nil {
 		return nil, fmt.Errorf("failed to configure providers: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	if !cfg.IsConfigured() {
@@ -226,7 +232,6 @@ func Load(workingDir, dataDir string, debug bool) (*ConfigStore, error) {
 		return nil, fmt.Errorf("invalid agent definitions: %w", err)
 	}
 
-	// Capture initial staleness snapshot
 	// Capture initial staleness snapshot. Track every discovered config path,
 	// not just the ones that loaded, so a config file created after startup
 	// (e.g. a crushrc added mid-session) is detected as a change.

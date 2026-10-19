@@ -51,7 +51,7 @@ func NewCoordinator(
 	messages message.Service,
 	opts ...CoordinatorOption,
 ) (agent.Coordinator, error) {
-	cfg, err := config.Init(workingDir, "", false)
+	cfg, err := config.Init(ctx, workingDir, "", false)
 	if err != nil {
 		return nil, err
 	}
