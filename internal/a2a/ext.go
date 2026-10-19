@@ -20,6 +20,7 @@ import (
 	"slices"
 
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
+	"github.com/bytedance/sonic"
 	"github.com/invopop/jsonschema"
 
 	"github.com/charmbracelet/crush/internal/agent"
@@ -105,7 +106,7 @@ func Encode(ext Extension, v any) (any, error) {
 		return nil, fmt.Errorf("a2a: encode %s extension value: %w", ext.URI, err)
 	}
 	var out any
-	if err := json.Unmarshal(b, &out); err != nil {
+	if err := sonic.Unmarshal(b, &out); err != nil {
 		return nil, fmt.Errorf("a2a: normalize %s extension value: %w", ext.URI, err)
 	}
 	return out, nil
@@ -120,7 +121,7 @@ func DecodeValue(ext Extension, raw any) (any, error) {
 		return nil, fmt.Errorf("a2a: re-encode %s extension value: %w", ext.URI, err)
 	}
 	out := reflect.New(ext.Type).Interface()
-	if err := json.Unmarshal(b, out); err != nil {
+	if err := sonic.Unmarshal(b, out); err != nil {
 		return nil, fmt.Errorf("a2a: decode %s extension value: %w", ext.URI, err)
 	}
 	return out, nil
@@ -306,7 +307,7 @@ func schemaParams(ext Extension) (map[string]any, bool) {
 		return nil, false
 	}
 	var schema map[string]any
-	if err := json.Unmarshal(b, &schema); err != nil {
+	if err := sonic.Unmarshal(b, &schema); err != nil {
 		slog.Warn("A2A extension schema failed to normalize; card params skipped", "uri", ext.URI, "err", err)
 		return nil, false
 	}

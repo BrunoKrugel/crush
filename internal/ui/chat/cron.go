@@ -1,12 +1,12 @@
 package chat
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/scheduler"
@@ -145,7 +145,7 @@ func (c *CronToolRenderContext) headerParams(opts *ToolRenderOpts, tasks []sched
 	switch c.tool {
 	case tools.CronCreateToolName:
 		var params tools.CronCreateParams
-		_ = json.Unmarshal([]byte(opts.ToolCall.Input), &params)
+		_ = sonic.Unmarshal([]byte(opts.ToolCall.Input), &params)
 
 		schedule := params.Cron
 		if len(tasks) > 0 {
@@ -166,7 +166,7 @@ func (c *CronToolRenderContext) headerParams(opts *ToolRenderOpts, tasks []sched
 
 	case tools.CronDeleteToolName:
 		var params tools.CronDeleteParams
-		_ = json.Unmarshal([]byte(opts.ToolCall.Input), &params)
+		_ = sonic.Unmarshal([]byte(opts.ToolCall.Input), &params)
 
 		id := params.ID
 		if len(tasks) > 0 {
@@ -203,7 +203,7 @@ func cronTasksFromResult(opts *ToolRenderOpts) []scheduler.Task {
 		return nil
 	}
 	var meta tools.CronTasksResponseMetadata
-	if err := json.Unmarshal([]byte(opts.Result.Metadata), &meta); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.Result.Metadata), &meta); err != nil {
 		return nil
 	}
 	tasks := slices.Clone(meta.Tasks)

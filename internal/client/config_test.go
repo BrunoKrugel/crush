@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/oauth"
 	"github.com/charmbracelet/crush/internal/proto"
@@ -33,7 +34,7 @@ func TestSetProviderAPIKeyStringSendsKind(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
-		require.NoError(t, json.Unmarshal(body, &got))
+		require.NoError(t, sonic.Unmarshal(body, &got))
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -56,7 +57,7 @@ func TestSetProviderAPIKeyOAuthSendsKind(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
-		require.NoError(t, json.Unmarshal(body, &got))
+		require.NoError(t, sonic.Unmarshal(body, &got))
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()

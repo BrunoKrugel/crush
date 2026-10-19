@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 )
 
 type SourcegraphParams struct {
@@ -140,7 +141,7 @@ func NewSourcegraphTool(client *http.Client) fantasy.AgentTool {
 			}
 
 			var result map[string]any
-			if err = json.Unmarshal(body, &result); err != nil {
+			if err = sonic.Unmarshal(body, &result); err != nil {
 				return fantasy.ToolResponse{}, fmt.Errorf("failed to unmarshal response: %w", err)
 			}
 

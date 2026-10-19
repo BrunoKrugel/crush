@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/oauth"
 	"github.com/charmbracelet/crush/internal/oauth/callback"
 	"github.com/modelcontextprotocol/go-sdk/auth"
@@ -735,7 +736,7 @@ func (rt *metadataFixupRoundTripper) RoundTrip(req *http.Request) (*http.Respons
 	}
 
 	var raw map[string]any
-	if json.Unmarshal(body, &raw) != nil {
+	if sonic.Unmarshal(body, &raw) != nil {
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 		return resp, nil
 	}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/notify"
 )
 
@@ -81,7 +82,7 @@ func (e AgentEvent) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON implements the [json.Unmarshaler] interface.
+// UnmarshalJSON implements the [sonic.Unmarshaler] interface.
 func (e *AgentEvent) UnmarshalJSON(data []byte) error {
 	type Alias AgentEvent
 	aux := &struct {
@@ -90,7 +91,7 @@ func (e *AgentEvent) UnmarshalJSON(data []byte) error {
 	}{
 		Alias: Alias(*e),
 	}
-	if err := json.Unmarshal(data, &aux); err != nil {
+	if err := sonic.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 	*e = AgentEvent(aux.Alias)

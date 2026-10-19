@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/ui/styles"
@@ -50,7 +51,7 @@ func (b *MCPToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *T
 	}
 
 	var params map[string]any
-	if err := json.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
 		return toolErrorContent(sty, &message.ToolResult{Content: "Invalid parameters"}, cappedWidth)
 	}
 
@@ -82,7 +83,7 @@ func (b *MCPToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *T
 	// static fallback) instead of raw text.
 	if opts.Result.Metadata != "" {
 		var meta tools.ReadMCPResourceResponseMetadata
-		if err := json.Unmarshal([]byte(opts.Result.Metadata), &meta); err == nil && len(meta.A2UISurfaces) > 0 {
+		if err := sonic.Unmarshal([]byte(opts.Result.Metadata), &meta); err == nil && len(meta.A2UISurfaces) > 0 {
 			return joinToolParts(header, renderToolA2UIResultBody(sty, meta, opts, widths))
 		}
 	}

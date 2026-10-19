@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/backend"
 	"github.com/charmbracelet/crush/internal/db"
@@ -246,7 +247,7 @@ func (h *e2eHarness) subscribeSSE(t *testing.T, ctx context.Context, workspaceID
 			}
 			data = bytes.TrimSpace(data)
 			var p pubsub.Payload
-			if err := json.Unmarshal(data, &p); err != nil {
+			if err := sonic.Unmarshal(data, &p); err != nil {
 				continue
 			}
 			ev, decoded := decodeSSEEnvelope(p)
@@ -271,37 +272,37 @@ func decodeSSEEnvelope(p pubsub.Payload) (any, bool) {
 	switch p.Type {
 	case pubsub.PayloadTypePermissionRequest:
 		var e pubsub.Event[proto.PermissionRequest]
-		if err := json.Unmarshal(p.Payload, &e); err != nil {
+		if err := sonic.Unmarshal(p.Payload, &e); err != nil {
 			return nil, false
 		}
 		return e, true
 	case pubsub.PayloadTypePermissionNotification:
 		var e pubsub.Event[proto.PermissionNotification]
-		if err := json.Unmarshal(p.Payload, &e); err != nil {
+		if err := sonic.Unmarshal(p.Payload, &e); err != nil {
 			return nil, false
 		}
 		return e, true
 	case pubsub.PayloadTypeQuestionNotification:
 		var e pubsub.Event[proto.QuestionNotification]
-		if err := json.Unmarshal(p.Payload, &e); err != nil {
+		if err := sonic.Unmarshal(p.Payload, &e); err != nil {
 			return nil, false
 		}
 		return e, true
 	case pubsub.PayloadTypeMessage:
 		var e pubsub.Event[proto.Message]
-		if err := json.Unmarshal(p.Payload, &e); err != nil {
+		if err := sonic.Unmarshal(p.Payload, &e); err != nil {
 			return nil, false
 		}
 		return e, true
 	case pubsub.PayloadTypeAgentEvent:
 		var e pubsub.Event[proto.AgentEvent]
-		if err := json.Unmarshal(p.Payload, &e); err != nil {
+		if err := sonic.Unmarshal(p.Payload, &e); err != nil {
 			return nil, false
 		}
 		return e, true
 	case pubsub.PayloadTypeRunComplete:
 		var e pubsub.Event[proto.RunComplete]
-		if err := json.Unmarshal(p.Payload, &e); err != nil {
+		if err := sonic.Unmarshal(p.Payload, &e); err != nil {
 			return nil, false
 		}
 		return e, true

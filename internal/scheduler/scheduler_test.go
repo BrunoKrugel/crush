@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -254,7 +255,7 @@ func TestDurablePersistenceRoundTrip(t *testing.T) {
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
 	var persisted []Task
-	require.NoError(t, json.Unmarshal(data, &persisted))
+	require.NoError(t, sonic.Unmarshal(data, &persisted))
 	require.Len(t, persisted, 1)
 	require.Equal(t, durableTask.ID, persisted[0].ID)
 

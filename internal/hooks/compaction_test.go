@@ -1,9 +1,9 @@
 package hooks
 
 import (
-	"encoding/json"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +19,7 @@ func TestBuildCompactionPayload(t *testing.T) {
 	})
 
 	var got map[string]any
-	require.NoError(t, json.Unmarshal([]byte(data), &got))
+	require.NoError(t, sonic.Unmarshal([]byte(data), &got))
 	assert.Equal(t, "auto", got["trigger"])
 	assert.Equal(t, "keep the failing test names", got["instructions"])
 	assert.Equal(t, float64(12), got["messages"])

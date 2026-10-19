@@ -12,6 +12,7 @@ import (
 
 	"charm.land/fantasy"
 	"github.com/alecthomas/chroma/v2/lexers"
+	"github.com/bytedance/sonic"
 	a2tea "github.com/joestump-agent/a2tea"
 	a2ui "github.com/tmc/a2ui"
 
@@ -314,12 +315,12 @@ func TestSemanticSearchDivert(t *testing.T) {
 	require.Contains(t, uiResp.Content, "main.go :: Hello")
 	require.NotContains(t, uiResp.Content, "return \"hi\"")
 	var meta ReadMCPResourceResponseMetadata
-	require.NoError(t, json.Unmarshal([]byte(uiResp.Metadata), &meta))
+	require.NoError(t, sonic.Unmarshal([]byte(uiResp.Metadata), &meta))
 	require.Len(t, meta.A2UISurfaces, 1)
 	require.True(t, strings.HasPrefix(meta.A2UISurfaces[0], "<a2ui-json>"))
 	var msg a2ui.ServerMessage
 	payload := strings.TrimSuffix(strings.TrimPrefix(meta.A2UISurfaces[0], "<a2ui-json>"), "</a2ui-json>")
-	require.NoError(t, json.Unmarshal([]byte(payload), &msg))
+	require.NoError(t, sonic.Unmarshal([]byte(payload), &msg))
 	require.Equal(t, a2ui.Version, msg.Version)
 	require.NotNil(t, msg.UpdateComponents)
 	require.Equal(t, "semantic-search", msg.UpdateComponents.SurfaceID)
@@ -339,7 +340,7 @@ func TestSemanticSurfaceMarksTextModelOnly(t *testing.T) {
 	resp := withSemanticSurface(fantasy.NewTextResponse("digest"), a2uiSurfaceIDPrefix+"search",
 		semanticSearchSurface("q", "", 0, []semanticSearchHit{{Path: "a.go", Score: 0.5, Snippet: "x"}}))
 	var meta ReadMCPResourceResponseMetadata
-	require.NoError(t, json.Unmarshal([]byte(resp.Metadata), &meta))
+	require.NoError(t, sonic.Unmarshal([]byte(resp.Metadata), &meta))
 	require.True(t, meta.TextIsModelOnly)
 }
 

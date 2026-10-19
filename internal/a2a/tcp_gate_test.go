@@ -15,6 +15,7 @@ import (
 	"time"
 
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -300,7 +301,7 @@ func TestVersionNotSupportedReadsBoundedBody(t *testing.T) {
 			Code int `json:"code"`
 		} `json:"error"`
 	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &rpcResp))
+	require.NoError(t, sonic.Unmarshal(rec.Body.Bytes(), &rpcResp))
 	require.Equal(t, -32009, rpcResp.Error.Code)
 }
 

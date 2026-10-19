@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -53,7 +54,7 @@ func TestA2UIInitConnRewritesInitialize(t *testing.T) {
 	require.Len(t, fc.written, 1)
 
 	var params map[string]any
-	require.NoError(t, json.Unmarshal(fc.written[0].Params, &params))
+	require.NoError(t, sonic.Unmarshal(fc.written[0].Params, &params))
 
 	caps, ok := params["capabilities"].(map[string]any)
 	require.True(t, ok, "initialize must carry a capabilities object")
@@ -101,7 +102,7 @@ func TestInjectA2UICapability(t *testing.T) {
 		out := injectA2UICapability(raw)
 		require.NotNil(t, out)
 		var params map[string]any
-		require.NoError(t, json.Unmarshal(out, &params))
+		require.NoError(t, sonic.Unmarshal(out, &params))
 		caps := params["capabilities"].(map[string]any)
 		require.Contains(t, caps, "a2ui")
 	})
@@ -112,7 +113,7 @@ func TestInjectA2UICapability(t *testing.T) {
 		out := injectA2UICapability(raw)
 		require.NotNil(t, out)
 		var params map[string]any
-		require.NoError(t, json.Unmarshal(out, &params))
+		require.NoError(t, sonic.Unmarshal(out, &params))
 		caps := params["capabilities"].(map[string]any)
 		require.Contains(t, caps, "a2ui")
 	})
@@ -181,7 +182,7 @@ func TestA2UIHandshakeReachesRealServer(t *testing.T) {
 		raw, err := json.Marshal(ext)
 		require.NoError(t, err)
 		var payload map[string]any
-		require.NoError(t, json.Unmarshal(raw, &payload))
+		require.NoError(t, sonic.Unmarshal(raw, &payload))
 		clientCaps, ok := payload["clientCapabilities"].(map[string]any)
 		require.True(t, ok, "extension payload must carry clientCapabilities, got %v", payload)
 		_, ok = clientCaps[a2ui.Version]

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charmbracelet/crush/internal/dispatch"
@@ -196,7 +197,7 @@ func TestDispatchListCommand(t *testing.T) {
 
 	jsonOut := runDispatchList(t, repo, dataDir, true)
 	var infos []dispatch.WorkspaceInfo
-	require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(jsonOut)), &infos))
+	require.NoError(t, sonic.Unmarshal([]byte(strings.TrimSpace(jsonOut)), &infos))
 	require.Len(t, infos, 2, "--json emits the same data as the table")
 	byBranch := make(map[string]dispatch.WorkspaceInfo, len(infos))
 	for _, w := range infos {

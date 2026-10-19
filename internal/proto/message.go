@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"charm.land/catwalk/pkg/catwalk"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/message"
 )
 
@@ -209,7 +210,7 @@ func (m Message) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON implements the [json.Unmarshaler] interface.
+// UnmarshalJSON implements the [sonic.Unmarshaler] interface.
 func (m *Message) UnmarshalJSON(data []byte) error {
 	type Alias Message
 	aux := &struct {
@@ -219,7 +220,7 @@ func (m *Message) UnmarshalJSON(data []byte) error {
 		Alias: (*Alias)(m),
 	}
 
-	if err := json.Unmarshal(data, &aux); err != nil {
+	if err := sonic.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 
@@ -570,7 +571,7 @@ func MarshalParts(parts []ContentPart) ([]byte, error) {
 func UnmarshalParts(data []byte) ([]ContentPart, error) {
 	temp := []json.RawMessage{}
 
-	if err := json.Unmarshal(data, &temp); err != nil {
+	if err := sonic.Unmarshal(data, &temp); err != nil {
 		return nil, err
 	}
 
@@ -582,56 +583,56 @@ func UnmarshalParts(data []byte) ([]ContentPart, error) {
 			Data json.RawMessage `json:"data"`
 		}
 
-		if err := json.Unmarshal(rawPart, &wrapper); err != nil {
+		if err := sonic.Unmarshal(rawPart, &wrapper); err != nil {
 			return nil, err
 		}
 
 		switch wrapper.Type {
 		case reasoningType:
 			part := ReasoningContent{}
-			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
+			if err := sonic.Unmarshal(wrapper.Data, &part); err != nil {
 				return nil, err
 			}
 			parts = append(parts, part)
 		case textType:
 			part := TextContent{}
-			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
+			if err := sonic.Unmarshal(wrapper.Data, &part); err != nil {
 				return nil, err
 			}
 			parts = append(parts, part)
 		case imageURLType:
 			part := ImageURLContent{}
-			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
+			if err := sonic.Unmarshal(wrapper.Data, &part); err != nil {
 				return nil, err
 			}
 			parts = append(parts, part)
 		case binaryType:
 			part := BinaryContent{}
-			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
+			if err := sonic.Unmarshal(wrapper.Data, &part); err != nil {
 				return nil, err
 			}
 			parts = append(parts, part)
 		case toolCallType:
 			part := ToolCall{}
-			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
+			if err := sonic.Unmarshal(wrapper.Data, &part); err != nil {
 				return nil, err
 			}
 			parts = append(parts, part)
 		case toolResultType:
 			part := ToolResult{}
-			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
+			if err := sonic.Unmarshal(wrapper.Data, &part); err != nil {
 				return nil, err
 			}
 			parts = append(parts, part)
 		case finishType:
 			part := Finish{}
-			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
+			if err := sonic.Unmarshal(wrapper.Data, &part); err != nil {
 				return nil, err
 			}
 			parts = append(parts, part)
 		case shellCommandType:
 			part := ShellCommand{}
-			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
+			if err := sonic.Unmarshal(wrapper.Data, &part); err != nil {
 				return nil, err
 			}
 			parts = append(parts, part)
@@ -713,7 +714,7 @@ func (a Attachment) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON implements the [json.Unmarshaler] interface.
+// UnmarshalJSON implements the [sonic.Unmarshaler] interface.
 func (a *Attachment) UnmarshalJSON(data []byte) error {
 	type Alias Attachment
 	aux := &struct {
@@ -722,7 +723,7 @@ func (a *Attachment) UnmarshalJSON(data []byte) error {
 	}{
 		Alias: (*Alias)(a),
 	}
-	if err := json.Unmarshal(data, &aux); err != nil {
+	if err := sonic.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 	content, err := base64.StdEncoding.DecodeString(aux.Content)

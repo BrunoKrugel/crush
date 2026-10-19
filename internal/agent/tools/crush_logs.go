@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 )
 
 const CrushLogsToolName = "crush_logs"
@@ -190,7 +191,7 @@ func readLastLines(filePath string, n int) ([]map[string]any, error) {
 
 			// Try to parse as JSON.
 			var entry map[string]any
-			if err := json.Unmarshal(lines[i], &entry); err != nil {
+			if err := sonic.Unmarshal(lines[i], &entry); err != nil {
 				// Skip malformed lines silently.
 				continue
 			}
@@ -207,7 +208,7 @@ func readLastLines(filePath string, n int) ([]map[string]any, error) {
 	// Handle final remainder.
 	if len(remainder) > 0 && len(remainder) <= maxLogLineSize {
 		var entry map[string]any
-		if err := json.Unmarshal(remainder, &entry); err == nil {
+		if err := sonic.Unmarshal(remainder, &entry); err == nil {
 			if len(entries) < n {
 				entries = append(entries, entry)
 			}

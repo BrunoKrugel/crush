@@ -12,6 +12,7 @@ import (
 
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
+	"github.com/bytedance/sonic"
 )
 
 // Artifact identity and transport budgets. diffChunkSize caps each diff
@@ -98,7 +99,7 @@ func decodeDispatchOutcome(part *a2aspec.Part) (DispatchOutcome, bool) {
 			return DispatchOutcome{}, false
 		}
 		var out DispatchOutcome
-		if err := json.Unmarshal(b, &out); err != nil {
+		if err := sonic.Unmarshal(b, &out); err != nil {
 			return DispatchOutcome{}, false
 		}
 		return out, true

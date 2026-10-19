@@ -17,6 +17,7 @@ import (
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy"
 	"charm.land/fantasy/providers/openaicompat"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/dispatch"
@@ -163,7 +164,7 @@ func decodeDispatchHandle(t *testing.T, resp fantasy.ToolResponse) dispatch.Disp
 	t.Helper()
 	require.False(t, resp.IsError, "unexpected tool error: %s", resp.Content)
 	var handle dispatch.DispatchResult
-	require.NoError(t, json.Unmarshal([]byte(resp.Content), &handle))
+	require.NoError(t, sonic.Unmarshal([]byte(resp.Content), &handle))
 	return handle
 }
 
@@ -1699,7 +1700,7 @@ func TestDispatchToolInfoStampsAgentEnum(t *testing.T) {
 	// A user dispatch agent joins the enum; a disabled one and the
 	// main and task agents never do.
 	var defs map[string]config.AgentDefinition
-	require.NoError(t, json.Unmarshal([]byte(`{
+	require.NoError(t, sonic.Unmarshal([]byte(`{
 		"reviewer": {"role": "dispatch"},
 		"ghost": {"role": "dispatch", "disabled": true}
 	}`), &defs))
@@ -1731,7 +1732,7 @@ func TestDispatchAgentParamSelectsDefinition(t *testing.T) {
 	}
 
 	var defs map[string]config.AgentDefinition
-	require.NoError(t, json.Unmarshal([]byte(`{"reviewer": {"role": "dispatch"}}`), &defs))
+	require.NoError(t, sonic.Unmarshal([]byte(`{"reviewer": {"role": "dispatch"}}`), &defs))
 	c.cfg.Config().AgentDefinitions = defs
 	c.cfg.Config().SetupAgents()
 	tool := c.dispatchTool()
@@ -1770,7 +1771,7 @@ func TestDispatchAgentParamRefusals(t *testing.T) {
 	}
 
 	var defs map[string]config.AgentDefinition
-	require.NoError(t, json.Unmarshal([]byte(`{
+	require.NoError(t, sonic.Unmarshal([]byte(`{
 		"reviewer": {"role": "dispatch"},
 		"ghost": {"role": "dispatch", "disabled": true}
 	}`), &defs))
@@ -1813,7 +1814,7 @@ func TestDispatchAgentParamModelOnPinnedDefinition(t *testing.T) {
 	}
 
 	var defs map[string]config.AgentDefinition
-	require.NoError(t, json.Unmarshal([]byte(`{"pinned": {"role": "dispatch", "model": {"provider": "p", "model": "m"}}}`), &defs))
+	require.NoError(t, sonic.Unmarshal([]byte(`{"pinned": {"role": "dispatch", "model": {"provider": "p", "model": "m"}}}`), &defs))
 	c.cfg.Config().AgentDefinitions = defs
 	c.cfg.Config().SetupAgents()
 	tool := c.dispatchTool()
@@ -1846,7 +1847,7 @@ func TestDispatchAgentParamSlotOverride(t *testing.T) {
 	}
 
 	var defs map[string]config.AgentDefinition
-	require.NoError(t, json.Unmarshal([]byte(`{"reviewer": {"role": "dispatch", "model": "large"}}`), &defs))
+	require.NoError(t, sonic.Unmarshal([]byte(`{"reviewer": {"role": "dispatch", "model": "large"}}`), &defs))
 	c.cfg.Config().AgentDefinitions = defs
 	c.cfg.Config().SetupAgents()
 	tool := c.dispatchTool()

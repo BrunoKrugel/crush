@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/backend"
@@ -136,7 +137,7 @@ func TestSessionListIncludesIsBusy(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var got []proto.Session
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.NoError(t, sonic.Unmarshal(rec.Body.Bytes(), &got))
 	require.Len(t, got, 1)
 	require.Equal(t, sid, got[0].ID)
 	require.True(t, got[0].IsBusy, "expected IsBusy=true for the busy session")
@@ -154,7 +155,7 @@ func TestSessionListIdleSessionIsNotBusy(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var got []proto.Session
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.NoError(t, sonic.Unmarshal(rec.Body.Bytes(), &got))
 	require.Len(t, got, 1)
 	require.False(t, got[0].IsBusy, "expected IsBusy=false for idle session")
 }
@@ -172,7 +173,7 @@ func TestSessionGetIncludesIsBusy(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var got proto.Session
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.NoError(t, sonic.Unmarshal(rec.Body.Bytes(), &got))
 	require.Equal(t, sid, got.ID)
 	require.True(t, got.IsBusy)
 }
@@ -205,7 +206,7 @@ func TestProtoSessionIsBusyBackwardCompat(t *testing.T) {
 		Title string `json:"title"`
 	}
 	var old oldSession
-	require.NoError(t, json.Unmarshal(raw, &old))
+	require.NoError(t, sonic.Unmarshal(raw, &old))
 	require.Equal(t, "s1", old.ID)
 	require.Equal(t, "t", old.Title)
 }
@@ -248,7 +249,7 @@ func listSessions(t *testing.T, c *controllerV1, wsID string) []proto.Session {
 	c.handleGetWorkspaceSessions(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
 	var got []proto.Session
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.NoError(t, sonic.Unmarshal(rec.Body.Bytes(), &got))
 	return got
 }
 
@@ -355,7 +356,7 @@ func TestSessionGetIncludesAttachedClients(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var got proto.Session
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.NoError(t, sonic.Unmarshal(rec.Body.Bytes(), &got))
 	require.Equal(t, 1, got.AttachedClients)
 }
 

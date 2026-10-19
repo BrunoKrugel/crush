@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/ui/styles"
 )
 
@@ -64,8 +65,8 @@ func TestRenderToolResultTextContent(t *testing.T) {
 		t.Parallel()
 		content := `{"a":1}`
 		var result json.RawMessage
-		if err := json.Unmarshal([]byte(content), &result); err != nil {
-			t.Fatalf("json.Unmarshal() error = %v", err)
+		if err := sonic.Unmarshal([]byte(content), &result); err != nil {
+			t.Fatalf("sonic.Unmarshal() error = %v", err)
 		}
 		prettyResult, err := json.MarshalIndent(result, "", "  ")
 		if err != nil {

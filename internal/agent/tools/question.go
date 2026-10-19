@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/question"
 )
 
@@ -34,20 +35,20 @@ func (p *QuestionParams) UnmarshalJSON(data []byte) error {
 	}{
 		Alias: (*Alias)(p),
 	}
-	if err := json.Unmarshal(data, aux); err != nil {
+	if err := sonic.Unmarshal(data, aux); err != nil {
 		return err
 	}
 	if len(aux.Questions) == 0 {
 		return nil
 	}
 	// Try array first.
-	if err := json.Unmarshal(aux.Questions, &p.Questions); err != nil {
+	if err := sonic.Unmarshal(aux.Questions, &p.Questions); err != nil {
 		// Fall back to string-encoded JSON array.
 		var s string
-		if err2 := json.Unmarshal(aux.Questions, &s); err2 != nil {
+		if err2 := sonic.Unmarshal(aux.Questions, &s); err2 != nil {
 			return err
 		}
-		if err2 := json.Unmarshal([]byte(strings.TrimSpace(s)), &p.Questions); err2 != nil {
+		if err2 := sonic.Unmarshal([]byte(strings.TrimSpace(s)), &p.Questions); err2 != nil {
 			return fmt.Errorf("questions must be an array: %w", err2)
 		}
 	}

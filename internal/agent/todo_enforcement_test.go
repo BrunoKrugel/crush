@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -12,6 +11,7 @@ import (
 
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/message"
@@ -987,7 +987,7 @@ func TestTodoHardGate_ReadOnlyBashPasses(t *testing.T) {
 			var p struct {
 				Command string `json:"command"`
 			}
-			if err := json.Unmarshal([]byte(call.Input), &p); err == nil {
+			if err := sonic.Unmarshal([]byte(call.Input), &p); err == nil {
 				commands = append(commands, p.Command)
 			}
 			return fantasy.NewTextResponse("ran"), nil

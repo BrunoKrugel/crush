@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/scheduler"
 	"github.com/stretchr/testify/require"
 )
@@ -174,7 +175,7 @@ func TestCronListShowsSessionTasks(t *testing.T) {
 	require.NotContains(t, resp.Content, "hidden task")
 
 	var meta CronTasksResponseMetadata
-	require.NoError(t, json.Unmarshal([]byte(resp.Metadata), &meta))
+	require.NoError(t, sonic.Unmarshal([]byte(resp.Metadata), &meta))
 	require.Len(t, meta.Tasks, 1)
 }
 

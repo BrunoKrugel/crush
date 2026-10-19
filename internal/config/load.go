@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"charm.land/catwalk/pkg/catwalk"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/hyper"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/discover"
@@ -1145,7 +1146,7 @@ func loadFromBytes(configs [][]byte) (*Config, error) {
 		return nil, err
 	}
 	var config Config
-	if err := json.Unmarshal(data, &config); err != nil {
+	if err := sonic.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}
 	return &config, nil

@@ -17,6 +17,7 @@ import (
 
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy/providers/openai"
+	"github.com/bytedance/sonic"
 )
 
 //go:generate wget -O provider.json https://hyper.charm.land/v1/provider
@@ -27,7 +28,7 @@ var embedded []byte
 // Embedded returns the embedded Hyper provider.
 var Embedded = sync.OnceValue(func() catwalk.Provider {
 	var provider catwalk.Provider
-	if err := json.Unmarshal(embedded, &provider); err != nil {
+	if err := sonic.Unmarshal(embedded, &provider); err != nil {
 		slog.Error("Could not use embedded provider data", "err", err)
 	}
 	if e := os.Getenv("HYPER_URL"); e != "" {

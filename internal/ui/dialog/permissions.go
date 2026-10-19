@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/fsext"
 	"github.com/charmbracelet/crush/internal/permission"
@@ -727,7 +728,7 @@ func (p *Permissions) renderDefaultContent(width int) string {
 		}
 
 		var parsed any
-		if err := json.Unmarshal([]byte(paramStr), &parsed); err == nil {
+		if err := sonic.Unmarshal([]byte(paramStr), &parsed); err == nil {
 			if b, err := json.MarshalIndent(parsed, "", "  "); err == nil {
 				jsonContent := string(b)
 				highlighted, err := common.SyntaxHighlight(t, jsonContent, "params.json", t.Dialog.Permissions.ParamsBg)

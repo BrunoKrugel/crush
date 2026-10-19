@@ -2,12 +2,12 @@ package shellconfig
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/shell"
 	"github.com/charmbracelet/crush/internal/version"
 	"github.com/stretchr/testify/require"
@@ -26,7 +26,7 @@ func TestLoadShellConfig_Provider(t *testing.T) {
 	require.NotNil(t, jsonBytes)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	providers, ok := result["providers"].(map[string]any)
 	require.True(t, ok)
@@ -49,7 +49,7 @@ func TestLoadShellConfig_FlagBoolCaseInsensitive(t *testing.T) {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	openai := result["providers"].(map[string]any)["openai"].(map[string]any)
 	require.Equal(t, true, openai["disable"])
@@ -69,7 +69,7 @@ provider add anthropic --api-key "key2"`
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	providers := result["providers"].(map[string]any)
 	require.Len(t, providers, 2)
@@ -90,7 +90,7 @@ model small anthropic/claude-3-5-haiku`
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	models := result["models"].(map[string]any)
 	large := models["large"].(map[string]any)
@@ -116,7 +116,7 @@ mcp add local-server --type http --url "http://localhost:3000/mcp" --header "Aut
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	mcps := result["mcp"].(map[string]any)
 
@@ -149,7 +149,7 @@ func TestLoadShellConfig_LSP(t *testing.T) {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	lsps := result["lsp"].(map[string]any)
 	gopls := lsps["gopls"].(map[string]any)
@@ -176,7 +176,7 @@ func TestLoadShellConfig_Permissions(t *testing.T) {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	perms := result["permissions"].(map[string]any)
 	tools := perms["allowed_tools"].([]any)
@@ -201,7 +201,7 @@ func TestLoadShellConfig_PermissionsDeny(t *testing.T) {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	opts := result["options"].(map[string]any)
 	disabled := opts["disabled_tools"].([]any)
@@ -222,7 +222,7 @@ func TestLoadShellConfig_Hook(t *testing.T) {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	hooks := result["hooks"].(map[string]any)
 	preToolUse := hooks["PreToolUse"].([]any)
@@ -248,7 +248,7 @@ option debug`
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	opts := result["options"].(map[string]any)
 	require.Equal(t, ".crush", opts["data_directory"])
@@ -278,7 +278,7 @@ provider add anthropic --api-key "main-key"`
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	providers := result["providers"].(map[string]any)
 	require.Len(t, providers, 2)
@@ -301,7 +301,7 @@ fi`
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	providers := result["providers"].(map[string]any)
 	require.Len(t, providers, 1)
@@ -319,7 +319,7 @@ func TestLoadShellConfig_CrushVersionEnv(t *testing.T) {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	providers := result["providers"].(map[string]any)
 	openai := providers["openai"].(map[string]any)
@@ -338,7 +338,7 @@ func TestLoadShellConfig_CommandSubstitution(t *testing.T) {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	providers := result["providers"].(map[string]any)
 	openai := providers["openai"].(map[string]any)
@@ -356,7 +356,7 @@ func TestLoadShellConfig_EnvVarExpansion(t *testing.T) {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	providers := result["providers"].(map[string]any)
 	openai := providers["openai"].(map[string]any)
@@ -422,7 +422,7 @@ func TestLoadShellConfig_ExtraHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	providers := result["providers"].(map[string]any)
 	custom := providers["custom"].(map[string]any)
@@ -469,7 +469,7 @@ option metrics false`
 	require.NotNil(t, jsonBytes)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	// Verify providers
 	providers := result["providers"].(map[string]any)

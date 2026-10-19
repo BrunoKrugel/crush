@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"charm.land/catwalk/pkg/catwalk"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/oauth"
 	"github.com/charmbracelet/crush/internal/oauth/copilot"
@@ -385,7 +386,7 @@ func (t *TUIOptions) UnmarshalJSON(data []byte) error {
 		tuiOptionsAlias
 		Theme json.RawMessage `json:"theme"`
 	}
-	if err := json.Unmarshal(data, &loose); err != nil {
+	if err := sonic.Unmarshal(data, &loose); err != nil {
 		return err
 	}
 	*t = TUIOptions(loose.tuiOptionsAlias)
@@ -394,11 +395,11 @@ func (t *TUIOptions) UnmarshalJSON(data []byte) error {
 	}
 
 	var legacyName string
-	if err := json.Unmarshal(loose.Theme, &legacyName); err != nil {
+	if err := sonic.Unmarshal(loose.Theme, &legacyName); err != nil {
 		// Legacy inline theme maps are ignored now that files are the only
 		// palette source, but they must remain loadable during migration.
 		var legacyThemes map[string]json.RawMessage
-		return json.Unmarshal(loose.Theme, &legacyThemes)
+		return sonic.Unmarshal(loose.Theme, &legacyThemes)
 	}
 	if legacyName != "" && t.ActiveTheme == "" {
 		t.ActiveTheme = legacyName

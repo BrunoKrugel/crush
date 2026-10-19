@@ -1,10 +1,10 @@
 package shellconfig
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,7 +20,7 @@ option progress false`
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	opts := result["options"].(map[string]any)
 	require.Equal(t, true, opts["debug"])
@@ -40,7 +40,7 @@ option metrics YES`
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	opts := result["options"].(map[string]any)
 	require.Equal(t, true, opts["debug"])
@@ -60,7 +60,7 @@ option notifications osc`
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	opts := result["options"].(map[string]any)
 	require.Equal(t, ".crush", opts["data_directory"])
@@ -79,7 +79,7 @@ option context-path CRUSH.md`
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	opts := result["options"].(map[string]any)
 	paths := opts["context_paths"].([]any)
@@ -101,7 +101,7 @@ option reset skill-path`
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	opts := result["options"].(map[string]any)
 	require.Empty(t, opts["skills_paths"].([]any))
@@ -121,7 +121,7 @@ option skill-path ./mine`
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	opts := result["options"].(map[string]any)
 	paths := opts["skills_paths"].([]any)
@@ -170,7 +170,7 @@ func TestOption_UIWorkingDirFormat(t *testing.T) {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	ui := result["options"].(map[string]any)["tui"].(map[string]any)
 	require.Equal(t, "{host}:{cwd}", ui["working_dir_format"])
@@ -196,7 +196,7 @@ func TestOption_UIExitBanner(t *testing.T) {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	ui := result["options"].(map[string]any)["tui"].(map[string]any)
 	require.Equal(t, "compact", ui["exit_banner"])
@@ -214,7 +214,7 @@ func TestOption_UINerdFonts(t *testing.T) {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	ui := result["options"].(map[string]any)["tui"].(map[string]any)
 	require.Equal(t, true, ui["nerd_fonts"])
@@ -236,7 +236,7 @@ option metrics`
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	opts := result["options"].(map[string]any)
 	require.Equal(t, true, opts["debug"])
@@ -254,7 +254,7 @@ func TestOption_InvertedBool(t *testing.T) {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	opts := result["options"].(map[string]any)
 	require.Equal(t, true, opts["disable_metrics"])
@@ -284,7 +284,7 @@ option request-timeout 0`
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	opts := result["options"].(map[string]any)
 	require.Equal(t, float64(0), opts["request_timeout"])
@@ -301,7 +301,7 @@ func TestOption_MaxBackgroundJobs(t *testing.T) {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	opts := result["options"].(map[string]any)
 	require.Equal(t, float64(200), opts["max_background_jobs"])
@@ -328,7 +328,7 @@ func loadTodoEnforcement(t *testing.T, script string) map[string]any {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 	return result["options"].(map[string]any)["todo_enforcement"].(map[string]any)
 }
 
@@ -450,7 +450,7 @@ func TestOption_DispatchMaxConcurrent(t *testing.T) {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	opts := result["options"].(map[string]any)
 	dispatch := opts["dispatch"].(map[string]any)
@@ -485,7 +485,7 @@ func TestOption_DispatchDefaultAgent(t *testing.T) {
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	opts := result["options"].(map[string]any)
 	dispatch := opts["dispatch"].(map[string]any)
@@ -523,7 +523,7 @@ option a2a-client-ca certs/ca.pem`
 	require.NoError(t, err)
 
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	opts := result["options"].(map[string]any)
 	require.Equal(t, map[string]any{

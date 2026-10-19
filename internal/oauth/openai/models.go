@@ -2,13 +2,13 @@ package openai
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 
 	"charm.land/catwalk/pkg/catwalk"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/oauth"
 )
 
@@ -77,7 +77,7 @@ func Models(ctx context.Context, token *oauth.Token) ([]catwalk.Model, error) {
 	}
 
 	var mr modelsResponse
-	if err := json.Unmarshal(body, &mr); err != nil {
+	if err := sonic.Unmarshal(body, &mr); err != nil {
 		return nil, fmt.Errorf("decode Codex model catalog: %w", err)
 	}
 

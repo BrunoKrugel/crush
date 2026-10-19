@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charmbracelet/crush/internal/db"
@@ -101,7 +102,7 @@ func TestReconcileOrphanedTasks(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, string(a2aspec.TaskStateFailed), row.State)
 	var failed a2aspec.Task
-	require.NoError(t, json.Unmarshal([]byte(row.TaskJson), &failed))
+	require.NoError(t, sonic.Unmarshal([]byte(row.TaskJson), &failed))
 	require.NotNil(t, failed.Status.Message)
 	require.Equal(t, reconcileRestartMessage, messageText(failed.Status.Message))
 	require.Equal(t, int64(2), row.Version)
@@ -126,7 +127,7 @@ func TestReconcileOrphanedTasks(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "failed", drow.Status)
 	var result dispatch.DispatchResult
-	require.NoError(t, json.Unmarshal([]byte(drow.ResultJson), &result))
+	require.NoError(t, sonic.Unmarshal([]byte(drow.ResultJson), &result))
 	require.Equal(t, dispatch.StatusFailed, result.Status)
 	require.Equal(t, "crush restarted; workspace preserved at /ws/dead", result.Error)
 	require.Equal(t, "dispatch-dead", result.DispatchID)
@@ -175,7 +176,7 @@ func TestReconcileOrphanedExternalDispatch(t *testing.T) {
 	drow, err := q.GetA2ADispatch(context.Background(), "dispatch-external")
 	require.NoError(t, err)
 	var result dispatch.DispatchResult
-	require.NoError(t, json.Unmarshal([]byte(drow.ResultJson), &result))
+	require.NoError(t, sonic.Unmarshal([]byte(drow.ResultJson), &result))
 	require.Equal(t, dispatch.StatusFailed, result.Status)
 	require.Equal(t, dispatch.SourceExternalUnknown, result.Source)
 	require.Empty(t, result.WorkspacePath)

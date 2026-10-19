@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"charm.land/catwalk/pkg/catwalk"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/lsp"
 )
@@ -335,7 +336,7 @@ func (e LSPEvent) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON implements the [json.Unmarshaler] interface.
+// UnmarshalJSON implements the [sonic.Unmarshaler] interface.
 func (e *LSPEvent) UnmarshalJSON(data []byte) error {
 	type Alias LSPEvent
 	aux := &struct {
@@ -344,7 +345,7 @@ func (e *LSPEvent) UnmarshalJSON(data []byte) error {
 	}{
 		Alias: Alias(*e),
 	}
-	if err := json.Unmarshal(data, &aux); err != nil {
+	if err := sonic.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 	*e = LSPEvent(aux.Alias)
@@ -380,7 +381,7 @@ func (i LSPClientInfo) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON implements the [json.Unmarshaler] interface.
+// UnmarshalJSON implements the [sonic.Unmarshaler] interface.
 func (i *LSPClientInfo) UnmarshalJSON(data []byte) error {
 	type Alias LSPClientInfo
 	aux := &struct {
@@ -389,7 +390,7 @@ func (i *LSPClientInfo) UnmarshalJSON(data []byte) error {
 	}{
 		Alias: Alias(*i),
 	}
-	if err := json.Unmarshal(data, &aux); err != nil {
+	if err := sonic.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 	*i = LSPClientInfo(aux.Alias)

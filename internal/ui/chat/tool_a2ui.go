@@ -1,10 +1,10 @@
 package chat
 
 import (
-	"encoding/json"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/joestump-agent/a2tea"
 	"github.com/joestump-agent/a2tea/render"
@@ -26,7 +26,7 @@ func (t *baseToolMessageItem) syncToolA2UISurfaces() {
 		return
 	}
 	var meta tools.ReadMCPResourceResponseMetadata
-	if err := json.Unmarshal([]byte(t.result.Metadata), &meta); err != nil || len(meta.A2UISurfaces) == 0 {
+	if err := sonic.Unmarshal([]byte(t.result.Metadata), &meta); err != nil || len(meta.A2UISurfaces) == 0 {
 		t.a2ui.surfaces = nil
 		t.a2ui.surfaceIDs = nil
 		t.a2ui.surfaceOwners = nil

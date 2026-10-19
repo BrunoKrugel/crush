@@ -1,7 +1,6 @@
 package chat
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -9,6 +8,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/tree"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/message"
@@ -331,7 +331,7 @@ func parseDispatchResult(result *message.ToolResult) *dispatch.DispatchResult {
 	}
 	if result.Metadata != "" {
 		var terminal dispatch.DispatchResult
-		if err := json.Unmarshal([]byte(result.Metadata), &terminal); err == nil && isTerminalDispatchStatus(terminal.Status) {
+		if err := sonic.Unmarshal([]byte(result.Metadata), &terminal); err == nil && isTerminalDispatchStatus(terminal.Status) {
 			return &terminal
 		}
 	}
@@ -339,7 +339,7 @@ func parseDispatchResult(result *message.ToolResult) *dispatch.DispatchResult {
 		return nil
 	}
 	var handle dispatch.DispatchResult
-	if err := json.Unmarshal([]byte(result.Content), &handle); err != nil {
+	if err := sonic.Unmarshal([]byte(result.Content), &handle); err != nil {
 		return nil
 	}
 	return &handle
@@ -444,7 +444,7 @@ func (r *DispatchToolRenderContext) RenderTool(sty *styles.Styles, width int, op
 	}
 
 	var params agent.DispatchAgentParams
-	_ = json.Unmarshal([]byte(opts.ToolCall.Input), &params)
+	_ = sonic.Unmarshal([]byte(opts.ToolCall.Input), &params)
 	prompt := params.Prompt
 	if !opts.ExpandedContent {
 		prompt = strings.ReplaceAll(prompt, "\n", " ")

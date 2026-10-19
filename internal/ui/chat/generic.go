@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/ui/styles"
@@ -43,7 +44,7 @@ func (g *GenericToolRenderContext) RenderTool(sty *styles.Styles, width int, opt
 	}
 
 	var params map[string]any
-	if err := json.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
 		return toolErrorContent(sty, &message.ToolResult{Content: "Invalid parameters"}, cappedWidth)
 	}
 
@@ -86,7 +87,7 @@ func (g *GenericToolRenderContext) RenderTool(sty *styles.Styles, width int, opt
 	// cairn://artifact/{id}/a2ui and similar resource reads render inline.
 	if opts.Result.Metadata != "" {
 		var meta tools.ReadMCPResourceResponseMetadata
-		if err := json.Unmarshal([]byte(opts.Result.Metadata), &meta); err == nil && len(meta.A2UISurfaces) > 0 {
+		if err := sonic.Unmarshal([]byte(opts.Result.Metadata), &meta); err == nil && len(meta.A2UISurfaces) > 0 {
 			return joinToolParts(header, renderToolA2UIResultBody(sty, meta, opts, widths))
 		}
 	}

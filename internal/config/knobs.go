@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/invopop/jsonschema"
 )
 
@@ -21,7 +22,7 @@ type Duration time.Duration
 // string "off" as zero, and any other string as a Go duration.
 func (d *Duration) UnmarshalJSON(data []byte) error {
 	var s string
-	if err := json.Unmarshal(data, &s); err == nil {
+	if err := sonic.Unmarshal(data, &s); err == nil {
 		if s == "off" {
 			*d = 0
 			return nil
@@ -34,7 +35,7 @@ func (d *Duration) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 	var n float64
-	if err := json.Unmarshal(data, &n); err != nil {
+	if err := sonic.Unmarshal(data, &n); err != nil {
 		return fmt.Errorf("invalid duration: want a number of seconds or a duration string")
 	}
 	*d = Duration(time.Duration(n * float64(time.Second)))
@@ -86,7 +87,7 @@ type IntOrOff int
 // UnmarshalJSON decodes a JSON integer, or the string "off" as zero.
 func (v *IntOrOff) UnmarshalJSON(data []byte) error {
 	var s string
-	if err := json.Unmarshal(data, &s); err == nil {
+	if err := sonic.Unmarshal(data, &s); err == nil {
 		if s != "off" {
 			return fmt.Errorf("invalid value %q: want an integer or \"off\"", s)
 		}
@@ -94,7 +95,7 @@ func (v *IntOrOff) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 	var n int
-	if err := json.Unmarshal(data, &n); err != nil {
+	if err := sonic.Unmarshal(data, &n); err != nil {
 		return fmt.Errorf("invalid value: want an integer or \"off\"")
 	}
 	*v = IntOrOff(n)

@@ -1,10 +1,10 @@
 package config
 
 import (
-	"encoding/json"
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,7 +57,7 @@ func TestOptionsRequestTimeoutFromJSON(t *testing.T) {
 	t.Parallel()
 
 	var cfg Config
-	require.NoError(t, json.Unmarshal([]byte(`{"options":{"request_timeout":300}}`), &cfg))
+	require.NoError(t, sonic.Unmarshal([]byte(`{"options":{"request_timeout":300}}`), &cfg))
 	require.Equal(t, 300, *cfg.Options.RequestTimeout)
 	require.Equal(t, 5*time.Minute, cfg.Options.GetRequestTimeout())
 }

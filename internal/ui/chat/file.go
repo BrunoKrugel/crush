@@ -1,10 +1,10 @@
 package chat
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/fsext"
 	"github.com/charmbracelet/crush/internal/message"
@@ -43,7 +43,7 @@ func (v *ViewToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *
 	}
 
 	var params tools.ViewParams
-	if err := json.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
 		return toolErrorContent(sty, &message.ToolResult{Content: "Invalid parameters"}, cappedWidth)
 	}
 
@@ -78,7 +78,7 @@ func (v *ViewToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *
 	// Try to get content from metadata first (contains actual file content).
 	var meta tools.ViewResponseMetadata
 	content := opts.Result.Content
-	if err := json.Unmarshal([]byte(opts.Result.Metadata), &meta); err == nil && meta.Content != "" {
+	if err := sonic.Unmarshal([]byte(opts.Result.Metadata), &meta); err == nil && meta.Content != "" {
 		content = meta.Content
 	}
 
@@ -129,7 +129,7 @@ func (w *WriteToolRenderContext) RenderTool(sty *styles.Styles, width int, opts 
 	}
 
 	var params tools.WriteParams
-	if err := json.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
 		return toolErrorContent(sty, &message.ToolResult{Content: "Invalid parameters"}, cappedWidth)
 	}
 
@@ -149,7 +149,7 @@ func (w *WriteToolRenderContext) RenderTool(sty *styles.Styles, width int, opts 
 	// On error with diff metadata (e.g. denied permission), show error + diff.
 	if opts.Result.IsError {
 		var meta tools.WriteResponseMetadata
-		if err := json.Unmarshal([]byte(opts.Result.Metadata), &meta); err == nil && meta.Diff != "" {
+		if err := sonic.Unmarshal([]byte(opts.Result.Metadata), &meta); err == nil && meta.Diff != "" {
 			errLine := toolErrorContent(sty, opts.Result, cappedWidth)
 			diff := toolOutputDiffContentFromUnified(sty, meta.Diff, cappedWidth, opts.ExpandedContent)
 			return strings.Join([]string{header, "", errLine, "", diff}, "\n")
@@ -198,7 +198,7 @@ func (e *EditToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *
 	}
 
 	var params tools.EditParams
-	if err := json.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
 		return toolErrorContent(sty, &message.ToolResult{Content: "Invalid parameters"}, width)
 	}
 
@@ -217,7 +217,7 @@ func (e *EditToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *
 
 	// Get diff content from metadata.
 	var meta tools.EditResponseMetadata
-	if err := json.Unmarshal([]byte(opts.Result.Metadata), &meta); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.Result.Metadata), &meta); err != nil {
 		bodyWidth := width - toolBodyLeftPaddingTotal
 		body := sty.Tool.Body.Render(toolOutputPlainContent(sty, opts.Result.Content, bodyWidth, opts.ExpandedContent))
 		return joinToolParts(header, body)
@@ -273,7 +273,7 @@ func (m *MultiEditToolRenderContext) RenderTool(sty *styles.Styles, width int, o
 	}
 
 	var params tools.MultiEditParams
-	if err := json.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
 		return toolErrorContent(sty, &message.ToolResult{Content: "Invalid parameters"}, width)
 	}
 
@@ -297,7 +297,7 @@ func (m *MultiEditToolRenderContext) RenderTool(sty *styles.Styles, width int, o
 
 	// Get diff content from metadata.
 	var meta tools.MultiEditResponseMetadata
-	if err := json.Unmarshal([]byte(opts.Result.Metadata), &meta); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.Result.Metadata), &meta); err != nil {
 		bodyWidth := width - toolBodyLeftPaddingTotal
 		body := sty.Tool.Body.Render(toolOutputPlainContent(sty, opts.Result.Content, bodyWidth, opts.ExpandedContent))
 		return joinToolParts(header, body)
@@ -354,7 +354,7 @@ func (d *DownloadToolRenderContext) RenderTool(sty *styles.Styles, width int, op
 	}
 
 	var params tools.DownloadParams
-	if err := json.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
 		return toolErrorContent(sty, &message.ToolResult{Content: "Invalid parameters"}, cappedWidth)
 	}
 

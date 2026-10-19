@@ -35,6 +35,7 @@ import (
 	"charm.land/fantasy/providers/openrouter"
 	"charm.land/fantasy/providers/vercel"
 	"charm.land/lipgloss/v2"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/hyper"
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/agent/tools"
@@ -2821,7 +2822,7 @@ func titleProviderOptions(m Model) fantasy.ProviderOptions {
 	merged := map[string]any{}
 	data, err := json.Marshal(m.ModelCfg.ProviderOptions)
 	if err == nil {
-		err = json.Unmarshal(data, &merged)
+		err = sonic.Unmarshal(data, &merged)
 	}
 	if err != nil {
 		slog.Error("Could not marshal title provider options", "err", err)

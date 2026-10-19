@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"encoding/json"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charmbracelet/crush/internal/config"
@@ -107,7 +107,7 @@ func TestReconcileDispatchDeliveries(t *testing.T) {
 	stamped, err := c.messages.Get(t.Context(), card.ID)
 	require.NoError(t, err)
 	var terminal dispatch.DispatchResult
-	require.NoError(t, json.Unmarshal([]byte(stamped.ToolResults()[0].Metadata), &terminal))
+	require.NoError(t, sonic.Unmarshal([]byte(stamped.ToolResults()[0].Metadata), &terminal))
 	require.Equal(t, "d-alive", terminal.DispatchID)
 	require.Equal(t, dispatch.StatusCompleted, terminal.Status)
 	require.Equal(t, `{"dispatch_id":"d-alive","status":"running"}`, stamped.ToolResults()[0].Content, "the handle the model saw is untouched")

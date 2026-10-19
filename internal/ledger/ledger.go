@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/compaction"
 	"github.com/charmbracelet/crush/internal/db"
 )
@@ -197,10 +198,10 @@ func rowToEntry(row db.CompactionLedger) (compaction.Entry, error) {
 		Text:      row.Text,
 		Relevance: compaction.Relevance(row.Relevance),
 	}
-	if err := json.Unmarshal([]byte(row.Sources), &e.Sources); err != nil {
+	if err := sonic.Unmarshal([]byte(row.Sources), &e.Sources); err != nil {
 		return compaction.Entry{}, fmt.Errorf("ledger entry %s sources: %w", row.ID, err)
 	}
-	if err := json.Unmarshal([]byte(row.Retires), &e.Retires); err != nil {
+	if err := sonic.Unmarshal([]byte(row.Retires), &e.Retires); err != nil {
 		return compaction.Entry{}, fmt.Errorf("ledger entry %s retires: %w", row.ID, err)
 	}
 	return e, nil

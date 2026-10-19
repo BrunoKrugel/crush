@@ -13,8 +13,10 @@ import (
 	"testing"
 
 	"fmt"
+
 	"golang.org/x/oauth2"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/env"
 	"github.com/charmbracelet/crush/internal/oauth"
@@ -857,7 +859,7 @@ func TestCreateSession_Sessionless(t *testing.T) {
 				ID     any    `json:"id"`
 				Method string `json:"method"`
 			}
-			_ = json.Unmarshal(body, &req)
+			_ = sonic.Unmarshal(body, &req)
 
 			writeResult := func(result any) {
 				w.Header().Set("Content-Type", "application/json")

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charmbracelet/crush/internal/a2a"
@@ -78,10 +79,10 @@ func TestHarnessServesCardAndSendMessage(t *testing.T) {
 	// bare array the SDK marshals (CARD-STRUCT-001): the served card
 	// must carry the normalized {"list": [...]} shape.
 	var schemes map[string]map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(card.SecurityRequirements[0]["schemes"], &schemes))
+	require.NoError(t, sonic.Unmarshal(card.SecurityRequirements[0]["schemes"], &schemes))
 	for name, scopes := range schemes {
 		var list []string
-		require.NoError(t, json.Unmarshal(scopes["list"], &list),
+		require.NoError(t, sonic.Unmarshal(scopes["list"], &list),
 			"scheme %q scopes must be a StringList object (a list field), got %s", name, scopes["list"])
 	}
 	for _, iface := range card.SupportedInterfaces {
@@ -238,7 +239,7 @@ func TestWithDispatchContext(t *testing.T) {
 				Message map[string]any `json:"message"`
 			} `json:"params"`
 		}
-		require.NoError(t, json.Unmarshal(body, &out))
+		require.NoError(t, sonic.Unmarshal(body, &out))
 		return out.Params.Message["contextId"]
 	}
 
@@ -253,8 +254,8 @@ func TestWithDispatchContext(t *testing.T) {
 			require.Equal(t, sessionID, stampedContext(t, got))
 
 			var before, after map[string]any
-			require.NoError(t, json.Unmarshal([]byte(body), &before))
-			require.NoError(t, json.Unmarshal(got, &after))
+			require.NoError(t, sonic.Unmarshal([]byte(body), &before))
+			require.NoError(t, sonic.Unmarshal(got, &after))
 			before["params"].(map[string]any)["message"].(map[string]any)["contextId"] = sessionID
 			require.Equal(t, before, after, "only the contextId may change")
 		})

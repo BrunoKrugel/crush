@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/tidwall/sjson"
 )
 
@@ -174,14 +175,14 @@ func shallowMerge(base, patch string) (string, error) {
 	}
 	// Ensure base is an object so sjson has somewhere to write.
 	var baseAny any
-	if err := json.Unmarshal([]byte(base), &baseAny); err != nil {
+	if err := sonic.Unmarshal([]byte(base), &baseAny); err != nil {
 		return "", err
 	}
 	if _, ok := baseAny.(map[string]any); !ok {
 		return "", errNotObject("tool_input")
 	}
 	var patchMap map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(patch), &patchMap); err != nil {
+	if err := sonic.Unmarshal([]byte(patch), &patchMap); err != nil {
 		return "", errNotObject("updated_input")
 	}
 	out := base

@@ -1,9 +1,9 @@
 package config
 
 import (
-	"encoding/json"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -49,7 +49,7 @@ func TestOptionsDispatchMaxConcurrentFromJSON(t *testing.T) {
 	t.Parallel()
 
 	var cfg Config
-	require.NoError(t, json.Unmarshal([]byte(`{"options":{"dispatch":{"max_concurrent":2}}}`), &cfg))
+	require.NoError(t, sonic.Unmarshal([]byte(`{"options":{"dispatch":{"max_concurrent":2}}}`), &cfg))
 	require.NotNil(t, cfg.Options.Dispatch)
 	require.Equal(t, 2, *cfg.Options.Dispatch.MaxConcurrent)
 	require.Equal(t, 2, cfg.Options.GetDispatchMaxConcurrent())
@@ -113,7 +113,7 @@ func TestOptionsDispatchDefaultAgentFromJSON(t *testing.T) {
 	t.Parallel()
 
 	var cfg Config
-	require.NoError(t, json.Unmarshal([]byte(`{"options":{"dispatch":{"default_agent":"reviewer"}}}`), &cfg))
+	require.NoError(t, sonic.Unmarshal([]byte(`{"options":{"dispatch":{"default_agent":"reviewer"}}}`), &cfg))
 	require.NotNil(t, cfg.Options.Dispatch)
 	require.Equal(t, "reviewer", cfg.Options.Dispatch.DefaultAgent)
 	require.Equal(t, "reviewer", cfg.Options.GetDispatchDefaultAgent())
@@ -215,7 +215,7 @@ func TestValidateAgentToolsets(t *testing.T) {
 		var cfg Config
 		cfg.Options = &Options{}
 		if agentsJSON != "" {
-			require.NoError(t, json.Unmarshal([]byte(agentsJSON), &cfg.AgentDefinitions))
+			require.NoError(t, sonic.Unmarshal([]byte(agentsJSON), &cfg.AgentDefinitions))
 		}
 		cfg.SetupAgents()
 		return cfg.ValidateAgentToolsets()

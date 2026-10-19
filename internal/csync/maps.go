@@ -5,6 +5,8 @@ import (
 	"iter"
 	"maps"
 	"sync"
+
+	"github.com/bytedance/sonic"
 )
 
 // Map is a concurrent map implementation that provides thread-safe access.
@@ -158,12 +160,12 @@ func (Map[K, V]) JSONSchemaAlias() any { //nolint
 	return m
 }
 
-// UnmarshalJSON implements json.Unmarshaler.
+// UnmarshalJSON implements json.Unmarshaler; sonic dispatches through it.
 func (m *Map[K, V]) UnmarshalJSON(data []byte) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.inner = make(map[K]V)
-	return json.Unmarshal(data, &m.inner)
+	return sonic.Unmarshal(data, &m.inner)
 }
 
 // MarshalJSON implements json.Marshaler.

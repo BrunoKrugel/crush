@@ -13,6 +13,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/a2a"
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
@@ -155,7 +156,7 @@ func TestClientWorkspace_PermissionGrantMapping(t *testing.T) {
 				require.Equal(t, "/v1/workspaces/ws-1/permissions/grant", r.URL.Path)
 				body, err := io.ReadAll(r.Body)
 				require.NoError(t, err)
-				require.NoError(t, json.Unmarshal(body, &got))
+				require.NoError(t, sonic.Unmarshal(body, &got))
 				require.NoError(t, json.NewEncoder(w).Encode(proto.PermissionGrantResponse{Resolved: true}))
 			}))
 			defer srv.Close()

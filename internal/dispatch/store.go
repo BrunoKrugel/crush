@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/db"
 )
 
@@ -140,7 +141,7 @@ func (s *SQLiteRecordStore) UndeliveredTerminal() ([]UndeliveredDispatch, error)
 			continue
 		}
 		var result DispatchResult
-		if err := json.Unmarshal([]byte(row.ResultJson), &result); err != nil {
+		if err := sonic.Unmarshal([]byte(row.ResultJson), &result); err != nil {
 			return nil, fmt.Errorf("record decode %s: %w", row.DispatchID, err)
 		}
 		undelivered = append(undelivered, UndeliveredDispatch{
@@ -164,7 +165,7 @@ func (s *SQLiteRecordStore) SnapshotRecord(sessionID string) (DispatchResult, St
 		return DispatchResult{}, Status(row.Status), true
 	}
 	var result DispatchResult
-	if err := json.Unmarshal([]byte(row.ResultJson), &result); err != nil {
+	if err := sonic.Unmarshal([]byte(row.ResultJson), &result); err != nil {
 		return DispatchResult{}, "", false
 	}
 	return result, Status(row.Status), true

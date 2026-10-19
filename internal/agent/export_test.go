@@ -18,6 +18,7 @@ import (
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy"
 	"charm.land/fantasy/providers/openaicompat"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/dispatch"
@@ -353,7 +354,7 @@ func (h *DispatchHarness) ParentPrompts() []string {
 func (h *DispatchHarness) SetAgentDefinitions(t *testing.T, agents string) {
 	t.Helper()
 	var defs map[string]config.AgentDefinition
-	require.NoError(t, json.Unmarshal([]byte(agents), &defs))
+	require.NoError(t, sonic.Unmarshal([]byte(agents), &defs))
 	h.c.cfg.Config().AgentDefinitions = defs
 	require.NoError(t, h.c.cfg.Config().ValidateAgents(h.c.cfg.WorkingDir()))
 	h.c.cfg.Config().SetupAgents()

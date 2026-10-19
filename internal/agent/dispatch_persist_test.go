@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/message"
@@ -96,7 +97,7 @@ func TestRunDispatchStampsTerminalMetadataOnParentToolResult(t *testing.T) {
 	}, 10*time.Second, 100*time.Millisecond, "terminal Metadata never stamped on the parent tool result")
 
 	var terminal dispatch.DispatchResult
-	require.NoError(t, json.Unmarshal([]byte(persistedTerminalMetadata(t, env, msgID, "dispatch-tool-call")), &terminal))
+	require.NoError(t, sonic.Unmarshal([]byte(persistedTerminalMetadata(t, env, msgID, "dispatch-tool-call")), &terminal))
 	require.Equal(t, dispatch.StatusCompleted, terminal.Status)
 	require.Equal(t, decodeDispatchID(t, handleJSON), terminal.DispatchID)
 
@@ -115,7 +116,7 @@ func TestRunDispatchStampsTerminalMetadataOnParentToolResult(t *testing.T) {
 func decodeDispatchID(t *testing.T, handleJSON string) string {
 	t.Helper()
 	var handle dispatch.DispatchResult
-	require.NoError(t, json.Unmarshal([]byte(handleJSON), &handle))
+	require.NoError(t, sonic.Unmarshal([]byte(handleJSON), &handle))
 	return handle.DispatchID
 }
 

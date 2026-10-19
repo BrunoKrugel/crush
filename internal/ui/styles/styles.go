@@ -14,6 +14,7 @@ import (
 	"charm.land/glamour/v2/ansi"
 	"charm.land/lipgloss/v2"
 	"github.com/alecthomas/chroma/v2"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/ui/diffview"
 	"github.com/charmbracelet/crush/internal/ui/textarea"
 	uv "github.com/charmbracelet/ultraviolet"
@@ -791,7 +792,7 @@ func cloneStyleConfig(src ansi.StyleConfig) ansi.StyleConfig {
 		return src
 	}
 	var dst ansi.StyleConfig
-	if err := json.Unmarshal(data, &dst); err != nil {
+	if err := sonic.Unmarshal(data, &dst); err != nil {
 		slog.Error("Failed to unmarshal markdown styles for theme preview", "error", err)
 		return src
 	}

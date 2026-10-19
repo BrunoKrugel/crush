@@ -16,6 +16,7 @@ import (
 	"time"
 
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
+	"github.com/bytedance/sonic"
 
 	"github.com/charmbracelet/crush/internal/a2a"
 )
@@ -180,15 +181,15 @@ func stampDispatchContext(next http.Handler, contextID string) http.Handler {
 // unchanged.
 func withDispatchContext(body []byte, contextID string) []byte {
 	var envelope map[string]json.RawMessage
-	if json.Unmarshal(body, &envelope) != nil {
+	if sonic.Unmarshal(body, &envelope) != nil {
 		return body
 	}
 	var params map[string]json.RawMessage
-	if json.Unmarshal(envelope["params"], &params) != nil {
+	if sonic.Unmarshal(envelope["params"], &params) != nil {
 		return body
 	}
 	var message map[string]json.RawMessage
-	if json.Unmarshal(params["message"], &message) != nil || message == nil {
+	if sonic.Unmarshal(params["message"], &message) != nil || message == nil {
 		return body
 	}
 	if setField(message["taskId"]) || setField(message["contextId"]) {
@@ -217,7 +218,7 @@ func withDispatchContext(body []byte, contextID string) []byte {
 // absent field, null and "" are unset.
 func setField(raw json.RawMessage) bool {
 	var s string
-	if err := json.Unmarshal(raw, &s); err != nil {
+	if err := sonic.Unmarshal(raw, &s); err != nil {
 		return len(raw) > 0
 	}
 	return s != ""
@@ -286,7 +287,7 @@ func normalizeCardJSON(card *a2aspec.AgentCard) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(encoded, &raw); err != nil {
+	if err := sonic.Unmarshal(encoded, &raw); err != nil {
 		return nil, err
 	}
 	requirements, ok := raw["securityRequirements"].([]any)

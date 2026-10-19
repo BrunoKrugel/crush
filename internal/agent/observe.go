@@ -2,13 +2,13 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/compaction"
 	"github.com/charmbracelet/crush/internal/log"
@@ -238,7 +238,7 @@ func parseObservations(raw string, known map[string]message.Message) ([]compacti
 		return nil, nil
 	}
 	var parsed []observation
-	if err := json.Unmarshal([]byte(body), &parsed); err != nil {
+	if err := sonic.Unmarshal([]byte(body), &parsed); err != nil {
 		return nil, fmt.Errorf("observe: unreadable entries: %w", err)
 	}
 

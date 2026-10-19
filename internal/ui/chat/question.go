@@ -1,11 +1,11 @@
 package chat
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/ui/styles"
@@ -40,7 +40,7 @@ func (q *QuestionToolRenderContext) RenderTool(sty *styles.Styles, width int, op
 	}
 
 	var params tools.QuestionParams
-	if err := json.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
 		return toolErrorContent(sty, &message.ToolResult{Content: "Invalid parameters"}, cappedWidth)
 	}
 

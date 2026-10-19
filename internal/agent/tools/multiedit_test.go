@@ -2,13 +2,13 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/history"
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
@@ -278,7 +278,7 @@ func TestProcessMultiEditExistingFilePartialFailure(t *testing.T) {
 	require.Equal(t, "one\nTWO\nthree\n", string(content))
 
 	var meta MultiEditResponseMetadata
-	require.NoError(t, json.Unmarshal([]byte(resp.Metadata), &meta))
+	require.NoError(t, sonic.Unmarshal([]byte(resp.Metadata), &meta))
 	require.Equal(t, 1, meta.EditsApplied)
 	require.Len(t, meta.EditsFailed, 1)
 	require.Equal(t, 2, meta.EditsFailed[0].Index)
@@ -318,7 +318,7 @@ func TestProcessMultiEditWithCreationPartialFailure(t *testing.T) {
 	require.Equal(t, "one\nTWO\nthree\n", string(content))
 
 	var meta MultiEditResponseMetadata
-	require.NoError(t, json.Unmarshal([]byte(resp.Metadata), &meta))
+	require.NoError(t, sonic.Unmarshal([]byte(resp.Metadata), &meta))
 	require.Equal(t, 2, meta.EditsApplied)
 	require.Len(t, meta.EditsFailed, 1)
 	require.Equal(t, 3, meta.EditsFailed[0].Index)

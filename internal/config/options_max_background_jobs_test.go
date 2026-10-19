@@ -1,9 +1,9 @@
 package config
 
 import (
-	"encoding/json"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,6 +34,6 @@ func TestOptionsMaxBackgroundJobsFromJSON(t *testing.T) {
 	t.Parallel()
 
 	var cfg Config
-	require.NoError(t, json.Unmarshal([]byte(`{"options":{"max_background_jobs":10}}`), &cfg))
+	require.NoError(t, sonic.Unmarshal([]byte(`{"options":{"max_background_jobs":10}}`), &cfg))
 	require.Equal(t, 10, cfg.Options.GetMaxBackgroundJobs())
 }

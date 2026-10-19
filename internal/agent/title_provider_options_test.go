@@ -6,6 +6,7 @@ import (
 
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy/providers/openaicompat"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/stretchr/testify/require"
 )
@@ -44,7 +45,7 @@ func TestTitleProviderOptions(t *testing.T) {
 		require.NoError(t, err)
 
 		var extra map[string]any
-		require.NoError(t, json.Unmarshal(body, &extra))
+		require.NoError(t, sonic.Unmarshal(body, &extra))
 		kwargs, ok := extra["chat_template_kwargs"].(map[string]any)
 		require.True(t, ok, "chat_template_kwargs should survive the round trip: %v", extra)
 		require.Equal(t, false, kwargs["enable_thinking"])

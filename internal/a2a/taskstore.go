@@ -14,6 +14,7 @@ import (
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
 	"github.com/a2aproject/a2a-go/v2/a2asrv/taskstore"
+	"github.com/bytedance/sonic"
 
 	"github.com/charmbracelet/crush/internal/db"
 )
@@ -280,7 +281,7 @@ func listStateFilter(status a2aspec.TaskState) string {
 // result is always a private copy, so callers may mutate it freely.
 func decodeStoredTask(data string) (*a2aspec.Task, error) {
 	var task a2aspec.Task
-	if err := json.Unmarshal([]byte(data), &task); err != nil {
+	if err := sonic.Unmarshal([]byte(data), &task); err != nil {
 		return nil, fmt.Errorf("taskstore decode failed: %w", err)
 	}
 	return &task, nil

@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/message"
@@ -166,7 +167,7 @@ func (c *Client) SubscribeEvents(ctx context.Context, id string) (<-chan any, er
 			data = bytes.TrimSpace(data)
 
 			var p pubsub.Payload
-			if err := json.Unmarshal(data, &p); err != nil {
+			if err := sonic.Unmarshal(data, &p); err != nil {
 				slog.Error("Unmarshaling event envelope", "error", err)
 				continue
 			}
@@ -174,85 +175,85 @@ func (c *Client) SubscribeEvents(ctx context.Context, id string) (<-chan any, er
 			switch p.Type {
 			case pubsub.PayloadTypeLSPEvent:
 				var e pubsub.Event[proto.LSPEvent]
-				_ = json.Unmarshal(p.Payload, &e)
+				_ = sonic.Unmarshal(p.Payload, &e)
 				if !sendEvent(ctx, events, e) {
 					return
 				}
 			case pubsub.PayloadTypeMCPEvent:
 				var e pubsub.Event[proto.MCPEvent]
-				_ = json.Unmarshal(p.Payload, &e)
+				_ = sonic.Unmarshal(p.Payload, &e)
 				if !sendEvent(ctx, events, e) {
 					return
 				}
 			case pubsub.PayloadTypePermissionRequest:
 				var e pubsub.Event[proto.PermissionRequest]
-				_ = json.Unmarshal(p.Payload, &e)
+				_ = sonic.Unmarshal(p.Payload, &e)
 				if !sendEvent(ctx, events, e) {
 					return
 				}
 			case pubsub.PayloadTypePermissionNotification:
 				var e pubsub.Event[proto.PermissionNotification]
-				_ = json.Unmarshal(p.Payload, &e)
+				_ = sonic.Unmarshal(p.Payload, &e)
 				if !sendEvent(ctx, events, e) {
 					return
 				}
 			case pubsub.PayloadTypeQuestionRequest:
 				var e pubsub.Event[proto.QuestionRequest]
-				_ = json.Unmarshal(p.Payload, &e)
+				_ = sonic.Unmarshal(p.Payload, &e)
 				if !sendEvent(ctx, events, e) {
 					return
 				}
 			case pubsub.PayloadTypeQuestionNotification:
 				var e pubsub.Event[proto.QuestionNotification]
-				_ = json.Unmarshal(p.Payload, &e)
+				_ = sonic.Unmarshal(p.Payload, &e)
 				if !sendEvent(ctx, events, e) {
 					return
 				}
 			case pubsub.PayloadTypeMessage:
 				var e pubsub.Event[proto.Message]
-				_ = json.Unmarshal(p.Payload, &e)
+				_ = sonic.Unmarshal(p.Payload, &e)
 				if !sendEvent(ctx, events, e) {
 					return
 				}
 			case pubsub.PayloadTypeSession:
 				var e pubsub.Event[proto.Session]
-				_ = json.Unmarshal(p.Payload, &e)
+				_ = sonic.Unmarshal(p.Payload, &e)
 				if !sendEvent(ctx, events, e) {
 					return
 				}
 			case pubsub.PayloadTypeFile:
 				var e pubsub.Event[proto.File]
-				_ = json.Unmarshal(p.Payload, &e)
+				_ = sonic.Unmarshal(p.Payload, &e)
 				if !sendEvent(ctx, events, e) {
 					return
 				}
 			case pubsub.PayloadTypeAgentEvent:
 				var e pubsub.Event[proto.AgentEvent]
-				_ = json.Unmarshal(p.Payload, &e)
+				_ = sonic.Unmarshal(p.Payload, &e)
 				if !sendEvent(ctx, events, e) {
 					return
 				}
 			case pubsub.PayloadTypeConfigChanged:
 				var e pubsub.Event[proto.ConfigChanged]
-				_ = json.Unmarshal(p.Payload, &e)
+				_ = sonic.Unmarshal(p.Payload, &e)
 				if !sendEvent(ctx, events, e) {
 					return
 				}
 			case pubsub.PayloadTypeSkillsEvent:
 				var e pubsub.Event[proto.SkillsEvent]
-				_ = json.Unmarshal(p.Payload, &e)
+				_ = sonic.Unmarshal(p.Payload, &e)
 				if !sendEvent(ctx, events, e) {
 					return
 				}
 			case pubsub.PayloadTypeRunComplete:
 				var e pubsub.Event[proto.RunComplete]
-				_ = json.Unmarshal(p.Payload, &e)
+				_ = sonic.Unmarshal(p.Payload, &e)
 				if !sendEvent(ctx, events, e) {
 					return
 				}
 			case pubsub.PayloadTypeUpdateAvailable:
 				var e pubsub.Event[proto.UpdateAvailable]
-				_ = json.Unmarshal(p.Payload, &e)
+				_ = sonic.Unmarshal(p.Payload, &e)
 				if !sendEvent(ctx, events, e) {
 					return
 				}

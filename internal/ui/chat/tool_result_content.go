@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/diffdetect"
 	"github.com/charmbracelet/crush/internal/stringext"
 	"github.com/charmbracelet/crush/internal/ui/styles"
@@ -42,7 +43,7 @@ func looksLikeMarkdown(content string) bool {
 
 func renderToolResultTextContent(sty *styles.Styles, content string, widths toolResultContentWidths, expanded bool) string {
 	var result json.RawMessage
-	if err := json.Unmarshal([]byte(content), &result); err == nil {
+	if err := sonic.Unmarshal([]byte(content), &result); err == nil {
 		prettyResult, err := json.MarshalIndent(result, "", "  ")
 		if err == nil {
 			return sty.Tool.Body.Render(toolOutputCodeContent(sty, "result.json", string(prettyResult), 0, widths.Body, expanded))

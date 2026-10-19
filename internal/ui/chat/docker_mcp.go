@@ -8,6 +8,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/stringext"
@@ -39,7 +40,7 @@ func (d *DockerMCPToolRenderContext) RenderTool(sty *styles.Styles, width int, o
 	cappedWidth := cappedMessageWidth(width)
 
 	var params map[string]any
-	if err := json.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
 		params = make(map[string]any)
 	}
 
@@ -168,7 +169,7 @@ func (d *DockerMCPToolRenderContext) renderMCPServers(sty *styles.Styles, opts *
 	}
 
 	var result FindMCPResponse
-	if err := json.Unmarshal([]byte(opts.Result.Content), &result); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.Result.Content), &result); err != nil {
 		return toolOutputPlainContent(sty, opts.Result.Content, width-toolBodyLeftPaddingTotal, opts.ExpandedContent)
 	}
 

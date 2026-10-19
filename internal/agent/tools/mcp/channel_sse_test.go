@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
 )
@@ -50,7 +51,7 @@ func newStreamableChannelServer(t *testing.T, name string, doorbell func(w http.
 				ID     json.RawMessage `json:"id"`
 				Method string          `json:"method"`
 			}
-			require.NoError(t, json.Unmarshal(body, &req))
+			require.NoError(t, sonic.Unmarshal(body, &req))
 			id := string(bytes.Trim(req.ID, "null"))
 			if id == "" {
 				id = "1"

@@ -219,5 +219,3 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
-
-replace charm.land/catwalk => github.com/BrunoKrugel/catwalk v0.0.0-20261019164334-3cb298551b78

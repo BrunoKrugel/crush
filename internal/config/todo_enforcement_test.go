@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -188,7 +189,7 @@ func TestTodoEnforcementConfigFromJSON(t *testing.T) {
 	// Duration strings and "off" load; the values resolve to the same
 	// windows as the legacy integer seconds.
 	var fromString TodoEnforcementConfig
-	require.NoError(t, json.Unmarshal([]byte(`{
+	require.NoError(t, sonic.Unmarshal([]byte(`{
 		"stall_window": "5m",
 		"hard_timeout": "1h30m"
 	}`), &fromString))
@@ -198,7 +199,7 @@ func TestTodoEnforcementConfigFromJSON(t *testing.T) {
 	assert.Equal(t, 90*time.Minute, time.Duration(*fromString.HardTimeout))
 
 	var fromOff TodoEnforcementConfig
-	require.NoError(t, json.Unmarshal([]byte(`{
+	require.NoError(t, sonic.Unmarshal([]byte(`{
 		"stall_window": "off",
 		"hard_timeout": "off",
 		"nudge_threshold": "off",
@@ -215,7 +216,7 @@ func TestTodoEnforcementConfigFromJSON(t *testing.T) {
 
 	// Legacy integer seconds still load, unchanged.
 	var fromLegacy TodoEnforcementConfig
-	require.NoError(t, json.Unmarshal([]byte(`{
+	require.NoError(t, sonic.Unmarshal([]byte(`{
 		"stall_window": 300,
 		"hard_timeout": 1800,
 		"nudge_threshold": 8,
@@ -240,7 +241,7 @@ func TestTodoEnforcementConfigFromJSON(t *testing.T) {
 	// Negative numbers still parse from bytes; the load-time Validate
 	// is what rejects them (see TestTodoEnforcementValidate).
 	var fromNegative TodoEnforcementConfig
-	require.NoError(t, json.Unmarshal([]byte(`{"hard_timeout": -1800}`), &fromNegative))
+	require.NoError(t, sonic.Unmarshal([]byte(`{"hard_timeout": -1800}`), &fromNegative))
 	require.Error(t, fromNegative.Validate("options.todo_enforcement"))
 
 	invalidDurations := []string{
@@ -249,7 +250,7 @@ func TestTodoEnforcementConfigFromJSON(t *testing.T) {
 	}
 	for _, raw := range invalidDurations {
 		var cfg TodoEnforcementConfig
-		err := json.Unmarshal([]byte(raw), &cfg)
+		err := sonic.Unmarshal([]byte(raw), &cfg)
 		require.Error(t, err, raw)
 		assert.Contains(t, err.Error(), "invalid duration", raw)
 	}
@@ -261,7 +262,7 @@ func TestTodoEnforcementConfigFromJSON(t *testing.T) {
 	}
 	for _, raw := range invalidCounts {
 		var cfg TodoEnforcementConfig
-		err := json.Unmarshal([]byte(raw), &cfg)
+		err := sonic.Unmarshal([]byte(raw), &cfg)
 		require.Error(t, err, raw)
 		assert.True(t,
 			strings.Contains(err.Error(), "want an integer") || strings.Contains(err.Error(), "invalid value"),
@@ -302,12 +303,12 @@ func TestTodoEnforcementInactivityTimeoutFromJSON(t *testing.T) {
 	t.Parallel()
 
 	var cfg Config
-	require.NoError(t, json.Unmarshal([]byte(`{"options":{"todo_enforcement":{"inactivity_timeout":900}}}`), &cfg))
+	require.NoError(t, sonic.Unmarshal([]byte(`{"options":{"todo_enforcement":{"inactivity_timeout":900}}}`), &cfg))
 	require.NotNil(t, cfg.Options.TodoEnforcement)
 	require.Equal(t, 900, *cfg.Options.TodoEnforcement.InactivityTimeout)
 	assert.Equal(t, 15*time.Minute, ResolveTodoEnforcement(cfg.Options.TodoEnforcement, nil).InactivityTimeout)
 
 	var bare Config
-	require.NoError(t, json.Unmarshal([]byte(`{"options":{"todo_enforcement":{"stall_window":300}}}`), &bare))
+	require.NoError(t, sonic.Unmarshal([]byte(`{"options":{"todo_enforcement":{"stall_window":300}}}`), &bare))
 	assert.Zero(t, ResolveTodoEnforcement(bare.Options.TodoEnforcement, nil).InactivityTimeout, "the backstop stays off unless the key is set")
 }

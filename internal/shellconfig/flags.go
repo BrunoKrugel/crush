@@ -1,13 +1,14 @@
 package shellconfig
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bytedance/sonic"
 )
 
 // flagKind is the value type a flag parses from the command line.
@@ -188,7 +189,7 @@ func parseFlagValue(spec flagSpec, args []string, i int) (any, int, error) {
 			return nil, 0, err
 		}
 		var object map[string]any
-		if err := json.Unmarshal([]byte(v), &object); err != nil || object == nil {
+		if err := sonic.Unmarshal([]byte(v), &object); err != nil || object == nil {
 			return nil, 0, fmt.Errorf("%s: --%s expects a JSON object, got %q", args[0], name, v)
 		}
 		return object, i + 2, nil
@@ -199,7 +200,7 @@ func parseFlagValue(spec flagSpec, args []string, i int) (any, int, error) {
 			return nil, 0, err
 		}
 		var parsed any
-		if err := json.Unmarshal([]byte(v), &parsed); err != nil {
+		if err := sonic.Unmarshal([]byte(v), &parsed); err != nil {
 			return nil, 0, fmt.Errorf("%s: --%s expects valid JSON, got %q: %s", args[0], name, v, err)
 		}
 		return parsed, i + 2, nil

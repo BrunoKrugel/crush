@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 )
 
@@ -44,7 +45,7 @@ func LoadThemeFile(path string) (*ThemeFile, error) {
 	}
 
 	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
+	if err := sonic.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("parse theme file: %w", err)
 	}
 
@@ -55,7 +56,7 @@ func LoadThemeFile(path string) (*ThemeFile, error) {
 	}
 
 	var tf ThemeFile
-	if err := json.Unmarshal(data, &tf); err != nil {
+	if err := sonic.Unmarshal(data, &tf); err != nil {
 		return nil, fmt.Errorf("decode theme file: %w", err)
 	}
 

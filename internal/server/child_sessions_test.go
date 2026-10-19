@@ -2,11 +2,11 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/backend"
 	"github.com/charmbracelet/crush/internal/proto"
@@ -48,7 +48,7 @@ func TestChildSessionsRouteEmptyWorkspace(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var got []proto.Session
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.NoError(t, sonic.Unmarshal(rec.Body.Bytes(), &got))
 	require.NotNil(t, got)
 	require.Empty(t, got)
 }

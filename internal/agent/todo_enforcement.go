@@ -2,13 +2,13 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"slices"
 	"sync"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/dispatch"
@@ -113,7 +113,7 @@ func isReadOnlyBashInput(input string) bool {
 	var params struct {
 		Command string `json:"command"`
 	}
-	if err := json.Unmarshal([]byte(input), &params); err != nil {
+	if err := sonic.Unmarshal([]byte(input), &params); err != nil {
 		return false
 	}
 	return tools.IsReadOnlyCommand(params.Command)

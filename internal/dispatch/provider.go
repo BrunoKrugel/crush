@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/lock"
 	"github.com/google/uuid"
 )
@@ -428,7 +429,7 @@ func (p *GitWorktreeProvider) updateOwnerMarker(id string, mutate func(*ownerMar
 		return fmt.Errorf("read owner marker for %s: %w", e.Branch, err)
 	}
 	var m ownerMarker
-	if err := json.Unmarshal(data, &m); err != nil {
+	if err := sonic.Unmarshal(data, &m); err != nil {
 		return fmt.Errorf("parse owner marker for %s: %w", e.Branch, err)
 	}
 	mutate(&m)
@@ -685,7 +686,7 @@ func (p *GitWorktreeProvider) reconcileStartup(ctx context.Context) {
 			continue
 		}
 		var m ownerMarker
-		if err := json.Unmarshal(data, &m); err != nil {
+		if err := sonic.Unmarshal(data, &m); err != nil {
 			slog.Debug("Skipping malformed dispatch owner marker", "name", name, "error", err)
 			continue
 		}

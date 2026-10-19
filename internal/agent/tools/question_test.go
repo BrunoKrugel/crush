@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/question"
 	"github.com/stretchr/testify/require"
 )
@@ -12,7 +13,7 @@ func TestQuestionParamsUnmarshalJSON_NativeArray(t *testing.T) {
 	t.Parallel()
 	input := `{"questions": [{"type": "yes_no", "question": "OK?", "description": "test"}]}`
 	var p QuestionParams
-	require.NoError(t, json.Unmarshal([]byte(input), &p))
+	require.NoError(t, sonic.Unmarshal([]byte(input), &p))
 	require.Len(t, p.Questions, 1)
 	require.Equal(t, "OK?", p.Questions[0].Question)
 }
@@ -24,7 +25,7 @@ func TestQuestionParamsUnmarshalJSON_StringEncodedArray(t *testing.T) {
 	encoded, _ := json.Marshal(inner)
 	input := `{"questions": ` + string(encoded) + `}`
 	var p QuestionParams
-	require.NoError(t, json.Unmarshal([]byte(input), &p))
+	require.NoError(t, sonic.Unmarshal([]byte(input), &p))
 	require.Len(t, p.Questions, 1)
 	require.Equal(t, "OK?", p.Questions[0].Question)
 }
@@ -35,7 +36,7 @@ func TestQuestionParamsUnmarshalJSON_StringEncodedWithWhitespace(t *testing.T) {
 	encoded, _ := json.Marshal(inner)
 	input := `{"questions": ` + string(encoded) + `, "confirm_title": "Go?"}`
 	var p QuestionParams
-	require.NoError(t, json.Unmarshal([]byte(input), &p))
+	require.NoError(t, sonic.Unmarshal([]byte(input), &p))
 	require.Len(t, p.Questions, 1)
 	require.Equal(t, "Pick", p.Questions[0].Question)
 	require.Equal(t, "Go?", p.ConfirmTitle)
@@ -46,7 +47,7 @@ func TestQuestionParamsUnmarshalJSON_InvalidString(t *testing.T) {
 	encoded, _ := json.Marshal("not valid json")
 	input := `{"questions": ` + string(encoded) + `}`
 	var p QuestionParams
-	require.Error(t, json.Unmarshal([]byte(input), &p))
+	require.Error(t, sonic.Unmarshal([]byte(input), &p))
 }
 
 func TestFormatAnswer_MultiChoiceWithFillIn(t *testing.T) {

@@ -17,6 +17,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/bytedance/sonic"
 )
 
 // maxIndexEventBytes bounds one index event on the wire. A snapshot
@@ -156,7 +158,7 @@ func readIndexEvents(body io.Reader, emit func(AgentIndexEvent) bool) error {
 				continue
 			}
 			var ev AgentIndexEvent
-			err := json.Unmarshal(data.Bytes(), &ev)
+			err := sonic.Unmarshal(data.Bytes(), &ev)
 			data.Reset()
 			if err != nil {
 				return fmt.Errorf("a2a: agent index event: %w", err)

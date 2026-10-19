@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/message"
 
 	"github.com/charmbracelet/crush/internal/ui/styles"
@@ -303,7 +304,7 @@ func TestRepairA2UIButtonsSynthesizesChildText(t *testing.T) {
 			Components []map[string]any `json:"components"`
 		} `json:"updateComponents"`
 	}
-	require.NoError(t, json.Unmarshal([]byte(body), &msg))
+	require.NoError(t, sonic.Unmarshal([]byte(body), &msg))
 
 	comps := msg.UpdateComponents.Components
 	require.Len(t, comps, 2, "a Text component must be added for the label")

@@ -2,7 +2,6 @@ package dispatch
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/lock"
 )
 
@@ -184,7 +184,7 @@ func readOwnerMarker(root *os.Root, branch string) (ownerMarker, bool, error) {
 		}
 		return m, false, fmt.Errorf("read owner marker for %s: %w", branch, err)
 	}
-	if err := json.Unmarshal(data, &m); err != nil {
+	if err := sonic.Unmarshal(data, &m); err != nil {
 		return m, false, nil
 	}
 	return m, true, nil

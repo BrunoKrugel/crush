@@ -27,6 +27,7 @@ import (
 	"github.com/a2aproject/a2a-go/v2/a2asrv/eventqueue"
 	"github.com/a2aproject/a2a-go/v2/a2asrv/taskstore"
 	"github.com/a2aproject/a2a-go/v2/errordetails"
+	"github.com/bytedance/sonic"
 
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/config"
@@ -1082,7 +1083,7 @@ func writeVersionNotSupported(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ID json.RawMessage `json:"id"`
 		}
-		if json.Unmarshal(body, &req) == nil && len(req.ID) > 0 {
+		if sonic.Unmarshal(body, &req) == nil && len(req.ID) > 0 {
 			id = req.ID
 		}
 		r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(body), r.Body))

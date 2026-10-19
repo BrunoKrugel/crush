@@ -1,8 +1,7 @@
 package chat
 
 import (
-	"encoding/json"
-
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/ui/styles"
@@ -36,7 +35,7 @@ func (r *DefinitionToolRenderContext) RenderTool(sty *styles.Styles, width int, 
 	}
 
 	var params tools.DefinitionParams
-	_ = json.Unmarshal([]byte(opts.ToolCall.Input), &params)
+	_ = sonic.Unmarshal([]byte(opts.ToolCall.Input), &params)
 
 	header := toolHeader(sty, opts.Status, "Find Definition", cappedWidth, opts, params.Symbol)
 	if opts.Compact {
@@ -53,7 +52,7 @@ func (r *DefinitionToolRenderContext) RenderTool(sty *styles.Styles, width int, 
 
 	// Try to render code with syntax highlighting using metadata.
 	var meta tools.DefinitionResponseMetadata
-	if err := json.Unmarshal([]byte(opts.Result.Metadata), &meta); err == nil && meta.Content != "" {
+	if err := sonic.Unmarshal([]byte(opts.Result.Metadata), &meta); err == nil && meta.Content != "" {
 		body := toolOutputCodeContent(sty, meta.FilePath, meta.Content, 0, cappedWidth, opts.ExpandedContent)
 		return joinToolParts(header, body)
 	}

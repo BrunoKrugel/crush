@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/stretchr/testify/require"
@@ -219,7 +220,7 @@ func TestPermissionRequestParamsTypeAssertable(t *testing.T) {
 			require.NoError(t, err)
 
 			var inbound proto.PermissionRequest
-			require.NoError(t, json.Unmarshal(data, &inbound))
+			require.NoError(t, sonic.Unmarshal(data, &inbound))
 
 			tc.assert(t, inbound.Params)
 		})

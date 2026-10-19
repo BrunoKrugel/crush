@@ -3,7 +3,6 @@ package a2a
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -16,6 +15,7 @@ import (
 
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2aclient"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charmbracelet/crush/internal/agent"
@@ -1148,7 +1148,7 @@ func jsonrpcRequestMethod(req *http.Request) string {
 	var envelope struct {
 		Method string `json:"method"`
 	}
-	_ = json.Unmarshal(body, &envelope)
+	_ = sonic.Unmarshal(body, &envelope)
 	req.Body = io.NopCloser(bytes.NewReader(body))
 	req.ContentLength = int64(len(body))
 	return envelope.Method

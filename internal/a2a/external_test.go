@@ -22,6 +22,7 @@ import (
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2aclient"
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charmbracelet/crush/internal/agent"
@@ -161,7 +162,7 @@ func newExternalServer(t *testing.T, scenario externalScenario) (*externalServer
 			var call struct {
 				Method string `json:"method"`
 			}
-			if json.Unmarshal(body, &call) == nil {
+			if sonic.Unmarshal(body, &call) == nil {
 				rec.method = call.Method
 			}
 		}

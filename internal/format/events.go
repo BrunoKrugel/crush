@@ -1,12 +1,12 @@
 package format
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/x/exp/charmtone"
 )
 
@@ -156,7 +156,7 @@ func briefToolInput(toolName, inputJSON string) string {
 
 	// Try to parse as a generic map first.
 	var raw map[string]any
-	if err := json.Unmarshal([]byte(inputJSON), &raw); err != nil {
+	if err := sonic.Unmarshal([]byte(inputJSON), &raw); err != nil {
 		return truncate(strings.TrimSpace(inputJSON), 60)
 	}
 

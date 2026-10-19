@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/shell"
 	"github.com/tidwall/gjson"
 )
@@ -105,7 +106,7 @@ func parseStdout(stdout string) HookResult {
 	}
 
 	var raw map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(stdout), &raw); err != nil {
+	if err := sonic.Unmarshal([]byte(stdout), &raw); err != nil {
 		return HookResult{Decision: DecisionNone}
 	}
 
@@ -122,7 +123,7 @@ func parseStdout(stdout string) HookResult {
 		Context      json.RawMessage `json:"context"`
 		UpdatedInput json.RawMessage `json:"updated_input"`
 	}
-	if err := json.Unmarshal([]byte(stdout), &parsed); err != nil {
+	if err := sonic.Unmarshal([]byte(stdout), &parsed); err != nil {
 		return HookResult{Decision: DecisionNone}
 	}
 
@@ -153,7 +154,7 @@ func parseContext(raw json.RawMessage) string {
 	// String form.
 	if raw[0] == '"' {
 		var s string
-		if err := json.Unmarshal(raw, &s); err == nil {
+		if err := sonic.Unmarshal(raw, &s); err == nil {
 			return s
 		}
 		return ""
@@ -161,7 +162,7 @@ func parseContext(raw json.RawMessage) string {
 	// Array form.
 	if raw[0] == '[' {
 		var items []string
-		if err := json.Unmarshal(raw, &items); err != nil {
+		if err := sonic.Unmarshal(raw, &items); err != nil {
 			return ""
 		}
 		out := items[:0]
@@ -184,7 +185,7 @@ func parseClaudeCodeOutput(data json.RawMessage) HookResult {
 		UpdatedInput             json.RawMessage `json:"updatedInput"`
 		AdditionalContext        string          `json:"additionalContext"`
 	}
-	if err := json.Unmarshal(data, &hso); err != nil {
+	if err := sonic.Unmarshal(data, &hso); err != nil {
 		return HookResult{Decision: DecisionNone}
 	}
 
@@ -212,7 +213,7 @@ func rawToString(raw json.RawMessage) string {
 	// If it's a JSON string, unwrap it.
 	if raw[0] == '"' {
 		var s string
-		if err := json.Unmarshal(raw, &s); err == nil {
+		if err := sonic.Unmarshal(raw, &s); err == nil {
 			return s
 		}
 	}

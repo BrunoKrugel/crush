@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"charm.land/catwalk/pkg/catwalk"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/oauth"
 	"github.com/stretchr/testify/require"
@@ -46,7 +47,7 @@ func TestSetProviderAPIKeyXAIIsEitherOr(t *testing.T) {
 		// SetConfigFields auto-reloads from configPath, so any state the
 		// assertions expect to survive must be on disk.
 		providers := csync.NewMap[string, ProviderConfig]()
-		require.NoError(t, json.Unmarshal([]byte(initialConfig), &struct {
+		require.NoError(t, sonic.Unmarshal([]byte(initialConfig), &struct {
 			Providers *csync.Map[string, ProviderConfig] `json:"providers"`
 		}{Providers: providers}))
 

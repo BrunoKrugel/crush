@@ -21,6 +21,7 @@ import (
 
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charmbracelet/crush/internal/agent"
@@ -851,7 +852,7 @@ func TestHostRejectsUnsupportedVersion(t *testing.T) {
 			Data    []map[string]any `json:"data"`
 		} `json:"error"`
 	}
-	require.NoError(t, json.Unmarshal([]byte(body), &rpcResp))
+	require.NoError(t, sonic.Unmarshal([]byte(body), &rpcResp))
 	require.Equal(t, -32009, rpcResp.Error.Code)
 	require.NotEmpty(t, rpcResp.Error.Message)
 	require.Equal(t, json.RawMessage("1"), rpcResp.ID, "the envelope echoes the request id")

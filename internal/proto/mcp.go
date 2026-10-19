@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/bytedance/sonic"
 )
 
 // MCPState represents the current state of an MCP client.
@@ -114,7 +116,7 @@ func (e MCPEvent) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON implements the [json.Unmarshaler] interface.
+// UnmarshalJSON implements the [sonic.Unmarshaler] interface.
 func (e *MCPEvent) UnmarshalJSON(data []byte) error {
 	type Alias MCPEvent
 	aux := &struct {
@@ -123,7 +125,7 @@ func (e *MCPEvent) UnmarshalJSON(data []byte) error {
 	}{
 		Alias: Alias(*e),
 	}
-	if err := json.Unmarshal(data, &aux); err != nil {
+	if err := sonic.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 	*e = MCPEvent(aux.Alias)
@@ -184,7 +186,7 @@ func (i MCPClientInfo) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON implements the [json.Unmarshaler] interface.
+// UnmarshalJSON implements the [sonic.Unmarshaler] interface.
 func (i *MCPClientInfo) UnmarshalJSON(data []byte) error {
 	type Alias MCPClientInfo
 	aux := &struct {
@@ -193,7 +195,7 @@ func (i *MCPClientInfo) UnmarshalJSON(data []byte) error {
 	}{
 		Alias: Alias(*i),
 	}
-	if err := json.Unmarshal(data, &aux); err != nil {
+	if err := sonic.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 	*i = MCPClientInfo(aux.Alias)

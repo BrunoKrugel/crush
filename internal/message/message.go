@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/db"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/google/uuid"
@@ -674,7 +675,7 @@ func unmarshalParts(data []byte) ([]ContentPart, error) {
 	// One pass gets every type tag and its still-encoded payload. Splitting
 	// into []json.RawMessage first would walk the same bytes twice.
 	var wrapped []rawPartWrapper
-	if err := json.Unmarshal(data, &wrapped); err != nil {
+	if err := sonic.Unmarshal(data, &wrapped); err != nil {
 		return nil, err
 	}
 
@@ -716,7 +717,7 @@ func unmarshalPart(typ partType, data json.RawMessage) (ContentPart, error) {
 
 func decodePart[T ContentPart](data json.RawMessage) (ContentPart, error) {
 	var part T
-	if err := json.Unmarshal(data, &part); err != nil {
+	if err := sonic.Unmarshal(data, &part); err != nil {
 		return nil, err
 	}
 	return part, nil

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/db"
 	"github.com/charmbracelet/crush/internal/event"
 	"github.com/charmbracelet/crush/internal/pubsub"
@@ -514,7 +515,7 @@ func unmarshalTodos(data string) ([]Todo, error) {
 		return []Todo{}, nil
 	}
 	var todos []Todo
-	if err := json.Unmarshal([]byte(data), &todos); err != nil {
+	if err := sonic.Unmarshal([]byte(data), &todos); err != nil {
 		return []Todo{}, err
 	}
 	return todos, nil

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/lock"
 	"github.com/charmbracelet/crush/internal/version"
 )
@@ -111,7 +112,7 @@ func readOwnerInfo(path string) dataDirOwnerInfo {
 		return dataDirOwnerInfo{}
 	}
 	var info dataDirOwnerInfo
-	_ = json.Unmarshal(raw, &info)
+	_ = sonic.Unmarshal(raw, &info)
 	return info
 }
 

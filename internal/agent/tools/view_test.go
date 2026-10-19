@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/filetracker"
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
@@ -129,7 +130,7 @@ func TestViewToolAllowsSmallSectionsOfLargeFiles(t *testing.T) {
 	require.NotContains(t, resp.Content, "File is too large")
 
 	var meta ViewResponseMetadata
-	require.NoError(t, json.Unmarshal([]byte(resp.Metadata), &meta))
+	require.NoError(t, sonic.Unmarshal([]byte(resp.Metadata), &meta))
 	require.Equal(t, "target line", meta.Content)
 }
 
@@ -310,7 +311,7 @@ func TestReadBuiltinFile(t *testing.T) {
 		require.NoError(t, err)
 
 		var meta ViewResponseMetadata
-		require.NoError(t, json.Unmarshal([]byte(resp.Metadata), &meta))
+		require.NoError(t, sonic.Unmarshal([]byte(resp.Metadata), &meta))
 		require.Equal(t, ViewResourceSkill, meta.ResourceType)
 		require.Equal(t, "crush-config", meta.ResourceName)
 		require.NotEmpty(t, meta.ResourceDescription)

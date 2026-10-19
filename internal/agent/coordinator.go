@@ -22,6 +22,7 @@ import (
 
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/hyper"
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/agent/prompt"
@@ -837,7 +838,7 @@ func getProviderOptions(model Model, providerCfg config.ProviderConfig) fantasy.
 
 	mergedOptions := make(map[string]any)
 
-	err = json.Unmarshal([]byte(got), &mergedOptions)
+	err = sonic.Unmarshal([]byte(got), &mergedOptions)
 	if err != nil {
 		slog.Error("Could not create config for call", "err", err)
 		return options

@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/backend"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/google/uuid"
@@ -54,7 +55,7 @@ func TestPostWorkspaces_RejectsMissingClientID(t *testing.T) {
 
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	var perr proto.Error
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &perr))
+	require.NoError(t, sonic.Unmarshal(rec.Body.Bytes(), &perr))
 	require.Contains(t, perr.Message, "client_id")
 }
 
@@ -95,7 +96,7 @@ func TestPostWorkspaces_RefusesParentReferences(t *testing.T) {
 	message := func(t *testing.T, rec *httptest.ResponseRecorder) string {
 		t.Helper()
 		var perr proto.Error
-		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &perr))
+		require.NoError(t, sonic.Unmarshal(rec.Body.Bytes(), &perr))
 		return perr.Message
 	}
 

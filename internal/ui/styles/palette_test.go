@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"charm.land/lipgloss/v2"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -103,7 +104,7 @@ func TestPalette_JSON_Serialization(t *testing.T) {
 	require.NoError(t, err)
 
 	var decoded Palette
-	err = json.Unmarshal(data, &decoded)
+	err = sonic.Unmarshal(data, &decoded)
 	require.NoError(t, err)
 
 	require.Equal(t, p.Primary, decoded.Primary)
@@ -123,7 +124,7 @@ func TestPalette_JSON_DiffFields(t *testing.T) {
 		"diff_delete_gutter_bg": "#667788"
 	}`
 	var palette Palette
-	require.NoError(t, json.Unmarshal([]byte(input), &palette))
+	require.NoError(t, sonic.Unmarshal([]byte(input), &palette))
 	require.NoError(t, palette.Validate())
 
 	recovered := PaletteFromOpts(palette.ToQuickStyleOpts(quickStyleOpts{}))
@@ -153,7 +154,7 @@ func TestPalette_JSON_OmitsEmpty(t *testing.T) {
 	require.NoError(t, err)
 
 	var m map[string]any
-	err = json.Unmarshal(data, &m)
+	err = sonic.Unmarshal(data, &m)
 	require.NoError(t, err)
 
 	require.Contains(t, m, "primary")

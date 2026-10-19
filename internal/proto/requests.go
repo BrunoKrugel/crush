@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/oauth"
 )
@@ -65,13 +66,13 @@ func (r ConfigProviderKeyRequest) DecodeAPIKey() (any, error) {
 	switch r.Kind {
 	case APIKeyKindString:
 		var s string
-		if err := json.Unmarshal(r.APIKey, &s); err != nil {
+		if err := sonic.Unmarshal(r.APIKey, &s); err != nil {
 			return nil, fmt.Errorf("decode api key string: %w", err)
 		}
 		return s, nil
 	case APIKeyKindOAuth:
 		var tok oauth.Token
-		if err := json.Unmarshal(r.APIKey, &tok); err != nil {
+		if err := sonic.Unmarshal(r.APIKey, &tok); err != nil {
 			return nil, fmt.Errorf("decode api key oauth token: %w", err)
 		}
 		return &tok, nil

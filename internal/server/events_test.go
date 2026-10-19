@@ -1,10 +1,10 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/app"
@@ -73,7 +73,7 @@ func TestMCPChannelEventToProto_RoundTrip(t *testing.T) {
 	require.Equal(t, pubsub.PayloadTypeMCPEvent, env.Type)
 
 	var decoded pubsub.Event[proto.MCPEvent]
-	require.NoError(t, json.Unmarshal(env.Payload, &decoded))
+	require.NoError(t, sonic.Unmarshal(env.Payload, &decoded))
 	require.Equal(t, proto.MCPEventChannelMessage, decoded.Payload.Type)
 	require.Equal(t, "webhook", decoded.Payload.Name)
 	require.Equal(t, `<channel source="webhook">build failed</channel>`, decoded.Payload.ChannelMessage)
@@ -100,7 +100,7 @@ func TestSkillsEventToProto_RoundTrip(t *testing.T) {
 	require.Equal(t, pubsub.PayloadTypeSkillsEvent, env.Type)
 
 	var decoded pubsub.Event[proto.SkillsEvent]
-	require.NoError(t, json.Unmarshal(env.Payload, &decoded))
+	require.NoError(t, sonic.Unmarshal(env.Payload, &decoded))
 	require.Equal(t, pubsub.UpdatedEvent, decoded.Type)
 	require.Len(t, decoded.Payload.States, 2)
 
@@ -140,7 +140,7 @@ func TestRunCompleteToProto_RoundTrip(t *testing.T) {
 	require.Equal(t, pubsub.PayloadTypeRunComplete, env.Type)
 
 	var decoded pubsub.Event[proto.RunComplete]
-	require.NoError(t, json.Unmarshal(env.Payload, &decoded))
+	require.NoError(t, sonic.Unmarshal(env.Payload, &decoded))
 	require.Equal(t, pubsub.UpdatedEvent, decoded.Type)
 	require.Equal(t, "S", decoded.Payload.SessionID)
 	require.Equal(t, "run-42", decoded.Payload.RunID,
@@ -160,7 +160,7 @@ func TestAgentFinishedStateToProto(t *testing.T) {
 		}})
 		require.NotNil(t, envelope)
 		var decoded pubsub.Event[proto.AgentEvent]
-		require.NoError(t, json.Unmarshal(envelope.Payload, &decoded))
+		require.NoError(t, sonic.Unmarshal(envelope.Payload, &decoded))
 		require.Equal(t, state, decoded.Payload.FinishState)
 		require.Equal(t, "session", decoded.Payload.SessionID)
 	}
@@ -189,7 +189,7 @@ func TestAgentErrorToProto_PreservesRunID(t *testing.T) {
 	require.Equal(t, pubsub.PayloadTypeAgentEvent, env.Type)
 
 	var decoded pubsub.Event[proto.AgentEvent]
-	require.NoError(t, json.Unmarshal(env.Payload, &decoded))
+	require.NoError(t, sonic.Unmarshal(env.Payload, &decoded))
 	require.Equal(t, proto.AgentEventTypeError, decoded.Payload.Type)
 	require.Equal(t, "S", decoded.Payload.SessionID)
 	require.Equal(t, "run-99", decoded.Payload.RunID,
@@ -219,7 +219,7 @@ func TestRunCompleteToProto_Error(t *testing.T) {
 	env := wrapEvent(src)
 	require.NotNil(t, env)
 	var decoded pubsub.Event[proto.RunComplete]
-	require.NoError(t, json.Unmarshal(env.Payload, &decoded))
+	require.NoError(t, sonic.Unmarshal(env.Payload, &decoded))
 	require.Equal(t, "context canceled", decoded.Payload.Error)
 	require.True(t, decoded.Payload.Cancelled)
 }
@@ -243,7 +243,7 @@ func TestUpdateAvailableMsgToProto_RoundTrip(t *testing.T) {
 	require.Equal(t, pubsub.PayloadTypeUpdateAvailable, env.Type)
 
 	var decoded pubsub.Event[proto.UpdateAvailable]
-	require.NoError(t, json.Unmarshal(env.Payload, &decoded))
+	require.NoError(t, sonic.Unmarshal(env.Payload, &decoded))
 	require.Equal(t, pubsub.UpdatedEvent, decoded.Type)
 	require.Equal(t, "1.0.0", decoded.Payload.CurrentVersion)
 	require.Equal(t, "1.1.0", decoded.Payload.LatestVersion)
@@ -271,7 +271,7 @@ func TestMCPChannelMessageWrappedAsChannelEvent(t *testing.T) {
 	require.NotNil(t, env, "EventChannelMessage must be forwarded as an SSE event (fork: channel routing)")
 	require.Equal(t, pubsub.PayloadTypeMCPEvent, env.Type)
 	var pe pubsub.Event[proto.MCPEvent]
-	require.NoError(t, json.Unmarshal(env.Payload, &pe))
+	require.NoError(t, sonic.Unmarshal(env.Payload, &pe))
 	require.Equal(t, proto.MCPEventChannelMessage, pe.Payload.Type)
 	require.Equal(t, `<channel source="webhook">build failed</channel>`, pe.Payload.ChannelMessage)
 }
@@ -345,7 +345,7 @@ func TestMCPStateChangedEventForwardsCounts(t *testing.T) {
 	require.Equal(t, pubsub.PayloadTypeMCPEvent, env.Type)
 
 	var decoded pubsub.Event[proto.MCPEvent]
-	require.NoError(t, json.Unmarshal(env.Payload, &decoded))
+	require.NoError(t, sonic.Unmarshal(env.Payload, &decoded))
 	require.Equal(t, proto.MCPEventStateChanged, decoded.Payload.Type)
 	require.Equal(t, "ctx", decoded.Payload.Name)
 	require.Equal(t, proto.MCPStateConnected, decoded.Payload.State)

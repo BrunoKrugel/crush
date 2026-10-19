@@ -11,6 +11,7 @@ import (
 
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charmbracelet/crush/internal/agent"
@@ -53,7 +54,7 @@ func fetchCard(t *testing.T, client *http.Client, url, host string, headers map[
 func decodeCard(t *testing.T, body string) *a2aspec.AgentCard {
 	t.Helper()
 	var card a2aspec.AgentCard
-	require.NoError(t, json.Unmarshal([]byte(body), &card))
+	require.NoError(t, sonic.Unmarshal([]byte(body), &card))
 	return &card
 }
 
@@ -232,7 +233,7 @@ func TestHostCardRouteKeepsMiddleware(t *testing.T) {
 			Code int `json:"code"`
 		} `json:"error"`
 	}
-	require.NoError(t, json.Unmarshal([]byte(body), &rpcResp))
+	require.NoError(t, sonic.Unmarshal([]byte(body), &rpcResp))
 	require.Equal(t, -32009, rpcResp.Error.Code)
 }
 

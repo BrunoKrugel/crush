@@ -21,6 +21,7 @@ import (
 	"charm.land/fantasy"
 	a2aspec "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charmbracelet/crush/internal/agent"
@@ -188,7 +189,7 @@ func TestStatusEventTimestampIsUTC(t *testing.T) {
 			Timestamp string `json:"timestamp"`
 		} `json:"status"`
 	}
-	require.NoError(t, json.Unmarshal(data, &wire))
+	require.NoError(t, sonic.Unmarshal(data, &wire))
 	require.True(t, strings.HasSuffix(wire.Status.Timestamp, "Z"),
 		"timestamp %q must end with the Z suffix", wire.Status.Timestamp)
 }

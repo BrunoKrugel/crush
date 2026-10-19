@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,6 +9,7 @@ import (
 	"testing"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charmbracelet/crush/internal/agent/tools"
@@ -326,7 +326,7 @@ func TestDispatchAgentToolRunsReadOnlyWorker(t *testing.T) {
 	c, _ := newDispatchToolEnv(t, agent)
 
 	var defs map[string]config.AgentDefinition
-	require.NoError(t, json.Unmarshal([]byte(`{"worker": {"tools": {"allow": ["@read"]}}}`), &defs))
+	require.NoError(t, sonic.Unmarshal([]byte(`{"worker": {"tools": {"allow": ["@read"]}}}`), &defs))
 	c.cfg.Config().AgentDefinitions = defs
 	c.cfg.Config().SetupAgents()
 

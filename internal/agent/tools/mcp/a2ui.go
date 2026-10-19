@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -192,7 +193,7 @@ func injectA2UICapability(raw json.RawMessage) json.RawMessage {
 		return nil
 	}
 	var params map[string]any
-	if err := json.Unmarshal(raw, &params); err != nil || params == nil {
+	if err := sonic.Unmarshal(raw, &params); err != nil || params == nil {
 		slog.Warn("A2UI capability not advertised: initialize params did not decode as an object", "error", err)
 		return nil
 	}

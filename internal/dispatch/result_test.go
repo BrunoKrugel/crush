@@ -1,11 +1,11 @@
 package dispatch
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -262,7 +262,7 @@ func TestDispatchResultSteerRepliesRoundTrip(t *testing.T) {
 	require.Contains(t, rendered, `"key_findings": "fixed 3 bugs"`)
 
 	var back DispatchResult
-	require.NoError(t, json.Unmarshal([]byte(rendered), &back))
+	require.NoError(t, sonic.Unmarshal([]byte(rendered), &back))
 	require.Equal(t, r, back)
 
 	plain := DispatchResult{

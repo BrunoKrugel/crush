@@ -2,7 +2,6 @@ package dispatch
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charmbracelet/crush/internal/lock"
@@ -330,7 +330,7 @@ func TestUpdateOwnerMarkerStamps(t *testing.T) {
 	data, err := os.ReadFile(env.p.ownerPath(entry.Branch))
 	require.NoError(t, err)
 	var m ownerMarker
-	require.NoError(t, json.Unmarshal(data, &m))
+	require.NoError(t, sonic.Unmarshal(data, &m))
 	require.Equal(t, "tester", m.Handle)
 	require.Equal(t, "role", m.Role)
 	require.Equal(t, DispositionApplied, m.Disposition)

@@ -2,6 +2,8 @@ package proto
 
 import (
 	"encoding/json"
+
+	"github.com/bytedance/sonic"
 )
 
 // CreatePermissionRequest represents a request to create a permission.
@@ -34,7 +36,7 @@ type PermissionRequest struct {
 	Path        string `json:"path"`
 }
 
-// UnmarshalJSON implements the json.Unmarshaler interface. This is needed
+// UnmarshalJSON implements the sonic.Unmarshaler interface. This is needed
 // because the Params field is of type any, so we need to unmarshal it into
 // its appropriate type based on the [PermissionRequest.ToolName].
 func (p *PermissionRequest) UnmarshalJSON(data []byte) error {
@@ -45,7 +47,7 @@ func (p *PermissionRequest) UnmarshalJSON(data []byte) error {
 	}{
 		Alias: (*Alias)(p),
 	}
-	if err := json.Unmarshal(data, &aux); err != nil {
+	if err := sonic.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 
@@ -57,7 +59,7 @@ func (p *PermissionRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// UnmarshalJSON implements the json.Unmarshaler interface. This is needed
+// UnmarshalJSON implements the sonic.Unmarshaler interface. This is needed
 // because the Params field is of type any, so we need to unmarshal it into
 // its appropriate type based on the [CreatePermissionRequest.ToolName].
 func (p *CreatePermissionRequest) UnmarshalJSON(data []byte) error {
@@ -68,7 +70,7 @@ func (p *CreatePermissionRequest) UnmarshalJSON(data []byte) error {
 	}{
 		Alias: (*Alias)(p),
 	}
-	if err := json.Unmarshal(data, &aux); err != nil {
+	if err := sonic.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 
@@ -84,61 +86,61 @@ func unmarshalToolParams(toolName string, raw json.RawMessage) (any, error) {
 	switch toolName {
 	case BashToolName:
 		var params BashPermissionsParams
-		if err := json.Unmarshal(raw, &params); err != nil {
+		if err := sonic.Unmarshal(raw, &params); err != nil {
 			return nil, err
 		}
 		return params, nil
 	case DownloadToolName:
 		var params DownloadPermissionsParams
-		if err := json.Unmarshal(raw, &params); err != nil {
+		if err := sonic.Unmarshal(raw, &params); err != nil {
 			return nil, err
 		}
 		return params, nil
 	case EditToolName:
 		var params EditPermissionsParams
-		if err := json.Unmarshal(raw, &params); err != nil {
+		if err := sonic.Unmarshal(raw, &params); err != nil {
 			return nil, err
 		}
 		return params, nil
 	case WriteToolName:
 		var params WritePermissionsParams
-		if err := json.Unmarshal(raw, &params); err != nil {
+		if err := sonic.Unmarshal(raw, &params); err != nil {
 			return nil, err
 		}
 		return params, nil
 	case MultiEditToolName:
 		var params MultiEditPermissionsParams
-		if err := json.Unmarshal(raw, &params); err != nil {
+		if err := sonic.Unmarshal(raw, &params); err != nil {
 			return nil, err
 		}
 		return params, nil
 	case FetchToolName:
 		var params FetchPermissionsParams
-		if err := json.Unmarshal(raw, &params); err != nil {
+		if err := sonic.Unmarshal(raw, &params); err != nil {
 			return nil, err
 		}
 		return params, nil
 	case AgenticFetchToolName:
 		var params AgenticFetchPermissionsParams
-		if err := json.Unmarshal(raw, &params); err != nil {
+		if err := sonic.Unmarshal(raw, &params); err != nil {
 			return nil, err
 		}
 		return params, nil
 	case ViewToolName:
 		var params ViewPermissionsParams
-		if err := json.Unmarshal(raw, &params); err != nil {
+		if err := sonic.Unmarshal(raw, &params); err != nil {
 			return nil, err
 		}
 		return params, nil
 	case LSToolName:
 		var params LSPermissionsParams
-		if err := json.Unmarshal(raw, &params); err != nil {
+		if err := sonic.Unmarshal(raw, &params); err != nil {
 			return nil, err
 		}
 		return params, nil
 	case ReplaceSymbolToolName:
 		var params ReplaceSymbolPermissionsParams
-		if err := json.Unmarshal(raw, &params); err != nil {
+		if err := sonic.Unmarshal(raw, &params); err != nil {
 			return nil, err
 		}
 		return params, nil
@@ -147,7 +149,7 @@ func unmarshalToolParams(toolName string, raw json.RawMessage) (any, error) {
 		// shape: MCP tools pass their raw input as a JSON string, which
 		// the permission dialog renders as is (#353).
 		var generic any
-		if err := json.Unmarshal(raw, &generic); err != nil {
+		if err := sonic.Unmarshal(raw, &generic); err != nil {
 			return nil, err
 		}
 		return generic, nil

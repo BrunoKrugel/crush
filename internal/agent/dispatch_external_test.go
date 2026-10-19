@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/stretchr/testify/require"
@@ -158,7 +159,7 @@ func newExternalDispatchEnvUnchecked(t *testing.T, defs string, ext *fakeExterna
 		return nil, errors.New("unexpected build")
 	}
 	var parsed map[string]config.AgentDefinition
-	require.NoError(t, json.Unmarshal([]byte(defs), &parsed))
+	require.NoError(t, sonic.Unmarshal([]byte(defs), &parsed))
 	c.cfg.Config().AgentDefinitions = parsed
 	require.NoError(t, c.cfg.Config().ValidateAgents(env.workingDir))
 	c.cfg.Config().SetupAgents()

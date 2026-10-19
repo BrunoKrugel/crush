@@ -15,6 +15,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/styles"
 	"github.com/joestump-agent/a2tea"
@@ -393,7 +394,7 @@ func scanJSONObject(s string) (end int, complete bool) {
 // bare A2UI message: valid JSON carrying at least one message-type key.
 func acceptedBareA2UIObject(obj string) bool {
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(obj), &m); err != nil {
+	if err := sonic.Unmarshal([]byte(obj), &m); err != nil {
 		return false
 	}
 	for _, key := range a2uiPayloadKeys {

@@ -15,6 +15,7 @@ import (
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy"
 	"charm.land/fantasy/providers/openaicompat"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/session"
@@ -1030,7 +1031,7 @@ func TestDispatchResult_KilledRoundTrips(t *testing.T) {
 	assert.Contains(t, string(b), `"killed_reason":"stalled todos"`)
 
 	var back dispatch.DispatchResult
-	require.NoError(t, json.Unmarshal(b, &back))
+	require.NoError(t, sonic.Unmarshal(b, &back))
 	assert.Equal(t, dispatch.ReasonStalledTodos, back.KilledReason)
 }
 

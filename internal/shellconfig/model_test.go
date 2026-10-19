@@ -1,10 +1,10 @@
 package shellconfig
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,7 +14,7 @@ func loadScript(t *testing.T, script string) map[string]any {
 	jsonBytes, err := LoadShellConfig(t.Context(), path, []byte(script))
 	require.NoError(t, err)
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 	return result
 }
 

@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/stretchr/testify/require"
 )
@@ -58,7 +59,7 @@ func TestA2AOptionsFromJSON(t *testing.T) {
 	t.Parallel()
 
 	var cfg config.Config
-	require.NoError(t, json.Unmarshal([]byte(`{"options":{"a2a":{
+	require.NoError(t, sonic.Unmarshal([]byte(`{"options":{"a2a":{
 		"listen": "127.0.0.1:7443",
 		"tls_cert": "certs/a2a.pem",
 		"tls_key": "certs/a2a-key.pem",

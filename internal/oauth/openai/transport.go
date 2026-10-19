@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/oauth"
 )
 
@@ -79,7 +80,7 @@ func codexRequestBody(body io.ReadCloser, length int64) (io.ReadCloser, int64) {
 	}
 
 	var raw map[string]any
-	if err := json.Unmarshal(data, &raw); err != nil {
+	if err := sonic.Unmarshal(data, &raw); err != nil {
 		return io.NopCloser(bytes.NewReader(data)), int64(len(data))
 	}
 	if _, ok := raw["max_output_tokens"]; !ok {

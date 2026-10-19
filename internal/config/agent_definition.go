@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"charm.land/catwalk/pkg/catwalk"
+	"github.com/bytedance/sonic"
 	"github.com/invopop/jsonschema"
 
 	"github.com/charmbracelet/crush/internal/filepathext"
@@ -234,7 +235,7 @@ type AgentModelRef struct {
 // provider and model.
 func (m *AgentModel) UnmarshalJSON(data []byte) error {
 	var slot string
-	if err := json.Unmarshal(data, &slot); err == nil {
+	if err := sonic.Unmarshal(data, &slot); err == nil {
 		switch SelectedModelType(slot) {
 		case SelectedModelTypeLarge, SelectedModelTypeSmall:
 			m.Type = SelectedModelType(slot)
@@ -245,7 +246,7 @@ func (m *AgentModel) UnmarshalJSON(data []byte) error {
 		}
 	}
 	var ref AgentModelRef
-	if err := json.Unmarshal(data, &ref); err != nil {
+	if err := sonic.Unmarshal(data, &ref); err != nil {
 		return fmt.Errorf("invalid model: want \"large\", \"small\", or {\"provider\", \"model\"}")
 	}
 	if ref.Provider == "" || ref.Model == "" {

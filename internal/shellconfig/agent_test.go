@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/shellconfig"
 	"github.com/stretchr/testify/require"
@@ -52,7 +53,7 @@ func loadAgentScript(t *testing.T, script string) map[string]any {
 	require.NoError(t, err)
 	require.NotNil(t, data, "script produced no config")
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(data, &result))
+	require.NoError(t, sonic.Unmarshal(data, &result))
 	agents, ok := result["agents"].(map[string]any)
 	require.True(t, ok, "script must populate the agents section")
 	return agents

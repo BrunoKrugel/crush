@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,7 +25,7 @@ func TestMCPClientInfo_ChannelRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	var got MCPClientInfo
-	require.NoError(t, json.Unmarshal(data, &got))
+	require.NoError(t, sonic.Unmarshal(data, &got))
 	require.True(t, got.Channel, "channel flag must survive the wire")
 	require.Equal(t, "webhook", got.Name)
 }
@@ -44,7 +45,7 @@ func TestMCPEvent_ChannelMessageRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	var got MCPEvent
-	require.NoError(t, json.Unmarshal(data, &got))
+	require.NoError(t, sonic.Unmarshal(data, &got))
 	require.Equal(t, MCPEventChannelMessage, got.Type)
 	require.Equal(t, `<channel source="webhook">hi</channel>`, got.ChannelMessage)
 }

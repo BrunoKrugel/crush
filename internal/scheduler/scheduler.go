@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/lock"
 )
 
@@ -797,7 +798,7 @@ func readDurableFile(path string) ([]Task, error) {
 		return nil, fmt.Errorf("failed to read scheduled tasks: %w", err)
 	}
 	var durable []Task
-	if err := json.Unmarshal(data, &durable); err != nil {
+	if err := sonic.Unmarshal(data, &durable); err != nil {
 		return nil, fmt.Errorf("failed to parse scheduled tasks: %w", err)
 	}
 	return durable, nil
