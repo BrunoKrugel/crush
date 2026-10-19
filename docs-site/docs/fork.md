@@ -107,6 +107,7 @@ separately.
 
 | Fix | Symptom it removes |
 | --- | --- |
+| Todo pill frozen on a stale step | The todo ladder treated *creating* a todo list as lifetime activity, so a model that made the list and then worked on later steps without updating it left the todo pill on the first step for the whole run. Mutating work now makes the list stale and re-arms the reminder, while read-only calls leave its freshness alone. |
 | Bounded MCP init waits | A wedged MCP server could blank the whole app at startup. Tool lists now wait for init, with a bound. |
 | Per-server MCP lifecycle serialized | Concurrent connect/disconnect on one server raced; an error on one session tore down others. |
 | stdio process groups reaped | Killed stdio MCP servers left orphan processes behind. |
