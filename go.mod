@@ -5,9 +5,9 @@ go 1.27.0
 require (
 	charm.land/bubbles/v2 v2.2.1
 	charm.land/bubbletea/v2 v2.1.0
-	charm.land/catwalk v0.52.69
+	charm.land/catwalk v0.52.78
 	charm.land/fang/v2 v2.0.1
-	charm.land/fantasy v0.45.2
+	charm.land/fantasy v0.45.3
 	charm.land/glamour/v2 v2.0.1
 	charm.land/lipgloss/v2 v2.0.6
 	charm.land/log/v2 v2.0.1
@@ -15,9 +15,9 @@ require (
 	charm.land/x/vcr v0.1.1
 	github.com/JohannesKaufmann/html-to-markdown v1.6.0
 	github.com/MakeNowJust/heredoc v1.0.0
-	github.com/Microsoft/go-winio v0.6.3
+	github.com/Microsoft/go-winio v0.6.4
 	github.com/PuerkitoBio/goquery v1.13.0
-	github.com/a2aproject/a2a-go/v2 v2.5.0
+	github.com/a2aproject/a2a-go/v2 v2.6.0
 	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/atotto/clipboard v0.1.4
 	github.com/aymanbagabas/go-udiff v0.4.1
@@ -55,9 +55,9 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/ncruces/go-sqlite3 v0.35.6
 	github.com/nxadm/tail v1.4.11
-	github.com/odvcencio/gotreesitter v0.51.0
+	github.com/odvcencio/gotreesitter v0.56.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
-	github.com/posthog/posthog-go v1.34.0
+	github.com/posthog/posthog-go v1.35.1
 	github.com/pressly/goose/v3 v3.29.0
 	github.com/qjebbs/go-jsons v1.0.0-alpha.6
 	github.com/rivo/uniseg v0.4.7
@@ -81,7 +81,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.60.1
 	mvdan.cc/sh/v3 v3.14.1
-	mvdan.cc/sh/x v0.0.0-20260929184124-9a79a445faf5
+	mvdan.cc/sh/x v0.0.0-20261018161248-58db06f18452
 )
 
 require (
@@ -92,7 +92,7 @@ require (
 	git.sr.ht/~jackmordaunt/go-toast v1.1.2 // indirect
 	github.com/andybalholm/brotli v1.2.6 // indirect
 	github.com/andybalholm/cascadia v1.3.5 // indirect
-	github.com/anthropics/anthropic-sdk-go v1.80.0 // indirect
+	github.com/anthropics/anthropic-sdk-go v1.82.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.47.3 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.22 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.33.9 // indirect
@@ -116,8 +116,8 @@ require (
 	github.com/charmbracelet/x/windows v0.2.2 // indirect
 	github.com/coder/websocket v1.8.15 // indirect
 	github.com/cyphar/filepath-securejoin v0.7.0 // indirect
-	github.com/dlclark/regexp2/v2 v2.8.4 // indirect
-	github.com/ebitengine/purego v0.11.1 // indirect
+	github.com/dlclark/regexp2/v2 v2.9.1 // indirect
+	github.com/ebitengine/purego v0.11.2 // indirect
 	github.com/esiqveland/notify v0.14.0 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
@@ -130,7 +130,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/goccy/go-json v0.11.2 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
-	github.com/godbus/dbus/v5 v5.2.3 // indirect
+	github.com/godbus/dbus/v5 v5.2.4 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
@@ -146,8 +146,8 @@ require (
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/kaptinlin/jsonpointer v0.4.28 // indirect
 	github.com/kaptinlin/jsonschema v0.9.10 // indirect
-	github.com/klauspost/compress v1.20.1 // indirect
-	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
+	github.com/klauspost/compress v1.20.3 // indirect
+	github.com/klauspost/cpuid/v2 v2.4.1 // indirect
 	github.com/klauspost/pgzip v1.2.7 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
@@ -157,7 +157,7 @@ require (
 	github.com/muesli/mango-cobra v1.3.0 // indirect
 	github.com/muesli/mango-pflag v0.2.0 // indirect
 	github.com/muesli/roff v0.1.0 // indirect
-	github.com/ncruces/go-sqlite3-wasm/v6 v6.3.35304 // indirect
+	github.com/ncruces/go-sqlite3-wasm/v6 v6.3.35401 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
 	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
@@ -194,22 +194,22 @@ require (
 	go.yaml.in/yaml/v4 v4.0.0-rc.6 // indirect
 	golang.design/x/x11 v0.2.0 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
-	golang.org/x/exp v0.0.0-20261011100332-faecfb24eb49 // indirect
-	golang.org/x/exp/shiny v0.0.0-20261011100332-faecfb24eb49 // indirect
+	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e // indirect
+	golang.org/x/exp/shiny v0.0.0-20261014143641-f0251eb4aa3e // indirect
 	golang.org/x/image v0.47.0 // indirect
 	golang.org/x/mobile v0.0.0-20261011034528-197770444867 // indirect
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/term v0.47.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
-	google.golang.org/api v0.301.0 // indirect
-	google.golang.org/genai v1.73.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20261005182115-fad411399dd8 // indirect
+	google.golang.org/api v0.304.0 // indirect
+	google.golang.org/genai v1.75.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20261012220534-4341edf3f941 // indirect
 	google.golang.org/grpc v1.84.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/dnaeon/go-vcr.v4 v4.0.7 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	modernc.org/libc v1.78.0 // indirect
+	modernc.org/libc v1.79.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
