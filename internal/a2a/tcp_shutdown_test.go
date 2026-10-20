@@ -23,8 +23,7 @@ func requireClosedByServer(t *testing.T, conn net.Conn, r io.Reader, msg string)
 	t.Helper()
 	require.NoError(t, conn.SetReadDeadline(time.Now().Add(10*time.Second)))
 	_, err := io.Copy(io.Discard, r)
-	var netErr net.Error
-	if errors.As(err, &netErr) {
+	if netErr, ok := errors.AsType[net.Error](err); ok {
 		require.False(t, netErr.Timeout(), "%s: the connection was left open", msg)
 	}
 }

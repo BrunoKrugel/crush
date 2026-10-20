@@ -10,15 +10,17 @@ import (
 )
 
 // boolPtr builds the tri-state pointers the lazy flags use.
-func boolPtr(v bool) *bool { return &v }
+//
+//go:fix inline
+func boolPtr(v bool) *bool { return new(v) }
 
 func TestOptionsGetLazyMCP(t *testing.T) {
 	t.Parallel()
 
 	require.True(t, (*Options)(nil).GetLazyMCP(), "a missing options block is still lazy")
 	require.True(t, (&Options{}).GetLazyMCP(), "laziness is on by default")
-	require.False(t, (&Options{LazyMCP: boolPtr(false)}).GetLazyMCP())
-	require.True(t, (&Options{LazyMCP: boolPtr(true)}).GetLazyMCP())
+	require.False(t, (&Options{LazyMCP: new(false)}).GetLazyMCP())
+	require.True(t, (&Options{LazyMCP: new(true)}).GetLazyMCP())
 }
 
 func TestMCPConfigIsLazy(t *testing.T) {
@@ -39,19 +41,19 @@ func TestMCPConfigIsLazy(t *testing.T) {
 		{
 			name:     "global off hides nothing",
 			server:   MCPConfig{},
-			options:  &Options{LazyMCP: boolPtr(false)},
+			options:  &Options{LazyMCP: new(false)},
 			expected: false,
 		},
 		{
 			name:     "per-server pin wins over global",
-			server:   MCPConfig{Lazy: boolPtr(false)},
+			server:   MCPConfig{Lazy: new(false)},
 			options:  &Options{},
 			expected: false,
 		},
 		{
 			name:     "per-server lazy wins over global off",
-			server:   MCPConfig{Lazy: boolPtr(true)},
-			options:  &Options{LazyMCP: boolPtr(false)},
+			server:   MCPConfig{Lazy: new(true)},
+			options:  &Options{LazyMCP: new(false)},
 			expected: true,
 		},
 		{
@@ -85,14 +87,14 @@ func TestConfigAnyMCPLazy(t *testing.T) {
 	// Every server pinned means the eager list already has the schemas.
 	require.False(t, Config{
 		MCP: map[string]MCPConfig{
-			"a": {Lazy: boolPtr(false)},
-			"b": {Lazy: boolPtr(false)},
+			"a": {Lazy: new(false)},
+			"b": {Lazy: new(false)},
 		},
 		Options: &Options{},
 	}.AnyMCPLazy())
 
 	require.True(t, Config{
-		MCP:     map[string]MCPConfig{"a": {Lazy: boolPtr(false)}, "b": {}},
+		MCP:     map[string]MCPConfig{"a": {Lazy: new(false)}, "b": {}},
 		Options: &Options{},
 	}.AnyMCPLazy(), "one unpinned server is enough")
 }
@@ -123,7 +125,7 @@ func TestSetMCPServerLazyConfigRequiresConfiguredServer(t *testing.T) {
 	t.Parallel()
 
 	store := NewTestStore(&Config{MCP: map[string]MCPConfig{"docker": {}}})
-	err := store.SetMCPServerLazyConfig(ScopeGlobal, "nope", boolPtr(true))
+	err := store.SetMCPServerLazyConfig(ScopeGlobal, "nope", new(true))
 	require.ErrorContains(t, err, "not configured", "unknown servers must not create empty config entries")
 }
 
@@ -136,7 +138,7 @@ func TestSetMCPServerLazyConfigWritesAndClears(t *testing.T) {
 		globalDataPath: globalPath,
 	}
 
-	require.NoError(t, store.SetMCPServerLazyConfig(ScopeGlobal, "docker", boolPtr(false)))
+	require.NoError(t, store.SetMCPServerLazyConfig(ScopeGlobal, "docker", new(false)))
 	data, err := os.ReadFile(globalPath)
 	require.NoError(t, err)
 	require.Equal(t, false, gjson.GetBytes(data, "mcp.docker.lazy").Bool())

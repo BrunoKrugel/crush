@@ -126,15 +126,13 @@ func TestConcurrentRunsDoNotPanicOnAgentReadiness(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range workers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range rounds {
 				// The error is irrelevant — reaching the readiness wait and
 				// the sub-agent build inside UpdateModels is the point.
 				_, _ = coord.run(context.Background(), nil, "missing-session", "hello")
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }

@@ -910,8 +910,8 @@ func gitCmd(ctx context.Context, dir string, extraEnv []string, args ...string) 
 	env := make([]string, 0, len(os.Environ())+1+len(extraEnv))
 	for _, kv := range os.Environ() {
 		key := kv
-		if i := strings.IndexByte(kv, '='); i >= 0 {
-			key = kv[:i]
+		if before, _, ok := strings.Cut(kv, "="); ok {
+			key = before
 		}
 		switch key {
 		case "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR",

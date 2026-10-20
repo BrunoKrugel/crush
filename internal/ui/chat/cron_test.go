@@ -239,7 +239,7 @@ func TestFormatCronTasksListCollapsedFitsWidth(t *testing.T) {
 
 	const width = 60
 	out := formatCronTasksList(&sty, tasks, width, cronListOpts{now: cronTestNow})
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		require.LessOrEqual(t, ansi.StringWidth(line), width)
 	}
 }

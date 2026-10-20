@@ -1,12 +1,13 @@
 package apigen
 
 import (
-	"github.com/bytedance/sonic"
-
-	_ "embed"
 	"html/template"
 	"io"
 	"sort"
+
+	"github.com/bytedance/sonic"
+
+	_ "embed"
 )
 
 // RenderDocs writes a plain, self-contained HTML documentation page for

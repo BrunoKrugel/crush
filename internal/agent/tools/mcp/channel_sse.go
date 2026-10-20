@@ -285,7 +285,7 @@ func (b *channelSSEBody) handleEvent(event []byte) {
 // Returns nil for comments (keepalives) and events without data.
 func eventData(event []byte) []byte {
 	var lines [][]byte
-	for _, line := range bytes.Split(event, []byte("\n")) {
+	for line := range bytes.SplitSeq(event, []byte("\n")) {
 		line = bytes.TrimSuffix(line, []byte("\r"))
 		if len(line) == 0 || line[0] == ':' {
 			continue

@@ -1580,8 +1580,7 @@ func isOAuthInitErr(err error) bool {
 	if errors.Is(err, mcpoauth.ErrInteractiveAuthRequired) {
 		return true
 	}
-	var rErr *oauth2.RetrieveError
-	if errors.As(err, &rErr) {
+	if _, ok := errors.AsType[*oauth2.RetrieveError](err); ok {
 		return true
 	}
 	msg := err.Error()

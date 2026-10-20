@@ -10,9 +10,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func intPtr(i int) *int                { return &i }
-func intOrOffPtr(v IntOrOff) *IntOrOff { return &v }
-func durationPtr(d Duration) *Duration { return &d }
+//go:fix inline
+func intPtr(i int) *int { return new(i) }
+
+//go:fix inline
+func intOrOffPtr(v IntOrOff) *IntOrOff { return new(v) }
+
+//go:fix inline
+func durationPtr(d Duration) *Duration { return new(d) }
 
 // TestResolveTodoEnforcementDefaults pins the ladder's defaults: nil
 // everywhere means nudging on, threshold 4, hard gate off.
@@ -32,9 +37,9 @@ func TestResolveTodoEnforcementGlobal(t *testing.T) {
 	t.Parallel()
 
 	global := &TodoEnforcementConfig{
-		Enabled:        boolPtr(false),
+		Enabled:        new(false),
 		NudgeThreshold: intOrOffPtr(9),
-		HardGate:       boolPtr(true),
+		HardGate:       new(true),
 	}
 	settings := ResolveTodoEnforcement(global, nil)
 	assert.False(t, settings.Enabled)
@@ -42,7 +47,7 @@ func TestResolveTodoEnforcementGlobal(t *testing.T) {
 	assert.True(t, settings.HardGate)
 
 	settings = ResolveTodoEnforcement(&TodoEnforcementConfig{
-		Enabled:        boolPtr(true),
+		Enabled:        new(true),
 		NudgeThreshold: intOrOffPtr(0),
 	}, nil)
 	assert.False(t, settings.Enabled, "an explicit 0 threshold disables nudging even with enabled: true")
@@ -60,9 +65,9 @@ func TestResolveTodoEnforcementAgentOverride(t *testing.T) {
 	t.Parallel()
 
 	global := &TodoEnforcementConfig{
-		Enabled:        boolPtr(true),
+		Enabled:        new(true),
 		NudgeThreshold: intOrOffPtr(6),
-		HardGate:       boolPtr(false),
+		HardGate:       new(false),
 	}
 
 	// Only the threshold is overridden; enabled and hard gate carry over.
@@ -74,8 +79,8 @@ func TestResolveTodoEnforcementAgentOverride(t *testing.T) {
 	// The agent turns the gate on and nudging off; the threshold carries
 	// over.
 	settings = ResolveTodoEnforcement(global, &TodoEnforcementConfig{
-		Enabled:  boolPtr(false),
-		HardGate: boolPtr(true),
+		Enabled:  new(false),
+		HardGate: new(true),
 	})
 	assert.False(t, settings.Enabled)
 	assert.Equal(t, 6, settings.NudgeThreshold)
@@ -119,7 +124,7 @@ func TestResolveTodoEnforcementKillKnobs(t *testing.T) {
 		KillAfterNudges:   intOrOffPtr(3),
 		StallWindow:       durationPtr(Duration(300 * time.Second)),
 		HardTimeout:       durationPtr(Duration(1800 * time.Second)),
-		InactivityTimeout: intPtr(900),
+		InactivityTimeout: new(900),
 	}
 	settings := ResolveTodoEnforcement(global, nil)
 	assert.Equal(t, 3, settings.KillAfterNudges)
@@ -131,7 +136,7 @@ func TestResolveTodoEnforcementKillKnobs(t *testing.T) {
 	settings = ResolveTodoEnforcement(global, &TodoEnforcementConfig{
 		KillAfterNudges:   intOrOffPtr(1),
 		StallWindow:       durationPtr(0),
-		InactivityTimeout: intPtr(60),
+		InactivityTimeout: new(60),
 	})
 	assert.Equal(t, 1, settings.KillAfterNudges)
 	assert.Zero(t, settings.StallWindow, "an explicit 0 must disable the stall window")
@@ -164,7 +169,7 @@ func TestTodoEnforcementValidate(t *testing.T) {
 		"kill_after_nudges":  {KillAfterNudges: intOrOffPtr(-1)},
 		"stall_window":       {StallWindow: durationPtr(Duration(-5 * time.Second))},
 		"hard_timeout":       {HardTimeout: durationPtr(Duration(-1800 * time.Second))},
-		"inactivity_timeout": {InactivityTimeout: intPtr(-1)},
+		"inactivity_timeout": {InactivityTimeout: new(-1)},
 	}
 	for field, cfg := range negatives {
 		err := cfg.Validate("options.todo_enforcement")

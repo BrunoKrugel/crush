@@ -1299,9 +1299,7 @@ func (c *coordinator) startDispatchKillWatch(ctx context.Context, run dispatchRu
 	}
 
 	if settings.HardTimeout > 0 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			timer := time.NewTimer(settings.HardTimeout)
 			defer timer.Stop()
 			select {
@@ -1309,15 +1307,13 @@ func (c *coordinator) startDispatchKillWatch(ctx context.Context, run dispatchRu
 				killFromWatch(dispatch.ReasonHardTimeout)
 			case <-ctx.Done():
 			}
-		}()
+		})
 	}
 
 	if settings.StallWindow > 0 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			c.watchTodosStall(ctx, run, settings.StallWindow, killFromWatch)
-		}()
+		})
 	}
 
 	return func() {
@@ -1335,10 +1331,7 @@ func (c *coordinator) startDispatchKillWatch(ctx context.Context, run dispatchRu
 // cadence is a quarter of the window, clamped so tiny windows still poll
 // and huge ones do not hammer the DB.
 func (c *coordinator) watchTodosStall(ctx context.Context, run dispatchRun, window time.Duration, kill func(string)) {
-	tick := window / 4
-	if tick < 50*time.Millisecond {
-		tick = 50 * time.Millisecond
-	}
+	tick := max(window/4, 50*time.Millisecond)
 	if tick > 30*time.Second {
 		tick = 30 * time.Second
 	}
@@ -1429,8 +1422,8 @@ func (c *coordinator) dispatchLastAssistantText(ctx context.Context, sessionID s
 	if err != nil {
 		return ""
 	}
-	for i := len(msgs) - 1; i >= 0; i-- {
-		msg := msgs[i]
+	for _, msg := range slices.Backward(msgs) {
+
 		if msg.Role != message.Assistant {
 			continue
 		}

@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -9,7 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func lazy(v bool) *bool { return &v }
+//go:fix inline
+func lazy(v bool) *bool { return new(v) }
 
 func mcpStore(servers map[string]config.MCPConfig, globalLazy *bool) *config.ConfigStore {
 	options := &config.Options{LazyMCP: globalLazy}
@@ -68,7 +70,7 @@ func TestCatalogIsSortedAndMarksLazy(t *testing.T) {
 	seedTools(t, "cat-b", "zeta")
 	seedTools(t, "cat-a", "alpha", "beta")
 	cfg := mcpStore(map[string]config.MCPConfig{
-		"cat-a": {Type: config.MCPStdio, Lazy: lazy(false)},
+		"cat-a": {Type: config.MCPStdio, Lazy: new(false)},
 		"cat-b": {Type: config.MCPStdio},
 	}, nil)
 
@@ -135,7 +137,7 @@ func TestIndexLines(t *testing.T) {
 	seedTools(t, "idx-pinned", "three")
 	cfg := mcpStore(map[string]config.MCPConfig{
 		"idx-hidden": {Type: config.MCPStdio},
-		"idx-pinned": {Type: config.MCPStdio, Lazy: lazy(false)},
+		"idx-pinned": {Type: config.MCPStdio, Lazy: new(false)},
 	}, nil)
 
 	lines := IndexLines(cfg)
@@ -143,8 +145,8 @@ func TestIndexLines(t *testing.T) {
 
 	// An eager setup contributes nothing, so the prompt block stays absent.
 	pinned := mcpStore(map[string]config.MCPConfig{
-		"idx-hidden": {Type: config.MCPStdio, Lazy: lazy(false)},
-		"idx-pinned": {Type: config.MCPStdio, Lazy: lazy(false)},
+		"idx-hidden": {Type: config.MCPStdio, Lazy: new(false)},
+		"idx-pinned": {Type: config.MCPStdio, Lazy: new(false)},
 	}, nil)
 	require.Empty(t, IndexLines(pinned))
 }
@@ -177,7 +179,7 @@ func TestDeferredNamesOnlyHidesLazyUnactivated(t *testing.T) {
 	seedTools(t, "def-b", "three")
 	cfg := mcpStore(map[string]config.MCPConfig{
 		"def-a": {Type: config.MCPStdio},
-		"def-b": {Type: config.MCPStdio, Lazy: lazy(false)},
+		"def-b": {Type: config.MCPStdio, Lazy: new(false)},
 	}, nil)
 
 	const session = "sess-deferred"
@@ -197,7 +199,7 @@ func TestDeferredNamesOnlyHidesLazyUnactivated(t *testing.T) {
 
 func TestDeferredNamesNilWhenNothingHidden(t *testing.T) {
 	seedTools(t, "def-off", "one")
-	cfg := mcpStore(map[string]config.MCPConfig{"def-off": {Type: config.MCPStdio}}, lazy(false))
+	cfg := mcpStore(map[string]config.MCPConfig{"def-off": {Type: config.MCPStdio}}, new(false))
 	require.Nil(t, DeferredNames(cfg, "sess-nil"))
 }
 
@@ -292,7 +294,7 @@ func TestExposedNames(t *testing.T) {
 
 	// Nothing to hide means the caller leaves ActiveTools unset.
 	eager := mcpStore(map[string]config.MCPConfig{
-		"exp": {Type: config.MCPStdio, Lazy: lazy(false)},
+		"exp": {Type: config.MCPStdio, Lazy: new(false)},
 	}, nil)
 	_, ok = ExposedNames(eager, session, candidates)
 	require.False(t, ok)
@@ -353,12 +355,7 @@ func TestLazyFlowWithLiveServer(t *testing.T) {
 }
 
 func containsName(haystack []string, want string) bool {
-	for _, name := range haystack {
-		if name == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(haystack, want)
 }
 
 func TestPromptSectionsTeachesSearch(t *testing.T) {

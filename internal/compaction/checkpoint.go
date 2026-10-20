@@ -124,11 +124,11 @@ func Body(summary string) string {
 // sentences a model reads, because a checkpoint card that silently lost their
 // counts would look like a bug in the card rather than in the file's vintage.
 func ParseInfo(summary string) (Info, bool) {
-	start := strings.Index(summary, infoStart)
-	if start == -1 {
+	_, after, ok := strings.Cut(summary, infoStart)
+	if !ok {
 		return Info{}, false
 	}
-	rest := summary[start+len(infoStart):]
+	rest := after
 	lineEnd := strings.IndexByte(rest, '\n')
 	if lineEnd == -1 {
 		lineEnd = len(rest)

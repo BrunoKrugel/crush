@@ -100,8 +100,7 @@ func (s *Scheduler) tick(ctx context.Context) {
 	for _, task := range s.store.DueTasks(s.serves) {
 		slog.Debug("Firing scheduled task", "id", task.ID, "session_id", task.SessionID)
 		if err := s.fire(ctx, task); err != nil {
-			var transient *TransientError
-			if errors.As(err, &transient) {
+			if transient, ok := errors.AsType[*TransientError](err); ok {
 				slog.Warn("Scheduled task fire deferred", "id", task.ID, "error", err)
 				s.store.Retry(task.ID, transient.RetryIn)
 				continue

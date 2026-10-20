@@ -165,12 +165,7 @@ func IsAllowedAttachmentType(path string) bool {
 		}
 	}
 	base := filepath.Base(lower)
-	for _, name := range AllowedTextFileNames {
-		if base == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(AllowedTextFileNames, base)
 }
 
 // SniffAttachmentMIME detects an attachment's MIME type from its content and

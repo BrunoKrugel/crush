@@ -57,8 +57,8 @@ func Parse(expression string) (*Schedule, error) {
 // turns a typo into a parse error the agent can act on, instead of a
 // task that is accepted and then quietly never runs.
 func rejectEmptyListEntries(expression string) error {
-	for _, field := range strings.Fields(expression) {
-		for _, entry := range strings.Split(field, ",") {
+	for field := range strings.FieldsSeq(expression) {
+		for entry := range strings.SplitSeq(field, ",") {
 			if strings.TrimSpace(entry) == "" {
 				return fmt.Errorf("empty list entry in field %q", field)
 			}
@@ -111,9 +111,9 @@ func normalizeSundayAlias(expression string) string {
 func expandDayOfWeek(entry string, days map[int]bool) bool {
 	step := 1
 	base := entry
-	if idx := strings.Index(entry, "/"); idx >= 0 {
-		base = entry[:idx]
-		parsed, err := strconv.Atoi(entry[idx+1:])
+	if before, after, ok := strings.Cut(entry, "/"); ok {
+		base = before
+		parsed, err := strconv.Atoi(after)
 		if err != nil || parsed <= 0 {
 			return false
 		}

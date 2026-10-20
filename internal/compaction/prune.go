@@ -3,6 +3,7 @@ package compaction
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/crush/internal/message"
@@ -169,8 +170,8 @@ func turnBoundary(msgs []message.Message, protectTurns int) int {
 		return 0
 	}
 	var seen int
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role != message.User {
+	for i, msg := range slices.Backward(msgs) {
+		if msg.Role != message.User {
 			continue
 		}
 		seen++

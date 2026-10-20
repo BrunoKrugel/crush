@@ -290,7 +290,7 @@ func scoreRef(ref ToolRef, query string) int {
 	// Nothing matched as a whole. "create pull request" should still find
 	// create_pull_request, so fall back to counting word hits.
 	score := 0
-	for _, word := range strings.Fields(q) {
+	for word := range strings.FieldsSeq(q) {
 		if len(word) < 3 {
 			continue
 		}
@@ -321,7 +321,7 @@ func byServer(refs []ToolRef, server string, limit int) []ToolRef {
 
 func bySelection(refs []ToolRef, selection string, limit int) []ToolRef {
 	wanted := make(map[string]struct{})
-	for _, name := range strings.Split(selection, ",") {
+	for name := range strings.SplitSeq(selection, ",") {
 		if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
 			wanted[name] = struct{}{}
 		}

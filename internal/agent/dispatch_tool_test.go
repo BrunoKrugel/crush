@@ -87,7 +87,8 @@ func dispatchTestModel() Model {
 	}
 }
 
-func intPtr(v int) *int { return &v }
+//go:fix inline
+func intPtr(v int) *int { return new(v) }
 
 // heldDispatchSlots reports the dispatch concurrency slots currently
 // held, so tests can wait for a finished dispatch to actually give its
@@ -1482,7 +1483,7 @@ func TestDispatchAgentToolRefusesAtCapacity(t *testing.T) {
 		gate:   gate,
 	}
 	c, env := newDispatchToolEnv(t, agent)
-	c.cfg.Config().Options.Dispatch = &config.DispatchOptions{MaxConcurrent: intPtr(2)}
+	c.cfg.Config().Options.Dispatch = &config.DispatchOptions{MaxConcurrent: new(2)}
 	tool := c.dispatchTool()
 
 	handleA := decodeDispatchHandle(t, runDispatchToolCallAs(t, tool, DispatchAgentParams{Prompt: "work A", Branch: "main"}, "dispatch-tool-call-A"))
@@ -1541,13 +1542,13 @@ func TestDispatchAgentToolParallelCallsNeverOvershootCap(t *testing.T) {
 		gate:   gate,
 	}
 	c, _ := newDispatchToolEnv(t, agent)
-	c.cfg.Config().Options.Dispatch = &config.DispatchOptions{MaxConcurrent: intPtr(3)}
+	c.cfg.Config().Options.Dispatch = &config.DispatchOptions{MaxConcurrent: new(3)}
 	tool := c.dispatchTool()
 
 	var wg sync.WaitGroup
 	responses := make([]fantasy.ToolResponse, 6)
 	errs := make([]error, 6)
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -1570,7 +1571,7 @@ func TestDispatchAgentToolParallelCallsNeverOvershootCap(t *testing.T) {
 	close(gate)
 
 	var handles []dispatch.DispatchResult
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		require.NoError(t, errs[i], "parallel call %d", i)
 		if responses[i].IsError {
 			require.Contains(t, responses[i].Content, "dispatch at capacity: 3 agents are already running (dispatch.max_concurrent=3)")
@@ -1608,7 +1609,7 @@ func TestDispatchAgentToolFailedSetupReleasesSlot(t *testing.T) {
 		gate:   gate,
 	}
 	c, _ := newDispatchToolEnv(t, agent)
-	c.cfg.Config().Options.Dispatch = &config.DispatchOptions{MaxConcurrent: intPtr(2)}
+	c.cfg.Config().Options.Dispatch = &config.DispatchOptions{MaxConcurrent: new(2)}
 	tool := c.dispatchTool()
 
 	handleA := decodeDispatchHandle(t, runDispatchToolCallAs(t, tool, DispatchAgentParams{Prompt: "work A", Branch: "main"}, "dispatch-tool-call-A"))

@@ -21,8 +21,8 @@ import (
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/scheduler"
-	"uuid"
 	"github.com/stretchr/testify/require"
+	"uuid"
 )
 
 // runCoordinator is a configurable agent.Coordinator stub for the

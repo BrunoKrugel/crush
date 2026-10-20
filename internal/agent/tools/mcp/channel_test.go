@@ -156,7 +156,7 @@ func TestParseChannelParamsMetaLimits(t *testing.T) {
 
 	// Too many meta entries: capped at maxChannelMetaEntries.
 	meta := make(map[string]string)
-	for i := 0; i < maxChannelMetaEntries+10; i++ {
+	for i := range maxChannelMetaEntries + 10 {
 		meta["k"+strings.Repeat("x", i)] = "v"
 	}
 	raw2, _ := sonic.Marshal(map[string]any{"content": "hi", "meta": meta})
@@ -394,8 +394,7 @@ func waitForEvent(t *testing.T, ch <-chan pubsub.Event[Event]) (Event, bool) {
 }
 
 func TestChannelConnGateOpenInjects(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sub := broker.Subscribe(ctx)
 
 	gate := newChannelGate()
@@ -436,8 +435,7 @@ func TestChannelConnGateOpenInjects(t *testing.T) {
 }
 
 func TestChannelConnGateClosedDropsEvents(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sub := broker.Subscribe(ctx)
 
 	gate := newChannelGate()
@@ -466,8 +464,7 @@ func TestChannelConnGateClosedDropsEvents(t *testing.T) {
 }
 
 func TestChannelConnMalformedPayloadDropped(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sub := broker.Subscribe(ctx)
 
 	gate := newChannelGate()
@@ -557,8 +554,7 @@ func TestPublishChannelMessageUsesMustDeliver(t *testing.T) {
 // Connect window), then resolves the gate to open and verifies the buffered
 // message is published.
 func TestChannelConnBuffersDuringUndecidedGate(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sub := broker.Subscribe(ctx)
 
 	gate := newChannelGate() // starts undecided
@@ -609,8 +605,7 @@ func TestChannelConnBuffersDuringUndecidedGate(t *testing.T) {
 // are discarded (not published) when the gate resolves to closed — a
 // non-opted-in or non-capable server must never deliver its events.
 func TestChannelConnDiscardsBufferOnClosedGate(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sub := broker.Subscribe(ctx)
 
 	gate := newChannelGate()
@@ -647,8 +642,7 @@ func TestChannelConnDiscardsBufferOnClosedGate(t *testing.T) {
 // through SubscribeEvents. The cross-workspace concern is handled at that
 // routing layer, not by filtering at the source.
 func TestSubscribeEventsForwardsChannelMessages(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	events := SubscribeEvents(ctx)
 

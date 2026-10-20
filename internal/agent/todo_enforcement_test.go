@@ -433,7 +433,7 @@ func TestTodoNudge_EscalatesAndCaps(t *testing.T) {
 	t.Parallel()
 	env := testEnv(t)
 	var steps []scriptedStep
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		steps = append(steps, scriptedStep{toolCalls: []scriptedToolCall{{name: "probe", input: "{}"}}})
 	}
 	steps = append(steps, scriptedStep{text: "done"})
@@ -919,7 +919,6 @@ func TestTodoHardGate_RejectsNewlyClassifiedMutatingTools(t *testing.T) {
 		}},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			env := testEnv(t)

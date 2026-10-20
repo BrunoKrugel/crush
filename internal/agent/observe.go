@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -301,8 +302,8 @@ func tailWithinTokens(ids []string, byID map[string]message.Message, budget int6
 		selected []message.Message
 		total    int64
 	)
-	for i := len(ids) - 1; i >= 0; i-- {
-		msg, ok := byID[ids[i]]
+	for _, id := range slices.Backward(ids) {
+		msg, ok := byID[id]
 		if !ok {
 			continue
 		}

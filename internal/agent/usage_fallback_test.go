@@ -31,7 +31,7 @@ func TestFallbackStepUsageKeepsProviderUsage(t *testing.T) {
 		TotalTokens:  15,
 	}
 	step := fantasy.StepResult{
-		Response: fantasy.Response{Usage: usage},
+		Usage: usage,
 	}
 
 	fallbackUsage, estimated := fallbackStepUsage(nil, step)
@@ -46,10 +46,8 @@ func TestFallbackStepUsageEstimatesPromptAndAssistantText(t *testing.T) {
 		fantasy.NewUserMessage("please explain the implementation details"),
 	}
 	step := fantasy.StepResult{
-		Response: fantasy.Response{
-			Content: fantasy.ResponseContent{
-				fantasy.TextContent{Text: "the implementation stores state safely"},
-			},
+		Content: fantasy.ResponseContent{
+			fantasy.TextContent{Text: "the implementation stores state safely"},
 		},
 	}
 
@@ -72,10 +70,8 @@ func TestFallbackStepUsageEstimatesReasoning(t *testing.T) {
 		},
 	}
 	step := fantasy.StepResult{
-		Response: fantasy.Response{
-			Content: fantasy.ResponseContent{
-				fantasy.ReasoningContent{Text: "second reason about the answer"},
-			},
+		Content: fantasy.ResponseContent{
+			fantasy.ReasoningContent{Text: "second reason about the answer"},
 		},
 	}
 
@@ -89,13 +85,11 @@ func TestFallbackStepUsageEstimatesToolCalls(t *testing.T) {
 	t.Parallel()
 
 	step := fantasy.StepResult{
-		Response: fantasy.Response{
-			Content: fantasy.ResponseContent{
-				fantasy.ToolCallContent{
-					ToolCallID: "tool-call-1",
-					ToolName:   "view",
-					Input:      `{"file_path":"/tmp/example.go"}`,
-				},
+		Content: fantasy.ResponseContent{
+			fantasy.ToolCallContent{
+				ToolCallID: "tool-call-1",
+				ToolName:   "view",
+				Input:      `{"file_path":"/tmp/example.go"}`,
 			},
 		},
 	}
@@ -149,14 +143,12 @@ func TestFallbackStepUsageSkipsClientToolResultsAsOutput(t *testing.T) {
 	t.Parallel()
 
 	step := fantasy.StepResult{
-		Response: fantasy.Response{
-			Content: fantasy.ResponseContent{
-				fantasy.ToolResultContent{
-					ToolCallID: "tool-call-1",
-					ToolName:   "bash",
-					Result: fantasy.ToolResultOutputContentText{
-						Text: "large client-executed payload that should not count as model output tokens",
-					},
+		Content: fantasy.ResponseContent{
+			fantasy.ToolResultContent{
+				ToolCallID: "tool-call-1",
+				ToolName:   "bash",
+				Result: fantasy.ToolResultOutputContentText{
+					Text: "large client-executed payload that should not count as model output tokens",
 				},
 			},
 		},
@@ -171,15 +163,13 @@ func TestFallbackStepUsageCountsProviderToolResultsAsOutput(t *testing.T) {
 	t.Parallel()
 
 	step := fantasy.StepResult{
-		Response: fantasy.Response{
-			Content: fantasy.ResponseContent{
-				fantasy.ToolResultContent{
-					ToolCallID:       "tool-call-1",
-					ToolName:         "web_search",
-					ProviderExecuted: true,
-					ClientMetadata:   "provider metadata",
-					Result:           fantasy.ToolResultOutputContentText{Text: "provider-executed result"},
-				},
+		Content: fantasy.ResponseContent{
+			fantasy.ToolResultContent{
+				ToolCallID:       "tool-call-1",
+				ToolName:         "web_search",
+				ProviderExecuted: true,
+				ClientMetadata:   "provider metadata",
+				Result:           fantasy.ToolResultOutputContentText{Text: "provider-executed result"},
 			},
 		},
 	}

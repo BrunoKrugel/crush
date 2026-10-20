@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"text/template"
 	"time"
@@ -144,11 +145,8 @@ func WithScheduling() Option {
 func filterSkillsByName(all []*skills.Skill, names []string) []*skills.Skill {
 	var filtered []*skills.Skill
 	for _, s := range all {
-		for _, name := range names {
-			if s.Name == name {
-				filtered = append(filtered, s)
-				break
-			}
+		if slices.Contains(names, s.Name) {
+			filtered = append(filtered, s)
 		}
 	}
 	return filtered

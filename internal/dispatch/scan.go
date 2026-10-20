@@ -64,7 +64,7 @@ type WorkspaceInfo struct {
 	// the marker.
 	InstanceID string    `json:"instance_id,omitempty"`
 	PID        int       `json:"pid,omitempty"`
-	CreatedAt  time.Time `json:"created_at,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // OwnerAliveState renders the three-way liveness a list column shows:

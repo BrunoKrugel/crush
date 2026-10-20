@@ -66,7 +66,7 @@ func TestRun_SubmissionDuringPreparationCompletionIsNotStranded(t *testing.T) {
 	env := testEnv(t)
 	sess, err := env.sessions.Create(ctx, "session")
 	require.NoError(t, err)
-	model := &preparationHandoffModel{finishStreamModel: finishStreamModel{text: "done"}}
+	model := &preparationHandoffModel{text: "done"}
 	sa := testSessionAgent(env, model, &finishStreamModel{text: "title"}, "system")
 	a, ok := sa.(*sessionAgent)
 	require.True(t, ok)

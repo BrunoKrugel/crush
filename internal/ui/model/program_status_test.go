@@ -185,6 +185,7 @@ func TestProgramStatusCompletionLifecycle(t *testing.T) {
 		})
 	}
 }
+
 func TestProgramStatusIgnoresOtherSessionOutcomes(t *testing.T) {
 	pinTTLs(t)
 	u := newBusyUI(&countingWorkspace{ready: true})
@@ -206,6 +207,7 @@ func TestProgramStatusIgnoresOtherSessionOutcomes(t *testing.T) {
 	u.Update(loadSessionMsg{session: &session.Session{ID: "s2"}})
 	require.Empty(t, u.turnOutcome)
 }
+
 func TestProgramStatusSubmissionReturn(t *testing.T) {
 	pinTTLs(t)
 	for _, tc := range []struct {

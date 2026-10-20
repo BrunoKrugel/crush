@@ -243,7 +243,7 @@ func parentCheckoutBusy(ctx context.Context, repoRoot string) (string, bool) {
 func abortDispatchConflict(ctx context.Context, repoRoot string) []string {
 	out, _ := git(ctx, repoRoot, "diff", "--name-only", "--diff-filter=U")
 	var conflicts []string
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
 		if line = strings.TrimSpace(line); line != "" {
 			conflicts = append(conflicts, line)
 		}

@@ -537,7 +537,7 @@ func TestRenderContentWithA2UIThemedContainer(t *testing.T) {
 
 	// The surface content line is enclosed by the container's side borders.
 	var surfaceLine string
-	for _, line := range strings.Split(plain, "\n") {
+	for line := range strings.SplitSeq(plain, "\n") {
 		if strings.Contains(line, "Hello from A2UI") {
 			surfaceLine = strings.TrimRight(line, " ")
 			break
@@ -548,7 +548,7 @@ func TestRenderContentWithA2UIThemedContainer(t *testing.T) {
 	require.True(t, strings.HasSuffix(surfaceLine, "│"), "surface line should end with container border: %q", surfaceLine)
 
 	// Prose outside the surface is not boxed.
-	for _, line := range strings.Split(plain, "\n") {
+	for line := range strings.SplitSeq(plain, "\n") {
 		if strings.Contains(line, "Here is a card") || strings.Contains(line, "Anything else") {
 			require.False(t, strings.Contains(line, "│"), "prose should not be inside the container: %q", line)
 		}
@@ -913,8 +913,8 @@ func TestA2UISubmissionPrompt(t *testing.T) {
 	t.Parallel()
 
 	clicked := event.ButtonClicked{
-		Source: event.Source{ComponentID: "btn-send", SurfaceID: "contact"},
-		ID:     "btn-send",
+		ComponentID: "btn-send", SurfaceID: "contact",
+		ID: "btn-send",
 	}
 
 	// Button only, no field values.

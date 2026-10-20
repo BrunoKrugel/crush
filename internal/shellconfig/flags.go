@@ -219,7 +219,7 @@ func parseFlagValue(spec flagSpec, args []string, i int) (any, int, error) {
 		// validation as one unknown tool name and fail the whole config.
 		var expanded []string
 		for _, value := range list {
-			for _, part := range strings.Split(value, ",") {
+			for part := range strings.SplitSeq(value, ",") {
 				if part = strings.TrimSpace(part); part != "" {
 					expanded = append(expanded, part)
 				}

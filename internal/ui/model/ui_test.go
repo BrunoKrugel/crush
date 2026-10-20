@@ -930,7 +930,7 @@ func cmdStages(cmd tea.Cmd) []tea.Msg {
 	if rv := reflect.ValueOf(msg); rv.Kind() == reflect.Slice {
 		var out []tea.Msg
 		for i := range rv.Len() {
-			if c, ok := rv.Index(i).Interface().(tea.Cmd); ok {
+			if c, ok := reflect.TypeAssert[tea.Cmd](rv.Index(i)); ok {
 				out = append(out, cmdStages(c)...)
 			}
 		}

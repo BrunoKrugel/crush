@@ -123,10 +123,7 @@ func (s *memoryService) ListFromSummary(ctx context.Context, sessionID, summaryM
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	ids := s.order[sessionID]
-	start := slices.Index(ids, summaryMessageID)
-	if start < 0 {
-		start = 0
-	}
+	start := max(slices.Index(ids, summaryMessageID), 0)
 	messages := make([]Message, 0, len(ids)-start)
 	for _, id := range ids[start:] {
 		if msg, ok := s.messages[id]; ok {
@@ -169,8 +166,8 @@ func (s *memoryService) GetLastAssistantMessage(ctx context.Context, sessionID s
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	ids := s.order[sessionID]
-	for i := len(ids) - 1; i >= 0; i-- {
-		if msg, ok := s.messages[ids[i]]; ok && msg.Role == Assistant && !msg.IsSummaryMessage {
+	for _, id := range slices.Backward(ids) {
+		if msg, ok := s.messages[id]; ok && msg.Role == Assistant && !msg.IsSummaryMessage {
 			return msg.Clone(), nil
 		}
 	}

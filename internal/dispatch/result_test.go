@@ -45,7 +45,7 @@ func TestSummarizeDiffEmpty(t *testing.T) {
 func TestSummarizeDiffTruncates(t *testing.T) {
 	var b strings.Builder
 	b.WriteString("diff --git a/big.txt b/big.txt\n--- a/big.txt\n+++ b/big.txt\n@@ -1 +1,999 @@\n")
-	for i := 0; i < MaxDiffLines+50; i++ {
+	for range MaxDiffLines + 50 {
 		b.WriteString("+line\n")
 	}
 
@@ -296,7 +296,7 @@ func TestSummarizeDiffByteBudgetCutsLongLine(t *testing.T) {
 // (#361).
 func TestSummarizeDiffFileCap(t *testing.T) {
 	var b strings.Builder
-	for i := 0; i < 150; i++ {
+	for i := range 150 {
 		fmt.Fprintf(&b, "diff --git a/f%03d.txt b/f%03d.txt\n--- a/f%03d.txt\n+++ b/f%03d.txt\n@@ -1 +1,2 @@\n+added\n", i, i, i, i)
 	}
 

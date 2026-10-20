@@ -187,7 +187,7 @@ func blankSidebarColumn(height int) string {
 		return ""
 	}
 	var sb strings.Builder
-	for i := 0; i < height; i++ {
+	for i := range height {
 		if i > 0 {
 			sb.WriteString("\n")
 		}

@@ -32,7 +32,7 @@ func TestOptionsGetDispatchMaxConcurrent(t *testing.T) {
 		},
 		{
 			name:     "configured",
-			options:  &Options{Dispatch: &DispatchOptions{MaxConcurrent: ptr(2)}},
+			options:  &Options{Dispatch: &DispatchOptions{MaxConcurrent: new(2)}},
 			expected: 2,
 		},
 	}
@@ -60,13 +60,13 @@ func TestDispatchOptionsValidate(t *testing.T) {
 
 	require.NoError(t, (*DispatchOptions)(nil).Validate("options.dispatch"))
 	require.NoError(t, (&DispatchOptions{}).Validate("options.dispatch"))
-	require.NoError(t, (&DispatchOptions{MaxConcurrent: ptr(1)}).Validate("options.dispatch"))
+	require.NoError(t, (&DispatchOptions{MaxConcurrent: new(1)}).Validate("options.dispatch"))
 
-	err := (&DispatchOptions{MaxConcurrent: ptr(0)}).Validate("options.dispatch")
+	err := (&DispatchOptions{MaxConcurrent: new(0)}).Validate("options.dispatch")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "options.dispatch.max_concurrent")
 
-	err = (&DispatchOptions{MaxConcurrent: ptr(-3)}).Validate("options.dispatch")
+	err = (&DispatchOptions{MaxConcurrent: new(-3)}).Validate("options.dispatch")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "options.dispatch.max_concurrent")
 }

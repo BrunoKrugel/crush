@@ -160,7 +160,7 @@ func renderToolA2UIResultBody(sty *styles.Styles, meta tools.ReadMCPResourceResp
 // from tool content, leaving only text the user should see.
 func stripA2UIPlaceholders(content string) string {
 	var out []string
-	for _, ln := range strings.Split(content, "\n") {
+	for ln := range strings.SplitSeq(content, "\n") {
 		if strings.HasPrefix(strings.TrimSpace(ln), tools.A2UISurfacePlaceholderPrefix) {
 			continue
 		}

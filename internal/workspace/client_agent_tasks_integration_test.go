@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"charm.land/fantasy"
-	"uuid"
 	"github.com/stretchr/testify/require"
+	"uuid"
 
 	"github.com/charmbracelet/crush/internal/a2a"
 	"github.com/charmbracelet/crush/internal/agent"

@@ -199,7 +199,7 @@ func tallA2UISurface(t *testing.T) string {
 	t.Helper()
 	var comps []string
 	var children []string
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		id := string(rune('a' + i%26))
 		id += string(rune('0' + i/26))
 		children = append(children, `"`+id+`"`)

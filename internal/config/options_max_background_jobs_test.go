@@ -17,9 +17,9 @@ func TestOptionsGetMaxBackgroundJobs(t *testing.T) {
 	}{
 		{"nil options", nil, DefaultMaxBackgroundJobs},
 		{"unset", &Options{}, DefaultMaxBackgroundJobs},
-		{"zero means default", &Options{MaxBackgroundJobs: ptr(0)}, DefaultMaxBackgroundJobs},
-		{"negative means default", &Options{MaxBackgroundJobs: ptr(-5)}, DefaultMaxBackgroundJobs},
-		{"configured", &Options{MaxBackgroundJobs: ptr(200)}, 200},
+		{"zero means default", &Options{MaxBackgroundJobs: new(0)}, DefaultMaxBackgroundJobs},
+		{"negative means default", &Options{MaxBackgroundJobs: new(-5)}, DefaultMaxBackgroundJobs},
+		{"configured", &Options{MaxBackgroundJobs: new(200)}, 200},
 	}
 
 	for _, tt := range tests {

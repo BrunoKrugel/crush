@@ -285,42 +285,42 @@ func (AgentModel) JSONSchema() *jsonschema.Schema {
 func builtinAgentDefinitions() map[string]AgentDefinition {
 	return map[string]AgentDefinition{
 		AgentCoder: {
-			Role:        strPtr(AgentRoleMain),
-			Runtime:     strPtr(AgentRuntimeBuiltin),
-			Name:        strPtr("Coder"),
-			Description: strPtr("An agent that helps with executing coding tasks."),
+			Role:        new(AgentRoleMain),
+			Runtime:     new(AgentRuntimeBuiltin),
+			Name:        new("Coder"),
+			Description: new("An agent that helps with executing coding tasks."),
 			Model:       &AgentModel{Type: SelectedModelTypeLarge},
-			Prompt:      strPtr("builtin:coder"),
+			Prompt:      new("builtin:coder"),
 			Tools:       &AgentTools{Allow: []string{"*"}},
 			MCP:         &AgentMCP{Allow: []string{"*"}},
 		},
 		AgentPlan: {
-			Role:        strPtr(AgentRoleMain),
-			Runtime:     strPtr(AgentRuntimeBuiltin),
-			Name:        strPtr("Plan"),
-			Description: strPtr("An agent that performs deep analysis and prepares implementation plans without modifying files."),
+			Role:        new(AgentRoleMain),
+			Runtime:     new(AgentRuntimeBuiltin),
+			Name:        new("Plan"),
+			Description: new("An agent that performs deep analysis and prepares implementation plans without modifying files."),
 			Model:       &AgentModel{Type: SelectedModelTypeLarge},
-			Prompt:      strPtr("builtin:plan"),
+			Prompt:      new("builtin:plan"),
 			Tools:       &AgentTools{Allow: slices.Clone(planToolNames())},
 			MCP:         &AgentMCP{Allow: []string{}},
 		},
 		AgentTask: {
-			Role:        strPtr(AgentRoleSubagent),
-			Runtime:     strPtr(AgentRuntimeBuiltin),
-			Name:        strPtr("Task"),
-			Description: strPtr("An agent that helps with searching for context and finding implementation details."),
+			Role:        new(AgentRoleSubagent),
+			Runtime:     new(AgentRuntimeBuiltin),
+			Name:        new("Task"),
+			Description: new("An agent that helps with searching for context and finding implementation details."),
 			Model:       &AgentModel{Type: SelectedModelTypeLarge},
-			Prompt:      strPtr("builtin:task"),
+			Prompt:      new("builtin:task"),
 			Tools:       &AgentTools{Allow: []string{"@read"}},
 			MCP:         &AgentMCP{Allow: []string{}},
 		},
 		AgentWorker: {
-			Role:        strPtr(AgentRoleDispatch),
-			Runtime:     strPtr(AgentRuntimeBuiltin),
-			Name:        strPtr("Worker"),
-			Description: strPtr("An agent that produces work in an isolated workspace."),
+			Role:        new(AgentRoleDispatch),
+			Runtime:     new(AgentRuntimeBuiltin),
+			Name:        new("Worker"),
+			Description: new("An agent that produces work in an isolated workspace."),
 			Model:       &AgentModel{Type: SelectedModelTypeSmall},
-			Prompt:      strPtr("builtin:dispatch"),
+			Prompt:      new("builtin:dispatch"),
 			// The dispatch toolset (#432): the read and write groups
 			// plus the support tools (#384) that let a dispatch observe
 			// what it ran and wrote. MCP stays off by default — the
@@ -328,7 +328,7 @@ func builtinAgentDefinitions() map[string]AgentDefinition {
 			// with agents.worker.mcp.allow.
 			Tools:     &AgentTools{Allow: slices.Concat(readOnlyToolNames, writeToolNames, []string{"job_output", "job_kill", "lsp_diagnostics"})},
 			MCP:       &AgentMCP{Allow: []string{}},
-			Workspace: strPtr(AgentWorkspaceWorktree),
+			Workspace: new(AgentWorkspaceWorktree),
 		},
 	}
 }
@@ -360,7 +360,8 @@ func planToolNames() []string {
 	}
 }
 
-func strPtr(s string) *string { return &s }
+//go:fix inline
+func strPtr(s string) *string { return new(s) }
 
 // expandToolRefs resolves allow and deny entries: @read and @write
 // expand to their groups and * to every tool name. The returned list

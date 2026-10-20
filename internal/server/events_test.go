@@ -304,8 +304,8 @@ func TestMessageToProtoPrismModel(t *testing.T) {
 		PrismModelID:   "prism-42",
 		PrismModelName: "GLM 5.3",
 
-		PrismHypercreditSavings: ptrFloat(1.5),
-		PrismDollarSavings:      ptrFloat(0.002),
+		PrismHypercreditSavings: new(1.5),
+		PrismDollarSavings:      new(0.002),
 	}
 
 	got := messageToProto(src)
@@ -317,7 +317,8 @@ func TestMessageToProtoPrismModel(t *testing.T) {
 	require.Equal(t, 0.002, *got.PrismDollarSavings)
 }
 
-func ptrFloat(v float64) *float64 { return &v }
+//go:fix inline
+func ptrFloat(v float64) *float64 { return new(v) }
 
 // TestMCPStateChangedEventForwardsCounts verifies that the SSE envelope
 // carries prompt and resource counts, not only tool counts. The client TUI

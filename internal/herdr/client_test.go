@@ -1219,24 +1219,20 @@ func TestSenderCallsAreSerialized(t *testing.T) {
 	)
 	var wg sync.WaitGroup
 	for range notifiers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range rounds {
 				c.Notify("Done", "turn complete")
 			}
-		}()
+		})
 	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for range rounds {
 			c.HandleEvent(AssistantMessage{SessionID: "s1"})
 			c.HandleEvent(QuestionAsked{BatchID: "b1", Text: "pick one"})
 			c.HandleEvent(QuestionResolved{BatchID: "b1"})
 			c.HandleEvent(RunComplete{SessionID: "s1"})
 		}
-	}()
+	})
 	wg.Wait()
 
 	// Every notification is sent unconditionally; state reports are

@@ -12,8 +12,8 @@ import (
 	"github.com/charmbracelet/crush/internal/backend"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/session"
-	"uuid"
 	"github.com/stretchr/testify/require"
+	"uuid"
 )
 
 // ListChildren filters the fixed session list by parent, mirroring the

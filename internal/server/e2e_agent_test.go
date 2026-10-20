@@ -23,8 +23,8 @@ import (
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/scheduler"
-	"uuid"
 	"github.com/stretchr/testify/require"
+	"uuid"
 )
 
 // scriptedCoordinator is an agent.Coordinator stub that mimics the

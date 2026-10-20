@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/backend"
 	"github.com/charmbracelet/crush/internal/proto"
-	"uuid"
 	"github.com/stretchr/testify/require"
+	"uuid"
 )
 
 // buildEmptyWorkspace returns a controller wired to a backend that owns

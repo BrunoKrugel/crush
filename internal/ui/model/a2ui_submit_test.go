@@ -101,8 +101,8 @@ func TestHandleA2UIButtonClickedStartsAgentTurn(t *testing.T) {
 	m := newA2UISubmitUI(t, ws)
 
 	cmd := m.handleA2UIButtonClicked(event.ButtonClicked{
-		Source: event.Source{ComponentID: "btn-send", SurfaceID: "form"},
-		ID:     "btn-send",
+		ComponentID: "btn-send", SurfaceID: "form",
+		ID: "btn-send",
 	})
 	require.NotNil(t, cmd, "a submit button must start a turn")
 	runCmdTree(cmd)
@@ -128,8 +128,8 @@ func TestHandleA2UIButtonClickedCancelDismissesWithoutTurn(t *testing.T) {
 	m := newA2UISubmitUI(t, ws)
 
 	cmd := m.handleA2UIButtonClicked(event.ButtonClicked{
-		Source: event.Source{ComponentID: "btn-cancel", SurfaceID: "form"},
-		ID:     "btn-cancel",
+		ComponentID: "btn-cancel", SurfaceID: "form",
+		ID: "btn-cancel",
 	})
 	require.Nil(t, cmd, "a cancel button must not start a turn")
 	require.Empty(t, ws.prompts)

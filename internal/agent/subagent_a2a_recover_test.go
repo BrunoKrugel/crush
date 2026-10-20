@@ -139,9 +139,9 @@ func TestSubAgentA2ARecoveryCancelsRunSession(t *testing.T) {
 // caller through tasks/get.
 func TestSubAgentA2ARecoveryFailingCancelFallsBackToDirect(t *testing.T) {
 	host := &failingCancelHost{
-		breakingStreamHost: breakingStreamHost{taskID: "task-1"},
-		cancelErr:          errors.New("cancel unreachable"),
-		taskStatus:         DispatchTaskStatus{Status: transportStatusCanceled, Text: "parent turn canceled"},
+		taskID:     "task-1",
+		cancelErr:  errors.New("cancel unreachable"),
+		taskStatus: DispatchTaskStatus{Status: transportStatusCanceled, Text: "parent turn canceled"},
 	}
 	c, _, parentID := newSubAgentRecoveryTest(t, host)
 

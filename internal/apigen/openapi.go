@@ -1,12 +1,12 @@
 package apigen
 
 import (
-	"github.com/bytedance/sonic"
-
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/bytedance/sonic"
 )
 
 // Info carries the top-level API metadata for the OpenAPI document.

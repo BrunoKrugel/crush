@@ -1199,7 +1199,7 @@ func TestExecuteInactivityProgressResetsTimer(t *testing.T) {
 		// A changed snapshot every 4 virtual seconds — half the
 		// timeout — resets the backstop each time, so it never fires
 		// while the run makes progress.
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			source.ch <- todoSnapshot(runTodos(
 				session.Todo{Content: fmt.Sprintf("step %d", i), Status: session.TodoStatusInProgress, ActiveForm: fmt.Sprintf("stepping %d", i)},
 			))
@@ -1407,9 +1407,9 @@ type askingRunner struct {
 
 func newAskingRunner(svc question.Service) *askingRunner {
 	return &askingRunner{
-		fakeRunner: fakeRunner{enqueueAccepted: true},
-		svc:        svc,
-		toolResp:   make(chan fantasy.ToolResponse, 1),
+		enqueueAccepted: true,
+		svc:             svc,
+		toolResp:        make(chan fantasy.ToolResponse, 1),
 	}
 }
 
@@ -1718,10 +1718,10 @@ type permissionVerdict struct {
 
 func newRequestingRunner(svc permission.Service, calls ...string) *requestingRunner {
 	return &requestingRunner{
-		fakeRunner: fakeRunner{enqueueAccepted: true},
-		svc:        svc,
-		calls:      calls,
-		verdicts:   make(chan permissionVerdict, len(calls)),
+		enqueueAccepted: true,
+		svc:             svc,
+		calls:           calls,
+		verdicts:        make(chan permissionVerdict, len(calls)),
 	}
 }
 
@@ -2051,9 +2051,9 @@ type steeringRunner struct {
 
 func newSteeringRunner(result *fantasy.AgentResult, err error, accept bool) *steeringRunner {
 	return &steeringRunner{
-		fakeRunner: fakeRunner{result: result, err: err, enqueueAccepted: accept},
-		started:    make(chan struct{}),
-		release:    make(chan struct{}),
+		result: result, err: err, enqueueAccepted: accept,
+		started: make(chan struct{}),
+		release: make(chan struct{}),
 	}
 }
 

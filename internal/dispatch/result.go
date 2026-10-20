@@ -1,10 +1,10 @@
 package dispatch
 
 import (
-	"github.com/bytedance/sonic"
-
 	"fmt"
 	"strings"
+
+	"github.com/bytedance/sonic"
 )
 
 // MaxDiffLines caps the diff text carried inside a DispatchResult's
@@ -226,7 +226,7 @@ func SummarizeDiff(diff string) string {
 	// state: 0 = before any section, 1 = header (before the first @@),
 	// 2 = hunk body.
 	state := 0
-	for _, line := range strings.Split(strings.TrimSuffix(diff, "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSuffix(diff, "\n"), "\n") {
 		// A section starts at its git header line, wherever the previous
 		// section left off (a binary or rename-only section has no @@ to
 		// end it).

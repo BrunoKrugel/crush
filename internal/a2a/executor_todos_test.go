@@ -89,9 +89,9 @@ type pacedRunner struct {
 
 func newPacedRunner(result string) *pacedRunner {
 	return &pacedRunner{
-		fakeRunner: fakeRunner{result: textResult(result)},
-		release:    make(chan struct{}),
-		started:    make(chan struct{}),
+		result:  textResult(result),
+		release: make(chan struct{}),
+		started: make(chan struct{}),
 	}
 }
 

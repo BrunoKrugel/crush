@@ -215,8 +215,8 @@ func (s *service) Delete(ctx context.Context, id string) error {
 	// Deepest level first, then the parent; a failure anywhere rolls
 	// back the whole transaction, so no half-deleted tree survives
 	// (#418).
-	for i := len(levels) - 1; i >= 0; i-- {
-		for _, child := range levels[i] {
+	for _, level := range slices.Backward(levels) {
+		for _, child := range level {
 			if err := s.deleteSessionRows(ctx, qtx, child.ID); err != nil {
 				return err
 			}
@@ -230,8 +230,8 @@ func (s *service) Delete(ctx context.Context, id string) error {
 	}
 
 	deleted := make([]Session, 0, len(visited))
-	for i := len(levels) - 1; i >= 0; i-- {
-		for _, child := range levels[i] {
+	for _, level := range slices.Backward(levels) {
+		for _, child := range level {
 			deleted = append(deleted, s.fromDBItem(child))
 		}
 	}

@@ -201,12 +201,12 @@ scan:
 			from = idx + 1
 		}
 		rest := s[tagIdx+len(a2uiOpenTag):]
-		j := strings.Index(rest, a2uiCloseTag)
-		if j < 0 {
+		before, after, ok := strings.Cut(rest, a2uiCloseTag)
+		if !ok {
 			stats.unclosed = true
 			return stats
 		}
-		messages, payloads := classifyA2UIBlock(rest[:j])
+		messages, payloads := classifyA2UIBlock(before)
 		switch {
 		case messages > 0: // renders — nothing to report
 		case payloads > 0:
@@ -214,7 +214,7 @@ scan:
 		default:
 			stats.dropped++
 		}
-		s = rest[j+len(a2uiCloseTag):]
+		s = after
 	}
 }
 
@@ -328,12 +328,7 @@ func hasBareA2UIKeyPrefix(fragment string) bool {
 }
 
 func isBareA2UIKey(fragment string) bool {
-	for _, key := range a2uiBareKeys {
-		if key == fragment {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(a2uiBareKeys, fragment)
 }
 
 func isJSONKeyChar(b byte) bool {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"maps"
 	"strings"
 
 	"github.com/bytedance/sonic"
@@ -205,9 +206,7 @@ func injectA2UICapability(raw json.RawMessage) json.RawMessage {
 		// Already advertised by something upstream; leave it alone.
 		return nil
 	}
-	for k, v := range a2uiClientCapabilities() {
-		caps[k] = v
-	}
+	maps.Copy(caps, a2uiClientCapabilities())
 	params["capabilities"] = caps
 	out, err := sonic.Marshal(params)
 	if err != nil {

@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"maps"
 	"net/http"
@@ -10,8 +11,6 @@ import (
 	"reflect"
 	"sync/atomic"
 	"testing"
-
-	"fmt"
 
 	"golang.org/x/oauth2"
 
@@ -743,7 +742,7 @@ func TestMCPConfigEqualExhaustive(t *testing.T) {
 		"ChannelReply": true,
 	}
 
-	typ := reflect.TypeOf(config.MCPConfig{})
+	typ := reflect.TypeFor[config.MCPConfig]()
 	for i := range typ.NumField() {
 		name := typ.Field(i).Name
 		if excluded[name] {

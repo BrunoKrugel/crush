@@ -15,8 +15,8 @@ import (
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/scheduler"
-	"uuid"
 	"github.com/stretchr/testify/require"
+	"uuid"
 )
 
 // blockingCoordinator is a minimal agent.Coordinator whose RunAccepted

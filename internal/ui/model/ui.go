@@ -5789,7 +5789,7 @@ func (m *UI) dropCompletionAttachment(remaining string) {
 func promptMentions(value, target string) bool {
 	// ScanPromptTokens works a line at a time and reports rune offsets, so
 	// slice the rune view of each line rather than the byte string.
-	for _, line := range strings.Split(value, "\n") {
+	for line := range strings.SplitSeq(value, "\n") {
 		runes := []rune(line)
 		for _, tok := range common.ScanPromptTokens(runes) {
 			if tok.Kind != common.PromptTokenFile {
@@ -5880,7 +5880,7 @@ func (m *UI) resetMentionTracking() {
 // promptTokenTexts is the list of token strings currently in the prompt.
 func (m *UI) promptTokenTexts() []string {
 	var out []string
-	for _, line := range strings.Split(m.textarea.Value(), "\n") {
+	for line := range strings.SplitSeq(m.textarea.Value(), "\n") {
 		runes := []rune(line)
 		for _, tok := range common.ScanPromptTokens(runes) {
 			out = append(out, string(runes[tok.Start:tok.End]))

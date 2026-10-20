@@ -14,8 +14,8 @@ import (
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/scheduler"
-	"uuid"
 	"github.com/stretchr/testify/require"
+	"uuid"
 )
 
 // errorCoordinator is a minimal agent.Coordinator whose RunAccepted
@@ -104,8 +104,7 @@ func TestRunAgent_PreRunErrorPublishesTerminalRunComplete(t *testing.T) {
 	runErr := errors.New("update models failed")
 	ws := insertRunCompleteWorkspace(t, b, context.Background(), &errorCoordinator{err: runErr})
 
-	subCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	subCtx := t.Context()
 	ch := ws.RunCompletions().Subscribe(subCtx)
 
 	err := b.SendMessage(ws.ID, proto.AgentMessage{SessionID: "S1", RunID: "run-1", Prompt: "hi"})
@@ -135,8 +134,7 @@ func TestRunAgent_NoFallbackWhenCoordinatorPublished(t *testing.T) {
 	ws := insertRunCompleteWorkspace(t, b, context.Background(),
 		&errorCoordinator{err: runErr, markPublished: true})
 
-	subCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	subCtx := t.Context()
 	ch := ws.RunCompletions().Subscribe(subCtx)
 
 	err := b.SendMessage(ws.ID, proto.AgentMessage{SessionID: "S1", RunID: "run-1", Prompt: "hi"})
@@ -164,8 +162,7 @@ func TestRunAgent_CancellationPublishesNoErrorTerminal(t *testing.T) {
 	ws := insertRunCompleteWorkspace(t, b, context.Background(),
 		&errorCoordinator{err: context.Canceled})
 
-	subCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	subCtx := t.Context()
 	ch := ws.RunCompletions().Subscribe(subCtx)
 
 	err := b.SendMessage(ws.ID, proto.AgentMessage{SessionID: "S1", RunID: "run-1", Prompt: "hi"})

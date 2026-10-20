@@ -1,10 +1,10 @@
 package shellconfig
 
 import (
-	"github.com/bytedance/sonic"
-
 	"context"
 	"fmt"
+
+	"github.com/bytedance/sonic"
 )
 
 // ConfigBuilder accumulates config state as config builtins execute during a

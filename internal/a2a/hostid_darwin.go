@@ -37,8 +37,7 @@ func processStartToken(pid int) (string, error) {
 func processAlive(pid int, token string) (bool, error) {
 	current, err := processStartToken(pid)
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if _, ok := errors.AsType[*exec.ExitError](err); ok {
 			return false, nil
 		}
 		return true, err

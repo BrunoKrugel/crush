@@ -558,12 +558,10 @@ func TestNameLock_ConcurrentFirstUseReturnsOneMutex(t *testing.T) {
 	var wg sync.WaitGroup
 	start := make(chan struct{})
 	for i := range n {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-start
 			locks[i] = renewLock(name)
-		}()
+		})
 	}
 	close(start)
 	wg.Wait()

@@ -150,7 +150,7 @@ func TestHandleA2UIButtonClickedMCPSurfaceRoundTrips(t *testing.T) {
 	ws.serveA2UITools(srv, "a2ui_action")
 
 	cmd := m.handleA2UIButtonClicked(event.ButtonClicked{
-		Source: event.Source{ComponentID: "btn-confirm", SurfaceID: "booking"},
+		ComponentID: "btn-confirm", SurfaceID: "booking",
 		ID:     "btn-confirm",
 		Action: &a2ui.EventAction{Name: "confirm_booking"},
 	})
@@ -188,7 +188,7 @@ func TestHandleA2UIButtonClickedMCPSurfaceWithoutActionToolFallsBack(t *testing.
 	ws.serveA2UITools(srv, "some_other_tool")
 
 	cmd := m.handleA2UIButtonClicked(event.ButtonClicked{
-		Source: event.Source{ComponentID: "btn-confirm", SurfaceID: "booking"},
+		ComponentID: "btn-confirm", SurfaceID: "booking",
 		ID:     "btn-confirm",
 		Action: &a2ui.EventAction{Name: "confirm_booking"},
 	})
@@ -421,7 +421,7 @@ func TestHandleA2UIButtonClickedAssistantSurfaceWinsOverMCPProvenance(t *testing
 		"the assistant item must hold a live surface with the colliding ID")
 
 	cmd := m.handleA2UIButtonClicked(event.ButtonClicked{
-		Source: event.Source{ComponentID: "btn-go", SurfaceID: "booking"},
+		ComponentID: "btn-go", SurfaceID: "booking",
 		ID:     "btn-go",
 		Action: &a2ui.EventAction{Name: "go"},
 	})

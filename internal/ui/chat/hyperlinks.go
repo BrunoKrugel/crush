@@ -88,8 +88,8 @@ func parseHyperlinkSpans(s string) []hyperlinkSpan {
 		s = s[n:]
 
 		// OSC 8 hyperlink: ESC ] 8 ; params ; url, terminated by BEL or ST.
-		if strings.HasPrefix(seq, "\x1b]8;") {
-			body := strings.TrimPrefix(seq, "\x1b]8;")
+		if after, ok := strings.CutPrefix(seq, "\x1b]8;"); ok {
+			body := after
 			body = strings.TrimSuffix(body, "\a")
 			body = strings.TrimSuffix(body, "\x1b\\")
 			var url string
@@ -146,8 +146,8 @@ func openURL(url string) tea.Cmd {
 	return func() tea.Msg {
 		if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
 			scheme := url
-			if i := strings.Index(url, ":"); i >= 0 {
-				scheme = url[:i]
+			if before, _, ok := strings.Cut(url, ":"); ok {
+				scheme = before
 			}
 			return util.ReportInfo("Blocked non-http link: " + scheme)()
 		}

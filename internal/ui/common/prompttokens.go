@@ -72,8 +72,8 @@ func IsPromptSkillPrefix(name string) bool {
 // and a name with arguments appended is longer than the name, not a prefix
 // of it.
 func promptTokenName(body string) string {
-	if i := strings.IndexByte(body, '('); i >= 0 {
-		return body[:i]
+	if before, _, ok := strings.Cut(body, "("); ok {
+		return before
 	}
 	return body
 }

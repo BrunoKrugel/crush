@@ -26,9 +26,7 @@ func TestTodoCollectorSubscribeUnsubscribeRace(t *testing.T) {
 
 	stop := make(chan struct{})
 	var emitDone sync.WaitGroup
-	emitDone.Add(1)
-	go func() {
-		defer emitDone.Done()
+	emitDone.Go(func() {
 		for {
 			select {
 			case <-stop:
@@ -41,18 +39,16 @@ func TestTodoCollectorSubscribeUnsubscribeRace(t *testing.T) {
 			})
 			time.Sleep(time.Millisecond)
 		}
-	}()
+	})
 
 	var churnDone sync.WaitGroup
-	churnDone.Add(1)
-	go func() {
-		defer churnDone.Done()
-		for i := 0; i < 500; i++ {
+	churnDone.Go(func() {
+		for range 500 {
 			ctx, cancel := context.WithCancel(context.Background())
 			_ = collector.SubscribeSessionTodos(ctx, "msg$$call")
 			cancel()
 		}
-	}()
+	})
 	churnDone.Wait()
 	close(stop)
 	emitDone.Wait()

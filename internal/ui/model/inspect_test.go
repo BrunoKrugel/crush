@@ -667,7 +667,7 @@ func TestInspectEscAlwaysLeaves(t *testing.T) {
 	t.Run("alt+esc never cancels the parent from inspect mode", func(t *testing.T) {
 		m, ws := setup(t, 0, 2)
 
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape, Mod: tea.ModAlt})
 			runInspectCmds(m, cmd)
 		}

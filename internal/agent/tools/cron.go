@@ -126,7 +126,8 @@ func NewCronListTool(store *scheduler.Store) fantasy.AgentTool {
 				return fantasy.NewTextResponse("No scheduled tasks in this session."), nil
 			}
 
-			response := fmt.Sprintf("%d scheduled task(s) in this session:\n", len(tasks))
+			var response strings.Builder
+			response.WriteString(fmt.Sprintf("%d scheduled task(s) in this session:\n", len(tasks)))
 			for _, task := range tasks {
 				kind := "recurring"
 				if !task.Recurring {
@@ -136,16 +137,16 @@ func NewCronListTool(store *scheduler.Store) fantasy.AgentTool {
 				if task.Durable {
 					durable = ", durable"
 				}
-				response += fmt.Sprintf(
+				response.WriteString(fmt.Sprintf(
 					"\n- ID: %s\n  Schedule: %s (local time)\n  Next run: %s\n  Type: %s%s, %d run(s)\n  Prompt: %s",
 					task.ID, task.Cron, formatTaskTime(task.NextRunAt), kind, durable, task.RunCount, task.Prompt,
-				)
+				))
 				if task.LastError != "" {
-					response += fmt.Sprintf("\n  Last error: %s", task.LastError)
+					response.WriteString(fmt.Sprintf("\n  Last error: %s", task.LastError))
 				}
 			}
 			return fantasy.WithResponseMetadata(
-				fantasy.NewTextResponse(response),
+				fantasy.NewTextResponse(response.String()),
 				CronTasksResponseMetadata{Tasks: tasks},
 			), nil
 		},

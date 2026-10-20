@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"uuid"
 	"github.com/stretchr/testify/require"
+	"uuid"
 
 	"github.com/charmbracelet/crush/internal/lock"
 )
@@ -673,7 +673,7 @@ func worktreeCount(t *testing.T, repo string) int {
 		return 0
 	}
 	count := 0
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if strings.HasPrefix(line, "worktree ") {
 			count++
 		}
@@ -690,7 +690,7 @@ func dispatchBranches(t *testing.T, repo string) []string {
 		return nil
 	}
 	var branches []string
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		line = strings.TrimSpace(line)
 		if line != "" {
 			branches = append(branches, line)
@@ -714,7 +714,7 @@ func TestProvisionConcurrent(t *testing.T) {
 	const n = 12
 	errs := make([]error, n)
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

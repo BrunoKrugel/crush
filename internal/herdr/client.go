@@ -11,8 +11,6 @@
 package herdr
 
 import (
-	"github.com/bytedance/sonic"
-
 	"context"
 	"flag"
 	"fmt"
@@ -25,6 +23,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/bytedance/sonic"
 )
 
 // State values matching herdr's PaneAgentState enum.

@@ -52,8 +52,8 @@ func Serialize(msgs []message.Message) string {
 		total   int
 		dropped int
 	)
-	for i := len(msgs) - 1; i >= 0; i-- {
-		chunk := renderMessage(i+1, msgs[i])
+	for i, msg := range slices.Backward(msgs) {
+		chunk := renderMessage(i+1, msg)
 		if total+len(chunk) > MaxTranscriptBytes {
 			dropped = i + 1
 			break

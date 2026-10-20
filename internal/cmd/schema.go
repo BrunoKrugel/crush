@@ -19,7 +19,7 @@ import (
 // would resolve to config.Duration's oneOf schema, advertising forms its
 // unmarshaler never accepts.
 func schemaNamer(t reflect.Type) string {
-	if t == reflect.TypeOf(config.Duration(0)) {
+	if t == reflect.TypeFor[config.Duration]() {
 		return "ConfigDuration"
 	}
 	return ""

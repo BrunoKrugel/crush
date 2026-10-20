@@ -97,10 +97,8 @@ func newLiveDispatchFixture(t *testing.T) *liveDispatchFixture {
 			Service: permission.NewPermissionService(t.TempDir(), false, nil),
 		},
 		agent: &blockingDispatchAgent{
-			dispatchTestAgent: dispatchTestAgent{
-				model:  dispatchTestModel(),
-				result: &fantasy.AgentResult{},
-			},
+			model:   dispatchTestModel(),
+			result:  &fantasy.AgentResult{},
 			release: make(chan struct{}),
 		},
 	}

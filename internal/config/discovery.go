@@ -363,9 +363,7 @@ func (s *ConfigStore) resolveDiscoveredModels(ctx context.Context, jobs []discov
 
 	probeCtx, cancel := context.WithTimeout(ctx, discoveryProbeTimeout)
 	defer cancel()
-	for id, models := range s.probeAndCache(probeCtx, misses, resolver) {
-		found[id] = models
-	}
+	maps.Copy(found, s.probeAndCache(probeCtx, misses, resolver))
 	return found
 }
 

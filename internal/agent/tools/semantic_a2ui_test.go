@@ -143,7 +143,7 @@ func TestNumberedSnippetTruncatesToWidth(t *testing.T) {
 	t.Parallel()
 	out := numberedSnippet(strings.Repeat("x", 200), 1, 6, 20)
 	require.Equal(t, "1  "+strings.Repeat("x", 16)+"…", out)
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		require.LessOrEqual(t, len([]rune(line)), 20)
 	}
 }
@@ -224,7 +224,7 @@ func TestSemanticIndexSurfaceErrors(t *testing.T) {
 	require.Contains(t, text, "\na.go\n")
 	require.Contains(t, text, "generate embeddings: embedding API returned 422: {\"error\"")
 	require.NotContains(t, text, "422:\n")
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		require.LessOrEqual(t, len([]rune(line)), errorMessageLimit+1)
 	}
 

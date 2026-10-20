@@ -293,7 +293,7 @@ func TestCapChunkSizesWindowsOversizedContent(t *testing.T) {
 	// ~64 KiB across many lines: two windows' worth.
 	const line = "the quick brown fox jumps over the lazy dog and keeps going"
 	lines := make([]string, 0, 1200)
-	for i := 0; i < 1200; i++ {
+	for range 1200 {
 		lines = append(lines, line)
 	}
 	content := strings.Join(lines, "\n")

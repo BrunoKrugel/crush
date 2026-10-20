@@ -274,11 +274,11 @@ func TestSQLiteStoreListShaping(t *testing.T) {
 	require.Len(t, got.History, 100, "default history cap")
 	require.Nil(t, got.Artifacts, "artifacts stripped by default")
 
-	got = list(&a2aspec.ListTasksRequest{HistoryLength: ptr(3)})
+	got = list(&a2aspec.ListTasksRequest{HistoryLength: new(3)})
 	require.Len(t, got.History, 3)
 	require.Equal(t, "line", got.History[2].Parts[0].Text())
 
-	got = list(&a2aspec.ListTasksRequest{HistoryLength: ptr(0)})
+	got = list(&a2aspec.ListTasksRequest{HistoryLength: new(0)})
 	require.NotNil(t, got.History)
 	require.Empty(t, got.History)
 
@@ -323,15 +323,13 @@ func TestSQLiteStoreConcurrentUpdates(t *testing.T) {
 	var wg sync.WaitGroup
 	results := make(chan error, racers)
 	for range racers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_, err := store.Update(t.Context(), &taskstore.UpdateRequest{
 				Task:        testTask("task-1", "ctx-1", a2aspec.TaskStateWorking),
 				PrevVersion: 1,
 			})
 			results <- err
-		}()
+		})
 	}
 	wg.Wait()
 	close(results)
@@ -476,4 +474,5 @@ func taskIDs(tasks []*a2aspec.Task) []string {
 	return ids
 }
 
-func ptr[T any](v T) *T { return &v }
+//go:fix inline
+func ptr[T any](v T) *T { return new(v) }

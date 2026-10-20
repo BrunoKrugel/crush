@@ -84,8 +84,7 @@ func TestInitCoderAgent_ReusesCoordinatorAcrossAttaches(t *testing.T) {
 	cfg := &config.Config{Options: &config.Options{}}
 	cfg.SetupAgents()
 
-	globalCtx, cancelGlobal := context.WithCancel(context.Background())
-	defer cancelGlobal()
+	globalCtx := t.Context()
 
 	app := NewForTest(globalCtx)
 	defer app.ShutdownForTest()

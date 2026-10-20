@@ -63,8 +63,8 @@ func renderChildFormFocus(t *testing.T, m *UI, itemID string) bool {
 // through the real Update routing.
 func clickA2UIButton(m *UI) []tea.Msg {
 	_, cmd := m.Update(event.ButtonClicked{
-		Source: event.Source{ComponentID: "btn-send", SurfaceID: "form"},
-		ID:     "btn-send",
+		ComponentID: "btn-send", SurfaceID: "form",
+		ID: "btn-send",
 	})
 	return runCmdTree(cmd)
 }

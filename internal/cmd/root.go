@@ -305,7 +305,7 @@ func resolveAllowCommands(cmd *cobra.Command) (allowCommands []string, allowAllC
 	}
 	if len(allowCommands) == 0 {
 		if v := os.Getenv("CRUSH_ALLOW_COMMANDS"); v != "" {
-			for _, c := range strings.Split(v, ",") {
+			for c := range strings.SplitSeq(v, ",") {
 				if c = strings.TrimSpace(c); c != "" {
 					allowCommands = append(allowCommands, c)
 				}

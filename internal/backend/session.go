@@ -82,10 +82,8 @@ func (b *Backend) GetAgentSession(ctx context.Context, workspaceID, sessionID st
 	}
 
 	return proto.AgentSession{
-		Session: proto.Session{
-			ID:    se.ID,
-			Title: se.Title,
-		},
+		ID:     se.ID,
+		Title:  se.Title,
 		IsBusy: isSessionBusy,
 	}, nil
 }

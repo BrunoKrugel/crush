@@ -4,8 +4,6 @@
 package semantic
 
 import (
-	"github.com/bytedance/sonic"
-
 	"bytes"
 	"context"
 	"encoding/json"
@@ -13,6 +11,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/bytedance/sonic"
 )
 
 // EmbeddingConfig holds the configuration for an embedding provider.
@@ -92,7 +92,7 @@ func (c *Client) Embed(ctx context.Context, texts []string) ([][]float32, error)
 	url := c.cfg.BaseURL + "/embeddings"
 
 	var resp *http.Response
-	for attempt := 0; attempt < 2; attempt++ {
+	for attempt := range 2 {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 		if err != nil {
 			return nil, fmt.Errorf("create embedding request: %w", err)

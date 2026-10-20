@@ -20,8 +20,8 @@ import (
 	"github.com/charmbracelet/crush/internal/hooks"
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/scheduler"
-	"uuid"
 	"github.com/stretchr/testify/require"
+	"uuid"
 )
 
 // newDispatchTestCoordinator builds a coordinator with the session-scoped
@@ -119,11 +119,9 @@ func reapDispatchRuns(t *testing.T, c *coordinator, gates ...func()) {
 	t.Helper()
 	var wg sync.WaitGroup
 	c.spawnDispatch = func(f func()) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			f()
-		}()
+		})
 	}
 	t.Cleanup(func() {
 		for _, release := range gates {
