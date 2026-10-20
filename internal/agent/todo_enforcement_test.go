@@ -1086,12 +1086,19 @@ func TestTodoNudge_MutatingWorkWithStaleListReArms(t *testing.T) {
 		{toolCalls: []scriptedToolCall{{name: tools.TodosToolName, input: `{"todos":[{"content":"step one","status":"in_progress","active_form":"Doing step one"}]}`}}},
 		// Step two is read-only: the list stays fresh.
 		{toolCalls: []scriptedToolCall{{name: "probe", input: "{}"}}},
-		// Step three mutates without updating the list: stale.
+		// Step three mutates without updating the list: stale, and counts
+		// toward the threshold, but a stale list does not trip immediately.
 		{toolCalls: []scriptedToolCall{{name: "probe_mutating", input: `{"path":"x"}`}}},
+		// Step four is the second tool call past the last todos activity:
+		// the threshold trips here, not on step three.
+		{toolCalls: []scriptedToolCall{{name: "probe_mutating", input: `{"path":"y"}`}}},
+		// Step five is the third tool call past the last todos activity,
+		// crossing the threshold of three: the nudge lands here.
+		{toolCalls: []scriptedToolCall{{name: "probe_mutating", input: `{"path":"z"}`}}},
 	}}
 	sa := newTodoTestAgent(t, env, model, config.TodoEnforcementSettings{
 		Enabled:        true,
-		NudgeThreshold: 2,
+		NudgeThreshold: 3,
 	}, probeTool(), mutatingTool("bash"))
 
 	_, err := sa.Run(t.Context(), SessionAgentCall{
@@ -1105,11 +1112,15 @@ func TestTodoNudge_MutatingWorkWithStaleListReArms(t *testing.T) {
 	require.NoError(t, err)
 
 	calls := model.promptTexts()
-	require.Len(t, calls, 4)
+	require.Len(t, calls, 6)
 	assert.NotContains(t, strings.Join(calls[0], "\n"), todoNudgeMessage,
 		"the list-creating step carries no nudge")
 	assert.NotContains(t, strings.Join(calls[1], "\n"), todoNudgeMessage,
 		"a read-only step right after a todos call carries no nudge")
-	assert.Contains(t, strings.Join(calls[3], "\n"), todoNudgeMessage,
-		"a mutating step with a stale list carries the nudge")
+	assert.NotContains(t, strings.Join(calls[2], "\n"), todoNudgeMessage,
+		"a stale list re-arms the count; it does not trip immediately")
+	assert.NotContains(t, strings.Join(calls[3], "\n"), todoNudgeMessage,
+		"the step after the first stale mutating call carries no nudge either")
+	assert.Contains(t, strings.Join(calls[4], "\n"), todoNudgeMessage,
+		"the threshold trip carries the nudge")
 }

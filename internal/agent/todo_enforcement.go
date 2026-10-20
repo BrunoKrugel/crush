@@ -220,11 +220,17 @@ func (r *todoEnforcementRun) recordToolCall(toolName, input string) {
 	r.toolCalls++
 	tool, ok := r.tools[toolName]
 	if !ok || isMutatingCall(tool, input) {
-		r.mutatingCall = true
-		// A mutating call also makes the run's existing list stale: the
-		// next step must either update the list or carry the nudge, the
-		// same contract as working without one. Read-only calls leave the
-		// list's freshness alone.
+		// A mutating call makes the run's existing list stale: the list is
+		// no longer trustworthy, and the count toward the next nudge keeps
+		// running until a todos call refreshes it. The threshold still
+		// governs the trip — a stale list must not nag on every mutating
+		// step. The immediate trip stays reserved for the no-list case
+		// below, where there is nothing to go stale.
+		if r.todosSatisfied {
+			r.mutatingCall = false
+		} else {
+			r.mutatingCall = true
+		}
 		r.todosSatisfied = false
 	}
 }
