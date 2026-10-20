@@ -1052,9 +1052,13 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		return nil, fmt.Errorf("failed to get session messages: %w", err)
 	}
 
-	// Generate title from the first real (non-shell) user prompt. Use a
-	// detached context so the title goroutine survives Run's cancel.
-	if !hasUserTextMessage(msgs) {
+	// Generate a root-session title from the first real (non-shell) user
+	// prompt. Title generation can take tens of seconds. Blocking Run on it
+	// delays the response to the caller. Use a detached context so the
+	// title goroutine survives Run's cancel. Task sessions skip titles:
+	// their names come from the dispatch, and a generated one would race
+	// the tool's own label.
+	if currentSession.ParentSessionID == "" && !hasUserTextMessage(msgs) {
 		titleCtx := context.WithoutCancel(ctx)
 		a.titles.Go(func() { a.GenerateTitle(titleCtx, call.SessionID, call.Prompt) })
 	}
