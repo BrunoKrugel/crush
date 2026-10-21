@@ -192,46 +192,46 @@ type liveDispatch struct {
 }
 
 type coordinator struct {
-	ledger                   ledger.Service
-	snapshots                *snapshot.Service
-	dispatchRecords          dispatch.DispatchRecords
-	sessions                 session.Service
-	messages                 message.Service
-	permissions              permission.Service
-	questions                question.Service
-	history                  history.Service
-	filetracker              filetracker.Service
-	dispatchHost             DispatchHost
-	notify                   pubsub.Publisher[notify.Notification]
-	runComplete              pubsub.Publisher[notify.RunComplete]
-	dispatchCtx              context.Context
-	dispatchProviderErr      error
-	mainAgent                SessionAgent
-	dispatchProvider         *dispatch.GitWorktreeProvider
-	semanticClient           *semantic.Client
-	skillTracker             *skills.Tracker
-	builds                   map[*readiness]struct{}
-	promptBuildHook          func()
-	cronStore                *scheduler.Store
-	semanticSymbols          *symbols.Extractor
-	dispatchReg              *dispatch.AgentRegistry
-	agents                   map[string]SessionAgent
-	lspManager               *lsp.Manager
-	dispatchAgentBuilder     func(context.Context, dispatchAgentOptions) (*dispatchedAgent, error)
-	spawnDispatch            func(func())
-	pendingResults           map[string][]dispatch.DispatchResult
-	dispatchCollector        *dispatch.TodoCollector
-	liveDispatches           map[string]*liveDispatch
-	semanticStore            *semantic.Store
-	cfg                      *config.ConfigStore
-	dispatchQuestions        chan struct{}
-	mainAgentName            string
+	ledger               ledger.Service
+	snapshots            *snapshot.Service
+	dispatchRecords      dispatch.DispatchRecords
+	sessions             session.Service
+	messages             message.Service
+	permissions          permission.Service
+	questions            question.Service
+	history              history.Service
+	filetracker          filetracker.Service
+	dispatchHost         DispatchHost
+	notify               pubsub.Publisher[notify.Notification]
+	runComplete          pubsub.Publisher[notify.RunComplete]
+	dispatchCtx          context.Context
+	dispatchProviderErr  error
+	mainAgent            SessionAgent
+	dispatchProvider     *dispatch.GitWorktreeProvider
+	semanticClient       *semantic.Client
+	skillTracker         *skills.Tracker
+	builds               map[*readiness]struct{}
+	promptBuildHook      func()
+	cronStore            *scheduler.Store
+	semanticSymbols      *symbols.Extractor
+	dispatchReg          *dispatch.AgentRegistry
+	agents               map[string]SessionAgent
+	lspManager           *lsp.Manager
+	dispatchAgentBuilder func(context.Context, dispatchAgentOptions) (*dispatchedAgent, error)
+	spawnDispatch        func(func())
+	pendingResults       map[string][]dispatch.DispatchResult
+	dispatchCollector    *dispatch.TodoCollector
+	liveDispatches       map[string]*liveDispatch
+	semanticStore        *semantic.Store
+	cfg                  *config.ConfigStore
+	dispatchQuestions    chan struct{}
+	mainAgentName        string
 	// memory yields the cross-session recall backend for every agent
 	// this coordinator builds. It is asked again on each build, so a
 	// backend connected mid-session is picked up by the same refresh a
 	// model change triggers. Nil, or a provider returning nil, means
 	// no memory.
-	memory MemoryProvider
+	memory                   MemoryProvider
 	dispatchSinks            []dispatch.TodoSink
 	allSkills                []*skills.Skill
 	activeSkills             []*skills.Skill
