@@ -31,29 +31,8 @@ func coderPrompt(opts ...prompt.Option) (*prompt.Prompt, error) {
 	return systemPrompt, nil
 }
 
-func taskPrompt(opts ...prompt.Option) (*prompt.Prompt, error) {
-	systemPrompt, err := prompt.NewPrompt("task", string(taskPromptTmpl), opts...)
-	if err != nil {
-		return nil, err
-	}
-	return systemPrompt, nil
-}
-
 func planPrompt(opts ...prompt.Option) (*prompt.Prompt, error) {
 	systemPrompt, err := prompt.NewPrompt("plan", string(planPromptTmpl), opts...)
-	if err != nil {
-		return nil, err
-	}
-	return systemPrompt, nil
-}
-
-// dispatchPrompt is the dispatched agent's system prompt: the task
-// template's shape plus the dispatch contract — stay inside the
-// workspace, track todos, never merge or push, and end with key
-// findings. Rendered at dispatch time against the scoped workspace
-// store (#64).
-func dispatchPrompt(opts ...prompt.Option) (*prompt.Prompt, error) {
-	systemPrompt, err := prompt.NewPrompt("dispatch", string(dispatchPromptTmpl), opts...)
 	if err != nil {
 		return nil, err
 	}

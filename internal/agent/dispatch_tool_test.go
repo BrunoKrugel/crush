@@ -65,12 +65,6 @@ func (f *dispatchTestAgent) Run(_ context.Context, call SessionAgentCall) (*fant
 	return f.result, f.err
 }
 
-func (f *dispatchTestAgent) lenCalls() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return len(f.calls)
-}
-
 func (f *dispatchTestAgent) Model() Model { return f.model }
 
 func (f *dispatchTestAgent) WaitReady() error { return nil }
@@ -86,9 +80,6 @@ func dispatchTestModel() Model {
 		ModelCfg:   config.SelectedModel{Provider: "test-provider", Model: "test-model"},
 	}
 }
-
-//go:fix inline
-func intPtr(v int) *int { return new(v) }
 
 // heldDispatchSlots reports the dispatch concurrency slots currently
 // held, so tests can wait for a finished dispatch to actually give its

@@ -261,7 +261,7 @@ func catwalkModelCfg() catwalk.Model {
 
 // nudgeMessages returns the session's persisted user messages that carry
 // the given nudge text.
-func nudgeMessages(t *testing.T, env fakeEnv, model *scriptedModel, sessID string, nudge string) []message.Message {
+func nudgeMessages(t *testing.T, env fakeEnv, _ *scriptedModel, sessID string, nudge string) []message.Message {
 	t.Helper()
 	msgs, err := env.messages.List(t.Context(), sessID)
 	require.NoError(t, err)
@@ -275,7 +275,7 @@ func nudgeMessages(t *testing.T, env fakeEnv, model *scriptedModel, sessID strin
 }
 
 // runWithScript runs the agent on a fresh session and returns it.
-func runWithScript(t *testing.T, env fakeEnv, sa *sessionAgent, model *scriptedModel) session.Session {
+func runWithScript(t *testing.T, env fakeEnv, sa *sessionAgent, _ *scriptedModel) session.Session {
 	t.Helper()
 	sess, err := env.sessions.Create(t.Context(), "session")
 	require.NoError(t, err)

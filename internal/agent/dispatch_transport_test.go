@@ -44,13 +44,6 @@ func (f *gatedServingTransport) SteerDispatch(ctx context.Context, p DispatchSte
 	return f.runnerTransport.SteerDispatch(ctx, p)
 }
 
-// steeredParams returns a copy of the steers the transport recorded.
-func (f *gatedServingTransport) steeredParams() []DispatchSteerParams {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]DispatchSteerParams(nil), f.steered...)
-}
-
 // release opens the gate exactly once, idempotently, as
 // gatedDispatchAgent.release does (#422).
 func (f *gatedServingTransport) release() {

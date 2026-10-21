@@ -1403,7 +1403,7 @@ func (c *coordinator) assembleDispatchResult(ctx context.Context, run dispatchRu
 // carries the dispatch tool call's RunID, which the delivery must not
 // echo (a queued delivery under that RunID suppresses or duplicates
 // the tool call's terminal RunComplete in `crush run`).
-func (c *coordinator) deliverDispatchResult(ctx context.Context, parentSessionID string, terminal dispatch.DispatchResult) {
+func (c *coordinator) deliverDispatchResult(_ context.Context, parentSessionID string, terminal dispatch.DispatchResult) {
 	// Shutdown starts no parent delivery turn (#372): the run above
 	// already recorded its terminal result and status, and a turn here
 	// would run against a coordinator that is canceling everything.

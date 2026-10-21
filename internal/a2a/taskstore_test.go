@@ -473,6 +473,3 @@ func taskIDs(tasks []*a2aspec.Task) []string {
 	}
 	return ids
 }
-
-//go:fix inline
-func ptr[T any](v T) *T { return new(v) }

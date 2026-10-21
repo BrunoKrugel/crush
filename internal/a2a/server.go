@@ -36,11 +36,6 @@ import (
 	"github.com/charmbracelet/crush/internal/version"
 )
 
-// shutdownTimeout bounds the A2A host's graceful shutdown: the HTTP
-// server stops accepting, in-flight requests drain, and the Serve
-// goroutine is reaped even when a client holds a stream open.
-const shutdownTimeout = 5 * time.Second
-
 // maxUnixSocketPathLen is the maximum length of a Unix domain socket
 // path. The macOS sun_path field is 104 bytes and must also hold the
 // trailing NUL, so a 104-byte path fails bind with EINVAL there; Linux

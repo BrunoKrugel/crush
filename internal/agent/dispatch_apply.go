@@ -64,10 +64,6 @@ type DismissDispatchParams struct {
 	Handle string `json:"handle,omitempty" description:"@handle of the finished dispatched agent (the \"handle\" from its dispatch handle)"`
 }
 
-func (p ApplyDispatchParams) addresses() (string, string) { return p.DispatchID, p.Handle }
-
-func (p DismissDispatchParams) addresses() (string, string) { return p.DispatchID, p.Handle }
-
 // The registry-sourced refs are pinned to the shapes git itself allows
 // before they reach a command line: a branch with no leading dash (git
 // would read it as an option), no ".." range, and a base that is nothing

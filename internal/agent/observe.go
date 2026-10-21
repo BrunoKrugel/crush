@@ -6,13 +6,10 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
-	"time"
 
 	"charm.land/fantasy"
 	"github.com/bytedance/sonic"
-	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/compaction"
-	"github.com/charmbracelet/crush/internal/log"
 	"github.com/charmbracelet/crush/internal/message"
 )
 
@@ -26,9 +23,6 @@ const (
 	// cheap model reading for facts, not a reasoner reconciling a whole
 	// session, so a long backlog is observed across several turns instead.
 	observeMaxTokens = 24_000
-	// observeTimeout bounds one distillation. Local models on modest hardware
-	// are slow; this is deliberately generous because nothing waits on it.
-	observeTimeout = 4 * time.Minute
 )
 
 const observeSystemPrompt = `You distill a coding session into durable memory.
@@ -55,40 +49,6 @@ relevance 2 is for a decision, a rejected approach, or a standing constraint,
 1 for a notable fact, 0 for background.
 sources must name the message ids the entry rests on, copied exactly.
 Prefer a few high-value entries over many. An empty array is a valid answer.`
-
-// observeTurn records what the ledger has not yet seen. It is fired from the
-// single terminal path for a turn and returns immediately, because a
-// distillation is slow and nothing about the turn should wait for it.
-//
-// Every failure here is a no-op by design: the messages stay unobserved and the
-// next turn picks them up. Memory that occasionally lags is a smaller problem
-// than a turn that fails because bookkeeping did.
-func (a *sessionAgent) observeTurn(complete notify.RunComplete) {
-	if a.ledger == nil || !a.observeMemory || a.isSubAgent {
-		return
-	}
-	// The terminal payload names the session, and it is the only field
-	// guaranteed to be set: reading the session off the call instead would
-	// silently observe nothing when a caller left it empty.
-	sessionID := complete.SessionID
-	if complete.Cancelled || sessionID == "" {
-		return
-	}
-
-	// Detached from the run: the turn is over, and its context is about to be
-	// cancelled. A bounded, cancellable context keeps a slow local model from
-	// outliving the session's usefulness.
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), observeTimeout)
-
-	go func() {
-		defer cancel()
-		defer log.RecoverPanic("agent.observeTurn", func() {})
-
-		if err := a.distill(ctx, sessionID); err != nil {
-			slog.Debug("Memory observation skipped", "session", sessionID, "err", err)
-		}
-	}()
-}
 
 // distill gathers the unseen conversation and appends what the observer makes
 // of it.
