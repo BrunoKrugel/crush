@@ -112,7 +112,7 @@ func newHonchoTestService(t *testing.T) (*honcho.Service, *honchoFake) {
 }
 
 // runTool invokes a tool with a JSON input document.
-func runTool(t *testing.T, tool fantasy.AgentTool, input string) fantasy.ToolResponse {
+func runHonchoTool(t *testing.T, tool fantasy.AgentTool, input string) fantasy.ToolResponse {
 	t.Helper()
 	resp, err := tool.Run(t.Context(), fantasy.ToolCall{
 		ID:    "call-1",
@@ -134,7 +134,7 @@ func TestHonchoSearchTool(t *testing.T) {
 			{"peer_id": "crush", "content": "noted, sqlite it is"},
 		}
 
-		resp := runTool(t, NewHonchoSearchTool(svc), `{"query":"database choice","limit":2}`)
+		resp := runHonchoTool(t, NewHonchoSearchTool(svc), `{"query":"database choice","limit":2}`)
 		require.False(t, resp.IsError)
 		require.Contains(t, resp.Content, "Found 2 past message(s)")
 		require.Contains(t, resp.Content, "[tester]")
@@ -151,12 +151,12 @@ func TestHonchoSearchTool(t *testing.T) {
 		t.Parallel()
 		svc, fake := newHonchoTestService(t)
 
-		runTool(t, NewHonchoSearchTool(svc), `{"query":"anything"}`)
+		runHonchoTool(t, NewHonchoSearchTool(svc), `{"query":"anything"}`)
 		var sent honcho.SearchQuery
 		require.NoError(t, json.Unmarshal([]byte(fake.body("search")), &sent))
 		require.Equal(t, honchoSearchDefaultLimit, sent.Limit)
 
-		runTool(t, NewHonchoSearchTool(svc), `{"query":"anything","limit":5000}`)
+		runHonchoTool(t, NewHonchoSearchTool(svc), `{"query":"anything","limit":5000}`)
 		require.NoError(t, json.Unmarshal([]byte(fake.body("search")), &sent))
 		require.Equal(t, honchoSearchMaxLimit, sent.Limit)
 	})
@@ -165,7 +165,7 @@ func TestHonchoSearchTool(t *testing.T) {
 		t.Parallel()
 		svc, _ := newHonchoTestService(t)
 
-		resp := runTool(t, NewHonchoSearchTool(svc), `{"query":"never discussed"}`)
+		resp := runHonchoTool(t, NewHonchoSearchTool(svc), `{"query":"never discussed"}`)
 		require.False(t, resp.IsError, "an empty result set is a normal outcome")
 		require.Contains(t, resp.Content, "No past messages matched")
 		require.Contains(t, resp.Content, "never discussed")
@@ -175,7 +175,7 @@ func TestHonchoSearchTool(t *testing.T) {
 		t.Parallel()
 		svc, fake := newHonchoTestService(t)
 
-		resp := runTool(t, NewHonchoSearchTool(svc), `{"query":"   "}`)
+		resp := runHonchoTool(t, NewHonchoSearchTool(svc), `{"query":"   "}`)
 		require.True(t, resp.IsError)
 		require.Contains(t, resp.Content, "query is required")
 		require.Empty(t, fake.body("search"), "a rejected call must not reach the network")
@@ -183,7 +183,7 @@ func TestHonchoSearchTool(t *testing.T) {
 
 	t.Run("nil service explains itself", func(t *testing.T) {
 		t.Parallel()
-		resp := runTool(t, NewHonchoSearchTool(nil), `{"query":"anything"}`)
+		resp := runHonchoTool(t, NewHonchoSearchTool(nil), `{"query":"anything"}`)
 		require.True(t, resp.IsError)
 		require.Contains(t, resp.Content, "Memory is not configured")
 	})
@@ -197,7 +197,7 @@ func TestHonchoChatTool(t *testing.T) {
 		svc, fake := newHonchoTestService(t)
 		fake.chatContent = "They prefer table-driven tests."
 
-		resp := runTool(t, NewHonchoChatTool(svc), `{"query":"how does the user like tests?"}`)
+		resp := runHonchoTool(t, NewHonchoChatTool(svc), `{"query":"how does the user like tests?"}`)
 		require.False(t, resp.IsError)
 		require.Contains(t, resp.Content, "They prefer table-driven tests.")
 		require.Contains(t, resp.Content, honcho.MemoryInstruction,
@@ -217,7 +217,7 @@ func TestHonchoChatTool(t *testing.T) {
 		t.Parallel()
 		svc, _ := newHonchoTestService(t)
 
-		resp := runTool(t, NewHonchoChatTool(svc), `{"query":"what is their favourite colour?"}`)
+		resp := runHonchoTool(t, NewHonchoChatTool(svc), `{"query":"what is their favourite colour?"}`)
 		require.False(t, resp.IsError)
 		require.Contains(t, resp.Content, "no answer")
 	})
@@ -226,7 +226,7 @@ func TestHonchoChatTool(t *testing.T) {
 		t.Parallel()
 		svc, fake := newHonchoTestService(t)
 
-		resp := runTool(t, NewHonchoChatTool(svc), `{"query":""}`)
+		resp := runHonchoTool(t, NewHonchoChatTool(svc), `{"query":""}`)
 		require.True(t, resp.IsError)
 		require.Contains(t, resp.Content, "query is required")
 		require.Empty(t, fake.body("chat"))
@@ -234,7 +234,7 @@ func TestHonchoChatTool(t *testing.T) {
 
 	t.Run("nil service explains itself", func(t *testing.T) {
 		t.Parallel()
-		resp := runTool(t, NewHonchoChatTool(nil), `{"query":"anything"}`)
+		resp := runHonchoTool(t, NewHonchoChatTool(nil), `{"query":"anything"}`)
 		require.True(t, resp.IsError)
 		require.Contains(t, resp.Content, "Memory is not configured")
 	})
@@ -247,7 +247,7 @@ func TestHonchoRememberTool(t *testing.T) {
 		t.Parallel()
 		svc, fake := newHonchoTestService(t)
 
-		resp := runTool(t, NewHonchoRememberTool(svc),
+		resp := runHonchoTool(t, NewHonchoRememberTool(svc),
 			`{"content":"Kieran wants gofmt, not gofumpt, on this repo."}`)
 		require.False(t, resp.IsError)
 		require.Contains(t, resp.Content, "Saved to memory")
@@ -272,7 +272,7 @@ func TestHonchoRememberTool(t *testing.T) {
 		svc, fake := newHonchoTestService(t)
 
 		long := strings.Repeat("a", honchoRememberClamp*2)
-		resp := runTool(t, NewHonchoRememberTool(svc),
+		resp := runHonchoTool(t, NewHonchoRememberTool(svc),
 			`{"content":"`+long+`"}`)
 		require.False(t, resp.IsError)
 		require.Contains(t, resp.Content, "shortened")
@@ -289,7 +289,7 @@ func TestHonchoRememberTool(t *testing.T) {
 		t.Parallel()
 		svc, fake := newHonchoTestService(t)
 
-		resp := runTool(t, NewHonchoRememberTool(svc), `{"content":"  "}`)
+		resp := runHonchoTool(t, NewHonchoRememberTool(svc), `{"content":"  "}`)
 		require.True(t, resp.IsError)
 		require.Contains(t, resp.Content, "content is required")
 		require.Empty(t, fake.body("conclusions"))
@@ -297,7 +297,7 @@ func TestHonchoRememberTool(t *testing.T) {
 
 	t.Run("nil service explains itself", func(t *testing.T) {
 		t.Parallel()
-		resp := runTool(t, NewHonchoRememberTool(nil), `{"content":"something"}`)
+		resp := runHonchoTool(t, NewHonchoRememberTool(nil), `{"content":"something"}`)
 		require.True(t, resp.IsError)
 		require.Contains(t, resp.Content, "Memory is not configured")
 	})
@@ -310,7 +310,7 @@ func TestHonchoStatusTool(t *testing.T) {
 		t.Parallel()
 		svc, _ := newHonchoTestService(t)
 
-		resp := runTool(t, NewHonchoStatusTool(svc), `{}`)
+		resp := runHonchoTool(t, NewHonchoStatusTool(svc), `{}`)
 		require.False(t, resp.IsError)
 
 		id := svc.Identity()
@@ -335,7 +335,7 @@ func TestHonchoStatusTool(t *testing.T) {
 			"pending_work_units":     2,
 		}
 
-		resp := runTool(t, NewHonchoStatusTool(svc), `{}`)
+		resp := runHonchoTool(t, NewHonchoStatusTool(svc), `{}`)
 		require.False(t, resp.IsError)
 		require.Contains(t, resp.Content, "2 pending")
 		require.Contains(t, resp.Content, "1 in progress")
@@ -344,7 +344,7 @@ func TestHonchoStatusTool(t *testing.T) {
 
 	t.Run("nil service explains itself", func(t *testing.T) {
 		t.Parallel()
-		resp := runTool(t, NewHonchoStatusTool(nil), `{}`)
+		resp := runHonchoTool(t, NewHonchoStatusTool(nil), `{}`)
 		require.True(t, resp.IsError)
 		require.Contains(t, resp.Content, "Memory is not configured")
 	})

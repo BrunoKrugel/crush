@@ -163,7 +163,7 @@ func TestResolvedSkills(t *testing.T) {
 	c := newDispatchTestCoordinator(t, env)
 
 	store := c.cfg
-	all, _ := discoverSkills(store)
+	all, _ := discoverSkills(store, nil)
 	if len(all) > 0 {
 		require.Equal(t, all, resolvedSkills(store, nil), "no request means every discovered skill")
 		require.Len(t, resolvedSkills(store, []string{all[0].Name}), 1, "a request narrows to exactly the named skill")
