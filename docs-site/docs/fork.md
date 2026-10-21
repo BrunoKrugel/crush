@@ -91,6 +91,7 @@ Smaller things you notice in the terminal rather than in a config file.
 | `oauth_client_id_metadata` | OAuth Client ID Metadata Documents (SEP-991): the URL is sent as the `client_id` for servers that advertise `client_id_metadata_document_supported` but have no registration endpoint (Home Assistant). Crush's own document is hosted on this docs site. | `brunokrugel/crush` |
 | `embeddings` block | Configure the semantic-search embedding provider from `crush.json` or `crushrc`. | `joestump-agent/crush` |
 | Config reload on reconnect | Reconnecting an MCP server re-reads config from disk, so an edit takes effect without a restart. | `joestump-agent/crush` |
+| SIGHUP reloads the server | A running `crush server` reloads its config on SIGHUP instead of stopping — the service-manager way to apply an edit without dropping sessions. | upstream branch `fix/shutdown-records-work` |
 | Current time in the prompt | The system prompt carries the current time, which is what makes relative scheduling ("every weekday at 9") work. | `joestump-agent/crush` |
 
 ### Performance
@@ -107,6 +108,10 @@ separately.
 
 | Fix | Symptom it removes |
 | --- | --- |
+| Quitting abandons work in flight | Closing the terminal window or stopping the server through a service manager killed the process outright: active runs never wound down, and the next visit to the session showed a step that still looked like it was running. External stop signals now go through the ordinary workspace shutdown, so runs record their terminal state, and a shutdown while work is genuinely still running says so in the log. | upstream branch `fix/shutdown-records-work` |
+| Cancelled turn streams keep running | Cancelling a turn left the provider stream running to its natural end whenever the request timeout was off, and a turn whose stream only ever sent keepalives ran until the (disabled) timeout. Cancelling now stops the stream immediately even with the timeout off, a keepalive-only stream ends at the stall budget, and a cancelled turn finishes cleanly. | upstream branch `fix/cancel-stops-stream` |
+| Oversized images rejected by the provider | A screenshot past the provider's per-image limits failed the whole request. Oversized images are now rescaled into the limits instead. | upstream branch `fix/oversized-images` |
+| Yolo banner inverted when truncated | The allow-all-permissions banner led with "runs any commands…", so a cut banner read as the opposite of the truth. It now leads with the limit, so a cut banner still says the safe thing. | upstream branch `fix/yolo-banner-truncation` |
 | Todo pill frozen on a stale step | The todo ladder treated *creating* a todo list as lifetime activity, so a model that made the list and then worked on later steps without updating it left the todo pill on the first step for the whole run. Mutating work now makes the list stale and re-arms the reminder, while read-only calls leave its freshness alone. |
 | Bounded MCP init waits | A wedged MCP server could blank the whole app at startup. Tool lists now wait for init, with a bound. |
 | Per-server MCP lifecycle serialized | Concurrent connect/disconnect on one server raced; an error on one session tore down others. |
