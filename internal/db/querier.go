@@ -56,6 +56,10 @@ type Querier interface {
 	FinishA2ADispatch(ctx context.Context, arg FinishA2ADispatchParams) (int64, error)
 	GetA2ADispatch(ctx context.Context, dispatchID string) (A2aDispatch, error)
 	GetA2ADispatchBySession(ctx context.Context, sessionID string) (A2aDispatch, error)
+
+	// GetA2ADispatchDeliveredAt returns a dispatch row's delivery stamp,
+	// zero when never delivered.
+	GetA2ADispatchDeliveredAt(ctx context.Context, dispatchID string) (int64, error)
 	GetA2ATask(ctx context.Context, id string) (A2aTask, error)
 	GetAverageResponseTime(ctx context.Context) (int64, error)
 	GetFile(ctx context.Context, id string) (File, error)

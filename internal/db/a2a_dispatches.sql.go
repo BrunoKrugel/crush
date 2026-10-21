@@ -59,6 +59,19 @@ func (q *Queries) FinishA2ADispatch(ctx context.Context, arg FinishA2ADispatchPa
 	return result.RowsAffected()
 }
 
+const getA2ADispatchDeliveredAt = `-- name: GetA2ADispatchDeliveredAt :one
+SELECT delivered_at FROM a2a_dispatches
+WHERE dispatch_id = ?
+LIMIT 1
+`
+
+func (q *Queries) GetA2ADispatchDeliveredAt(ctx context.Context, dispatchID string) (int64, error) {
+	row := q.queryRow(ctx, q.getA2ADispatchDeliveredAtStmt, getA2ADispatchDeliveredAt, dispatchID)
+	var delivered_at int64
+	err := row.Scan(&delivered_at)
+	return delivered_at, err
+}
+
 const getA2ADispatch = `-- name: GetA2ADispatch :one
 SELECT dispatch_id, task_id, session_id, parent_session_id, handle, branch, workspace_path, status, result_json, delivered_at, host_id, updated_at FROM a2a_dispatches
 WHERE dispatch_id = ?1

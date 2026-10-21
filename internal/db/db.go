@@ -123,6 +123,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getA2ADispatchStmt, err = db.PrepareContext(ctx, getA2ADispatch); err != nil {
 		return nil, fmt.Errorf("error preparing query GetA2ADispatch: %w", err)
 	}
+	if q.getA2ADispatchDeliveredAtStmt, err = db.PrepareContext(ctx, getA2ADispatchDeliveredAt); err != nil {
+		return nil, fmt.Errorf("error preparing query GetA2ADispatchDeliveredAt: %w", err)
+	}
 	if q.getA2ADispatchBySessionStmt, err = db.PrepareContext(ctx, getA2ADispatchBySession); err != nil {
 		return nil, fmt.Errorf("error preparing query GetA2ADispatchBySession: %w", err)
 	}
@@ -438,6 +441,11 @@ func (q *Queries) Close() error {
 	if q.getA2ADispatchStmt != nil {
 		if cerr := q.getA2ADispatchStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getA2ADispatchStmt: %w", cerr)
+		}
+	}
+	if q.getA2ADispatchDeliveredAtStmt != nil {
+		if cerr := q.getA2ADispatchDeliveredAtStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getA2ADispatchDeliveredAtStmt: %w", cerr)
 		}
 	}
 	if q.getA2ADispatchBySessionStmt != nil {
@@ -757,6 +765,7 @@ type Queries struct {
 	failA2ADispatchStmt                  *sql.Stmt
 	finishA2ADispatchStmt                *sql.Stmt
 	getA2ADispatchStmt                   *sql.Stmt
+	getA2ADispatchDeliveredAtStmt        *sql.Stmt
 	getA2ADispatchBySessionStmt          *sql.Stmt
 	getA2ATaskStmt                       *sql.Stmt
 	getAverageResponseTimeStmt           *sql.Stmt
@@ -853,6 +862,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		failA2ADispatchStmt:                  q.failA2ADispatchStmt,
 		finishA2ADispatchStmt:                q.finishA2ADispatchStmt,
 		getA2ADispatchStmt:                   q.getA2ADispatchStmt,
+		getA2ADispatchDeliveredAtStmt:        q.getA2ADispatchDeliveredAtStmt,
 		getA2ADispatchBySessionStmt:          q.getA2ADispatchBySessionStmt,
 		getA2ATaskStmt:                       q.getA2ATaskStmt,
 		getAverageResponseTimeStmt:           q.getAverageResponseTimeStmt,

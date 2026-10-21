@@ -1411,6 +1411,17 @@ func (c *coordinator) deliverDispatchResult(_ context.Context, parentSessionID s
 		slog.Debug("Dispatch result delivery skipped: shutting down", "parent_session", parentSessionID, "dispatch_id", terminal.DispatchID)
 		return
 	}
+	// The delivered stamp is the dedupe key for every path that could
+	// present this payload to the parent again — a re-pended retry whose
+	// first turn actually delivered, a duplicated finalize. The record
+	// says delivered, so the parent has seen it; a second copy would
+	// make it review, and try to dismiss, an already-dismissed dispatch.
+	if c.dispatchRecords != nil {
+		if done, err := c.dispatchRecords.Delivered(terminal.DispatchID); err == nil && done {
+			slog.Debug("Dispatch result delivery skipped: record already delivered", "parent_session", parentSessionID, "dispatch_id", terminal.DispatchID)
+			return
+		}
+	}
 	c.dispatchMu.Lock()
 	if c.pendingResults == nil {
 		c.pendingResults = make(map[string][]dispatch.DispatchResult)
@@ -1467,6 +1478,22 @@ func (c *coordinator) flushPendingResults(parentSessionID string) {
 	pending := c.pendingResults[parentSessionID]
 	delete(c.pendingResults, parentSessionID)
 	c.dispatchMu.Unlock()
+	if len(pending) == 0 {
+		return
+	}
+	// Drop anything the durable record already says was delivered: a
+	// re-pended retry must not repeat a payload the parent answered.
+	if c.dispatchRecords != nil {
+		filtered := pending[:0]
+		for _, terminal := range pending {
+			if done, err := c.dispatchRecords.Delivered(terminal.DispatchID); err == nil && done {
+				slog.Debug("Pending dispatch result dropped: record already delivered", "parent_session", parentSessionID, "dispatch_id", terminal.DispatchID)
+				continue
+			}
+			filtered = append(filtered, terminal)
+		}
+		pending = filtered
+	}
 	if len(pending) == 0 {
 		return
 	}

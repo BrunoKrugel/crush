@@ -21,10 +21,11 @@ import (
 // records (#355): it answers the redelivery list from seeded memory and
 // records the stamps it is given.
 type fakeRecordStore struct {
-	err         error
-	undelivered []dispatch.UndeliveredDispatch
-	delivered   []string
-	mu          sync.Mutex
+	err          error
+	undelivered  []dispatch.UndeliveredDispatch
+	delivered    []string
+	deliveredSet map[string]bool
+	mu           sync.Mutex
 }
 
 func (f *fakeRecordStore) RecordStarted(dispatch.DispatchResult, string) error { return nil }
@@ -37,7 +38,17 @@ func (f *fakeRecordStore) RecordDelivered(dispatchID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.delivered = append(f.delivered, dispatchID)
+	if f.deliveredSet == nil {
+		f.deliveredSet = make(map[string]bool)
+	}
+	f.deliveredSet[dispatchID] = true
 	return nil
+}
+
+func (f *fakeRecordStore) Delivered(dispatchID string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.deliveredSet[dispatchID], nil
 }
 
 func (f *fakeRecordStore) UndeliveredTerminal() ([]dispatch.UndeliveredDispatch, error) {
@@ -342,4 +353,36 @@ func TestQueuedDeliveryDroppedStaysUndelivered(t *testing.T) {
 	require.Equal(t, 2, main.runCount())
 	require.Contains(t, main.lastRun().Prompt, `"dispatch_id": "d-dropped"`)
 	require.Empty(t, undeliveredIDs(t, records))
+}
+
+// TestDispatchDeliveredStampDeduplicatesDelivery pins the double-delivery
+// fix: whatever re-pends a terminal payload after the parent has already
+// received it (a retry after a delivery turn that errored during
+// cleanup, a duplicated finalize) must be dropped against the durable
+// delivered stamp, not turned into a second parent turn. The parent
+// answers the review prompt once; a second copy makes it dismiss an
+// already-dismissed dispatch.
+func TestDispatchDeliveredStampDeduplicatesDelivery(t *testing.T) {
+	c, main, parentID := newDeliveryEnv(t)
+	records := newAgentRecordStore(t)
+	c.dispatchRecords = records
+	terminal := seedTerminalRecord(t, records, parentID, "d-dup")
+	spawns, spawned := trackDispatchSpawns(c)
+
+	c.deliverDispatchResult(t.Context(), parentID, terminal)
+	awaitSpawn(t, spawned, "the first delivery turn")
+	require.Equal(t, int32(1), spawns.Load())
+	require.Equal(t, 1, main.runCount(), "the first delivery turns exactly once")
+	require.Eventually(t, func() bool { return len(undeliveredIDs(t, records)) == 0 },
+		10*time.Second, 50*time.Millisecond, "the successful delivery stamps the record")
+
+	// The same terminal arrives again. The record now says delivered;
+	// the second attempt must spawn nothing — neither a direct turn nor
+	// the retry chain a failing attempt would arm (the backoff is 2s,
+	// so the window below covers one retry).
+	c.deliverDispatchResult(t.Context(), parentID, terminal)
+	require.Never(t, func() bool { return spawns.Load() > 1 },
+		3*time.Second, 100*time.Millisecond,
+		"a dispatch whose record is stamped delivered must never be delivered again")
+	require.Equal(t, 1, main.runCount())
 }

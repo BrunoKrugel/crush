@@ -3,6 +3,7 @@ package dispatch
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -38,6 +39,10 @@ type DispatchRecords interface {
 	// RecordDelivered stamps the parent-delivery timestamp, proving the
 	// terminal payload reached the parent session exactly once (#355).
 	RecordDelivered(dispatchID string) error
+	// Delivered reports whether the dispatch's terminal payload was
+	// already stamped delivered: the dedupe key for every path that
+	// might present the payload to the parent again.
+	Delivered(dispatchID string) (bool, error)
 	// UndeliveredTerminal returns every terminal record whose payload
 	// was never delivered to its parent — the restart redelivery list.
 	UndeliveredTerminal() ([]UndeliveredDispatch, error)
@@ -125,6 +130,19 @@ func (s *SQLiteRecordStore) RecordDelivered(dispatchID string) error {
 		DispatchID:  dispatchID,
 		DeliveredAt: time.Now().UnixNano(),
 	})
+}
+
+// Delivered implements [DispatchRecords].
+func (s *SQLiteRecordStore) Delivered(dispatchID string) (bool, error) {
+	ctx := context.WithoutCancel(context.Background())
+	at, err := s.q.GetA2ADispatchDeliveredAt(ctx, dispatchID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return at != 0, nil
 }
 
 // UndeliveredTerminal implements [DispatchRecords].

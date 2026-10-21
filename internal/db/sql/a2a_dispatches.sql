@@ -65,6 +65,11 @@ UPDATE a2a_dispatches SET
     updated_at = @delivered_at
 WHERE dispatch_id = @dispatch_id;
 
+-- name: GetA2ADispatchDeliveredAt :one
+SELECT delivered_at FROM a2a_dispatches
+WHERE dispatch_id = @dispatch_id
+LIMIT 1;
+
 -- name: GetA2ADispatch :one
 SELECT * FROM a2a_dispatches
 WHERE dispatch_id = @dispatch_id
