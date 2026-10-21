@@ -214,6 +214,7 @@ func Execute() {
 		ctx,
 		rootCmd,
 		fang.WithVersion(version.Version),
+		fang.WithTheme(helpColorScheme()),
 		fang.WithErrorHandler(func(w io.Writer, styles fang.Styles, err error) {
 			if ctx.Err() == nil {
 				fang.DefaultErrorHandler(w, styles, err)
