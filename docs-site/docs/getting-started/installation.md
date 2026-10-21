@@ -62,8 +62,9 @@ go build -o ~/.local/bin/crush .
 crush --version
 ```
 
-send a prompt; if the assistant emits a renderable surface, you are on the
-fork.
+Upstream and the fork print different version lines; the fork's `git pull`
+flow above also only works against `brunokrugel/crush`, so the remote URL of
+the clone is the simplest check.
 
 ## Updating
 

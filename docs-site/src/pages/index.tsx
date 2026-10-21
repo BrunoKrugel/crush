@@ -43,7 +43,7 @@ function Hero(): ReactNode {
         <div className="charmHero__install">
           <span aria-hidden="true">$</span>
           <span className="charmHero__installCmd">
-            git clone https://github.com/joestump-agent/crush.git &amp;&amp; cd
+            git clone https://github.com/brunokrugel/crush.git &amp;&amp; cd
             crush &amp;&amp; go install .
           </span>
         </div>
