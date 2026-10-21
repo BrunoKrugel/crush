@@ -13,9 +13,9 @@ import (
 // can be marked as loaded. This prevents misattribution when reading builtin
 // files that have been overridden.
 type Tracker struct {
-	mu          sync.RWMutex
 	loaded      map[string]bool
-	activeNames map[string]bool // Set of active skill names (post-dedup, post-filter)
+	activeNames map[string]bool
+	mu          sync.RWMutex
 }
 
 // NewTracker creates a new skill tracker with the given active skill names.

@@ -39,10 +39,9 @@ const (
 type e2eRemote struct {
 	srv      *httptest.Server
 	scenario func(execCtx *a2asrv.ExecutorContext, yield func(a2aspec.Event, error) bool)
-
-	mu       sync.Mutex
 	requests map[string][][]string
 	cancels  []string
+	mu       sync.Mutex
 }
 
 func (r *e2eRemote) Execute(_ context.Context, execCtx *a2asrv.ExecutorContext) iter.Seq2[a2aspec.Event, error] {
@@ -98,9 +97,9 @@ func TestExternalDispatchE2E(t *testing.T) {
 	t.Setenv(e2eTokenEnv, e2eTokenValue)
 
 	scenarios := []struct {
-		name     string
 		scenario func(execCtx *a2asrv.ExecutorContext, yield func(a2aspec.Event, error) bool)
 		check    func(t *testing.T, remote *e2eRemote, entry dispatch.Entry)
+		name     string
 	}{
 		{
 			name: "completes with untrusted findings and no workspace",

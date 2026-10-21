@@ -15,8 +15,8 @@ import (
 )
 
 type preparationHandoffModel struct {
-	finishStreamModel
 	beforeStream func() error
+	finishStreamModel
 }
 
 func (m *preparationHandoffModel) Stream(ctx context.Context, call fantasy.Call) (fantasy.StreamResponse, error) {

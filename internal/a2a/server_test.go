@@ -700,8 +700,8 @@ func TestHostRejectsUnauthenticated(t *testing.T) {
 		require.NoError(t, err)
 		var rpcResp struct {
 			Error *struct {
-				Code    int    `json:"code"`
 				Message string `json:"message"`
+				Code    int    `json:"code"`
 			} `json:"error"`
 		}
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&rpcResp))
@@ -755,10 +755,10 @@ func TestHostAuthenticatesBearerAndServesTasks(t *testing.T) {
 	resp, err = postJSONRPCAuthed(t, factory, client, server.Endpoint, listBody)
 	require.NoError(t, err)
 	var listResp struct {
+		Error  any `json:"error"`
 		Result struct {
 			Tasks []*a2aspec.Task `json:"tasks"`
 		} `json:"result"`
-		Error any `json:"error"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&listResp))
 	_ = resp.Body.Close()
@@ -847,9 +847,9 @@ func TestHostRejectsUnsupportedVersion(t *testing.T) {
 	var rpcResp struct {
 		ID    json.RawMessage `json:"id"`
 		Error struct {
-			Code    int              `json:"code"`
 			Message string           `json:"message"`
 			Data    []map[string]any `json:"data"`
+			Code    int              `json:"code"`
 		} `json:"error"`
 	}
 	require.NoError(t, sonic.Unmarshal([]byte(body), &rpcResp))

@@ -20,8 +20,8 @@ import (
 // captures the messages it was called with, so a test can assert what the
 // model saw after an injected message was folded in.
 type twoStepEchoModel struct {
-	mu      sync.Mutex
 	prompts []fantasy.Prompt
+	mu      sync.Mutex
 }
 
 func (m *twoStepEchoModel) Provider() string { return "fake" }
@@ -291,11 +291,11 @@ func TestEnqueueWhenBusyOrderingAndConcurrency(t *testing.T) {
 // to fold into, yet the session stays busy until Run releases it — and
 // its second step answers the steer.
 type gatedFinalTextModel struct {
-	mu      sync.Mutex
-	calls   int
 	midText chan struct{}
 	gate    chan struct{}
+	calls   int
 	midOnce sync.Once
+	mu      sync.Mutex
 }
 
 func newGatedFinalTextModel() *gatedFinalTextModel {
@@ -489,8 +489,8 @@ func TestFoldedSteerLeavesDispatchFindingsUnchanged(t *testing.T) {
 // through a call's OnConsumed (#351), so a test can assert exactly-once
 // delivery after the run has settled.
 type consumedRecorder struct {
-	mu   sync.Mutex
 	seen []bool
+	mu   sync.Mutex
 }
 
 func (r *consumedRecorder) record(ok bool) {

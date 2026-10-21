@@ -13,8 +13,6 @@ import (
 	"text/template"
 	"time"
 
-	a2ui "github.com/tmc/a2ui"
-
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/filepathext"
 	"github.com/charmbracelet/crush/internal/gitutil"
@@ -33,25 +31,22 @@ type Prompt struct {
 	contextRoot  string
 	skillFilter  []string
 	contextPaths []string
-	a2ui         bool
 	scheduling   bool
 }
 
 type PromptDat struct {
-	Provider           string
-	Model              string
 	Config             config.Config
-	WorkingDir         string
-	IsGitRepo          bool
-	Platform           string
 	Date               string
+	Model              string
+	WorkingDir         string
+	Platform           string
+	Provider           string
 	Time               string
 	GitStatus          string
+	AvailSkillXML      string
 	ContextFiles       []ContextFile
 	GlobalContextFiles []ContextFile
-	AvailSkillXML      string
-	A2UI               bool
-	A2UIVersion        string
+	IsGitRepo          bool
 	Scheduling         bool
 }
 
@@ -114,18 +109,6 @@ func WithContextPaths(paths []string) Option {
 func WithContextRoot(dir string) Option {
 	return func(p *Prompt) {
 		p.contextRoot = dir
-	}
-}
-
-// WithA2UI enables the template's A2UI section, which tells the model it may
-// emit <a2ui-json> surfaces. Crush's chat TUI renders those blocks via a2tea;
-// consumers that only ever see plain text (scripted crush run, headless serve
-// clients) receive them as raw markup, so deployments that need plain-text
-// output can turn the section off with options.disable_a2ui — the coordinator
-// applies that setting.
-func WithA2UI() Option {
-	return func(p *Prompt) {
-		p.a2ui = true
 	}
 }
 
@@ -316,8 +299,6 @@ func (p *Prompt) promptData(ctx context.Context, provider, model string, store *
 		Date:          p.now().Format("1/2/2006"),
 		Time:          p.now().Format("3:04:05 PM MST"),
 		AvailSkillXML: availSkillXML,
-		A2UI:          p.a2ui,
-		A2UIVersion:   a2ui.Version,
 		Scheduling:    p.scheduling,
 	}
 	if isGit {

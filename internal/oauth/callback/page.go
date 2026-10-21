@@ -88,21 +88,21 @@ func Write(w io.Writer, r Result) error {
 	}
 
 	data := struct {
-		Title            string
-		Kind             string
+		ErrorCode        string
+		CSS              template.CSS
 		Heading          string
 		Detail           string
 		Subject          string
 		ContinueURL      string
-		ErrorCode        string
-		ErrorDescription string
+		Kind             string
 		Status           string
-		CloseDelay       int
-		CSS              template.CSS
+		Title            string
+		Favicon          template.URL
+		ErrorDescription string
 		JS               template.JS
 		Heartbit         template.HTML
 		Charm            template.HTML
-		Favicon          template.URL
+		CloseDelay       int
 	}{
 		Subject:          r.Subject,
 		ContinueURL:      r.ContinueURL,

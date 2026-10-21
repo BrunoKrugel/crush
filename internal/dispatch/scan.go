@@ -29,42 +29,20 @@ const (
 // takes and immediately releases a free lease, so scanning never
 // changes who owns a workspace.
 type WorkspaceInfo struct {
-	// ID is the dispatch ID: the branch name minus the [BranchPrefix].
-	ID string `json:"id"`
-	// Branch is the workspace's dispatch branch name.
-	Branch string `json:"branch"`
-	// Path is the workspace directory.
-	Path string `json:"path"`
-	// Handle and Role are the dispatch's addressable identity (#313),
-	// recorded on the owner marker by [GitWorktreeProvider.UpdateOwnerIdentity].
-	// Both are empty on a marker that predates the stamp or was never
-	// assigned one.
-	Handle string `json:"handle"`
-	Role   string `json:"role"`
-	// Disposition is what became of the work (#368): [DispositionApplied]
-	// or [DispositionDismissed], empty when unjudged.
-	Disposition string `json:"disposition"`
-	// HasMarker reports whether an owner marker was found and parsed.
-	HasMarker bool `json:"has_marker"`
-	// HasLock reports whether a lease file exists. A missing lock file
-	// means ownership cannot be proven either way — cleanup tools skip
-	// such entries, exactly as [GitWorktreeProvider.Sweep] does.
-	HasLock bool `json:"has_lock"`
-	// OwnerAlive reports whether the ownership lease is held. It is
-	// meaningless without HasLock: an unknown owner is not a dead one.
-	OwnerAlive bool `json:"owner_alive"`
-	// HasChanges reports work a human might want: commits on the branch
-	// ahead of the recorded base, or a dirty tree. A git probe error or
-	// an unknown base counts as changes — the fail-safe is to keep the
-	// workspace, never to discard it, mirroring the provider's hasWork.
-	HasChanges bool `json:"has_changes"`
-	// BaseSHA is the commit the branch was cut from, from the marker.
-	BaseSHA string `json:"base_sha,omitempty"`
-	// InstanceID, PID and CreatedAt identify the recording owner, from
-	// the marker.
-	InstanceID string    `json:"instance_id,omitempty"`
-	PID        int       `json:"pid,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
+	CreatedAt   time.Time `json:"created_at"`
+	BaseSHA     string    `json:"base_sha,omitempty"`
+	Branch      string    `json:"branch"`
+	Path        string    `json:"path"`
+	Handle      string    `json:"handle"`
+	Role        string    `json:"role"`
+	Disposition string    `json:"disposition"`
+	ID          string    `json:"id"`
+	InstanceID  string    `json:"instance_id,omitempty"`
+	PID         int       `json:"pid,omitempty"`
+	HasMarker   bool      `json:"has_marker"`
+	HasChanges  bool      `json:"has_changes"`
+	OwnerAlive  bool      `json:"owner_alive"`
+	HasLock     bool      `json:"has_lock"`
 }
 
 // OwnerAliveState renders the three-way liveness a list column shows:

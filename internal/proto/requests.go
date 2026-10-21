@@ -11,22 +11,22 @@ import (
 
 // ConfigSetRequest represents a request to set a config field.
 type ConfigSetRequest struct {
-	Scope config.Scope `json:"scope"`
-	Key   string       `json:"key"`
 	Value any          `json:"value"`
+	Key   string       `json:"key"`
+	Scope config.Scope `json:"scope"`
 }
 
 // ConfigRemoveRequest represents a request to remove a config field.
 type ConfigRemoveRequest struct {
-	Scope config.Scope `json:"scope"`
 	Key   string       `json:"key"`
+	Scope config.Scope `json:"scope"`
 }
 
 // ConfigModelRequest represents a request to update the preferred model.
 type ConfigModelRequest struct {
-	Scope     config.Scope             `json:"scope"`
 	ModelType config.SelectedModelType `json:"model_type"`
 	Model     config.SelectedModel     `json:"model"`
+	Scope     config.Scope             `json:"scope"`
 }
 
 // ConfigCompactRequest represents a request to set compact mode.
@@ -52,10 +52,10 @@ const (
 // key. APIKey is the raw JSON for the credential; Kind selects the
 // concrete Go type APIKey should be decoded into via DecodeAPIKey.
 type ConfigProviderKeyRequest struct {
-	Scope      config.Scope    `json:"scope"`
 	ProviderID string          `json:"provider_id"`
 	Kind       APIKeyKind      `json:"kind"`
 	APIKey     json.RawMessage `json:"api_key"`
+	Scope      config.Scope    `json:"scope"`
 }
 
 // DecodeAPIKey decodes APIKey into the Go type indicated by Kind. It
@@ -83,8 +83,8 @@ func (r ConfigProviderKeyRequest) DecodeAPIKey() (any, error) {
 
 // ConfigRefreshOAuthRequest represents a request to refresh an OAuth token.
 type ConfigRefreshOAuthRequest struct {
-	Scope      config.Scope `json:"scope"`
 	ProviderID string       `json:"provider_id"`
+	Scope      config.Scope `json:"scope"`
 }
 
 // ImportCopilotResponse represents the response from importing Copilot credentials.
@@ -187,16 +187,16 @@ type MCPReadResourceRequest struct {
 
 // MCPCallToolRequest represents a request to call a tool on an MCP server.
 type MCPCallToolRequest struct {
+	Args     map[string]any `json:"args"`
 	Name     string         `json:"name"`
 	ToolName string         `json:"tool_name"`
-	Args     map[string]any `json:"args"`
 }
 
 // MCPGetPromptRequest represents a request to get an MCP prompt.
 type MCPGetPromptRequest struct {
+	Args     map[string]string `json:"args"`
 	ClientID string            `json:"client_id"`
 	PromptID string            `json:"prompt_id"`
-	Args     map[string]string `json:"args"`
 }
 
 // MCPGetPromptResponse represents the response from getting an MCP prompt.

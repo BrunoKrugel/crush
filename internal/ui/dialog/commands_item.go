@@ -12,17 +12,17 @@ import (
 
 // CommandItem wraps a uicmd.Command to implement the ListItem interface.
 type CommandItem struct {
+	action Action
+	t      *styles.Styles
 	*list.Versioned
+	cache       map[int]string
 	id          string
 	title       string
 	shortcut    string
 	description string
-	action      Action
 	aliases     []string
 	children    []*CommandItem
-	t           *styles.Styles
 	m           fuzzy.Match
-	cache       map[int]string
 	focused     bool
 	hideInfo    bool
 }

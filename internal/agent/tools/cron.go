@@ -32,9 +32,9 @@ var cronListDescription string
 var cronDeleteDescription string
 
 type CronCreateParams struct {
+	Recurring *bool  `json:"recurring,omitempty" description:"Whether the task reschedules itself after it fires. Defaults to true; false makes a one-shot task that fires once and deletes itself."`
 	Cron      string `json:"cron" description:"Required. A 5-field local-time cron expression: minute hour day-of-month month day-of-week."`
 	Prompt    string `json:"prompt" description:"Required. The prompt to run when the task fires."`
-	Recurring *bool  `json:"recurring,omitempty" description:"Whether the task reschedules itself after it fires. Defaults to true; false makes a one-shot task that fires once and deletes itself."`
 	Durable   bool   `json:"durable,omitempty" description:"Whether to persist the task to disk so it survives restarts. Defaults to false (session-only, in-memory)."`
 }
 

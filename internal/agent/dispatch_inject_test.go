@@ -19,25 +19,18 @@ import (
 // coordinator's queue is exercised end to end, the agent is the boundary.
 type gatedDispatchAgent struct {
 	SessionAgent
-	model   Model
-	gate    chan struct{}
-	entered chan struct{}
-	result  *fantasy.AgentResult
-
-	// enterOnce latches the entered notification; gateOnce makes release
-	// idempotent (#422): the env's cleanup may release a gate the test
-	// body already released.
-	enterOnce sync.Once
-	gateOnce  sync.Once
-	mu        sync.Mutex
-	queued    []SessionAgentCall
-	lastCall  *SessionAgentCall
-	canceled  []string
-
-	// cancelCh closes on the first Cancel so a parked Run returns as if
-	// the cancel reached it (#373); cancelOnce keeps the close idempotent.
+	lastCall   *SessionAgentCall
+	gate       chan struct{}
+	entered    chan struct{}
+	result     *fantasy.AgentResult
 	cancelCh   chan struct{}
+	model      Model
+	queued     []SessionAgentCall
+	canceled   []string
+	enterOnce  sync.Once
+	gateOnce   sync.Once
 	cancelOnce sync.Once
+	mu         sync.Mutex
 }
 
 func (f *gatedDispatchAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy.AgentResult, error) {
@@ -218,12 +211,11 @@ func TestDeliverAgentMessageMidRunThenRefusalAfterFinish(t *testing.T) {
 // deferred cleanup has not run yet.
 type parkedSessions struct {
 	session.Service
-
-	mu      sync.Mutex
-	id      string
-	once    sync.Once
 	parked  chan struct{}
 	release chan struct{}
+	id      string
+	once    sync.Once
+	mu      sync.Mutex
 }
 
 func newParkedSessions(inner session.Service) *parkedSessions {
@@ -503,27 +495,24 @@ func TestMessageAgentToolInputShapes(t *testing.T) {
 // catch.
 type refusingDispatchAgent struct {
 	SessionAgent
-	model  Model
-	result *fantasy.AgentResult
-
+	result       *fantasy.AgentResult
 	startGate    chan struct{}
 	gate         chan struct{}
 	entered      chan struct{}
 	busyCh       chan struct{}
+	cancelCh     chan struct{}
+	lastCall     *SessionAgentCall
+	model        Model
+	queued       []SessionAgentCall
+	canceled     []string
+	startOnce    sync.Once
+	enterOnce    sync.Once
+	busyOnce     sync.Once
+	gateOnce     sync.Once
+	cancelOnce   sync.Once
+	mu           sync.Mutex
+	busy         bool
 	alwaysRefuse bool
-
-	startOnce sync.Once
-	gateOnce  sync.Once
-	busyOnce  sync.Once
-	enterOnce sync.Once
-	mu        sync.Mutex
-	busy      bool
-	queued    []SessionAgentCall
-	lastCall  *SessionAgentCall
-	canceled  []string
-
-	cancelCh   chan struct{}
-	cancelOnce sync.Once
 }
 
 func newRefusingDispatchAgent() *refusingDispatchAgent {

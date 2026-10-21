@@ -19,12 +19,12 @@ import (
 // delivery sink, and an optional resolved config for the definition
 // completions.
 type agentMentionWorkspace struct {
-	slashCommandWorkspace
-	byHandle   map[string]workspace.AgentTask
-	delivered  []deliveredMessage
 	deliverErr error
-	agentRuns  int
+	byHandle   map[string]workspace.AgentTask
 	cfg        *config.Config
+	slashCommandWorkspace
+	delivered []deliveredMessage
+	agentRuns int
 }
 
 type deliveredMessage struct {

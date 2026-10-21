@@ -21,8 +21,8 @@ type MatchSettable interface {
 // via a settable query.
 type FilterableList struct {
 	*List
-	items []FilterableItem
 	query string
+	items []FilterableItem
 }
 
 // NewFilterableList creates a new filterable list.

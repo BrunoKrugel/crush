@@ -15,23 +15,23 @@ import (
 // CreateMessageParams represents parameters for creating a message.
 type CreateMessageParams struct {
 	Role     MessageRole   `json:"role"`
-	Parts    []ContentPart `json:"parts"`
 	Model    string        `json:"model"`
 	Provider string        `json:"provider,omitempty"`
+	Parts    []ContentPart `json:"parts"`
 }
 
 // Message represents a message in the proto layer.
 type Message struct {
-	ID                      string        `json:"id"`
-	Role                    MessageRole   `json:"role"`
-	SessionID               string        `json:"session_id"`
-	Parts                   []ContentPart `json:"parts"`
-	Model                   string        `json:"model"`
-	Provider                string        `json:"provider"`
-	PrismModelID            string        `json:"prism_model_id,omitempty"`
-	PrismModelName          string        `json:"prism_model_name,omitempty"`
 	PrismHypercreditSavings *float64      `json:"prism_hypercredit_savings,omitempty"`
 	PrismDollarSavings      *float64      `json:"prism_dollar_savings,omitempty"`
+	PrismModelID            string        `json:"prism_model_id,omitempty"`
+	Model                   string        `json:"model"`
+	Provider                string        `json:"provider"`
+	ID                      string        `json:"id"`
+	PrismModelName          string        `json:"prism_model_name,omitempty"`
+	SessionID               string        `json:"session_id"`
+	Role                    MessageRole   `json:"role"`
+	Parts                   []ContentPart `json:"parts"`
 	CreatedAt               int64         `json:"created_at"`
 	UpdatedAt               int64         `json:"updated_at"`
 	IsSummaryMessage        bool          `json:"is_summary_message,omitempty"`
@@ -177,9 +177,9 @@ func (ToolResult) isPart() {}
 // Finish represents the end of a message generation.
 type Finish struct {
 	Reason  FinishReason `json:"reason"`
-	Time    int64        `json:"time"`
 	Message string       `json:"message,omitempty"`
 	Details string       `json:"details,omitempty"`
+	Time    int64        `json:"time"`
 }
 
 func (Finish) isPart() {}
@@ -202,8 +202,8 @@ func (m Message) MarshalJSON() ([]byte, error) {
 
 	type Alias Message
 	return sonic.Marshal(&struct {
-		Parts json.RawMessage `json:"parts"`
 		*Alias
+		Parts json.RawMessage `json:"parts"`
 	}{
 		Parts: json.RawMessage(parts),
 		Alias: (*Alias)(&m),
@@ -214,8 +214,8 @@ func (m Message) MarshalJSON() ([]byte, error) {
 func (m *Message) UnmarshalJSON(data []byte) error {
 	type Alias Message
 	aux := &struct {
-		Parts json.RawMessage `json:"parts"`
 		*Alias
+		Parts json.RawMessage `json:"parts"`
 	}{
 		Alias: (*Alias)(m),
 	}
@@ -527,8 +527,8 @@ const (
 )
 
 type partWrapper struct {
-	Type partType    `json:"type"`
 	Data ContentPart `json:"data"`
+	Type partType    `json:"type"`
 }
 
 // MarshalParts marshals content parts to JSON.
@@ -646,14 +646,11 @@ func UnmarshalParts(data []byte) ([]ContentPart, error) {
 
 // Attachment represents a file attachment.
 type Attachment struct {
-	FilePath string `json:"file_path"`
-	FileName string `json:"file_name"`
-	MimeType string `json:"mime_type"`
-	Content  []byte `json:"content"`
-	// Kind and PromptArgCount carry presentation identity that MimeType
-	// cannot express; see [message.AttachmentKind]. Both are omitempty so
-	// an ordinary file attachment serializes exactly as it did before.
+	FilePath       string `json:"file_path"`
+	FileName       string `json:"file_name"`
+	MimeType       string `json:"mime_type"`
 	Kind           string `json:"kind,omitempty"`
+	Content        []byte `json:"content"`
 	PromptArgCount int    `json:"prompt_arg_count,omitempty"`
 }
 
@@ -706,8 +703,8 @@ func AttachmentsFromMessage(as []message.Attachment) []Attachment {
 func (a Attachment) MarshalJSON() ([]byte, error) {
 	type Alias Attachment
 	return sonic.Marshal(&struct {
-		Content string `json:"content"`
 		*Alias
+		Content string `json:"content"`
 	}{
 		Content: base64.StdEncoding.EncodeToString(a.Content),
 		Alias:   (*Alias)(&a),
@@ -718,8 +715,8 @@ func (a Attachment) MarshalJSON() ([]byte, error) {
 func (a *Attachment) UnmarshalJSON(data []byte) error {
 	type Alias Attachment
 	aux := &struct {
-		Content string `json:"content"`
 		*Alias
+		Content string `json:"content"`
 	}{
 		Alias: (*Alias)(a),
 	}

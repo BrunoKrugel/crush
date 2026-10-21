@@ -61,19 +61,12 @@ type TodoSink interface {
 // subscription and reduction are written once and sunk twice — the
 // agent block is the first sink, #174's A2A event bridge the second.
 type TodoCollector struct {
-	reg      *AgentRegistry
-	sessions pubsub.Subscriber[session.Session]
-	sinks    []TodoSink
-
-	mu sync.Mutex
-	// latest holds the most recent snapshot per dispatch ID, so a
-	// registry transition can re-emit a snapshot without waiting for
-	// the next session save, and Snapshot can answer a pull.
-	latest map[string]TodoSnapshot
-	// sessionListeners holds the per-session snapshot subscriptions
-	// (#174): each receives every snapshot reduced for its session,
-	// until its context ends.
+	sessions         pubsub.Subscriber[session.Session]
+	reg              *AgentRegistry
+	latest           map[string]TodoSnapshot
 	sessionListeners map[string]map[chan TodoSnapshot]struct{}
+	sinks            []TodoSink
+	mu               sync.Mutex
 }
 
 // NewTodoCollector returns a collector reducing progress for the

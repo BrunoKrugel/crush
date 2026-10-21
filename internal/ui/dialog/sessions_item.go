@@ -44,19 +44,16 @@ type ListItem interface {
 // SessionItem wraps a [session.Session] to implement the [ListItem] interface.
 type SessionItem struct {
 	*list.Versioned
-	session.Session
 	t                *styles.Styles
-	sessionsMode     sessionsMode
-	m                fuzzy.Match
 	cache            map[int]string
 	updateTitleInput textinput.Model
-	focused          bool
-	hideInfo         bool
-	// child marks a sub-agent task session rendered inside its parent's
-	// sub-menu (#314); agentCount is the number of such children when
-	// this row is a parent.
-	child      bool
-	agentCount int
+	session.Session
+	m            fuzzy.Match
+	agentCount   int
+	sessionsMode sessionsMode
+	focused      bool
+	hideInfo     bool
+	child        bool
 }
 
 // Finished implements list.Item. Session items are render-stable

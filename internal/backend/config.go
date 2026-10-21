@@ -49,17 +49,9 @@ type MCPResourceContents struct {
 	Blob     []byte `json:"blob,omitempty"`
 }
 
-// MCPToolCallResult holds the model-facing text and any A2UI surface
-// payloads from an MCP tool call.
+// MCPToolCallResult holds the model-facing text from an MCP tool call.
 type MCPToolCallResult struct {
-	Content  string               `json:"content"`
-	Surfaces []MCPToolCallSurface `json:"surfaces,omitempty"`
-}
-
-// MCPToolCallSurface is a single A2UI surface payload from a tool call.
-type MCPToolCallSurface struct {
-	Payload string `json:"payload"`
-	URI     string `json:"uri"`
+	Content string `json:"content"`
 }
 
 // SetConfigField sets a key/value pair in the config file for the
@@ -359,7 +351,7 @@ func (b *Backend) ReadMCPResource(ctx context.Context, workspaceID, name, uri st
 }
 
 // CallMCPTool invokes a tool on a named MCP server and returns its text
-// content plus any A2UI surface payload it embedded.
+// content.
 func (b *Backend) CallMCPTool(ctx context.Context, workspaceID, name, toolName string, args map[string]any) (MCPToolCallResult, error) {
 	ws, err := b.GetWorkspace(workspaceID)
 	if err != nil {
@@ -373,11 +365,7 @@ func (b *Backend) CallMCPTool(ctx context.Context, workspaceID, name, toolName s
 	if err != nil {
 		return MCPToolCallResult{}, err
 	}
-	out := MCPToolCallResult{Content: res.Content}
-	for _, s := range res.Surfaces {
-		out.Surfaces = append(out.Surfaces, MCPToolCallSurface{Payload: s.Payload, URI: s.URI})
-	}
-	return out, nil
+	return MCPToolCallResult{Content: res.Content}, nil
 }
 
 // GetMCPPrompt retrieves a prompt from a named MCP server.

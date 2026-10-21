@@ -110,26 +110,14 @@ func authorizationHeader(callCtx *a2asrv.CallContext) []string {
 // rejected-uid case a single process cannot produce on its own live
 // socket is unit-testable.
 type authDecision struct {
-	// token is the host's bearer token.
-	token string
-	// wantUID is the uid the peer must present when credentials are
-	// known.
-	wantUID string
-	// peerKnown reports whether the platform reported peer credentials;
-	// false disables the uid half of the decision (Windows).
-	peerKnown bool
-	// peerUID is the peer's uid, meaningful only when peerKnown.
-	peerUID string
-	// authorization is the request's Authorization header values.
+	token         string
+	wantUID       string
+	peerUID       string
+	certIdentity  string
 	authorization []string
-	// remote reports a call from the TCP listener (#358). It has no peer
-	// credentials, so peerKnown is ignored for it.
-	remote bool
-	// certVerified reports a client certificate the TCP listener
-	// verified against client_ca (#358); meaningful only when remote.
-	certVerified bool
-	// certIdentity names the verified client certificate.
-	certIdentity string
+	peerKnown     bool
+	remote        bool
+	certVerified  bool
 }
 
 // authorize returns a2a.ErrUnauthenticated unless every required half

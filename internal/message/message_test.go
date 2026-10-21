@@ -54,8 +54,8 @@ func newTestService(t *testing.T, opts ...ServiceOption) (Service, string) {
 // eventCollector consumes broker events into a slice in a goroutine
 // and exposes thread-safe Snapshot / Reset helpers for assertions.
 type eventCollector struct {
-	mu     sync.Mutex
 	events []pubsub.Event[Message]
+	mu     sync.Mutex
 }
 
 func collect(ctx context.Context, sub <-chan pubsub.Event[Message]) *eventCollector {
@@ -623,8 +623,8 @@ func TestUpdate_StructuralFlushUsesMustDeliver(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		mut  func(*Message)
+		name string
 	}{
 		{
 			name: "tool call add",

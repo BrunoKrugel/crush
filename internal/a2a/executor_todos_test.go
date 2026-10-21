@@ -46,11 +46,10 @@ func statesWithTodos(t *testing.T, evs []a2aspec.Event) []a2aspec.TaskState {
 // records the subscription context, so tests can assert the executor
 // unsubscribes when the run ends.
 type pipeTodoSource struct {
-	ch chan dispatch.TodoSnapshot
-
-	mu       sync.Mutex
 	subCtx   context.Context
+	ch       chan dispatch.TodoSnapshot
 	subCount int
+	mu       sync.Mutex
 }
 
 func newPipeTodoSource() *pipeTodoSource {
@@ -79,12 +78,12 @@ func (p *pipeTodoSource) subscriptionCanceled() bool {
 // pacedRunner is a runner whose Run blocks until released, so a test can
 // push todo snapshots while the run is in flight and then finish it.
 type pacedRunner struct {
+	ranCtx  context.Context
+	release chan struct{}
+	started chan struct{}
 	fakeRunner
-	release  chan struct{}
-	started  chan struct{}
-	once     sync.Once
-	ranCtx   context.Context
 	ranCount int
+	once     sync.Once
 }
 
 func newPacedRunner(result string) *pacedRunner {

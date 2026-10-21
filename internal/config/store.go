@@ -60,26 +60,11 @@ type fileSnapshot struct {
 // disk. They are applied on top of the loaded Config and survive only for
 // the lifetime of the process (or workspace).
 type RuntimeOverrides struct {
+	Models                 map[SelectedModelType]SelectedModel
+	EnabledChannels        []string
+	AllowedCommands        []string
 	SkipPermissionRequests bool
-	// EnabledChannels lists the MCP servers opted in as channels for this
-	// session (via the --channels flag). A server present in MCP config only
-	// pushes channel events when it also appears here. Entries may be written
-	// as "server:<name>" or as a bare "<name>".
-	EnabledChannels []string
-	// AllowAllCommands, when true, removes every bash-tool command block for
-	// this session (via the --allow-all-commands flag or CRUSH_ALLOW_ALL_COMMANDS).
-	AllowAllCommands bool
-	// AllowedCommands lists commands to drop from the bash tool's default
-	// banned list for this session (via the --allow-commands flag or
-	// CRUSH_ALLOW_COMMANDS). It is merged with options.allowed_commands from
-	// the config file. Held here rather than in Options so it survives config
-	// reloads.
-	AllowedCommands []string
-	// Models records the model choices made in this instance, whether
-	// persisted or not. They are reapplied after a config reload so that a
-	// selection made here always outranks whatever the shared config file
-	// happens to hold — see pinPreferredModelLocked.
-	Models map[SelectedModelType]SelectedModel
+	AllowAllCommands       bool
 }
 
 // ConfigStore is the single entry point for all config access. It owns the
@@ -100,74 +85,28 @@ type RuntimeOverrides struct {
 // as immutable: a mutator clones, mutates the clone, and swaps it in under
 // writeMu rather than mutating the live Config in place.
 type ConfigStore struct {
-	config         *Config
-	workingDir     string
-	resolver       VariableResolver
-	globalDataPath string   // ~/.local/share/crush/crush.json
-	workspacePath  string   // .crush/crush.json
-	loadedPaths    []string // config files that were successfully loaded
-	knownProviders []catwalk.Provider
-	// loadDiagnostics is what SetupAgents reported for the published
-	// config (#560), plus what the command recorded from inputs the
-	// load cannot see, like the flag and env allow-commands values
-	// (#578): the problems that did not fail the load. Load collects
-	// them before any logger exists; the command replays them once it
-	// does. A reload replaces the set with the new config's, and a
-	// rolled-back reload keeps the old. Guarded by writeMu.
-	loadDiagnostics    []LoadDiagnostic
-	overrides          RuntimeOverrides
-	trackedConfigPaths []string                // unique, normalized config file paths
-	snapshots          map[string]fileSnapshot // path -> snapshot at last capture
-	cachedDiscovery    []discoveryJob          // providers whose models came from the discovery cache; guarded by writeMu
-
-	// userConfiguredModels records, per custom provider, the models the
-	// user explicitly listed in config, captured by configureProviders
-	// before load-time discovery merges endpoint models into the live
-	// provider config. ReloadModelDiscovery seeds re-discovery from this
-	// set so endpoint-removed models get pruned while user-specified
-	// models survive. Guarded by writeMu.
-	userConfiguredModels map[string][]catwalk.Model
-
-	// failedDiscoveryProviders records custom providers dropped during
-	// configureProviders because model discovery failed (or found
-	// nothing) and they had no user-specified models to fall back on.
-	// ReloadModelDiscovery retries them and resurrects any that succeed.
-	// Guarded by writeMu.
+	refreshSF                singleflight.Group
+	resolver                 VariableResolver
+	userConfiguredModels     map[string][]catwalk.Model
+	exchangeToken            func(ctx context.Context, providerID, refreshToken string) (*oauth.Token, error)
+	config                   *Config
+	authSignals              map[string]chan struct{}
+	fetchOpenAIModels        func(ctx context.Context, token *oauth.Token) ([]catwalk.Model, error)
 	failedDiscoveryProviders map[string]ProviderConfig
-
-	// configMu guards the config pointer field against concurrent
-	// readers (Config) and the writeMu-serialised swap (setConfig). It
-	// protects the pointer word only; the pointed-to Config is treated
-	// as immutable once published, since both reloads and typed mutators
-	// build a fresh Config rather than mutating the live one.
-	configMu sync.RWMutex
-
-	mu      sync.Mutex   // serialises config file writes
-	writeMu sync.RWMutex // serialises in-memory config production (mutators + reload); RLock for readers
-
-	// refreshSF collapses concurrent in-process OAuth refreshes for the
-	// same provider into a single attempt. Combined with the per-provider
-	// cross-process refresh lock, it ensures only one token exchange runs
-	// at a time. See RefreshOAuthToken.
-	refreshSF singleflight.Group
-
-	// exchangeToken performs the provider-specific OAuth token exchange.
-	// It is a field so tests can substitute a fake exchange without making
-	// real network calls. Production code leaves it nil, and exchange falls
-	// back to the real provider clients.
-	exchangeToken func(ctx context.Context, providerID, refreshToken string) (*oauth.Token, error)
-
-	// fetchOpenAIModels fetches the ChatGPT model catalog. A field for the
-	// same reason as exchangeToken: tests stub it to avoid network calls,
-	// production leaves it nil and refetchOpenAIModels calls the real one.
-	fetchOpenAIModels func(ctx context.Context, token *oauth.Token) ([]catwalk.Model, error)
-
-	// authSignalMu guards authSignals, which maps provider IDs to
-	// channels that WaitForTokenChange blocks on. SignalAuthComplete
-	// closes the channel to unblock waiters; a new channel is created
-	// on the next wait.
-	authSignalMu sync.Mutex
-	authSignals  map[string]chan struct{}
+	snapshots                map[string]fileSnapshot
+	workspacePath            string
+	globalDataPath           string
+	workingDir               string
+	loadedPaths              []string
+	cachedDiscovery          []discoveryJob
+	trackedConfigPaths       []string
+	loadDiagnostics          []LoadDiagnostic
+	knownProviders           []catwalk.Provider
+	overrides                RuntimeOverrides
+	configMu                 sync.RWMutex
+	writeMu                  sync.RWMutex
+	mu                       sync.Mutex
+	authSignalMu             sync.Mutex
 }
 
 // Config returns the pure-data config struct (read-only after load).
@@ -1345,10 +1284,10 @@ func (s *ConfigStore) ImportCopilot() (*oauth.Token, bool) {
 
 // StalenessResult contains the result of a staleness check.
 type StalenessResult struct {
-	Dirty   bool
+	Errors  map[string]error
 	Changed []string
 	Missing []string
-	Errors  map[string]error // stat errors by path
+	Dirty   bool
 }
 
 // ConfigStaleness checks whether any tracked config files have changed on disk

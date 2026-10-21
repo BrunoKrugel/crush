@@ -53,11 +53,11 @@ type ContentPart interface {
 }
 
 type ReasoningContent struct {
+	ResponsesData    *openai.ResponsesReasoningMetadata `json:"responses_data"`
 	Thinking         string                             `json:"thinking"`
 	Signature        string                             `json:"signature"`
-	ThoughtSignature string                             `json:"thought_signature"` // Used for google
-	ToolID           string                             `json:"tool_id"`           // Used for openrouter google models
-	ResponsesData    *openai.ResponsesReasoningMetadata `json:"responses_data"`
+	ThoughtSignature string                             `json:"thought_signature"`
+	ToolID           string                             `json:"tool_id"`
 	StartedAt        int64                              `json:"started_at,omitempty"`
 	FinishedAt       int64                              `json:"finished_at,omitempty"`
 }
@@ -96,17 +96,11 @@ func (iuc ImageURLContent) String() string {
 func (ImageURLContent) isPart() {}
 
 type BinaryContent struct {
-	Path     string
-	MIMEType string
-	Data     []byte
-	// Kind and PromptArgCount carry an attachment's presentation identity
-	// across the message boundary. Without them a chip loses what it is the
-	// moment the message is sent: the transcript rebuilds attachments from
-	// these parts, and MIMEType alone cannot distinguish an MCP prompt from
-	// any other text attachment. Both are omitempty and zero-valued for
-	// ordinary files, so existing persisted messages decode unchanged.
+	Path           string
+	MIMEType       string
 	Kind           AttachmentKind `json:",omitempty"`
-	PromptArgCount int            `json:",omitempty"`
+	Data           []byte
+	PromptArgCount int `json:",omitempty"`
 }
 
 func (bc BinaryContent) String(p catwalk.InferenceProvider) string {
@@ -143,9 +137,9 @@ func (ToolResult) isPart() {}
 
 type Finish struct {
 	Reason  FinishReason `json:"reason"`
-	Time    int64        `json:"time"`
 	Message string       `json:"message,omitempty"`
 	Details string       `json:"details,omitempty"`
+	Time    int64        `json:"time"`
 }
 
 func (Finish) isPart() {}
@@ -182,26 +176,19 @@ func (m *Message) ShellCommands() []ShellCommand {
 }
 
 type Message struct {
-	ID               string
-	Role             MessageRole
-	SessionID        string
-	Parts            []ContentPart
-	Model            string
-	Provider         string
-	CreatedAt        int64
-	UpdatedAt        int64
-	IsSummaryMessage bool
-	// PrismModelID and PrismModelName identify the model that actually
-	// served the turn, as reported by the Hyper Prism model router
-	// headers. Empty when the turn was not routed through Prism.
-	PrismModelID   string
-	PrismModelName string
-	// PrismHypercreditSavings and PrismDollarSavings are the savings
-	// from routing through Prism, as reported by its savings trailers.
-	// Nil when not reported. When both are present the hypercredit
-	// figure is the one shown.
-	PrismHypercreditSavings *float64
 	PrismDollarSavings      *float64
+	PrismHypercreditSavings *float64
+	PrismModelID            string
+	Role                    MessageRole
+	SessionID               string
+	ID                      string
+	Model                   string
+	Provider                string
+	PrismModelName          string
+	Parts                   []ContentPart
+	UpdatedAt               int64
+	CreatedAt               int64
+	IsSummaryMessage        bool
 }
 
 func (m *Message) Content() TextContent {

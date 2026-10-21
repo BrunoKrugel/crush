@@ -26,16 +26,13 @@ type OAuthClient struct {
 
 // Token represents an OAuth2 token.
 type Token struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token,omitempty"`
-	IDToken      string `json:"id_token,omitempty"`
-	// AccountID is the provider account the token belongs to, extracted
-	// from the ID token when the provider embeds one. The ChatGPT
-	// backend requires it as a header on every request.
-	AccountID string       `json:"account_id,omitempty"`
-	ExpiresIn int          `json:"expires_in"`
-	ExpiresAt int64        `json:"expires_at"`
-	Client    *OAuthClient `json:"client,omitempty"`
+	Client       *OAuthClient `json:"client,omitempty"`
+	AccessToken  string       `json:"access_token"`
+	RefreshToken string       `json:"refresh_token,omitempty"`
+	IDToken      string       `json:"id_token,omitempty"`
+	AccountID    string       `json:"account_id,omitempty"`
+	ExpiresIn    int          `json:"expires_in"`
+	ExpiresAt    int64        `json:"expires_at"`
 }
 
 // SetExpiresAt calculates and sets the ExpiresAt field based on the
@@ -81,8 +78,8 @@ func (t *Token) SetExpiresIn() {
 // recoverable failures (e.g. temporary server error) and terminal ones
 // (e.g. revoked refresh token).
 type TokenExchangeError struct {
-	StatusCode int
 	Body       string
+	StatusCode int
 }
 
 func (e *TokenExchangeError) Error() string {

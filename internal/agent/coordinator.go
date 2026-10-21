@@ -180,189 +180,83 @@ type Coordinator interface {
 // closed when the run's teardown drops the record. #372 (cancel at
 // shutdown) and #373 (user-initiated cancel) build on it.
 type liveDispatch struct {
-	cancel    context.CancelFunc
-	sessionID string
 	agent     SessionAgent
+	cancel    context.CancelFunc
 	kill      *dispatchKill
 	done      chan struct{}
+	sessionID string
 }
 
 type coordinator struct {
-	ledger      ledger.Service
-	cfg         *config.ConfigStore
-	sessions    session.Service
-	messages    message.Service
-	permissions permission.Service
-	questions   question.Service
-	history     history.Service
-	filetracker filetracker.Service
-	lspManager  *lsp.Manager
-	notify      pubsub.Publisher[notify.Notification]
-	runComplete pubsub.Publisher[notify.RunComplete]
-	interactive bool
-
-	// agentMu guards mainAgent, mainAgentName and interactive:
-	// SetMainAgent and SetInteractive run on HTTP handler goroutines
-	// while runs, cancels, and probes read them from their own
-	// goroutines.
-	agentMu       sync.RWMutex
-	mainAgent     SessionAgent
-	mainAgentName string
-	agents        map[string]SessionAgent
-
-	// buildsMu guards builds: the readiness latch of every agent build
-	// whose background work has not finished (#515). That work renders
-	// the system prompt, which runs git in the working directory, and
-	// nothing else joins it: every run rebuilds the tool palette, and the
-	// task sub-agent built there is only waited on if it ever runs.
-	// Teardown waits on these latches instead (waitAgentBuilds). Lazily
-	// created because tests construct the coordinator struct directly.
-	buildsMu sync.Mutex
-	builds   map[*readiness]struct{}
-	// promptBuildHook runs on an agent build's system-prompt goroutine
-	// just before the render; a test-only seam, nil in production.
-	promptBuildHook func()
-
-	cronStore *scheduler.Store
-
-	// Worktree dispatch (#61): the agent registry is created eagerly (it
-	// is pure in-memory state and never fails), while the git worktree
-	// provider is created lazily on first dispatch because a non-git
-	// working directory must not fail coordinator construction, and the
-	// failure is cached so later dispatches report it instead of
-	// retrying. dispatchAgentBuilder is the dispatched-agent constructor
-	// the DispatchAgent tool uses; nil means the real one, and tests
-	// substitute a fake through it.
-	dispatchMu           sync.Mutex
-	dispatchReg          *dispatch.AgentRegistry
-	dispatchProvider     *dispatch.GitWorktreeProvider
-	dispatchProviderErr  error
-	dispatchAgentBuilder func(context.Context, dispatchAgentOptions) (*dispatchedAgent, error)
-	// spawnDispatch starts a dispatch's background run; nil means the
-	// production `go f()`. Tests install a WaitGroup-backed spawner so
-	// a test can never end while a runDispatch it started is still
-	// running (#422).
-	spawnDispatch func(func())
-	// pendingResults holds each parent session's dispatch results whose
-	// delivery turn has not succeeded yet (#388): a result arrives while
-	// the parent is busy, so it waits here — outside the prompt queue
-	// the user's Esc clears — and flushPendingResults delivers it on the
-	// next idle. Guarded by dispatchMu; lazily created because tests
-	// construct the coordinator struct directly.
-	pendingResults map[string][]dispatch.DispatchResult
-	// dispatchCollector reduces dispatched-session state into
-	// per-dispatch snapshots for the configured sinks (#65); created
-	// with the provider and run on the coordinator's lifetime context.
-	dispatchCollector *dispatch.TodoCollector
-	// liveDispatches maps each running dispatch's ID to its live record
-	// (#371): the per-dispatch root cancel, the task session and agent
-	// behind the run, the wander-kill, and a done channel closed at
-	// teardown. Guarded by dispatchMu; #372 (cancel at shutdown) and
-	// #373 (user-initiated cancel) build on it.
-	liveDispatches map[string]*liveDispatch
-	// shuttingDown is set when CancelAll begins (#372): while it is set,
-	// a finishing dispatch still records its terminal result and status
-	// in the registry, but neither deliverDispatchResult nor the
-	// run-end flush starts a parent turn.
-	shuttingDown atomic.Bool
-	// dispatchShutdownWait bounds the shared wait CancelAll gives the
-	// live dispatches' graceful agent.Cancel to finish each run (#372);
-	// dispatchShutdownRootWait is the extra shared bound the root-cancel
-	// fallback gets. Zero keeps the defaults, 5s and 1s, matching
-	// sessionAgent.CancelAll's own bound; tests shorten them.
-	dispatchShutdownWait     time.Duration
+	ledger                   ledger.Service
+	dispatchRecords          dispatch.DispatchRecords
+	sessions                 session.Service
+	messages                 message.Service
+	permissions              permission.Service
+	questions                question.Service
+	history                  history.Service
+	filetracker              filetracker.Service
+	dispatchHost             DispatchHost
+	notify                   pubsub.Publisher[notify.Notification]
+	runComplete              pubsub.Publisher[notify.RunComplete]
+	dispatchCtx              context.Context
+	dispatchProviderErr      error
+	mainAgent                SessionAgent
+	dispatchProvider         *dispatch.GitWorktreeProvider
+	semanticClient           *semantic.Client
+	skillTracker             *skills.Tracker
+	builds                   map[*readiness]struct{}
+	promptBuildHook          func()
+	cronStore                *scheduler.Store
+	semanticSymbols          *symbols.Extractor
+	dispatchReg              *dispatch.AgentRegistry
+	agents                   map[string]SessionAgent
+	lspManager               *lsp.Manager
+	dispatchAgentBuilder     func(context.Context, dispatchAgentOptions) (*dispatchedAgent, error)
+	spawnDispatch            func(func())
+	pendingResults           map[string][]dispatch.DispatchResult
+	dispatchCollector        *dispatch.TodoCollector
+	liveDispatches           map[string]*liveDispatch
+	semanticStore            *semantic.Store
+	cfg                      *config.ConfigStore
+	dispatchQuestions        chan struct{}
+	mainAgentName            string
+	dispatchSinks            []dispatch.TodoSink
+	allSkills                []*skills.Skill
+	activeSkills             []*skills.Skill
+	dispatchSlots            int
 	dispatchShutdownRootWait time.Duration
-	// dispatchSlots counts the dispatch slots currently held (#390):
-	// setups in flight plus live dispatches, capped by the resolved
-	// dispatch.max_concurrent. Guarded by dispatchMu.
-	dispatchSlots int
-	// dispatchCtx is the NewCoordinator context the collector's
-	// subscriptions run on; nil-safe (tests construct the coordinator
-	// struct directly) — dispatchWorkspaceProvider falls back to
-	// context.Background.
-	dispatchCtx   context.Context
-	dispatchSinks []dispatch.TodoSink
-	// dispatchHost is the A2A protocol boundary every dispatch runs
-	// behind (#70, #71); nil until the app wires a2a.ServerFactory, and
-	// nil means dispatches are refused at the tool — nothing runs
-	// unserved (#347).
-	dispatchHost DispatchHost
-	// dispatchQuestions is the one-slot semaphore dispatched agents'
-	// questions take turns on (#352): the question service holds one
-	// pending question at a time. Made on first use under dispatchMu.
-	dispatchQuestions chan struct{}
-	// dispatchPersistWindow bounds how long a finished run waits for the
-	// parent turn to persist its dispatch_agent tool result (#410).
-	// NewCoordinator sets dispatchResultPersistWindow; a coordinator
-	// built as a struct literal (tests) leaves it zero and makes a single
-	// attempt, so a test that never writes the parent result does not sit
-	// out the window.
-	dispatchPersistWindow time.Duration
-
-	// dispatchRecords is the durable a2a_dispatches store (#355); nil
-	// until the app wires it, and nil means dispatches leave no restart
-	// record — every record write and the startup reconcile delivery
-	// are nil-safe no-ops.
-	dispatchRecords dispatch.DispatchRecords
-
-	// semanticStore and semanticClient back the semantic_search and
-	// semantic_index tools. Both are nil unless an embedding provider is
-	// configured and the store initialised, in which case neither tool
-	// is registered.
-	semanticStore   *semantic.Store
-	semanticClient  *semantic.Client
-	semanticSymbols *symbols.Extractor
-
-	// Skills discovery results (session-start snapshot).
-	allSkills    []*skills.Skill // Pre-filter: all discovered after dedup.
-	activeSkills []*skills.Skill // Post-filter: active skills only.
-	skillTracker *skills.Tracker
+	dispatchPersistWindow    time.Duration
+	dispatchShutdownWait     time.Duration
+	agentMu                  sync.RWMutex
+	dispatchMu               sync.Mutex
+	buildsMu                 sync.Mutex
+	shuttingDown             atomic.Bool
+	interactive              bool
 }
 
 // CoordinatorOptions holds the dependencies for NewCoordinator. Using a
 // struct keeps the constructor self-documenting and avoids a long
 // positional parameter list.
 type CoordinatorOptions struct {
-	Config      *config.ConfigStore
-	Sessions    session.Service
-	Messages    message.Service
-	Permissions permission.Service
-	Questions   question.Service
-	History     history.Service
-	FileTracker filetracker.Service
-	LSPManager  *lsp.Manager
-	Ledger      ledger.Service
-	Notify      pubsub.Publisher[notify.Notification]
-	RunComplete pubsub.Publisher[notify.RunComplete]
-	Skills      *skills.Manager
-	Interactive bool
-
-	// SemanticStore/SemanticClient enable the semantic_search and
-	// semantic_index tools. Both must be non-nil for the tools to be
-	// registered; the caller (app) is responsible for constructing them
-	// from the configured embedding provider.
-	SemanticStore  *semantic.Store
-	SemanticClient *semantic.Client
-
-	// DispatchSinks receive the per-dispatch todo snapshots the
-	// collector reduces (#65). The app passes the broker sink that
-	// feeds the agent block; #174's A2A TaskStatusUpdateEvent bridge
-	// will attach as a second sink over the same reduction. Empty in
-	// callers that do not observe progress.
-	DispatchSinks []dispatch.TodoSink
-
-	// DispatchHost is the A2A protocol boundary every dispatch runs
-	// behind (#70, #71): the app passes a2a.ServerFactory. Nil (tests
-	// that opt out, or any caller without the factory wired) means
-	// dispatches are refused at the tool — there is no unserved run
-	// (#347).
-	DispatchHost DispatchHost
-
-	// DispatchRecords persists the durable dispatch records (#355); the
-	// app passes dispatch.NewSQLiteRecordStore. Nil (tests, or any
-	// caller without the database wired) means dispatches keep no
-	// restart record, which is exactly the pre-#355 behavior.
+	Ledger          ledger.Service
+	RunComplete     pubsub.Publisher[notify.RunComplete]
+	Messages        message.Service
+	Permissions     permission.Service
+	Questions       question.Service
+	History         history.Service
+	FileTracker     filetracker.Service
 	DispatchRecords dispatch.DispatchRecords
+	Sessions        session.Service
+	DispatchHost    DispatchHost
+	Notify          pubsub.Publisher[notify.Notification]
+	Skills          *skills.Manager
+	SemanticStore   *semantic.Store
+	SemanticClient  *semantic.Client
+	Config          *config.ConfigStore
+	LSPManager      *lsp.Manager
+	DispatchSinks   []dispatch.TodoSink
+	Interactive     bool
 }
 
 func NewCoordinator(ctx context.Context, opts CoordinatorOptions) (Coordinator, error) {
@@ -418,17 +312,12 @@ func NewCoordinator(ctx context.Context, opts CoordinatorOptions) (Coordinator, 
 		return nil, errCoderAgentNotConfigured
 	}
 
-	// A2UI is on unless the user disables it; see prompt.WithA2UI for the
-	// host-capability trade-off. The cron tools are registered
-	// unconditionally in buildAgent, so the matching prompt guidance is
-	// always on for the coder agent. These coder-only sections ride the
-	// coder agent's build (#432): the definition's prompt — builtin or
-	// file — renders with them, and a file-based template that does not
-	// reference the fields is unaffected.
+	// The cron tools are registered unconditionally in buildAgent, so the
+	// matching prompt guidance is always on for the coder agent. These
+	// coder-only sections ride the coder agent's build (#432): the
+	// definition's prompt — builtin or file — renders with them, and a
+	// file-based template that does not reference the fields is unaffected.
 	coderOpts := []prompt.Option{prompt.WithScheduling()}
-	if !c.cfg.Config().Options.DisableA2UI {
-		coderOpts = append(coderOpts, prompt.WithA2UI())
-	}
 
 	agent, err := c.buildAgent(ctx, agentCfg, false, coderOpts...)
 	if err != nil {
@@ -1105,8 +994,8 @@ func mergeCallOptions(model Model, cfg config.ProviderConfig) (fantasy.ProviderO
 // configured slots, the prompt renders from the definition's prompt
 // reference with the definition's context paths and skills, and the
 // tools build from the definition's allow list. extraOpts carry
-// caller-owned prompt sections — the coder-only scheduling guidance and
-// A2UI; a file-based template that does not reference those fields is
+// caller-owned prompt sections — the coder-only scheduling guidance;
+// a file-based template that does not reference those fields is
 // unaffected by them.
 func (c *coordinator) buildAgent(ctx context.Context, agent config.Agent, isSubAgent bool, extraOpts ...prompt.Option) (SessionAgent, error) {
 	large, small, err := c.buildAgentModels(ctx, isSubAgent)
@@ -2272,8 +2161,8 @@ func callTopK(providerCfg config.ProviderConfig, topK *int64) *int64 {
 // a turn that runs through the runtime.
 type subAgentTurn struct {
 	sessionID string
-	call      SessionAgentCall
 	provider  string
+	call      SessionAgentCall
 }
 
 // prepareSubAgent does the session and call shaping every sub-agent

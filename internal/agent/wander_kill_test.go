@@ -27,11 +27,11 @@ import (
 // The cancel hook is what the production observer does after recording
 // (#348): the observer owns ending the run.
 type killRecorder struct {
-	mu     sync.Mutex
+	cancel func(sessionID string)
 	killID string
 	reason string
 	calls  int
-	cancel func(sessionID string)
+	mu     sync.Mutex
 }
 
 func (k *killRecorder) observe(sessionID, reason string) {
@@ -317,28 +317,21 @@ func (m *blockingScriptedModel) Stream(ctx context.Context, call fantasy.Call) (
 // running dispatch entry and task session, the dispatched scripted
 // agent, the kill state, and a fake main agent to receive delivery.
 type wanderKillFixture struct {
-	env        fakeEnv
-	c          *coordinator
-	reg        *dispatch.AgentRegistry
-	provider   *dispatch.GitWorktreeProvider
-	entry      dispatch.Entry
-	taskSess   session.Session
-	parentSess session.Session
-	// runModel is the model the dispatchRun carries; blocking fixtures
-	// point it at the blocking wrapper.
-	runModel fantasy.LanguageModel
-	kill     *dispatchKill
-	// killSettings ride the dispatchRun, the way the tool resolves them.
-	killSettings config.TodoEnforcementSettings
-
+	entry           dispatch.Entry
+	env             fakeEnv
+	runModel        fantasy.LanguageModel
+	runCtx          context.Context
 	dispatched      SessionAgent
-	killHookInvoked bool
 	main            *fakeMainAgent
-	// runCtx and runCancel mirror the dispatch root (#371) production
-	// wires: buildRun hands the cancel to the run, and the watchdog's
-	// kill fires it. Nil when a test drives the run without a root.
-	runCtx    context.Context
-	runCancel context.CancelFunc
+	c               *coordinator
+	reg             *dispatch.AgentRegistry
+	provider        *dispatch.GitWorktreeProvider
+	runCancel       context.CancelFunc
+	kill            *dispatchKill
+	parentSess      session.Session
+	taskSess        session.Session
+	killSettings    config.TodoEnforcementSettings
+	killHookInvoked bool
 }
 
 func newWanderKillFixture(t *testing.T, model *scriptedModel, dispatchedSettings config.TodoEnforcementSettings) *wanderKillFixture {
@@ -1042,9 +1035,8 @@ func TestDispatchResult_KilledRoundTrips(t *testing.T) {
 // task, so a kill must fall back to the direct cancel.
 type cancelingTransport struct {
 	runnerTransport
-
-	mu         sync.Mutex
 	cancels    []DispatchCancelParams
+	mu         sync.Mutex
 	reportTask bool
 	fail       bool
 }

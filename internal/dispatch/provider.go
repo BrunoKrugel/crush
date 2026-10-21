@@ -14,10 +14,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"uuid"
 
 	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/lock"
-	"uuid"
 )
 
 // BranchPrefix namespaces every branch and directory a dispatched
@@ -74,35 +74,14 @@ type WorkspaceProvider interface {
 // The registry is injected so Sweep can drop and re-register entries
 // around teardown. All methods are safe for concurrent use.
 type GitWorktreeProvider struct {
-	repoRoot string
-	// worktreesDir is the directory provisioned workspaces are created
-	// under, [WorktreesDir]'s result.
-	worktreesDir string
-	// commonDir is the repository's git common dir, resolved in
-	// NewGitWorktreeProvider. It keys the per-repo provision lock, so
-	// two providers on the same repository serialize their worktree
-	// adds.
-	commonDir string
-
-	// reg is the registry the caller registers provisioned entries in.
-	// Sweep reads it for the tracked set and drops entries from it as
-	// their teardown starts.
-	reg *AgentRegistry
-
-	// provisionHook, when set, runs just before the locked worktree add
-	// with the branch and path about to be created. Tests use it to
-	// force a deterministic failure, such as a pre-created non-empty
-	// target directory.
+	reg           *AgentRegistry
 	provisionHook func(branch, path string)
-
-	// instanceID identifies this provider instance in the owner
-	// markers it writes, so humans can tell concurrent processes apart.
-	instanceID string
-
-	mu sync.Mutex
-	// leases holds the release function for the ownership lease of
-	// every provisioned workspace, keyed by dispatch ID.
-	leases map[string]func()
+	leases        map[string]func()
+	repoRoot      string
+	worktreesDir  string
+	commonDir     string
+	instanceID    string
+	mu            sync.Mutex
 }
 
 var _ WorkspaceProvider = (*GitWorktreeProvider)(nil)
@@ -360,21 +339,13 @@ const ownerMarkerSuffix = ".owner.json"
 
 // ownerMarker records who holds a workspace's lease.
 type ownerMarker struct {
-	InstanceID string    `json:"instance_id"`
-	PID        int       `json:"pid"`
-	CreatedAt  time.Time `json:"created_at"`
-	// BaseSHA is the commit the workspace's branch was cut from,
-	// recorded so startup reconciliation can tell a workless leftover
-	// from salvageable work (#367).
-	BaseSHA string `json:"base_sha"`
-	// Handle and Role are the dispatch's addressable identity (#313),
-	// stamped by UpdateOwnerIdentity when the registry assigns the
-	// handle, so tooling outside a session can show it (#369).
-	Handle string `json:"handle,omitempty"`
-	Role   string `json:"role,omitempty"`
-	// Disposition is what became of the work (#368): applied or
-	// dismissed. Empty means nobody has judged it yet.
-	Disposition string `json:"disposition,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	InstanceID  string    `json:"instance_id"`
+	BaseSHA     string    `json:"base_sha"`
+	Handle      string    `json:"handle,omitempty"`
+	Role        string    `json:"role,omitempty"`
+	Disposition string    `json:"disposition,omitempty"`
+	PID         int       `json:"pid"`
 }
 
 // writeOwnerMarker atomically records this provider instance as the

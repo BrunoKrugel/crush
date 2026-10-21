@@ -81,13 +81,13 @@ func TestGetResourceTemplates_NoResourcesCapability(t *testing.T) {
 // templates intact.
 func TestGetResourceTemplates_ListsTemplates(t *testing.T) {
 	sess := liveResourceSession(t, nil, []*mcp.ResourceTemplate{
-		{Name: "run", URITemplate: "cairn://run/{id}/a2ui"},
+		{Name: "run", URITemplate: "cairn://run/{id}/trace"},
 	})
 
 	templates, err := getResourceTemplates(context.Background(), sess)
 	require.NoError(t, err)
 	require.Len(t, templates, 1)
-	require.Equal(t, "cairn://run/{id}/a2ui", templates[0].URITemplate)
+	require.Equal(t, "cairn://run/{id}/trace", templates[0].URITemplate)
 }
 
 // TestRefreshSessionResources_CountsSumResourcesAndTemplates pins the seam

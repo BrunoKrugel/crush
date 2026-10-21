@@ -36,10 +36,10 @@ type BashPermissionsParams = tools.BashPermissionsParams
 
 // BashResponseMetadata represents the metadata for a bash tool response.
 type BashResponseMetadata struct {
-	StartTime        int64  `json:"start_time"`
-	EndTime          int64  `json:"end_time"`
 	Output           string `json:"output"`
 	WorkingDirectory string `json:"working_directory"`
+	StartTime        int64  `json:"start_time"`
+	EndTime          int64  `json:"end_time"`
 }
 
 // DiagnosticsParams represents the parameters for the diagnostics tool.
@@ -74,10 +74,10 @@ type EditPermissionsParams = tools.EditPermissionsParams
 
 // EditResponseMetadata represents the metadata for an edit tool response.
 type EditResponseMetadata struct {
-	Additions  int    `json:"additions"`
-	Removals   int    `json:"removals"`
 	OldContent string `json:"old_content,omitempty"`
 	NewContent string `json:"new_content,omitempty"`
+	Additions  int    `json:"additions"`
+	Removals   int    `json:"removals"`
 }
 
 const FetchToolName = "fetch"
@@ -174,10 +174,10 @@ type MultiEditPermissionsParams = tools.MultiEditPermissionsParams
 
 // MultiEditResponseMetadata represents the metadata for a multi-edit tool response.
 type MultiEditResponseMetadata struct {
-	Additions    int    `json:"additions"`
-	Removals     int    `json:"removals"`
 	OldContent   string `json:"old_content,omitempty"`
 	NewContent   string `json:"new_content,omitempty"`
+	Additions    int    `json:"additions"`
+	Removals     int    `json:"removals"`
 	EditsApplied int    `json:"edits_applied"`
 }
 

@@ -32,27 +32,16 @@ import (
 
 // fakeRunner is a test double for the SessionAgent slice the Executor drives.
 type fakeRunner struct {
-	result *fantasy.AgentResult
-	err    error
-
-	// panicValue, when non-nil, makes Run panic with it instead of
-	// returning (#345).
-	panicValue any
-
-	// delay, when non-zero, makes Run take that long before returning,
-	// for tests that need a served run slower than a transport deadline.
-	delay time.Duration
-
-	// enqueueAccepted reports what EnqueueWhenBusy answers (#351): true
-	// accepts the steer into enqueuedCalls, false refuses it the way an
-	// ended run does.
+	gotCall         agent.SessionAgentCall
+	err             error
+	panicValue      any
+	result          *fantasy.AgentResult
+	canceledFor     string
+	enqueuedCalls   []agent.SessionAgentCall
+	delay           time.Duration
+	mu              sync.Mutex
 	enqueueAccepted bool
-
-	mu            sync.Mutex
-	gotCall       agent.SessionAgentCall
-	ran           bool
-	canceledFor   string
-	enqueuedCalls []agent.SessionAgentCall
+	ran             bool
 }
 
 func (f *fakeRunner) Run(_ context.Context, call agent.SessionAgentCall) (*fantasy.AgentResult, error) {
@@ -612,8 +601,8 @@ func TestExecuteOutOfBandCancelEmitsCanceled(t *testing.T) {
 	// reason, or the consumer waits forever (#342).
 	tests := []struct {
 		name   string
-		opts   []Option
 		reason string
+		opts   []Option
 	}{
 		{
 			name:   "default reason",
@@ -897,10 +886,10 @@ func TestCancelCarriesReason(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
 		metadata map[string]any
-		opts     []Option
+		name     string
 		want     string
+		opts     []Option
 	}{
 		{
 			name:     "typed reason from the wire round-trip",
@@ -1395,13 +1384,9 @@ func TestExecuteDiffChunkedArtifact(t *testing.T) {
 // context error once the ask was canceled, the way the agent's turn
 // ends when its context dies.
 type askingRunner struct {
-	fakeRunner
-
-	svc question.Service
-	// toolResp receives the question tool's response once the ask ends.
+	svc      question.Service
 	toolResp chan fantasy.ToolResponse
-	// runs counts Run calls: a resumed run is the same call, never a
-	// second one.
+	fakeRunner
 	runs atomic.Int32
 }
 
@@ -1511,8 +1496,8 @@ func TestExecuteQuestionParksAndResumes(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name   string
 		answer func(t *testing.T, q agent.QuestionRequest) *a2aspec.Message
+		name   string
 	}{
 		{
 			name: "typed answer",
@@ -1698,22 +1683,17 @@ func TestExecuteSteerWhileParkedStaysASteer(t *testing.T) {
 // for its tool calls through the scoped permission service (#353), the
 // way bash does, then ends the turn naming each verdict.
 type requestingRunner struct {
-	fakeRunner
-
-	svc permission.Service
-	// calls are the tool calls the turn requests permission for, in
-	// parallel when there is more than one.
-	calls []string
-	// verdicts receives each call's (granted, err) once its request
-	// resolves.
+	svc      permission.Service
 	verdicts chan permissionVerdict
-	runs     atomic.Int32
+	fakeRunner
+	calls []string
+	runs  atomic.Int32
 }
 
 type permissionVerdict struct {
+	err     error
 	call    string
 	granted bool
-	err     error
 }
 
 func newRequestingRunner(svc permission.Service, calls ...string) *requestingRunner {
@@ -1808,8 +1788,8 @@ func TestExecutePermissionParksAndResumes(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
 		answer  func(t *testing.T) *a2aspec.Message
+		name    string
 		granted bool
 	}{
 		{name: "allow", answer: func(t *testing.T) *a2aspec.Message { return decisionMessage(t, true) }, granted: true},
@@ -1898,9 +1878,8 @@ func verdictFor(t *testing.T, runner *requestingRunner, call string) permissionV
 // denied before passing the denial on.
 type denyRecorder struct {
 	PermissionSource
-
-	mu     sync.Mutex
 	denied []string
+	mu     sync.Mutex
 }
 
 func (d *denyRecorder) Deny(req permission.PermissionRequest) bool {
@@ -2044,9 +2023,9 @@ func TestStopRunsHonorsContext(t *testing.T) {
 // until consumed, or until ClearQueue drops them unread the way the
 // session agent does (#398).
 type steeringRunner struct {
-	fakeRunner
 	started chan struct{}
 	release chan struct{}
+	fakeRunner
 }
 
 func newSteeringRunner(result *fantasy.AgentResult, err error, accept bool) *steeringRunner {

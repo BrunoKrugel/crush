@@ -146,80 +146,30 @@ var _ PermissionSource = permission.Service(nil)
 // Parallel tool calls park one request at a time: the scoped service
 // publishes the next request only once the parked one is decided.
 type Executor struct {
-	// contexts resolves the A2A context ID onto the dispatch binding the
-	// turn runs against (#350). The host owns the registry; the binding
-	// lives exactly as long as the dispatch run.
-	contexts *ContextRegistry
-	// contextID is the context this executor's route owns (#350): a task
-	// naming any other context — unknown or another dispatch's — is
-	// rejected here.
-	contextID string
-	diff      DiffFunc
-	todos     TodoSource
-	// questions is the dispatched agent's question service (#352); nil
-	// means the agent cannot ask and runs never park.
-	questions QuestionSource
-	// permissions is the dispatched agent's scoped permission service
-	// (#353); nil means no permission request ever parks a run.
-	permissions PermissionSource
-	// inactivityTimeout is the A2A-level backstop (#360): a run that
-	// yields no events for this long while in flight is canceled by
-	// the executor and failed with the reason. Zero (the default)
-	// disables the backstop.
+	questions         QuestionSource
+	hooks             executorHooks
+	permissions       PermissionSource
+	todos             TodoSource
+	steers            map[*steerRecord]struct{}
+	contexts          *ContextRegistry
+	endedByExecutor   map[string]struct{}
+	diff              DiffFunc
+	canceledTasks     map[string]struct{}
+	cancelReason      func() string
+	usage             func(ctx context.Context) (agent.Usage, error)
+	onTurn            func(taskID string)
+	live              map[*taskRun]struct{}
+	runs              map[string]*taskRun
+	contextID         string
+	undelivered       []string
 	inactivityTimeout time.Duration
-	// endedByExecutor holds the task IDs whose terminal status the
-	// executor itself has already emitted (the inactivity backstop's
-	// Failed, #360). #342's out-of-band cancel branch consults the set
-	// so a run the executor ended is not also reported Canceled.
-	mu              sync.Mutex
-	endedByExecutor map[string]struct{}
-	// cancelMu guards canceledTasks: the task IDs this executor's own
-	// Cancel has touched (#342). A run that returns context.Canceled
-	// while its task is in the set was ended by that Cancel — which
-	// emits the terminal Canceled status itself — while the same error
-	// from an out-of-band kill (the wander ladder, the watchdog) must
-	// surface as this executor's own Canceled, or the task never
-	// reaches a terminal state.
-	cancelMu      sync.Mutex
-	canceledTasks map[string]struct{}
-	// cancelReason reports why the current run was killed (#316), for
-	// the Canceled status an out-of-band cancel emits. Optional; a nil
-	// func or an empty string falls back to "canceled".
-	cancelReason func() string
-	// usage reads the dispatched session's final usage once its run has
-	// ended (#364). Optional; nil means terminal statuses carry no usage
-	// metadata.
-	usage func(ctx context.Context) (agent.Usage, error)
-	// onTurn is told the task that starts the dispatch's own turn (#421);
-	// nil when nothing tracks it.
-	onTurn func(taskID string)
-	// runEnded is set once the dispatch's run goroutine has returned
-	// (#398): a steer the runner refuses before then is refused as not
-	// ready, not as a finished run.
-	runEnded atomic.Bool
-	// turnMu guards turnStarted (#351): one executor serves one
-	// dispatch's route, and every message on its context either starts
-	// the dispatch's own turn — the first one — or is a steer.
-	turnMu      sync.Mutex
-	turnStarted bool
-	// steersMu guards steers and undelivered (#398): steers holds every
-	// steer accepted into the running session's queue whose fate is not
-	// known yet, and undelivered the text of each one the queue dropped
-	// unread. The run's terminal status reports undelivered.
-	steersMu    sync.Mutex
-	steers      map[*steerRecord]struct{}
-	undelivered []string
-	// runsMu guards runs and live. runs holds the in-flight run records
-	// by task ID (#352): a record outlives the execution that drains it,
-	// so the executor — not Execute's stack — owns it. live holds every
-	// run goroutine that has not returned yet. A record leaves runs when
-	// its drain ends or a cancel drops it, while its goroutine may still
-	// be unwinding a tool call, so stopRuns joins live, not runs.
-	runsMu sync.Mutex
-	runs   map[string]*taskRun
-	live   map[*taskRun]struct{}
-	// hooks are test-only seams; every field is nil in production.
-	hooks executorHooks
+	cancelMu          sync.Mutex
+	steersMu          sync.Mutex
+	runsMu            sync.Mutex
+	turnMu            sync.Mutex
+	mu                sync.Mutex
+	runEnded          atomic.Bool
+	turnStarted       bool
 }
 
 // executorHooks are seams that only tests set, to hold the SDK's
@@ -257,36 +207,17 @@ type runOutcome struct {
 // same run; every way a drain ends without the run's outcome — a cancel,
 // a stopped consumer, the inactivity backstop — cancels it.
 type taskRun struct {
-	taskID  string
-	binding ContextBinding
-	// cancel ends the run's context: the runner's turn and every
-	// subscription the record holds.
-	cancel context.CancelFunc
-	// done receives the run goroutine's single outcome.
-	done chan runOutcome
-	// exited is closed once the run goroutine has returned.
-	exited chan struct{}
-	// todoCh is the run's todo subscription (#174); nil without a todo
-	// source.
-	todoCh <-chan dispatch.TodoSnapshot
-	// lastTodos is the last todo list emitted, so a snapshot that did
-	// not change the list stays silent — across a park and resume too.
-	lastTodos []session.Todo
-	// questionCh is the run's question subscription (#352); nil without
-	// a question source.
-	questionCh <-chan pubsub.Event[question.Request]
-	// pending is the question the run is parked on (#352): non-nil
-	// exactly while the task is in input-required and no execution is
-	// draining the record. Guarded by the executor's runsMu.
-	pending *question.Request
-	// permCh is the run's permission subscription (#353); nil without a
-	// permission source. The scoped service publishes one request at a
-	// time, so the run parks on one request at a time.
-	permCh <-chan pubsub.Event[permission.PermissionRequest]
-	// pendingPermission is the permission request the run is parked on
-	// (#353), like pending for a question. At most one of the two is
-	// set. Guarded by the executor's runsMu.
+	cancel            context.CancelFunc
+	done              chan runOutcome
+	exited            chan struct{}
+	todoCh            <-chan dispatch.TodoSnapshot
+	questionCh        <-chan pubsub.Event[question.Request]
+	pending           *question.Request
+	permCh            <-chan pubsub.Event[permission.PermissionRequest]
 	pendingPermission *permission.PermissionRequest
+	binding           ContextBinding
+	taskID            string
+	lastTodos         []session.Todo
 }
 
 // Option configures an [Executor].

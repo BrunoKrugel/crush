@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"uuid"
 
 	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/app"
@@ -13,7 +14,6 @@ import (
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/stretchr/testify/require"
-	"uuid"
 )
 
 // ListChildren filters the fixed session list by parent, mirroring the

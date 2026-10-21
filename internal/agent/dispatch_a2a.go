@@ -49,101 +49,37 @@ type DispatchHost interface {
 // import-clean of internal/a2a; the production value is the dispatch
 // registry's todo collector.
 type DispatchServerParams struct {
-	// DispatchID is the registry entry's id the served dispatch answers
-	// as (#346): the process host routes /agents/<DispatchID> to it.
-	DispatchID string
-	// SessionID is the ephemeral task session backing the dispatch.
-	SessionID string
-	// Runner is the dispatched agent itself.
-	Runner SessionAgent
-	// Diff collects the completion artifact (the workspace diff).
-	Diff func(ctx context.Context) (string, error)
-	// Todos streams per-session progress snapshots for
-	// TaskStatusUpdateEvents (#174).
 	Todos interface {
 		SubscribeSessionTodos(ctx context.Context, sessionID string) <-chan dispatch.TodoSnapshot
 	}
-	// Name is the card's agent name — the dispatch's assigned handle.
-	Name string
-	// Description is the card's one-line description — the dispatch's
-	// role.
-	Description string
-	// Skills are the skills the dispatch was given.
-	Skills []*skills.Skill
-	// Call is the template every served turn runs with (#71): the
-	// dispatch's full call shaping — model options, token budget,
-	// content width, NonInteractive — with the prompt overridden per
-	// message. Without it the server's executor runs a minimal call,
-	// which is enough for tests, not for a production dispatched turn.
-	Call SessionAgentCall
-	// InactivityTimeout is the A2A-level backstop (#360): a served run
-	// that yields no events for this long is ended with a Failed status
-	// carrying the reason. 0 disables it.
+	Permissions       permission.Service
+	Questions         question.Service
+	Runner            SessionAgent
+	CancelReason      func() string
+	Usage             func(ctx context.Context) (Usage, error)
+	Diff              func(ctx context.Context) (string, error)
+	Name              string
+	Description       string
+	SessionID         string
+	ParentSessionID   string
+	DispatchID        string
+	Skills            []*skills.Skill
+	Call              SessionAgentCall
 	InactivityTimeout time.Duration
-	// CancelReason reports why the dispatched run was killed (#316), for
-	// the Canceled status an out-of-band cancel emits (#342). Nil-safe:
-	// the production value is the run's kill reason, and a nil func or
-	// an empty string falls back to "canceled".
-	CancelReason func() string
-	// Usage reads the dispatched session's final usage once its run has
-	// ended (#364): the totals the executor attaches to the terminal
-	// status under the usage/v1 extension. Nil-safe — a nil func simply
-	// emits no usage metadata.
-	Usage func(ctx context.Context) (Usage, error)
-	// Questions is the dispatched agent's own question service (#352),
-	// the one its question tool asks through: the served executor parks
-	// the run in input-required on each question and resolves it with
-	// the answer. Nil when the agent has no question tool.
-	Questions question.Service
-	// Listed puts the served dispatch on the host's agent index (#421),
-	// the surface a UI watches dispatched agents through. Dispatches are
-	// listed; sub-agent turns, which no UI addresses, are not.
-	Listed bool
-	// ParentSessionID is the session the dispatch was created from
-	// (#399), carried on the index so a UI scopes it to the session it
-	// shows.
-	ParentSessionID string
-	// Permissions is the dispatched agent's scoped permission service
-	// (#353), the one its tools request approval through: the served
-	// executor parks the run in input-required on each request that
-	// reaches a prompt and resolves it with the decision. Nil for a run
-	// whose tools share the parent's own service.
-	Permissions permission.Service
+	Listed            bool
 }
 
 // DispatchTransportParams is one dispatch's slice of the A2A client
 // (#71): where to send it and what to say. Card is the registry entry's
 // opaque AgentCard — the transport owns its concrete type.
 type DispatchTransportParams struct {
-	Endpoint string
-	Card     any
-	Prompt   string
-	// ContextID is the A2A context the initial task belongs to (#350):
-	// the dispatch's task session ID, sent as Message.ContextID. The
-	// served agent binds this context for the run's lifetime, so the
-	// task, its steering (#351), and its logs all address one context.
-	// Required.
-	ContextID string
-	// OnTask, when set, receives the served task's ID once the stream's
-	// first event names it (#349): the task outlives a dropped stream,
-	// and with the ID the coordinator can stamp the registry entry so
-	// the run stays recoverable (tasks/resubscribe, tasks/get) and
-	// answerable after the fact. Called at most once. Nil-safe.
-	OnTask func(taskID string)
-	// OnInputRequired answers a question the served agent parked its run
-	// on (#352): the transport calls it when the task enters
-	// input-required, sends the answer on the same task, and keeps
-	// consuming until a terminal state. An error means no answer is
-	// coming; the transport cancels the parked task with the error's
-	// text as the reason. Nil answers with UnattendedQuestionAnswer.
-	OnInputRequired func(ctx context.Context, req QuestionRequest) (QuestionAnswer, error)
-	// OnPermissionRequired decides a permission request the served agent
-	// parked its run on (#353): the transport calls it when the task
-	// enters input-required with a permissions/v1 payload, sends the
-	// decision on the same task, and keeps consuming. An error means no
-	// decision is coming; the transport cancels the parked task with the
-	// error's text as the reason. Nil denies every request.
+	Card                 any
+	OnTask               func(taskID string)
+	OnInputRequired      func(ctx context.Context, req QuestionRequest) (QuestionAnswer, error)
 	OnPermissionRequired func(ctx context.Context, req PermissionPrompt) (bool, error)
+	Endpoint             string
+	Prompt               string
+	ContextID            string
 }
 
 // GetDispatchTaskParams is one A2A task query (#349): the served
@@ -310,33 +246,15 @@ type DispatchSteerer interface {
 // declared todos/v1 extension metadata, when the remote agent declared
 // and emitted it.
 type DispatchTransportOutcome struct {
-	Status        string
-	Text          string
-	Diff          string
-	DiffError     string
-	DiffTruncated bool
-	WorkingEvents int
-	// TodoProgress is the decoded todo progress from the dispatch's
-	// TaskStatusUpdateEvent metadata (extension
-	// https://crush.charm.land/ext/todos/v1), from the last progress
-	// event that carried it. Nil when the agent did not declare the
-	// extension, never emitted it, or emitted a value that failed to
-	// decode — a malformed extension value is logged and dropped, not a
-	// stream failure.
-	TodoProgress *TodoProgress
-	// Usage is the decoded usage, cost and trace context (#364) from
-	// the dispatch's terminal TaskStatusUpdateEvent metadata (extension
-	// https://crush.charm.land/ext/usage/v1). Nil when the remote agent
-	// did not declare the extension, never emitted it, or emitted a
-	// value that failed to decode — a dispatch whose usage is missing
-	// leaves the parent session's cost untouched.
-	Usage *Usage
-	// UndeliveredSteers are the steers the served agent accepted but
-	// never consumed before its run ended (#398), decoded from the
-	// terminal TaskStatusUpdateEvent metadata (extension
-	// https://crush.charm.land/ext/undelivered-steers/v1). Empty when
-	// every steer was consumed or the agent did not declare it.
+	TodoProgress      *TodoProgress
+	Usage             *Usage
+	Status            string
+	Text              string
+	Diff              string
+	DiffError         string
 	UndeliveredSteers []string
+	WorkingEvents     int
+	DiffTruncated     bool
 }
 
 // TodoItem is one entry of the todos/v1 extension's todo list, the
@@ -354,14 +272,10 @@ type TodoItem struct {
 // N/M completed count, and the full structured todo list, so a consumer
 // renders a checklist without parsing the message prose.
 type TodoProgress struct {
-	// Current is the in-progress todo's active form when set, its
-	// content otherwise. Empty when no todo is in progress.
-	Current string `json:"current"`
-	// Completed and Total count the todos.
-	Completed int `json:"completed"`
-	Total     int `json:"total"`
-	// Todos is the full structured todo list.
-	Todos []TodoItem `json:"todos"`
+	Current   string     `json:"current"`
+	Todos     []TodoItem `json:"todos"`
+	Completed int        `json:"completed"`
+	Total     int        `json:"total"`
 }
 
 // Usage is the statically typed payload the usage/v1 extension carries in
@@ -371,18 +285,12 @@ type TodoProgress struct {
 // process today, remote with #72/#73 — can account for the run and
 // correlate its logs across hops.
 type Usage struct {
-	// Model is the model ID the dispatched agent ran on.
-	Model string `json:"model"`
-	// Provider is the provider ID the dispatched agent ran on.
-	Provider string `json:"provider"`
-	// PromptTokens and CompletionTokens are the child session's totals.
-	PromptTokens     int64 `json:"promptTokens"`
-	CompletionTokens int64 `json:"completionTokens"`
-	// Cost is the child session's total cost.
-	Cost float64 `json:"cost"`
-	// TraceID is the trace-id segment of the W3C traceparent the parent
-	// sent with the dispatch call. Empty when the call carried none.
-	TraceID string `json:"traceId"`
+	Model            string  `json:"model"`
+	Provider         string  `json:"provider"`
+	TraceID          string  `json:"traceId"`
+	PromptTokens     int64   `json:"promptTokens"`
+	CompletionTokens int64   `json:"completionTokens"`
+	Cost             float64 `json:"cost"`
 }
 
 // QuestionRequest is the statically typed payload of the questions/v1

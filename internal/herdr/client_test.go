@@ -13,8 +13,8 @@ import (
 // recordingSender captures state transitions without connecting to a
 // real Unix socket.
 type recordingSender struct {
-	mu       sync.Mutex
 	requests []reportRequest
+	mu       sync.Mutex
 }
 
 func (r *recordingSender) send(req reportRequest) error {

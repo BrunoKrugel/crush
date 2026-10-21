@@ -22,16 +22,12 @@ const badgeLeftInset = 1
 
 // Status is the status bar and help model.
 type Status struct {
-	com      *common.Common
-	hideHelp bool
-	help     help.Model
-	helpKm   help.KeyMap
-	msg      util.InfoMsg
-
-	// msgSeq identifies the message on screen; expiry timers carry it.
-	msgSeq uint64
-
-	// inputMode and yolo drive the mode badge shown before the help hints.
+	helpKm    help.KeyMap
+	com       *common.Common
+	help      help.Model
+	msg       util.InfoMsg
+	msgSeq    uint64
+	hideHelp  bool
 	inputMode uiInputMode
 	yolo      bool
 }

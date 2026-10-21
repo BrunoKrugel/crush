@@ -129,25 +129,21 @@ type PermissionKey struct {
 }
 
 type permissionService struct {
-	autoApproveSessionsMu sync.RWMutex
-	autoApproveSessions   map[string]bool
+	parent              Service
+	pendingRequests     *csync.Map[string, chan bool]
+	activeRequest       *PermissionRequest
+	notificationBroker  *pubsub.Broker[PermissionNotification]
+	sessionPermissions  *csync.Map[PermissionKey, bool]
+	requestSlot         chan struct{}
+	autoApproveSessions map[string]bool
 	*pubsub.Broker[PermissionRequest]
-
-	notificationBroker *pubsub.Broker[PermissionNotification]
-	workingDir         string
-	sessionPermissions *csync.Map[PermissionKey, bool]
-	pendingRequests    *csync.Map[string, chan bool]
-	skip               atomic.Bool
-	allowedTools       []string
-
-	// used to make sure we only process one request at a time
-	requestMu       sync.Mutex
-	activeRequest   *PermissionRequest
-	activeRequestMu sync.Mutex
-	// skipFn is consulted on every Request; a scoped service delegates.
-	skipFn      func() bool
-	parent      Service
-	requestSlot chan struct{}
+	skipFn                func() bool
+	workingDir            string
+	allowedTools          []string
+	autoApproveSessionsMu sync.RWMutex
+	activeRequestMu       sync.Mutex
+	requestMu             sync.Mutex
+	skip                  atomic.Bool
 }
 
 // resolve atomically removes the pending request entry for the given

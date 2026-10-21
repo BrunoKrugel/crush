@@ -42,37 +42,17 @@ import (
 // proto.Workspace returned at creation time and refreshes it after
 // config-mutating operations.
 type ClientWorkspace struct {
-	client *client.Client
-
-	mu     sync.RWMutex
-	ws     proto.Workspace
-	skills *skills.Manager
-	// lastSession is the most recent session ID reported via
-	// SetCurrentSession. The subscription loop re-asserts it after a
-	// reconnect, because the server's per-client presence entry (or the
-	// whole workspace) may have been re-created in the meantime.
-	lastSession string
-
-	// agentTasks follows the workspace host's agent index through the
-	// server's proxy (#421).
-	agentTasks *agentTaskWatcher
-
-	// subCtx bounds the lifetime of the event subscription (and its
-	// reconnect loop). Shutdown cancels it so Subscribe stops
-	// reconnecting instead of racing the teardown.
-	subCtx    context.Context
-	subCancel context.CancelFunc
-	// subStarted reports whether the subscription loop ever ran, and
-	// subDone is closed when it returns. Shutdown uses them to let an
-	// in-flight workspace recovery finish before it says goodbye to the
-	// server, so the workspace it releases is the one recovery just
-	// minted.
-	subStarted atomic.Bool
-	subDone    chan struct{}
-
-	// herdrClient reports agent state to herdr when running inside
-	// a herdr-managed pane. Nil when not in a herdr environment.
+	subCtx      context.Context
+	client      *client.Client
+	skills      *skills.Manager
+	agentTasks  *agentTaskWatcher
+	subCancel   context.CancelFunc
+	subDone     chan struct{}
 	herdrClient *herdr.Client
+	lastSession string
+	ws          proto.Workspace
+	mu          sync.RWMutex
+	subStarted  atomic.Bool
 }
 
 // SSE reconnect backoff bounds for the workspace event stream. Stored
@@ -856,7 +836,6 @@ func (w *ClientWorkspace) MCPGetStates() map[string]mcp.ClientInfo {
 			},
 			ConnectedAt: v.ConnectedAt,
 			Channel:     v.Channel,
-			A2UITools:   v.A2UITools,
 		}
 	}
 	return result
@@ -924,16 +903,13 @@ func (w *ClientWorkspace) GetMCPPrompt(clientID, promptID string, args map[strin
 }
 
 // CallMCPTool invokes a tool on a named MCP server via the server and
-// returns its text content plus any A2UI surface payload it embedded.
+// returns its text content.
 func (w *ClientWorkspace) CallMCPTool(ctx context.Context, name, toolName string, args map[string]any) (MCPToolCallResult, error) {
 	res, err := w.client.CallMCPTool(ctx, w.workspaceID(), name, toolName, args)
 	if err != nil {
 		return MCPToolCallResult{}, err
 	}
 	out := MCPToolCallResult{Content: res.Content}
-	for _, s := range res.Surfaces {
-		out.Surfaces = append(out.Surfaces, MCPToolCallSurface{Payload: s.Payload, URI: s.URI})
-	}
 	return out, nil
 }
 

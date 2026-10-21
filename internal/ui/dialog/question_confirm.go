@@ -20,34 +20,29 @@ import (
 // user confirm or go back to editing. Implements questionResponder
 // so QuestionForm treats it like any other tab.
 type ConfirmComponent struct {
+	compositor       *lipgloss.Compositor
+	OnReject         func()
+	OnConfirm        func()
 	Styles           *styles.Styles
 	Title            string
 	Description      string
-	QuestionLabels   []string
-	QuestionRequests []question.Question
+	keyClose         key.Binding
+	keyDown          key.Binding
+	keyRight         key.Binding
+	keyYes           key.Binding
+	keyNo            key.Binding
+	keyEnter         key.Binding
+	keyLeft          key.Binding
+	keyUp            key.Binding
 	Answers          []*question.Answer
+	QuestionRequests []question.Question
+	QuestionLabels   []string
+	lastWidth        int
+	scrollOffset     int
+	hoverX           int
+	hoverY           int
+	focused          bool
 	confirmYes       bool
-
-	keyLeft  key.Binding
-	keyRight key.Binding
-	keyYes   key.Binding
-	keyNo    key.Binding
-	keyEnter key.Binding
-	keyClose key.Binding
-	keyUp    key.Binding
-	keyDown  key.Binding
-
-	focused      bool
-	lastWidth    int
-	scrollOffset int
-	compositor   *lipgloss.Compositor
-	hoverX       int
-	hoverY       int
-
-	// OnConfirm is called when the user confirms.
-	OnConfirm func()
-	// OnReject is called when the user says "not yet".
-	OnReject func()
 }
 
 // NewConfirmComponent creates a new confirmation component.

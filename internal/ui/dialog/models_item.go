@@ -14,10 +14,10 @@ import (
 // ModelGroup represents a group of model items.
 type ModelGroup struct {
 	*list.Versioned
+	t          *styles.Styles
 	Title      string
 	Items      []*ModelItem
 	configured bool
-	t          *styles.Styles
 }
 
 // NewModelGroup creates a new ModelGroup.
@@ -67,15 +67,13 @@ func (m *ModelGroup) Render(width int) string {
 
 // ModelItem represents a list item for a model type.
 type ModelItem struct {
+	model catwalk.Model
+	prov  catwalk.Provider
 	*list.Versioned
-
-	prov      catwalk.Provider
-	model     catwalk.Model
-	modelType ModelType
-
 	cache        map[int]string
 	t            *styles.Styles
 	m            fuzzy.Match
+	modelType    ModelType
 	focused      bool
 	showProvider bool
 }

@@ -22,19 +22,14 @@ import (
 // workspace (local mode or a client process); the backend server hosts
 // multiple workspaces concurrently and must not enable mirroring.
 type Manager struct {
-	mu           sync.RWMutex
-	allSkills    []*Skill
-	activeSkills []*Skill
-	states       []*SkillState
-
-	// resolvedPaths are the expanded SkillsPaths used during discovery.
-	// Stored so Catalog/ReadContent can label skills without
-	// re-resolving.
-	resolvedPaths []string
+	broker        *pubsub.Broker[Event]
 	workingDir    string
-
-	broker       *pubsub.Broker[Event]
-	globalMirror bool
+	allSkills     []*Skill
+	activeSkills  []*Skill
+	states        []*SkillState
+	resolvedPaths []string
+	mu            sync.RWMutex
+	globalMirror  bool
 }
 
 // ManagerOption configures a Manager at construction time.
@@ -211,11 +206,10 @@ func DiscoverFromConfig(cfg DiscoveryConfig) (allSkills, activeSkills []*Skill, 
 // dedicated struct (rather than importing internal/config) keeps the
 // skills package's dependency graph small.
 type DiscoveryConfig struct {
+	Resolver       func(string) (string, error)
+	WorkingDir     string
 	SkillsPaths    []string
 	DisabledSkills []string
-	WorkingDir     string
-	// Resolver expands $VAR-style references in paths. May be nil.
-	Resolver func(string) (string, error)
 }
 
 // ResolvePaths expands home-directory and $VAR references in

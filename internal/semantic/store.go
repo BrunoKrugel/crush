@@ -112,23 +112,23 @@ const (
 
 // Chunk represents a piece of content ready for embedding.
 type Chunk struct {
+	Content   string
 	SessionID sql.NullString
 	Path      sql.NullString
 	Symbol    sql.NullString
+	FileHash  sql.NullString
 	StartLine int
 	EndLine   int
-	Content   string
-	FileHash  sql.NullString
 }
 
 // SearchResult is a single hit from a KNN search.
 type SearchResult struct {
-	ChunkID   int64
 	Path      string
 	Symbol    string
+	Content   string
+	ChunkID   int64
 	StartLine int
 	EndLine   int
-	Content   string
 	Score     float64
 }
 

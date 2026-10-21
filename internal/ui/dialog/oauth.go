@@ -51,37 +51,31 @@ const OAuthID = "oauth"
 
 // OAuth handles the OAuth flow authentication.
 type OAuth struct {
-	com          *common.Common
-	isOnboarding bool
-
-	provider      catwalk.Provider
-	model         config.SelectedModel
-	modelType     config.SelectedModelType
-	oAuthProvider OAuthProvider
-
-	State OAuthState
-
-	spinner spinner.Model
-	help    help.Model
-	keyMap  struct {
+	provider        catwalk.Provider
+	model           config.SelectedModel
+	oAuthProvider   OAuthProvider
+	cancelFunc      context.CancelFunc
+	com             *common.Common
+	token           *oauth.Token
+	help            help.Model
+	modelType       config.SelectedModelType
+	deviceCode      string
+	userCode        string
+	verificationURL string
+	keyMap          struct {
 		Copy      key.Binding
 		CopyURL   key.Binding
 		Submit    key.Binding
 		FocusCode key.Binding
 		Close     key.Binding
 	}
-
-	width           int
-	deviceCode      string
-	userCode        string
-	verificationURL string
-	expiresIn       int
-	interval        int
-	token           *oauth.Token
-	cancelFunc      context.CancelFunc
-	// codeInput is the paste field for providers whose browser flow
-	// can finish with a code entered back in the terminal.
-	codeInput textinput.Model
+	codeInput    textinput.Model
+	spinner      spinner.Model
+	width        int
+	expiresIn    int
+	interval     int
+	State        OAuthState
+	isOnboarding bool
 }
 
 var _ Dialog = (*OAuth)(nil)

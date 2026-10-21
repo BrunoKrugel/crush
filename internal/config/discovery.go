@@ -53,8 +53,8 @@ const modelDiscoveryTimeout = 15 * time.Second
 // an explicit models list.
 type discoveryJob struct {
 	id           string
-	cfg          discover.Config
 	providerType string
+	cfg          discover.Config
 }
 
 // discoveredModels is the on-disk cache entry for one provider. BaseURL is

@@ -15,29 +15,16 @@ import (
 
 // Capabilities define different terminal capabilities supported.
 type Capabilities struct {
-	// Profile is the terminal color profile used to determine how colors are
-	// rendered.
-	Profile colorprofile.Profile
-	// Columns is the number of character columns in the terminal.
-	Columns int
-	// Rows is the number of character rows in the terminal.
-	Rows int
-	// PixelX is the width of the terminal in pixels.
-	PixelX int
-	// PixelY is the height of the terminal in pixels.
-	PixelY int
-	// KittyGraphics indicates whether the terminal supports the Kitty graphics
-	// protocol.
-	KittyGraphics bool
-	// SixelGraphics indicates whether the terminal supports Sixel graphics.
-	SixelGraphics bool
-	// Env is the terminal environment variables.
-	Env uv.Environ
-	// TerminalVersion is the terminal version string.
-	TerminalVersion string
-	// ReportFocusEvents indicates whether the terminal supports focus events.
-	ReportFocusEvents bool
-	// OSC99Notifications indicates whether the terminal supports OSC 99 notifications.
+	TerminalVersion    string
+	Env                uv.Environ
+	Columns            int
+	Rows               int
+	PixelX             int
+	PixelY             int
+	Profile            colorprofile.Profile
+	KittyGraphics      bool
+	SixelGraphics      bool
+	ReportFocusEvents  bool
 	OSC99Notifications bool
 }
 

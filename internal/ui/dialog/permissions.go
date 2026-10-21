@@ -55,27 +55,22 @@ const (
 
 // Permissions represents a dialog for permission requests.
 type Permissions struct {
-	com          *common.Common
-	windowWidth  int // Terminal window dimensions.
-	windowHeight int
-	fullscreen   bool // true when dialog is fullscreen
-
-	permission     permission.PermissionRequest
-	selectedOption int // 0: Allow, 1: Allow for session, 2: Deny
-
-	viewport      viewport.Model
-	viewportDirty bool // true when viewport content needs to be re-rendered
-	viewportWidth int
-
-	// Diff view state.
-	diffSplitMode        *bool // nil means use default based on width
-	defaultDiffSplitMode bool  // default split mode based on width
-	diffXOffset          int   // horizontal scroll offset for diff view
+	com                  *common.Common
+	diffSplitMode        *bool
+	help                 help.Model
+	permission           permission.PermissionRequest
 	unifiedDiffContent   string
 	splitDiffContent     string
-
-	help   help.Model
-	keyMap permissionsKeyMap
+	keyMap               permissionsKeyMap
+	viewport             viewport.Model
+	selectedOption       int
+	viewportWidth        int
+	diffXOffset          int
+	windowHeight         int
+	windowWidth          int
+	viewportDirty        bool
+	fullscreen           bool
+	defaultDiffSplitMode bool
 }
 
 type permissionsKeyMap struct {

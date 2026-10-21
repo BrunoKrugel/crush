@@ -57,15 +57,12 @@ var ErrNoWorkingDir = errors.New("dispatch toolchain requires a workspace direct
 // the parent's transport puts the request through the parent's approval
 // flow.
 type DispatchToolchain struct {
-	workingDir  string
+	permissions permission.Service
+	questions   question.Service
 	store       *config.ConfigStore
 	lspManager  *lsp.Manager
-	permissions permission.Service
+	workingDir  string
 	tools       []fantasy.AgentTool
-	// questions is the dispatched agent's own question service (#352),
-	// the one its question tool asks through. Nil when the parent was
-	// not interactive at build time, and the agent has no question tool.
-	questions question.Service
 }
 
 // WorkingDir returns the isolated workspace directory the toolchain is

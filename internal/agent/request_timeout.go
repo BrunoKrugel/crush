@@ -16,9 +16,9 @@ import (
 // underlying error so callers can still match [context.DeadlineExceeded]
 // through the chain.
 type requestTimeoutError struct {
+	cause   error
 	timeout time.Duration
 	idle    bool
-	cause   error
 }
 
 func (e *requestTimeoutError) Error() string {

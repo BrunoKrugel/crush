@@ -49,24 +49,20 @@ func HasIncompleteTodos(todos []Todo) bool {
 }
 
 type Session struct {
-	ID               string
-	ParentSessionID  string
-	Title            string
-	MessageCount     int64
-	PromptTokens     int64
-	CompletionTokens int64
-	EstimatedUsage   bool
-	SummaryMessageID string
-	// SummaryCutMessageID is the first message the checkpoint left untouched.
-	// Everything before it was folded into the summary; everything from it on
-	// still goes to the model verbatim. Empty when a checkpoint replaced the
-	// whole transcript.
-	SummaryCutMessageID string
-	Cost                float64
-	Todos               []Todo
+	SummaryMessageID    string
+	ParentSessionID     string
+	Title               string
 	Channel             string
+	ID                  string
+	SummaryCutMessageID string
+	Todos               []Todo
+	Cost                float64
+	CompletionTokens    int64
+	PromptTokens        int64
+	MessageCount        int64
 	CreatedAt           int64
 	UpdatedAt           int64
+	EstimatedUsage      bool
 }
 
 type Service interface {
@@ -114,14 +110,10 @@ type Service interface {
 
 type service struct {
 	*pubsub.Broker[Session]
-	db *sql.DB
-	q  *db.Queries
-
-	// Estimated usage stays in memory so fetch-modify-save paths (e.g.,
-	// updating todos or parent-session cost) do not rebuild a session from
-	// SQLite and incorrectly clear the UI "~" marker.
-	estimatedUsageMu sync.RWMutex
+	db               *sql.DB
+	q                *db.Queries
 	estimatedUsage   map[string]bool
+	estimatedUsageMu sync.RWMutex
 }
 
 func (s *service) Create(ctx context.Context, title string) (Session, error) {

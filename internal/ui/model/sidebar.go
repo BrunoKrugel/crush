@@ -63,9 +63,9 @@ func (m *UI) modelInfo(width int) string {
 // section (Agents, Channels) hides entirely when it has nothing to list;
 // the always-on ones render a "None" placeholder instead.
 type sidebarSection struct {
+	render   func(maxItems int) string
 	count    int
 	optional bool
-	render   func(maxItems int) string
 }
 
 // getDynamicHeightLimits will give us the num of items to show in each

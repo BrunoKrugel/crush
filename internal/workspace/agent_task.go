@@ -15,43 +15,24 @@ import (
 // registry. A finished dispatch's durable record stays in the session
 // store (#410); this type carries the live state.
 type AgentTask struct {
-	// DispatchID is the dispatch's registry id.
-	DispatchID string
-	// SessionID is the dispatched agent's child session, its A2A
-	// context. ParentSessionID is the session it was dispatched from
-	// (#399).
-	SessionID       string
-	ParentSessionID string
-	// Handle and Role are the dispatch's @handle and one-line role.
-	Handle string
-	Role   string
-	// Status is the dispatch's state in the dispatch vocabulary:
-	// provisioned until its task exists, running while it works, then
-	// completed, failed, or killed. StatusText is the task's latest
-	// status message.
-	Status     dispatch.Status
-	StatusText string
-	// CurrentTodo, Todos, TodoCompleted and TodoTotal are the agent's
-	// latest todo progress.
-	CurrentTodo   string
-	Todos         []session.Todo
-	TodoCompleted int
-	TodoTotal     int
-	// PromptTokens, CompletionTokens and Cost are the agent's latest
-	// usage reading.
-	PromptTokens     int64
+	StartedAt        time.Time
+	FinishedAt       time.Time
+	descriptor       a2a.AgentDescriptor
+	SessionID        string
+	ParentSessionID  string
+	Handle           string
+	Role             string
+	Status           dispatch.Status
+	StatusText       string
+	CurrentTodo      string
+	DispatchID       string
+	Todos            []session.Todo
 	CompletionTokens int64
 	Cost             float64
-	// Served reports whether the dispatch's route is still up.
-	Served bool
-	// StartedAt is when the dispatch was served; FinishedAt is zero until
-	// its task ended.
-	StartedAt  time.Time
-	FinishedAt time.Time
-
-	// descriptor is the index entry this task was read from: the card
-	// and task id that steering and cancel dial with.
-	descriptor a2a.AgentDescriptor
+	PromptTokens     int64
+	TodoTotal        int
+	TodoCompleted    int
+	Served           bool
 }
 
 // Terminal reports whether the dispatch has ended.

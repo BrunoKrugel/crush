@@ -162,9 +162,9 @@ func sanitizeResolveError(template string, err error) error {
 // Its Error() method returns the template + scrubbed inner message;
 // Unwrap exposes the original error so errors.Is/As continue to work.
 type resolveError struct {
+	inner    error
 	template string
 	msg      string
-	inner    error
 }
 
 func (e *resolveError) Error() string {

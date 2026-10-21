@@ -54,16 +54,14 @@ const (
 // panic through the embedded interface, exactly like countingWorkspace.
 type inspectWorkspace struct {
 	workspace.Workspace
-
-	sessions map[string]session.Session
-	messages map[string][]message.Message
-
+	sessions         map[string]session.Session
+	messages         map[string][]message.Message
+	listFailures     map[string]bool
 	getSessions      []string
 	listMessages     []string
 	agentRuns        []string
 	agentCancels     []string
 	agentClearQueues []string
-	listFailures     map[string]bool
 }
 
 func newInspectWorkspace() *inspectWorkspace {

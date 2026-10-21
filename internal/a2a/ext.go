@@ -33,17 +33,10 @@ const extensionURIPrefix = "https://crush.charm.land/ext/"
 // Extension is one declared, statically typed A2A metadata extension: Task
 // metadata keyed by URI carries values of Type, described by Schema.
 type Extension struct {
-	// URI is the extension's unique identifier and the metadata key its
-	// values are stored under. Must start with [extensionURIPrefix].
-	URI string
-	// Description is the one-liner advertised on the agent card.
+	Type        reflect.Type
+	Schema      *jsonschema.Schema
+	URI         string
 	Description string
-	// Type is the Go type an extension value decodes into. Required.
-	Type reflect.Type
-	// Schema is the JSON Schema of an extension value, advertised in the
-	// card's extension params so third-party clients can validate values.
-	// Optional.
-	Schema *jsonschema.Schema
 }
 
 // registry is the process-wide extension registry, populated at init by

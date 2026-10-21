@@ -40,23 +40,22 @@ const (
 // AuthMethod asks how to authenticate a provider that supports both
 // OAuth and an API key, before starting either flow.
 type AuthMethod struct {
-	com          *common.Common
-	isOnboarding bool
-	provider     catwalk.Provider
-	model        config.SelectedModel
-	modelType    config.SelectedModelType
-
-	selected       int
-	oauthCardArea  image.Rectangle
-	apiKeyCardArea image.Rectangle
-	lastClickCard  int
-	lastClickTime  time.Time
-	help           help.Model
-	keyMap         struct {
+	provider      catwalk.Provider
+	model         config.SelectedModel
+	lastClickTime time.Time
+	com           *common.Common
+	help          help.Model
+	modelType     config.SelectedModelType
+	keyMap        struct {
 		Choose key.Binding
 		Select key.Binding
 		Close  key.Binding
 	}
+	oauthCardArea  image.Rectangle
+	apiKeyCardArea image.Rectangle
+	selected       int
+	lastClickCard  int
+	isOnboarding   bool
 }
 
 var _ Dialog = (*AuthMethod)(nil)

@@ -265,40 +265,18 @@ func renameCursorOffset(
 // RenderContext is a dialog rendering context that can be used to render
 // common dialog layouts.
 type RenderContext struct {
-	// Styles is the styles to use for rendering.
-	Styles *styles.Styles
-	// TitleStyle is the style of the dialog title by default it uses Styles.Dialog.Title
-	TitleStyle lipgloss.Style
-	// ViewStyle is the style of the dialog title by default it uses Styles.Dialog.View
-	ViewStyle lipgloss.Style
-	// TitleGradientFromColor is the color the title gradient starts by default
-	// its Styles.Dialog.TitleGradFromColor
+	TitleStyle             lipgloss.Style
+	ViewStyle              lipgloss.Style
 	TitleGradientFromColor color.Color
-	// TitleGradientToColor is the color the title gradient ends by default its
-	// Styles.Dialog.TitleGradToColor
-	TitleGradientToColor color.Color
-	// Width is the total width of the dialog including any margins, borders,
-	// and paddings.
-	Width int
-	// Gap is the gap between content parts. Zero means no gap.
-	Gap int
-	// Title is the title of the dialog. This will be styled using the default
-	// dialog title style and prepended to the content parts slice.
-	Title string
-	// TitleInfo is additional information to display next to the title. This
-	// part is displayed as is, any styling must be applied before setting this
-	// field.
-	TitleInfo string
-	// Parts are the rendered parts of the dialog.
-	Parts []string
-	// Help is the fully rendered help footer line. Produce it with
-	// renderDialogHelp so it is sized and padded consistently; it is
-	// appended as-is without further styling.
-	Help string
-	// IsOnboarding indicates whether to render the dialog as part of the
-	// onboarding flow. This means that the content will be rendered at the
-	// bottom left of the screen.
-	IsOnboarding bool
+	TitleGradientToColor   color.Color
+	Styles                 *styles.Styles
+	Title                  string
+	TitleInfo              string
+	Help                   string
+	Parts                  []string
+	Width                  int
+	Gap                    int
+	IsOnboarding           bool
 }
 
 // NewRenderContext creates a new RenderContext with the provided styles and width.

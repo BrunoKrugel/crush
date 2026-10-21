@@ -208,8 +208,8 @@ func TestChatDrawCache_InvalidatedByWidthMethodSwap(t *testing.T) {
 // ansi.Method) WidthMethod implementation. Chat.Draw is expected to
 // detect the type-assertion miss and fall through to the uncached path.
 type fixedMethodScreen struct {
-	uv.ScreenBuffer
 	method uv.WidthMethod
+	uv.ScreenBuffer
 }
 
 func (s fixedMethodScreen) WidthMethod() uv.WidthMethod { return s.method }

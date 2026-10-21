@@ -28,8 +28,8 @@ type skillStatusItem struct {
 }
 
 var builtinSkillsCache struct {
-	once   sync.Once
 	skills []*skills.Skill
+	once   sync.Once
 }
 
 func cachedBuiltinSkills() []*skills.Skill {

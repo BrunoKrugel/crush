@@ -25,19 +25,11 @@ const (
 // Quit represents a confirmation dialog for quitting the application.
 type Quit struct {
 	com        *common.Common
-	selectedNo bool // true if "No" button is selected
 	compositor *lipgloss.Compositor
+	keyMap     struct{ LeftRight, EnterSpace, Yes, No, Tab, Close, Quit key.Binding }
 	hoverX     int
 	hoverY     int
-	keyMap     struct {
-		LeftRight,
-		EnterSpace,
-		Yes,
-		No,
-		Tab,
-		Close,
-		Quit key.Binding
-	}
+	selectedNo bool
 }
 
 var _ Dialog = (*Quit)(nil)

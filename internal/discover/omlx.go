@@ -21,9 +21,9 @@ type omlxModelsStatusResponse struct {
 
 // omlxModelStatus is a single entry from /v1/models/status.
 type omlxModelStatus struct {
-	ID               string `json:"id"`
 	MaxContextWindow *int64 `json:"max_context_window"`
 	MaxTokens        *int64 `json:"max_tokens"`
+	ID               string `json:"id"`
 }
 
 // omlxEnricher fetches model metadata from oMLX's /models/status

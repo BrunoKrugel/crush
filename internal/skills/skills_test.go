@@ -138,9 +138,9 @@ func TestSkillValidate(t *testing.T) {
 
 	tests := []struct {
 		name    string
+		errMsg  string
 		skill   Skill
 		wantErr bool
-		errMsg  string
 	}{
 		{
 			name: "valid skill",
@@ -554,19 +554,6 @@ func TestDiscoverBuiltin(t *testing.T) {
 		}
 	}
 	require.True(t, foundHooks, "crush-hooks builtin skill not found")
-
-	var foundA2UI bool
-	for _, s := range discovered {
-		if s.Name == "a2ui" {
-			foundA2UI = true
-			require.Equal(t, "crush://skills/a2ui/SKILL.md", s.SkillFilePath)
-			require.Equal(t, "crush://skills/a2ui", s.Path)
-			require.NotEmpty(t, s.Description)
-			require.NotEmpty(t, s.Instructions)
-			require.True(t, s.Builtin)
-		}
-	}
-	require.True(t, foundA2UI, "a2ui builtin skill not found")
 }
 
 func TestDeduplicate(t *testing.T) {
@@ -574,10 +561,10 @@ func TestDeduplicate(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		input    []*Skill
-		wantLen  int
 		wantName string
 		wantPath string
+		input    []*Skill
+		wantLen  int
 	}{
 		{
 			name:    "no duplicates",

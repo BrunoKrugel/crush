@@ -365,13 +365,13 @@ func runNonInteractive(
 // and live message streaming, which is still correct for the
 // single-turn case.
 type runStream struct {
-	sessionID  string
-	runID      string
 	out        io.Writer
 	read       map[string]int
+	events     *format.EventPrinter
+	sessionID  string
+	runID      string
 	printed    bool
 	showEvents bool
-	events     *format.EventPrinter
 }
 
 // handle processes one SSE event. Returns done=true when the run

@@ -14,15 +14,15 @@ import (
 )
 
 type CallMCPPromptParams struct {
+	Arguments  map[string]string `json:"arguments,omitempty" description:"Arguments to pass to the prompt, as a map of argument name to value"`
 	MCPName    string            `json:"mcp_name" description:"The MCP server name"`
 	PromptName string            `json:"prompt_name" description:"The name of the prompt to invoke"`
-	Arguments  map[string]string `json:"arguments,omitempty" description:"Arguments to pass to the prompt, as a map of argument name to value"`
 }
 
 type CallMCPPromptPermissionsParams struct {
+	Arguments  map[string]string `json:"arguments,omitempty"`
 	MCPName    string            `json:"mcp_name"`
 	PromptName string            `json:"prompt_name"`
-	Arguments  map[string]string `json:"arguments,omitempty"`
 }
 
 const CallMCPPromptToolName = "call_mcp_prompt"

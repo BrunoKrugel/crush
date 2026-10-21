@@ -116,12 +116,12 @@ func parseStdout(stdout string) HookResult {
 	}
 
 	var parsed struct {
-		Version      int             `json:"version"`
 		Decision     string          `json:"decision"`
-		Halt         bool            `json:"halt"`
 		Reason       string          `json:"reason"`
 		Context      json.RawMessage `json:"context"`
 		UpdatedInput json.RawMessage `json:"updated_input"`
+		Version      int             `json:"version"`
+		Halt         bool            `json:"halt"`
 	}
 	if err := sonic.Unmarshal([]byte(stdout), &parsed); err != nil {
 		return HookResult{Decision: DecisionNone}
@@ -182,8 +182,8 @@ func parseClaudeCodeOutput(data json.RawMessage) HookResult {
 	var hso struct {
 		PermissionDecision       string          `json:"permissionDecision"`
 		PermissionDecisionReason string          `json:"permissionDecisionReason"`
-		UpdatedInput             json.RawMessage `json:"updatedInput"`
 		AdditionalContext        string          `json:"additionalContext"`
+		UpdatedInput             json.RawMessage `json:"updatedInput"`
 	}
 	if err := sonic.Unmarshal(data, &hso); err != nil {
 		return HookResult{Decision: DecisionNone}

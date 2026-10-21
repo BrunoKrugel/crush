@@ -254,117 +254,34 @@ func (w line) Hash() string {
 
 // Model is the Bubble Tea model for this text area element.
 type Model struct {
-	Err error
-
-	// General settings.
-	cache *memoization.MemoCache[line, [][]rune]
-
-	// Prompt is printed at the beginning of each line.
-	//
-	// When changing the value of Prompt after the model has been
-	// initialized, ensure that SetWidth() gets called afterwards.
-	//
-	// See also [SetPromptFunc] for a dynamic prompt.
-	Prompt string
-
-	// Placeholder is the text displayed when the user
-	// hasn't entered anything yet.
-	Placeholder string
-
-	// ShowLineNumbers, if enabled, causes line numbers to be printed
-	// after the prompt.
-	ShowLineNumbers bool
-
-	// EndOfBufferCharacter is displayed at the end of the input.
+	Err                  error
+	highlighter          LineHighlighter
+	rsan                 runeutil.Sanitizer
+	cache                *memoization.MemoCache[line, [][]rune]
+	viewport             *viewport.Model
+	promptFunc           func(PromptInfo) string
+	Prompt               string
+	Placeholder          string
+	KeyMap               KeyMap
+	virtualCursor        cursor.Model
+	value                [][]rune
+	styles               Styles
+	MaxHeight            int
+	col                  int
+	CharLimit            int
+	lastCharOffset       int
+	MaxWidth             int
+	promptWidth          int
+	MaxContentHeight     int
+	row                  int
+	MinHeight            int
+	height               int
+	width                int
 	EndOfBufferCharacter rune
-
-	// KeyMap encodes the keybindings recognized by the widget.
-	KeyMap KeyMap
-
-	// virtualCursor manages the virtual cursor.
-	virtualCursor cursor.Model
-
-	// CharLimit is the maximum number of characters this input element will
-	// accept. If 0 or less, there's no limit.
-	CharLimit int
-
-	// MaxHeight is the maximum height of the text area in rows. If 0 or less,
-	// there's no limit.
-	MaxHeight int
-
-	// MaxWidth is the maximum width of the text area in columns. If 0 or less,
-	// there's no limit.
-	MaxWidth int
-
-	// DynamicHeight, when true, causes the textarea to automatically grow
-	// and shrink its height to fit the content. The height is clamped between
-	// MinHeight and MaxHeight.
-	DynamicHeight bool
-
-	// MinHeight is the minimum height of the text area in rows when
-	// DynamicHeight is enabled. If 0 or less, defaults to 1.
-	MinHeight int
-
-	// MaxContentHeight is the maximum content height in visual rows
-	// (accounting for soft wraps). When set (> 0), input is blocked once
-	// the total visual lines reach this limit, while MaxHeight controls
-	// only the visible viewport height. When 0, the content guard falls
-	// back to the legacy MaxHeight behavior (blocking at MaxHeight
-	// logical lines) for backward compatibility.
-	MaxContentHeight int
-
-	// Styling. Styles are defined in [Styles]. Use [SetStyles] and [GetStyles]
-	// to work with this value publicly.
-	styles Styles
-
-	// useVirtualCursor determines whether or not to use the virtual cursor.
-	// Use [SetVirtualCursor] and [VirtualCursor] to work with this this
-	// value publicly.
-	useVirtualCursor bool
-
-	// If promptFunc is set, it replaces Prompt as a generator for
-	// prompt strings at the beginning of each line.
-	promptFunc func(PromptInfo) string
-
-	// promptWidth is the width of the prompt.
-	promptWidth int
-
-	// width is the maximum number of characters that can be displayed at once.
-	// If 0 or less this setting is ignored.
-	width int
-
-	// height is the maximum number of lines that can be displayed at once. It
-	// essentially treats the text field like a vertically scrolling viewport
-	// if there are more lines than the permitted height.
-	height int
-
-	// Underlying text value.
-	value [][]rune
-
-	// focus indicates whether user input focus should be on this input
-	// component. When false, ignore keyboard input and hide the cursor.
-	focus bool
-
-	// Cursor column.
-	col int
-
-	// Cursor row.
-	row int
-
-	// Last character offset, used to maintain state when the cursor is moved
-	// vertically such that we can maintain the same navigating position.
-	lastCharOffset int
-
-	// viewport is the vertically-scrollable viewport of the multi-line text
-	// input.
-	viewport *viewport.Model
-
-	// rune sanitizer for input.
-	rsan runeutil.Sanitizer
-
-	// highlighter is the optional per-line token highlighter installed via
-	// SetHighlighter. Consulted at render time only.
-	highlighter LineHighlighter
+	focus                bool
+	useVirtualCursor     bool
+	DynamicHeight        bool
+	ShowLineNumbers      bool
 }
 
 // New creates a new model with default settings.

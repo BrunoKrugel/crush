@@ -32,11 +32,11 @@ func NewSavingTokenSource(wrapped oauth2.TokenSource, config *oauth2.Config, ini
 }
 
 type savingTokenSource struct {
-	mu          sync.Mutex
 	src         oauth2.TokenSource
 	saver       func(*oauth2.Config, *oauth2.Token)
 	config      *oauth2.Config
 	accessToken string
+	mu          sync.Mutex
 }
 
 func (s *savingTokenSource) Token() (*oauth2.Token, error) {

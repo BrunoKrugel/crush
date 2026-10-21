@@ -27,11 +27,11 @@ import (
 // cannedA2AHost records every served turn and streamed drive, answering
 // the stream with one canned terminal outcome.
 type cannedA2AHost struct {
-	mu      sync.Mutex
+	outcome DispatchTransportOutcome
 	started []DispatchServerParams
 	streams []DispatchTransportParams
-	outcome DispatchTransportOutcome
 	stopped int
+	mu      sync.Mutex
 }
 
 func (h *cannedA2AHost) StartDispatchServer(_ context.Context, params DispatchServerParams) (string, any, func(), error) {

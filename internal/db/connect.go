@@ -48,8 +48,8 @@ func init() {
 // crush process from racing the storage.
 type connEntry struct {
 	db       *sql.DB
-	refCount int
 	lock     *dataDirLock
+	refCount int
 }
 
 var (

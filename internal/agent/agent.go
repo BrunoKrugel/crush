@@ -79,123 +79,33 @@ var (
 )
 
 type SessionAgentCall struct {
-	SessionID string
-	// RunID, when non-empty, is the caller-supplied correlator that
-	// gets echoed back on the notify.RunComplete event emitted for
-	// this turn. It is preserved when the call is enqueued behind a
-	// busy session so the queued turn's terminal event is still
-	// recognisable to the original caller. Callers that need a
-	// reliable completion contract (e.g. `crush run` against a
-	// session that may be busy) MUST set it; SessionID alone is
-	// ambiguous when concurrent turns share the same session.
+	FrequencyPenalty  *float64
+	turnText          func(call SessionAgentCall, text string)
+	OnAuthRefresh     func(ctx context.Context, err *fantasy.ProviderError) error
+	channelMeta       map[string]string
+	turn              *turnOutcome
+	Accepted          *AcceptedRun
+	OnConsumed        func(consumed bool)
+	ProviderOptions   fantasy.ProviderOptions
+	OnComplete        func(notify.RunComplete)
+	PresencePenalty   *float64
+	Temperature       *float64
+	TopP              *float64
+	TopK              *int64
+	Prompt            string
+	Channel           string
 	RunID             string
+	SessionID         string
+	Attachments       []message.Attachment
+	ContentWidth      int
+	acceptSeq         uint64
+	MaxOutputTokens   int64
+	OperatorSteering  bool
+	systemDelivery    bool
+	PermissionPolicy  permission.RequestPolicy
+	Steer             bool
 	HiddenUserMessage bool
-	// Steer marks the call as a mid-run injection into a running
-	// dispatched agent (#312): the persisted user message carries
-	// TextContent.Steer so a rebuilt transcript can tell steers apart
-	// from the dispatch's initial prompt and from todo nudges (#410).
-	// Only the injection paths set it; callers cannot forge it onto an
-	// ordinary prompt.
-	Steer   bool
-	Channel string
-	// ContentWidth is the UI's chat content width hint in cells (0 when
-	// the turn has no interactive UI). Tools rendering width-sensitive
-	// remote content (e.g. A2UI surfaces with pre-sized bar geometry)
-	// use it to ask the server for exactly the right size.
-	ContentWidth     int
-	Prompt           string
-	ProviderOptions  fantasy.ProviderOptions
-	Attachments      []message.Attachment
-	MaxOutputTokens  int64
-	Temperature      *float64
-	TopP             *float64
-	TopK             *int64
-	FrequencyPenalty *float64
-	PresencePenalty  *float64
-	NonInteractive   bool
-	// PermissionPolicy is the permission behavior for this turn. Unlike the
-	// caller's context, it is retained when the turn is queued.
-	PermissionPolicy permission.RequestPolicy
-	// OperatorSteering permits anonymous operator input to amend the active
-	// turn without changing its permission policy. Channel input is excluded.
-	OperatorSteering bool
-	// systemDelivery marks a dispatch-result delivery turn (#388): a
-	// queue partition keeps it where it would drop a user prompt
-	// (ClearQueue, Cancel, the cancel-covered handoffs), and the
-	// queued-prompt surfaces the UI reads (QueuedPrompts,
-	// QueuedPromptsList) skip it, so Esc-clears-queue never drops a
-	// delivery and the queue pill never counts one. It is set from the
-	// WithSystemDelivery context marker on the delivery path and is
-	// unexported so external callers cannot forge it.
-	systemDelivery bool
-	// OnComplete, when non-nil, replaces the default RunComplete
-	// publish path: the inner Run hands the terminal payload to this
-	// callback instead of emitting it on the RunComplete broker. The
-	// coordinator uses this hook to coalesce the unauthorized →
-	// re-auth → retry chain into a single user-visible terminal
-	// event, so non-interactive clients (e.g. `crush run`) don't
-	// exit on a stale failed-attempt RunComplete before the
-	// successful retry. It is intentionally stripped when queueing
-	// a busy-session call (see Run): the originating
-	// coordinator.Run has long returned by the time the queued
-	// recursion drains, so falling back to the default broker
-	// publish keeps the event visible to subscribers.
-	OnComplete func(notify.RunComplete)
-	// OnConsumed, when non-nil, reports what the queue did with this
-	// call (#351): true exactly once, after the message was consumed —
-	// persisted into the active turn by a fold, or the call was
-	// dequeued to run as its own turn — and false exactly once when a
-	// queue-removal path dropped it without running (a cancel covering
-	// it, or an explicit queue clear). The A2A executor's steer path
-	// waits on it to turn the enqueue into a terminal task state, and a
-	// queued dispatch delivery stamps its durable records delivered on
-	// true (#355); a run that ends with the call still queued fires
-	// nothing, and that stranded case is #398's. enqueueCall preserves
-	// it across queueing; every fire site is nil-safe and fires at most
-	// once per call.
-	OnConsumed func(consumed bool)
-	// Accepted, when non-nil, is the accept reservation taken by
-	// BeginAccepted before the call was dispatched onto a goroutine
-	// (the client/server fire-and-forget path). Run consumes it under
-	// dispatchMu[SessionID] once the accepted -> (cancel-on-entry |
-	// queued | active) transition has been chosen. When nil
-	// (in-process / local callers like AppWorkspace), behavior is
-	// unchanged and no accept tracking applies.
-	Accepted *AcceptedRun
-	// acceptSeq carries the accept sequence of the handle that produced
-	// this call after it has been enqueued and its Accepted handle
-	// stripped. The queue-drain paths compare it against a session's
-	// cancel mark so a follow-up queued before a cancel is dropped while
-	// one queued after the cancel survives. 0 means untracked (an
-	// in-process enqueue with no accept reservation), which the drain
-	// paths treat as covered by any present mark, preserving the
-	// pre-sequence behavior.
-	acceptSeq uint64
-	// turn is shared only with this call's automatic-summary continuations.
-	// Ordinary queued submissions receive their own identity on promotion.
-	turn *turnOutcome
-	// channelMeta holds the attributes of the <channel> element a
-	// channel-originated turn was started with, parsed once at Run
-	// entry. It survives the auto-summarize continuation, whose Prompt
-	// is rewritten and no longer carries the element, so the reply
-	// target is not lost when a long channel turn is summarized.
-	channelMeta map[string]string
-	// OnAuthRefresh, when non-nil, is called by fantasy when a stream
-	// fails with an authentication error (HTTP 401). The callback should
-	// refresh credentials and return nil on success, in which case
-	// fantasy retries the stream transparently. Returning an error
-	// surfaces the original auth error without retry.
-	OnAuthRefresh func(ctx context.Context, err *fantasy.ProviderError) error
-	// turnText, when non-nil, is called once with the finished turn's
-	// response text as its arguments, after the turn's final step but
-	// before the run hands off to a queued follow-up. enqueueCall strips
-	// only the exported hooks, so the field survives queueing: a turn
-	// re-queued by a summarize continuation reports into the same
-	// holder. Set only on the dispatch call template, which routes by
-	// the turn's own call: the work turn reports its findings, a steer
-	// turn (#397) reports into the steers' record instead. Nil
-	// everywhere else.
-	turnText func(call SessionAgentCall, text string)
+	NonInteractive    bool
 }
 
 // filterToolsForChannel scopes the tool list for a turn. A channel-originated
@@ -287,143 +197,63 @@ type activeCancel struct {
 // automatic-summary continuation that resumes it, so the suspended frame
 // reports the continuation's result and never its own interrupted one.
 type turnOutcome struct {
-	completed bool
-	result    *fantasy.AgentResult
 	err       error
+	result    *fantasy.AgentResult
+	completed bool
 }
 
 type sessionAgent struct {
-	largeModel         *csync.Value[Model]
-	smallModel         *csync.Value[Model]
-	systemPromptPrefix *csync.Value[string]
-	systemPrompt       *csync.Value[string]
-	tools              *csync.Slice[fantasy.AgentTool]
-
-	isSubAgent bool
-	sessions   session.Service
-	messages   message.Service
-	// cfg backs channel reply routing (config lookup + MCP tool
-	// invocation). Nil in tests and sub-agents that never see channel
-	// turns; sendChannelReply treats nil as "routing disabled".
-	cfg                  *config.ConfigStore
-	disableAutoSummarize bool
-	isYolo               bool
-	notify               pubsub.Publisher[notify.Notification]
-	runComplete          pubsub.Publisher[notify.RunComplete]
-	compactionHooks      func(event string) CompactionHookRunner
 	ledger               ledger.Service
+	sessions             session.Service
+	runComplete          pubsub.Publisher[notify.RunComplete]
+	notify               pubsub.Publisher[notify.Notification]
+	messages             message.Service
+	dispatchMu           *csync.Map[string, *sync.Mutex]
+	largeModel           *csync.Value[Model]
+	tools                *csync.Slice[fantasy.AgentTool]
+	cfg                  *config.ConfigStore
+	ready                *readiness
+	loopStop             func(sessionID string)
+	systemPrompt         *csync.Value[string]
+	systemPromptPrefix   *csync.Value[string]
+	compactionHooks      func(event string) CompactionHookRunner
+	smallModel           *csync.Value[Model]
+	messageQueue         *csync.Map[string, []SessionAgentCall]
+	todoKill             func(sessionID string, reason string)
+	activeRequests       *csync.Map[string, *activeCancel]
+	todoEnforcement      *todoEnforcement
+	cancelMark           *csync.Map[string, uint64]
+	acceptedRuns         *csync.Map[string, int]
+	titles               sync.WaitGroup
+	acceptSeqGen         uint64
+	dispatchMuCreate     sync.Mutex
+	acceptedMu           sync.Mutex
 	observeMemory        bool
-
-	messageQueue   *csync.Map[string, []SessionAgentCall]
-	activeRequests *csync.Map[string, *activeCancel]
-
-	// titles tracks the detached title generations Run starts. They
-	// outlive Run and write to the session store, so anything that closes
-	// the store must wait on it first.
-	titles sync.WaitGroup
-
-	// dispatchMu holds a per-session mutex that serializes the
-	// accepted -> (cancel-on-entry | queued | active) transition in
-	// Run against a concurrent Cancel. The lock is held only during
-	// the brief handoff (no DB or LLM I/O under the lock).
-	dispatchMu *csync.Map[string, *sync.Mutex]
-	// acceptedRuns counts dispatched-but-not-yet-active runs per
-	// session. A counter > 0 means a dispatched prompt is in flight
-	// and has not yet completed the dispatch handoff in Run. Only
-	// BeginAccepted increments it; only AcceptedRun.Close decrements
-	// it.
-	acceptedRuns *csync.Map[string, int]
-	// cancelMark records, per session, a high-water accept sequence: an
-	// accepted handle is canceled by it iff the handle's sequence is at
-	// or below the mark. Cancel raises the mark to the latest sequence
-	// assigned at cancel time, so a single Cancel covers every prompt
-	// accepted-but-not-yet-active then, while a prompt accepted later
-	// (higher sequence) is never poisoned. Absent or 0 means no pending
-	// cancel. It is only raised by Cancel when acceptedRuns > 0, so an
-	// idle Escape never records a mark.
-	cancelMark *csync.Map[string, uint64]
-	// dispatchMuCreate guards lazy creation of per-session entries in
-	// dispatchMu so two goroutines can't race to lock different mutex
-	// instances for the same session.
-	dispatchMuCreate sync.Mutex
-	// todoEnforcement carries this agent's resolved todo enforcement
-	// settings (#315): the nudge ladder and the opt-in mutating-tool
-	// gate. Nil when the ladder is off (the no-op fast path every
-	// method checks for).
-	todoEnforcement *todoEnforcement
-	// todoKill observes the wander-kill escalation (#316). Nil except
-	// for dispatched agents; see SessionAgentOptions.TodoKill.
-	todoKill func(sessionID string, reason string)
-	// loopStop observes the loop-detection stop (#343). Nil except for
-	// dispatched agents; see SessionAgentOptions.LoopStop.
-	loopStop func(sessionID string)
-	// acceptedMu serializes increments/decrements of acceptedRuns and
-	// the assignment of accept sequence numbers from acceptSeqGen. It
-	// is separate from dispatchMu so AcceptedRun.Close (which may run
-	// while Run holds dispatchMu for the same session) does not
-	// deadlock by re-entering the dispatch lock.
-	acceptedMu sync.Mutex
-	// acceptSeqGen is the monotonic source of accept sequence numbers.
-	// Each BeginAccepted increments it under acceptedMu and stamps the
-	// returned handle, so sequences strictly increase in accept order
-	// across the agent. Cancel uses its current value as the per-session
-	// high-water mark.
-	acceptSeqGen uint64
-	// ready is this agent's own one-shot setup latch, observed through
-	// WaitReady. It is satisfied from construction unless a builder
-	// (coordinator.buildAgent) replaces it with an armed latch before the
-	// agent is reachable by anyone else.
-	ready *readiness
+	isSubAgent           bool
+	isYolo               bool
+	disableAutoSummarize bool
 }
 
 type SessionAgentOptions struct {
-	LargeModel           Model
-	SmallModel           Model
-	SystemPromptPrefix   string
-	SystemPrompt         string
-	IsSubAgent           bool
-	DisableAutoSummarize bool
-	IsYolo               bool
+	RunComplete          pubsub.Publisher[notify.RunComplete]
+	Ledger               ledger.Service
 	Sessions             session.Service
 	Messages             message.Service
-	Cfg                  *config.ConfigStore
-	Tools                []fantasy.AgentTool
 	Notify               pubsub.Publisher[notify.Notification]
-	RunComplete          pubsub.Publisher[notify.RunComplete]
-	// Ledger persists session memory. Nil disables observation and leaves
-	// compaction summarizing with a model, which is the default.
-	Ledger ledger.Service
-	// ObserveMemory distills each completed turn into the ledger when true.
-	ObserveMemory bool
-
-	// CompactionHooks returns the runner for a compaction event, or nil when
-	// the user configured none for it. It is a function because each event
-	// has its own configured command list, and it is nil for sub-agents,
-	// which never compact.
-	CompactionHooks func(event string) CompactionHookRunner
-
-	// TodoEnforcement carries this agent's resolved todo enforcement
-	// settings (#315): nudge injection and the opt-in mutating-tool
-	// gate. The zero value disables the ladder (Enabled and HardGate
-	// both false), which keeps direct constructors — tests and the
-	// default agents — unchanged.
-	TodoEnforcement config.TodoEnforcementSettings
-	// TodoKill is the wander-kill escalation's supervisor hook (#316):
-	// invoked when a run ignores its nudges past the resolved kill
-	// threshold. The observer owns the kill (#348): it records the
-	// reason and ends the run — routing it through the dispatched run's
-	// tasks/cancel, or the direct fallback — so the ladder closure does
-	// not cancel the run itself. Nil everywhere but dispatched agents,
-	// so only they can be killed.
-	TodoKill func(sessionID string, reason string)
-	// LoopStop observes the loop-detection stop (#343): invoked when the
-	// run's step loop ends on the loop-detection stop condition. The
-	// stop itself is intrinsic to the run; this is the coordinator's
-	// chance to record the reason — over the served transport path the
-	// result's steps never reach the parent, so this observer is the
-	// only signal a loop stop ever happened. Nil everywhere but
-	// dispatched agents.
-	LoopStop func(sessionID string)
+	CompactionHooks      func(event string) CompactionHookRunner
+	TodoKill             func(sessionID string, reason string)
+	Cfg                  *config.ConfigStore
+	LoopStop             func(sessionID string)
+	SystemPrompt         string
+	SystemPromptPrefix   string
+	Tools                []fantasy.AgentTool
+	SmallModel           Model
+	LargeModel           Model
+	TodoEnforcement      config.TodoEnforcementSettings
+	ObserveMemory        bool
+	IsYolo               bool
+	DisableAutoSummarize bool
+	IsSubAgent           bool
 }
 
 func NewSessionAgent(
@@ -2459,10 +2289,10 @@ func compactionTriggerContext(ctx context.Context) context.Context {
 }
 
 type compactionProgress struct {
+	last     time.Time
 	replaced int
 	goal     int64
 	written  int64
-	last     time.Time
 }
 
 type CompactionHookRunner interface {

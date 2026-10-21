@@ -34,14 +34,9 @@ const (
 // Theme is the theme management dialog. It lists all available themes
 // with shortcuts to switch, rename, and create new themes.
 type Theme struct {
-	com   *common.Common
-	help  help.Model
-	list  *list.FilterableList
-	input textinput.Model
-
-	mode          themesMode
-	selectedIndex int
-
+	com    *common.Common
+	list   *list.FilterableList
+	help   help.Model
 	keyMap struct {
 		Select        key.Binding
 		Next          key.Binding
@@ -57,14 +52,17 @@ type Theme struct {
 		CancelDelete  key.Binding
 		Close         key.Binding
 	}
+	input         textinput.Model
+	selectedIndex int
+	mode          themesMode
 }
 
 // ThemeSectionHeader is a non-selectable section divider in the theme
 // list. It renders as a titled horizontal rule via common.Section.
 type ThemeSectionHeader struct {
 	*list.Versioned
-	title string
 	t     *styles.Styles
+	title string
 }
 
 func (h *ThemeSectionHeader) Filter() string { return "" }
@@ -88,18 +86,17 @@ func (s *themeSpacer) Render(width int) string { return strings.Repeat("\n", s.h
 // ThemeItem represents a single theme entry in the picker.
 type ThemeItem struct {
 	*list.Versioned
-	name       string
-	label      string
-	isCurrent  bool
-	overridden bool
-	t          *styles.Styles
-	m          fuzzy.Match
-	cache      map[int]string
-	focused    bool
-	hideInfo   bool
-
-	mode        themesMode
+	t           *styles.Styles
+	cache       map[int]string
+	name        string
+	label       string
 	renameInput textinput.Model
+	m           fuzzy.Match
+	isCurrent   bool
+	overridden  bool
+	focused     bool
+	hideInfo    bool
+	mode        themesMode
 }
 
 // Finished implements list.Item. Theme items are render-stable outside

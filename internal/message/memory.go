@@ -6,9 +6,9 @@ import (
 	"slices"
 	"sync"
 	"time"
+	"uuid"
 
 	"github.com/charmbracelet/crush/internal/pubsub"
-	"uuid"
 )
 
 // memoryService is an in-memory implementation of [Service] for
@@ -20,12 +20,9 @@ import (
 // the app-wide message broker.
 type memoryService struct {
 	*pubsub.Broker[Message]
-
-	mu       sync.RWMutex
 	messages map[string]Message
-	// order preserves per-session insertion order so List returns
-	// messages in creation order even when timestamps collide.
-	order map[string][]string
+	order    map[string][]string
+	mu       sync.RWMutex
 }
 
 // NewInMemoryService returns a [Service] backed entirely by process

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"uuid"
 
 	"charm.land/fantasy"
 	"github.com/bytedance/sonic"
@@ -19,7 +20,6 @@ import (
 	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/shell"
-	"uuid"
 )
 
 //go:embed templates/dispatch_tool.md
@@ -45,35 +45,13 @@ const dispatchResultPersistPoll = 200 * time.Millisecond
 
 // DispatchAgentParams are the DispatchAgent tool's arguments.
 type DispatchAgentParams struct {
-	Prompt string `json:"prompt" description:"Self-contained task instructions for the dispatched agent"`
-	// Agent selects the agent definition the dispatch runs (#433): the
-	// id of one of the resolved dispatch agents, stamped onto the
-	// parameter schema's enum at Info time by dispatchAgentTool. Empty
-	// runs the configured default agent (options.dispatch.default_agent,
-	// "worker" unless configured).
-	Agent string `json:"agent,omitempty" description:"Agent definition to run the dispatch on: one of the dispatch agent ids in the enum. Omit to use the configured default agent"`
-	// Model is the model type the dispatched agent runs on — "large" or
-	// "small" — defaulting to the selected agent definition's slot (#433;
-	// the worker's is the small model). Per-dispatch model choice is
-	// by selected-model type, not raw model ID, matching how agent
-	// configs select models. A definition pinned to an explicit model
-	// refuses the parameter with a tool error.
-	Model string `json:"model,omitempty" description:"Model type to run the dispatched agent on: \"large\" or \"small\" (default: the selected agent's configured model slot; refused for agents pinned to an explicit model)"`
-	// Skills names the skills the dispatched agent may use; the default
-	// is every skill discovered in the workspace.
+	Prompt string   `json:"prompt" description:"Self-contained task instructions for the dispatched agent"`
+	Agent  string   `json:"agent,omitempty" description:"Agent definition to run the dispatch on: one of the dispatch agent ids in the enum. Omit to use the configured default agent"`
+	Model  string   `json:"model,omitempty" description:"Model type to run the dispatched agent on: \"large\" or \"small\" (default: the selected agent's configured model slot; refused for agents pinned to an explicit model)"`
+	Branch string   `json:"branch,omitempty" description:"Base revision the isolated workspace is cut from (default: current branch)"`
+	Handle string   `json:"handle,omitempty" description:"@handle to address the dispatched agent by while it runs (default: derived from role, else \"agent\")"`
+	Role   string   `json:"role,omitempty" description:"One-line role label for the dispatched agent (e.g. \"tester\", \"docs writer\"), shown in the @ completions and used to derive its handle"`
 	Skills []string `json:"skills,omitempty" description:"Names of skills to make available to the dispatched agent (default: all skills discovered in the workspace)"`
-	// Branch is the base revision the workspace is cut from; the default
-	// is the repository's current branch.
-	Branch string `json:"branch,omitempty" description:"Base revision the isolated workspace is cut from (default: current branch)"`
-	// Handle is the @handle the dispatched agent is addressable by
-	// (#313); the user steers it mid-run as "@handle stop writing Rust".
-	// Collisions are suffixed numerically (tester-2). Default: derived
-	// from Role, else "agent".
-	Handle string `json:"handle,omitempty" description:"@handle to address the dispatched agent by while it runs (default: derived from role, else \"agent\")"`
-	// Role is the one-line label of what the agent is for — shown next
-	// to the handle in the editor's @ completions and used to derive the
-	// handle when none was supplied.
-	Role string `json:"role,omitempty" description:"One-line role label for the dispatched agent (e.g. \"tester\", \"docs writer\"), shown in the @ completions and used to derive its handle"`
 }
 
 // dispatchSweepTimeout bounds the session-end ReleaseDispatches: it runs
@@ -83,32 +61,12 @@ const dispatchSweepTimeout = 30 * time.Second
 
 // dispatchAgentOptions configures the dispatched-agent constructor.
 type dispatchAgentOptions struct {
-	// Toolchain is the workspace-rooted toolchain the agent runs with
-	// (#62); its Tools, Config, and WorkingDir feed the agent build.
 	Toolchain *DispatchToolchain
-	// AgentID is the id of the resolved agent definition the dispatch
-	// runs (#433); the builder renders its prompt and model. Empty
-	// means the worker definition.
-	AgentID string
-	// ModelType selects which selected model the dispatched agent runs
-	// on. The default (empty) is the agent definition's slot (#432).
+	TodoKill  func(sessionID string, reason string)
+	LoopStop  func(sessionID string)
+	AgentID   string
 	ModelType config.SelectedModelType
-	// Skills restricts the rendered available-skills set; empty means
-	// every skill discovered in the workspace.
-	Skills []string
-	// TodoKill is the wander-kill escalation's supervisor hook (#316):
-	// invoked when the dispatched run ignores its nudges past the kill
-	// threshold. The observer owns the kill (#348): it records the
-	// reason against this dispatch and routes the kill through the
-	// served run's tasks/cancel, with the direct cancel as the fallback.
-	TodoKill func(sessionID string, reason string)
-	// LoopStop observes the loop-detection stop (#343): invoked when the
-	// dispatched run's step loop ends on the loop-detection stop
-	// condition, so the coordinator can record the tool-loop kill reason
-	// against this dispatch. The run's own end is intrinsic; this only
-	// observes — over the served transport path it is the only signal a
-	// loop stop ever happened.
-	LoopStop func(sessionID string)
+	Skills    []string
 }
 
 // dispatchKill records the deterministic-kill outcome of one dispatched
@@ -118,11 +76,9 @@ type dispatchAgentOptions struct {
 // path, so runs without kill wiring (existing callers, tests) never
 // branch on it.
 type dispatchKill struct {
-	mu     sync.Mutex
+	done   chan struct{}
 	reason string
-	// done is closed by the first kill (#352), so a wait on the user —
-	// a parked question — ends with the run. Made on first use.
-	done chan struct{}
+	mu     sync.Mutex
 }
 
 func (k *dispatchKill) kill(reason string) {
@@ -186,8 +142,8 @@ func (k *dispatchKill) Reason() string { return k.current() }
 // applies to a sub-agent's turn.
 type dispatchedAgent struct {
 	agent       SessionAgent
-	model       Model
 	providerCfg config.ProviderConfig
+	model       Model
 }
 
 // dispatchFindings is one dispatched run's turn-text record (#397): the
@@ -197,9 +153,9 @@ type dispatchedAgent struct {
 // turn observers fire from the run's turns while the terminal assembly
 // reads the record.
 type dispatchFindings struct {
-	mu       sync.Mutex
 	workText string
 	replies  []string
+	mu       sync.Mutex
 }
 
 // setWork records the work turn's text, last write wins: a summarize
@@ -249,57 +205,24 @@ func (f *dispatchFindings) steerReplies() []string {
 // dispatchRun carries one backgrounded dispatch from the tool call that
 // started it to the goroutine that runs it.
 type dispatchRun struct {
-	reg         *dispatch.AgentRegistry
-	provider    *dispatch.GitWorktreeProvider
-	entry       dispatch.Entry
-	toolchain   *DispatchToolchain
-	agent       SessionAgent
-	model       Model
-	providerCfg config.ProviderConfig
-	prompt      string
-	sessionID   string
-	// parentSessionID is the session the DispatchAgent tool call ran in;
-	// the dispatched session's cost is propagated to it and the terminal
-	// result payload (#66) is delivered back into it.
+	external        ExternalAgent
+	agent           SessionAgent
+	cancel          context.CancelFunc
+	reg             *dispatch.AgentRegistry
+	stopServer      func()
+	provider        *dispatch.GitWorktreeProvider
+	toolchain       *DispatchToolchain
+	findings        *dispatchFindings
+	kill            *dispatchKill
+	entry           dispatch.Entry
+	prompt          string
 	parentSessionID string
-	// contentWidth is the parent turn's UI width hint, captured at tool
-	// call time so the dispatched agent's turns render at the right size
-	// (the PrepareStep stamp would otherwise clobber it with zero).
-	contentWidth int
-	// stopServer tears the dispatch's A2A server down (#70); nil when no
-	// server was started. The run owns it: the server serves exactly as
-	// long as the dispatch runs.
-	stopServer func()
-
-	// kill accumulates the wander-kill reason (#316) from the
-	// enforcement ladder's hook and the watchdog; empty when the run is
-	// never killed.
-	kill *dispatchKill
-	// cancel ends the dispatch's root context (#371). The watchdog's
-	// kill fires it so a kill landing before the dispatched agent's Run
-	// registered the session still ends the run: agent.Cancel alone is
-	// a no-op for an unregistered session (#430). Nil where a run is
-	// driven without a root (tests that assemble or observe only).
-	cancel context.CancelFunc
-	// holdsSlot reports that the run holds the dispatch concurrency slot
-	// its tool call reserved (#390): the run's teardown releases it when
-	// the dispatch reaches a terminal state. Runs driven without a
-	// reservation (tests that call runDispatch directly) do not.
-	holdsSlot bool
-	// killSettings are the resolved wander-kill thresholds for this
-	// dispatch: nudges-before-kill, todos stall window, hard timeout.
-	killSettings config.TodoEnforcementSettings
-	// findings records the run's work-turn text and steer replies
-	// (#397): a pointer, because the dispatchRun value is copied into
-	// the background run and both copies must name the same record.
-	// Nil where a run is driven without the record (tests that assemble
-	// only); the accessors are nil-safe.
-	findings *dispatchFindings
-	// external is the resolved external agent a runtime a2a dispatch
-	// runs on (#434), holding the card's pinned client and credential;
-	// nil for a dispatch served in-process. An external run has no
-	// agent, toolchain, provider, or server of its own.
-	external ExternalAgent
+	sessionID       string
+	providerCfg     config.ProviderConfig
+	model           Model
+	killSettings    config.TodoEnforcementSettings
+	contentWidth    int
+	holdsSlot       bool
 }
 
 // registerLiveDispatch records a running dispatch (#371). The map is
@@ -343,8 +266,8 @@ func (c *coordinator) cancelDispatchesForShutdown() {
 	// dispatch finishing from here on records its terminal state but
 	// starts no parent delivery turn.
 	type shutdownTarget struct {
-		id   string
 		live *liveDispatch
+		id   string
 	}
 	c.dispatchMu.Lock()
 	targets := make([]shutdownTarget, 0, len(c.liveDispatches))
@@ -1191,31 +1114,12 @@ func (c *coordinator) persistDispatchTerminalResult(ctx context.Context, parentS
 // The transport fills it via dispatchNaturalOutcomeFromTransport — the
 // only execution path since #347.
 type dispatchNaturalOutcome struct {
-	// completed reports whether the run finished its turn naturally —
-	// false for failed, canceled, and runs that never started a turn.
-	completed bool
-	// findings is the run's final assistant text. A steer's follow-up
-	// turn text may arrive here as the last turn's; assembleDispatchResult
-	// prefers the run's findings record over it (#397).
-	findings string
-	// runErr is the run's error; nil when the turn ran to a natural end.
-	runErr error
-	// diff resolves the run's diff-vs-base on demand: the transport
-	// prefers the diff that arrived on the wire and falls back to an
-	// in-process capture when none did, so a capture error surfaces as
-	// "(diff unavailable: ...)" instead of "(no changes)" (#361 puts the
-	// error on the wire and deletes this).
-	diff func(ctx context.Context) (string, error)
-	// killReason is a kill reason the transport outcome carried (#348):
-	// a terminal Canceled whose status message is one of the kill
-	// reasons. The in-process kill state is the first witness and wins;
-	// this is the mapping for a kill this process never recorded — an
-	// out-of-process supervisor (#72/#73) that killed the served task
-	// directly. Empty unless the wire said killed.
-	killReason string
-	// undeliveredSteers are the steers the served agent accepted but
-	// never consumed (#398), from the transport outcome.
+	runErr            error
+	diff              func(ctx context.Context) (string, error)
+	findings          string
+	killReason        string
 	undeliveredSteers []string
+	completed         bool
 }
 
 // assembleTerminalDispatchResult maps a finished dispatched run onto its
@@ -1331,10 +1235,7 @@ func (c *coordinator) startDispatchKillWatch(ctx context.Context, run dispatchRu
 // cadence is a quarter of the window, clamped so tiny windows still poll
 // and huge ones do not hammer the DB.
 func (c *coordinator) watchTodosStall(ctx context.Context, run dispatchRun, window time.Duration, kill func(string)) {
-	tick := max(window/4, 50*time.Millisecond)
-	if tick > 30*time.Second {
-		tick = 30 * time.Second
-	}
+	tick := min(max(window/4, 50*time.Millisecond), 30*time.Second)
 	ticker := time.NewTicker(tick)
 	defer ticker.Stop()
 

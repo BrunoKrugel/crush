@@ -14,9 +14,9 @@ import (
 func TestPermissionService_AllowedCommands(t *testing.T) {
 	tests := []struct {
 		name         string
-		allowedTools []string
 		toolName     string
 		action       string
+		allowedTools []string
 		expected     bool
 	}{
 		{
@@ -192,8 +192,8 @@ func TestPermissionService_HookApproval(t *testing.T) {
 }
 
 type permissionResult struct {
-	granted bool
 	err     error
+	granted bool
 }
 
 func requestAsync(ctx context.Context, service Service, request CreatePermissionRequest) <-chan permissionResult {

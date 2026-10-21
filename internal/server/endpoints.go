@@ -710,8 +710,6 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 
 		apigen.Post("/v1/workspaces/{id}/mcp/call-tool").
 			Summary("Call an MCP tool").
-			Description("Restricted to the A2UI round-trip tools; any other tool name is "+
-				"rejected with 403.").
 			Tags("mcp").
 			PathParam("id", "Workspace ID").
 			Accepts(proto.MCPCallToolRequest{}).

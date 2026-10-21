@@ -20,9 +20,9 @@ var questionDescription string
 
 // QuestionParams defines the parameters for the question tool.
 type QuestionParams struct {
-	Questions          []QuestionItem `json:"questions" description:"List of questions to present. Single item = no tabs, multiple = tabbed form."`
 	ConfirmTitle       string         `json:"confirm_title,omitempty" description:"Title for the confirmation tab. Required for multi-question batches."`
 	ConfirmDescription string         `json:"confirm_description,omitempty" description:"Description for the confirmation tab. Required for multi-question batches."`
+	Questions          []QuestionItem `json:"questions" description:"List of questions to present. Single item = no tabs, multiple = tabbed form."`
 }
 
 // UnmarshalJSON handles models that double-serialize the questions field as a
@@ -30,8 +30,8 @@ type QuestionParams struct {
 func (p *QuestionParams) UnmarshalJSON(data []byte) error {
 	type Alias QuestionParams
 	aux := &struct {
-		Questions json.RawMessage `json:"questions"`
 		*Alias
+		Questions json.RawMessage `json:"questions"`
 	}{
 		Alias: (*Alias)(p),
 	}

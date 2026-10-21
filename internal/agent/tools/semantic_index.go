@@ -110,13 +110,7 @@ func NewSemanticIndexTool(cfg *config.ConfigStore, store *semantic.Store, extrac
 			for _, e := range errs {
 				fmt.Fprintf(&b, "error: %s\n", e)
 			}
-			resp := fantasy.NewTextResponse(b.String())
-			// The summary card renders as a live A2UI surface when a chat UI
-			// is attached; the text above stays model-facing either way.
-			if semanticDivert(ctx, cfg) {
-				resp = withSemanticSurface(resp, a2uiSurfaceIDPrefix+"index", semanticIndexSurface(workingDir, indexed, skipped, failed, int(total), errs))
-			}
-			return resp, nil
+			return fantasy.NewTextResponse(b.String()), nil
 		},
 	)
 }

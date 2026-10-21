@@ -17,8 +17,8 @@ import (
 )
 
 type lifecycleModel struct {
-	finishStreamModel
 	stream func(context.Context, fantasy.Call) (fantasy.StreamResponse, error)
+	finishStreamModel
 }
 
 func (m *lifecycleModel) Stream(ctx context.Context, call fantasy.Call) (fantasy.StreamResponse, error) {

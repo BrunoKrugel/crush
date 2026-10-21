@@ -82,28 +82,17 @@ func (r ResourceCompletionValue) IsTemplate() bool {
 
 // CompletionItem represents an item in the completions list.
 type CompletionItem struct {
-	*list.Versioned
-
-	text    string
-	value   any
-	match   fuzzy.Match
-	focused bool
-	cache   map[int]string
-
-	// detailStart is the byte offset in text where the secondary detail
-	// (e.g. a skill's description) begins, or -1 when the item is all
-	// primary text. The detail renders dimmed so the name still leads.
-	detailStart int
-
-	// sortKey is what the name-priority tiering ranks on. It defaults to
-	// text, but items whose display text carries a trailing detail set it
-	// to the bare name so the description can't skew the tier.
-	sortKey string
-
-	// Styles
 	normalStyle  lipgloss.Style
 	focusedStyle lipgloss.Style
 	matchStyle   lipgloss.Style
+	value        any
+	*list.Versioned
+	cache       map[int]string
+	text        string
+	sortKey     string
+	match       fuzzy.Match
+	detailStart int
+	focused     bool
 }
 
 // NewCompletionItem creates a new completion item.

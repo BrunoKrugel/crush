@@ -16,10 +16,10 @@ import (
 // recordingModel is a [fantasy.LanguageModel] that keeps a rendering of every
 // call it receives, so tests can assert on what actually reached the model.
 type recordingModel struct {
+	fail      error
+	text      string
 	calls     []string
 	maxOutput []int64
-	text      string
-	fail      error
 }
 
 func (m *recordingModel) Generate(context.Context, fantasy.Call) (*fantasy.Response, error) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 	"time"
+	"uuid"
 
 	"charm.land/fantasy"
 	"github.com/charmbracelet/crush/internal/agent"
@@ -15,7 +16,6 @@ import (
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/scheduler"
 	"github.com/stretchr/testify/require"
-	"uuid"
 )
 
 // errorCoordinator is a minimal agent.Coordinator whose RunAccepted

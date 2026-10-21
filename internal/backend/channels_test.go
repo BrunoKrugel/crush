@@ -26,10 +26,10 @@ import (
 // fakeChannelSessions is a channelSessionStore backed by in-memory
 // fixtures. created records the titles passed to Create.
 type fakeChannelSessions struct {
+	getErr   error
 	sessions map[string]session.Session
 	listed   []session.Session
 	created  []string
-	getErr   error
 }
 
 func (f *fakeChannelSessions) Create(_ context.Context, title string) (session.Session, error) {

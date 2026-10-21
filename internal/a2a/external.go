@@ -711,15 +711,11 @@ func (a *externalAgent) cancelRemote(ctx context.Context, taskID a2aspec.TaskID,
 // updates say, under one byte budget. Nothing in it is ever read as a
 // diff or written anywhere.
 type externalFold struct {
-	// token is scrubbed from every artifact's text before the budget cut,
-	// so the cut cannot leave a prefix of it behind.
-	token agent.Secret
-	order []a2aspec.ArtifactID
-	texts map[a2aspec.ArtifactID]string
-	size  int
-	// pausedOn is the state the task parked on — input-required or
-	// auth-required — set when the stream pauses.
+	texts    map[a2aspec.ArtifactID]string
+	token    agent.Secret
 	pausedOn a2aspec.TaskState
+	order    []a2aspec.ArtifactID
+	size     int
 }
 
 // artifactUpdate folds one artifact update event.
@@ -907,10 +903,9 @@ type streamWatch struct {
 	touched chan struct{}
 	quit    chan struct{}
 	done    chan struct{}
+	cause   string
 	once    sync.Once
-
-	mu    sync.Mutex
-	cause string
+	mu      sync.Mutex
 }
 
 // startStreamWatch arms the watch: cancel cuts the stream. A zero idle

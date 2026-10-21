@@ -71,22 +71,13 @@ const (
 // and an optional validator. A builtin's whole flag surface is a []flagSpec
 // handed to applyFlags, which replaces the per-builtin parse loops.
 type flagSpec struct {
-	name    string // long flag including dashes, e.g. "--api-key"
-	jsonKey string // destination key in the target map
-	kind    flagKind
-	op      flagOp
-	child   string // child map name for opSetChild / opMergeChild
-
-	// validate, if non-nil, checks the parsed value before it is stored.
-	// It receives the value as string, bool, int64, float64, or
-	// map[string]any depending on kind.
 	validate func(any) error
-
-	// parse, if non-nil, replaces the kind-based parse: it receives args
-	// and the flag's index and returns the value plus the index to resume
-	// from, so a flag can derive its stored shape (e.g. --model
-	// provider/model becomes an object).
-	parse func(args []string, i int) (any, int, error)
+	parse    func(args []string, i int) (any, int, error)
+	name     string
+	jsonKey  string
+	child    string
+	kind     flagKind
+	op       flagOp
 }
 
 // applyFlags parses args[start:] against specs and writes the results into

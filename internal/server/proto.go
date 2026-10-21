@@ -8,12 +8,12 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"uuid"
 
 	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/backend"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/session"
-	"uuid"
 )
 
 type controllerV1 struct {

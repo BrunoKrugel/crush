@@ -62,11 +62,11 @@ func TestDispatchE2EOverServerFactory(t *testing.T) {
 	}
 
 	scenarios := []struct {
-		name     string
-		settings config.TodoEnforcementSettings
 		factory  func() agent.DispatchHost
 		model    func(t *testing.T) (fantasy.LanguageModel, func())
 		check    func(t *testing.T, entry dispatch.Entry, elapsed time.Duration)
+		name     string
+		settings config.TodoEnforcementSettings
 	}{
 		{
 			name: "completed run writes a file and delivers findings",

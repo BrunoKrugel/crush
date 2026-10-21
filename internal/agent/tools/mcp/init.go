@@ -193,17 +193,13 @@ const (
 
 // Event represents an event in the MCP system
 type Event struct {
-	Type   EventType
-	Name   string
-	State  State
-	Error  error
-	Counts Counts
-	// ChannelMessage is set only for EventChannelMessage: the fully rendered
-	// and escaped <channel>...</channel> element to inject into the session.
+	Error          error
+	ChannelMeta    map[string]string
+	Name           string
 	ChannelMessage string
-	// ChannelMeta carries the channel payload's meta attributes (sender, group,
-	// etc.) so workspace-side channel and reply routing can act on them.
-	ChannelMeta map[string]string
+	Counts         Counts
+	Type           EventType
+	State          State
 }
 
 // Counts number of available tools, prompts, etc.
@@ -215,43 +211,15 @@ type Counts struct {
 
 // ClientInfo holds information about an MCP client's state.
 type ClientInfo struct {
-	Name        string
-	State       State
-	Error       error
-	Client      *ClientSession
-	Counts      Counts
-	ConnectedAt time.Time
-	// Channel reports whether this server is an active channel, for the MCP
-	// list marker and the channels dialog.
-	Channel bool
-	// A2UITools lists the a2ui_* tools this server exposes. It rides on the
-	// state rather than being read from the tool registry via HasTool
-	// because the registry only exists in the process that owns the MCP
-	// sessions: a client/server TUI has an empty one, so a HasTool gate
-	// there is permanently false and the surface round-trip it guards can
-	// never fire. Only the a2ui_* subset is carried — the UI asks nothing
-	// else, and a full tool list would put every server's whole catalog on
-	// the wire on every state change.
-	A2UITools []string
-
-	// Config is the configuration the server last successfully connected
-	// with. Reconcile compares it against the live config to decide whether
-	// a connected server needs a restart. It is recorded by updateState on
-	// StateConnected and cleared on StateDisabled, so it never has to be
-	// synced by hand.
-	Config config.MCPConfig
-
-	// PendingConfig is the configuration an in-flight initialization is
-	// connecting with. It is set on StateStarting so a config change that
-	// arrives mid-connect is compared against the attempt actually in
-	// progress rather than the last successful one, which would leave the
-	// server skipped as "starting" and never restarted for the new config.
+	ConnectedAt   time.Time
+	Error         error
+	Client        *ClientSession
 	PendingConfig *config.MCPConfig
-}
-
-// ServesA2UITool reports whether the server exposes the named a2ui_* tool.
-func (c ClientInfo) ServesA2UITool(toolName string) bool {
-	return slices.Contains(c.A2UITools, toolName)
+	Name          string
+	Config        config.MCPConfig
+	Counts        Counts
+	State         State
+	Channel       bool
 }
 
 // SubscribeEvents returns a channel for MCP events, including channel-message
@@ -1049,9 +1017,6 @@ func updateState(name string, state State, err error, client *ClientSession, cou
 	} else if state == StateDisabled || state == StateNeedsAuth {
 		info.Channel = false
 	}
-	// Snapshot the a2ui_* capability alongside the counts so a remote
-	// client learns it without reading this process's tool registry.
-	info.A2UITools = a2uiToolNames(name)
 	for _, opt := range opts {
 		opt(&info)
 	}
@@ -1143,32 +1108,6 @@ func createSession(ctx context.Context, cfg *config.ConfigStore, name string, m 
 	channelGate := newChannelGate()
 	transport = &channelTransport{inner: transport, name: name, gate: channelGate}
 
-	// Advertise A2UI support in the initialize handshake so an A2UI-over-MCP
-	// server knows it can send surfaces. A host that won't render A2UI must
-	// not claim the capability.
-	// A2UI injects its capability by wrapping the CONNECTION, and for
-	// streamable HTTP a wrapped connection is fatal: the SDK starts the
-	// standalone SSE stream (the hanging GET every server-initiated
-	// notification rides) only after type-asserting the connection to its
-	// unexported clientConnection interface, and a wrapper declared in this
-	// package can never satisfy an unexported method. The assert fails
-	// silently — the ok is discarded — so the stream is never opened and every
-	// push is rejected with "stream not connected or already closed".
-	//
-	// channelTransport already avoids that by filtering below the connection
-	// for streamable HTTP. Wrapping again out here put the wrapper straight
-	// back on and undid it, which is why channel doorbells still never
-	// arrived after that fix.
-	//
-	// The capability is not lost: a2uiSDKCapabilities carries the same payload
-	// in the typed Extensions field (see opts.Capabilities below), which is
-	// what a go-sdk server reads. Only the raw top-level "capabilities.a2ui"
-	// key — the spec-conformant-non-go-sdk path — is skipped here, and only
-	// for streamable HTTP, where the alternative is no notifications at all.
-	if !a2uiDisabled(cfg) && !isStreamableHTTP(transport) {
-		transport = &a2uiInitTransport{inner: transport}
-	}
-
 	// When the server is marked Sessionless, the tools/prompts/resources
 	// list-changed handlers are omitted. The go-sdk opens a SEP-2575
 	// "subscriptions/listen" stream whenever any of those handlers is set
@@ -1181,7 +1120,6 @@ func createSession(ctx context.Context, cfg *config.ConfigStore, name string, m 
 			level := parseLevel(string(req.Params.Level))
 			slog.Log(ctx, level, "MCP log", "name", name, "logger", req.Params.Logger, "data", req.Params.Data)
 		},
-		Capabilities: a2uiSDKCapabilities(a2uiDisabled(cfg)),
 	}
 	if !m.IsSessionless(resolver) {
 		opts.ToolListChangedHandler = func(context.Context, *mcp.ToolListChangedRequest) {
@@ -1284,8 +1222,8 @@ func maybeStdioErr(err error, transport mcp.Transport) error {
 	if !errors.Is(err, io.EOF) {
 		return err
 	}
-	// Transports are wrapped in one or more decorators before Connect (the
-	// channel gate, the A2UI capability injector); the stdio transport we're
+	// Transports are wrapped in decorators before Connect (the
+	// channel gate); the stdio transport we're
 	// probing for is the innermost one. Unwrap all of them — without this the
 	// assertion below never matches and stdio startup failures report a bare
 	// EOF instead of the child's actual output. Every wrapper must implement

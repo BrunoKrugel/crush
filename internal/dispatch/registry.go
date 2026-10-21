@@ -94,68 +94,24 @@ const (
 // [WorkspaceProvider] returned and stay empty for an agent served by
 // [NoneProvider].
 type Entry struct {
-	// ID is the dispatch identifier, a UUID. The branch and directory
-	// name are BranchPrefix + ID.
-	ID string
-	// Path is the absolute workspace directory.
-	Path string
-	// Branch is the workspace branch, BranchPrefix + ID.
-	Branch string
-	// Base is the base the workspace was cut from: a branch, commit, or
-	// other revision as given at provision time.
-	Base string
-	// BaseSHA is the commit Base resolved to when the workspace was
-	// provisioned. Diff always diffs against it.
-	BaseSHA string
-	// SessionID is the ephemeral session backing the dispatched agent
-	// (#48/#50); empty until the dispatch starts running.
-	SessionID string
-	// ParentSessionID is the session the dispatch was created from
-	// (#399): the scope handle and session-ID addressing are validated
-	// against, so only the dispatching session can address the agent.
-	// Empty until the dispatch tool records it.
+	FinishedAt      time.Time
+	StartedAt       time.Time
+	AgentCard       any
+	Result          *DispatchResult
+	Role            string
+	Status          Status
 	ParentSessionID string
-	// Handle is the workspace's @handle for agent addressing (#313);
-	// empty until one is assigned by [AgentRegistry.AssignHandle].
-	Handle string
-	// Role is the one-line role label the dispatch was given (#313) —
-	// the "what it is" shown next to the handle in the @ completions,
-	// and the fallback a handle is derived from when the model did not
-	// supply one.
-	Role string
-	// Agent is the id of the agent definition the dispatch runs (#433):
-	// worker by default, or the agent the tool call named.
-	Agent string
-	// Source is the external Agent Card URL a runtime a2a dispatch runs
-	// against (#434); empty for a dispatch served in-process. A dispatch
-	// with a source has no workspace, no local agent, and no A2A server
-	// of its own: Endpoint and AgentCard stay empty, so nothing that
-	// talks to a served dispatch can reach the external one.
-	Source string
-	// Status is the workspace's lifecycle state.
-	Status Status
-	// Endpoint is the A2A server endpoint serving the dispatched agent
-	// (#70); empty in Phase 1's in-process dispatch.
-	Endpoint string
-	// AgentCard is the dispatched agent's A2A AgentCard (#70). Opaque to
-	// this package to keep it import-cycle-free of internal/a2a.
-	AgentCard any
-	// TaskID is the A2A task ID the served dispatch's first stream event
-	// named (#349); empty until then. It survives a dropped stream: with
-	// it, the run is recoverable through tasks/resubscribe and tasks/get
-	// and answerable through queries after the fact.
-	TaskID string
-	// StartedAt is when the dispatch's agent started running; zero
-	// until then. FinishedAt is when it reached a terminal state. The
-	// agent block (#65) renders elapsed time from the pair.
-	StartedAt  time.Time
-	FinishedAt time.Time
-	// Result is the terminal DispatchResult (#66) recorded when the run
-	// finished; nil until then. It is written once and read-only after,
-	// so sharing the pointer between entry copies is safe. The
-	// completed agent block (#65) renders its durable record — the
-	// findings summary and diff stat — from it.
-	Result *DispatchResult
+	Handle          string
+	ID              string
+	Agent           string
+	Source          string
+	SessionID       string
+	Endpoint        string
+	BaseSHA         string
+	TaskID          string
+	Base            string
+	Branch          string
+	Path            string
 }
 
 // clone returns a copy of the entry.
@@ -168,13 +124,9 @@ func (e Entry) clone() Entry { return e }
 // keeps no SCM or filesystem state of its own. All methods are safe
 // for concurrent use.
 type AgentRegistry struct {
-	// events re-publishes every registry mutation as an entry event, so
-	// the todo collector (#65) and later sinks observe lifecycle
-	// transitions without the mutation call sites knowing about them.
-	events *pubsub.Broker[Entry]
-
-	mu      sync.Mutex
+	events  *pubsub.Broker[Entry]
 	entries map[string]Entry
+	mu      sync.Mutex
 }
 
 // NewAgentRegistry returns an empty registry.

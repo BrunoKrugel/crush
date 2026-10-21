@@ -91,9 +91,9 @@ func TestAgentDefinitionModel(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
+		want   map[string]string
 		name   string
 		agents string
-		want   map[string]string
 	}{
 		{
 			name: "no agents section keeps every agent on the large slot",
@@ -259,10 +259,10 @@ func TestWorkerDefinitionToolset(t *testing.T) {
 
 	writeTools := []string{tools.BashToolName, tools.EditToolName, tools.MultiEditToolName, tools.WriteToolName}
 	tests := []struct {
+		check   func(t *testing.T, c *config.Config, allowed, built []string)
 		name    string
 		agents  string
 		options string
-		check   func(t *testing.T, c *config.Config, allowed, built []string)
 	}{
 		{
 			name: "no agents section matches the pre-definition dispatch set",

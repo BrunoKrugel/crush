@@ -22,16 +22,15 @@ const (
 
 // ThemeNew prompts for a name and base when creating a new theme.
 type ThemeNew struct {
-	com   *common.Common
-	help  help.Model
-	input textinput.Model
-	base  string
-	err   string
-
+	com    *common.Common
+	help   help.Model
+	base   string
+	err    string
 	keyMap struct {
 		Confirm key.Binding
 		Close   key.Binding
 	}
+	input textinput.Model
 }
 
 var _ Dialog = (*ThemeNew)(nil)

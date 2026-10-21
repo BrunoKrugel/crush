@@ -10,8 +10,8 @@ import (
 func TestCommandBlocking(t *testing.T) {
 	tests := []struct {
 		name        string
-		blockFuncs  []BlockFunc
 		command     string
+		blockFuncs  []BlockFunc
 		shouldBlock bool
 	}{
 		{

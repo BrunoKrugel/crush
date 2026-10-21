@@ -17,10 +17,10 @@ import (
 // wrongly started a concurrent run for the same session is observable as an
 // in-flight count above one.
 type concurrencyProbeModel struct {
-	inFlight atomic.Int32
-	maxSeen  atomic.Int32
 	entered  chan struct{}
 	release  chan struct{}
+	inFlight atomic.Int32
+	maxSeen  atomic.Int32
 }
 
 func (m *concurrencyProbeModel) Provider() string { return "fake" }

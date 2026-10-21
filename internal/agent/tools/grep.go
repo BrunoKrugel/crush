@@ -74,11 +74,11 @@ type GrepParams struct {
 }
 
 type grepMatch struct {
-	path     string
 	modTime  time.Time
+	path     string
+	lineText string
 	lineNum  int
 	charNum  int
-	lineText string
 }
 
 type GrepResponseMetadata struct {
@@ -280,10 +280,10 @@ type ripgrepMatch struct {
 		Lines struct {
 			Text string `json:"text"`
 		} `json:"lines"`
-		LineNumber int `json:"line_number"`
 		Submatches []struct {
 			Start int `json:"start"`
 		} `json:"submatches"`
+		LineNumber int `json:"line_number"`
 	} `json:"data"`
 }
 
@@ -367,9 +367,9 @@ func searchFilesWithRegex(pattern, rootPath, include string) ([]grepMatch, error
 // number, the 1-based column of the first match on that line, and the
 // line text (with the trailing newline stripped).
 type lineMatch struct {
+	lineText string
 	lineNum  int
 	charNum  int
-	lineText string
 }
 
 // fileMatches returns every line in filePath that matches pattern. Like

@@ -74,12 +74,9 @@ const defaultModelsDialogMaxWidth = 73
 
 // Models represents a model selection dialog.
 type Models struct {
-	com          *common.Common
-	isOnboarding bool
-
-	modelType ModelType
-	providers []catwalk.Provider
-
+	com    *common.Common
+	list   *ModelsList
+	help   help.Model
 	keyMap struct {
 		Tab      key.Binding
 		UpDown   key.Binding
@@ -90,9 +87,10 @@ type Models struct {
 		Previous key.Binding
 		Close    key.Binding
 	}
-	list  *ModelsList
-	input textinput.Model
-	help  help.Model
+	providers    []catwalk.Provider
+	input        textinput.Model
+	modelType    ModelType
+	isOnboarding bool
 }
 
 var _ Dialog = (*Models)(nil)

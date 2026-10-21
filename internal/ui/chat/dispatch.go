@@ -37,28 +37,11 @@ type AgentTaskSetter interface {
 // and diff stat — and never clears or collapses.
 type DispatchToolMessageItem struct {
 	*baseToolMessageItem
-
+	task        *workspace.AgentTask
+	fallback    *dispatch.DispatchResult
+	now         func() time.Time
 	nestedTools []ToolMessageItem
-	// task is the dispatched agent's latest live state from the agent
-	// surface (#421); nil until one arrives.
-	task *workspace.AgentTask
-	// fallback is the dispatch state parsed from the persisted tool
-	// result: the running handle, or the terminal result the run stamps
-	// on it when it ends (#410). With no live state — a dispatch from an
-	// earlier process — the running handle is static by definition; a
-	// terminal result is the durable record either way.
-	fallback *dispatch.DispatchResult
-	// steers records the mid-run messages injected into the running
-	// agent (#312) and the agent's latest reply to each, as observed on
-	// the child session's message events. The initial dispatch prompt is
-	// not a steer and is never recorded. In-memory only: a reloaded
-	// session loses the live steer log; the durable record remains the
-	// terminal result's findings.
-	steers []dispatchSteer
-	// now supplies the wall clock for a running dispatch's elapsed time;
-	// nil means time.Now. Tests pin it so elapsed assertions stay
-	// deterministic (#428).
-	now func() time.Time
+	steers      []dispatchSteer
 }
 
 // dispatchSteer is one injected message and the agent's answer so far.

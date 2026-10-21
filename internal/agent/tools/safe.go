@@ -17,43 +17,14 @@ import (
 // parsed AST — not `git -c core.pager=... status` either, since that argv
 // begins with different tokens.
 type safeCommand struct {
-	// argv is the exact leading token sequence this entry matches.
-	argv []string
-	// restrictFlags limits the accepted flags to allowFlags. When false,
-	// any flag not in denyFlags is accepted. It exists so that a command
-	// whose every flag is harmless (`ls`, `df`) does not have to enumerate
-	// them, while one that can mutate under a flag (`git branch`) does.
-	restrictFlags bool
-	// allowFlags is the set of accepted flag names when restrictFlags is
-	// set. Compared against the flag name only, so `--format=x` is matched
-	// by an entry of "--format".
-	allowFlags []string
-	// denyFlags is the set of rejected flag names when restrictFlags is
-	// not set.
-	denyFlags []string
-	// requireFlag demands that at least one flag be present. It exists
-	// for `git config`, where the read-only forms are distinguished from
-	// the write form by a flag rather than by a subcommand token:
-	// `git config --get x` reads, `git config x y` writes.
-	requireFlag bool
-	// allowOperands reports whether non-flag arguments may follow argv.
-	// It is false for commands that mutate when handed an operand, such
-	// as `git branch <name>` (creates) or `git remote add` (writes).
-	allowOperands bool
-	// operandsWithFlags lists flags that turn operands into read-only
-	// patterns: `git branch --list 'feat/*'` and `git tag -l 'v1.*'`
-	// filter the listing, while the same operand without the flag
-	// creates a branch or tag. When set, operands are accepted only if
-	// one of these flags is present anywhere in the arguments as a real
-	// flag — not swallowed as the value of a value-taking flag (`git
-	// branch --format -l <name>` creates, because git consumes `-l` as
-	// the format string); the flag must also be in allowFlags, which
-	// keeps the rest of the entry's policy in force.
+	argv              []string
+	allowFlags        []string
+	denyFlags         []string
 	operandsWithFlags []string
-	// valueFlags lists the flags of this entry that consume a separate
-	// value token, so the operandsWithFlags scan can tell a real flag
-	// from a token eaten as a value.
-	valueFlags []string
+	valueFlags        []string
+	restrictFlags     bool
+	requireFlag       bool
+	allowOperands     bool
 }
 
 // gitCodeExecFlags are flags that make an otherwise read-only git

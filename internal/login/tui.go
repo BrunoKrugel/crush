@@ -74,37 +74,24 @@ func (m *authModel) updateAuthKeymap() {
 
 // authModel is the Bubble Tea model for the OAuth authorization flow.
 type authModel struct {
-	platform string
-	newFlow  func() flow
-	flow     flow
-
-	state authState
-
-	spinner spinner.Model
-
+	flow            flow
+	err             error
+	newFlow         func() flow
+	token           *oauth.Token
+	help            help.Model
 	verificationURL string
 	userCode        string
-
-	// codeEntry is set when the flow can finish with a pasted code from
-	// the authorization page; codeInput is its paste field, shown while
-	// waiting for the browser callback, and codeErr the last paste
-	// failure. The callback and the paste race: whichever lands first
-	// wins, and a failed paste keeps the flow waiting.
-	codeEntry bool
-	codeInput textinput.Model
-	codeErr   string
-
-	help   help.Model
-	keymap authKeyMap
-
-	token    *oauth.Token
-	err      error
-	canceled bool
-	quitting bool
-	// blankLines is the height of the last rendered frame, used to blank it
-	// out in the final render on quit.
-	blankLines int
-	width      int
+	platform        string
+	codeErr         string
+	keymap          authKeyMap
+	codeInput       textinput.Model
+	spinner         spinner.Model
+	state           authState
+	blankLines      int
+	width           int
+	codeEntry       bool
+	canceled        bool
+	quitting        bool
 }
 
 type authReadyMsg struct {

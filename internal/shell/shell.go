@@ -63,11 +63,11 @@ type BlockFunc func(args []string) bool
 
 // Shell provides cross-platform shell execution with optional state persistence
 type Shell struct {
-	env        []string
-	cwd        string
-	mu         sync.Mutex
 	logger     Logger
+	cwd        string
+	env        []string
 	blockFuncs []BlockFunc
+	mu         sync.Mutex
 }
 
 // Options for creating a new shell

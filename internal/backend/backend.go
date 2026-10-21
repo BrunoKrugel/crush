@@ -91,58 +91,20 @@ type ShutdownFunc func()
 // while calling [registerClient] so that a workspace cannot be torn
 // down beneath it.
 type Backend struct {
-	workspaces *csync.Map[string, *Workspace]
-	// pathIndex maps a resolved absolute workspace path to its
-	// workspace ID. Reads and writes are serialised via mu so
-	// concurrent CreateWorkspace calls at the same path deduplicate
-	// deterministically.
-	pathIndex map[string]string
-	// pending counts CreateWorkspace calls that have committed to the
-	// slow initialization path (config/db/app setup) but have not yet
-	// registered their workspace in the map. It is guarded by mu.
-	// teardown must observe pending == 0 in addition to an empty
-	// workspace map before triggering server shutdown: otherwise a
-	// teardown of the last live workspace could race ahead of a
-	// concurrent create — which releases mu during its slow init — and
-	// shut the whole server down out from under the workspace being
-	// born.
-	pending int
-	// shutdownTimer, when non-nil, is an armed idle-shutdown timer
-	// waiting out lingerDelay before it shuts the server down. It is
-	// guarded by mu and cancelled the moment a new create arrives.
+	ctx           context.Context
+	shutdownFn    ShutdownFunc
 	shutdownTimer *time.Timer
-	// closing latches the decision to exit. Every site that commits to
-	// a shutdown sets it while still holding mu, because shutdownFn has
-	// to run unlocked; CreateWorkspace refuses once it is set. That
-	// makes the shutdown-vs-create decision atomic: a create can never
-	// be handed a workspace on a process that is already leaving.
-	closing bool
-	// retired holds the IDs of clients that announced their exit via
-	// RetireClient. Creates from a retired client are refused, which is what
-	// lets a client release a workspace whose ID it never learned.
-	//
-	// Entries are never pruned, and deliberately so: an entry is exactly
-	// what refuses a create that was already on the wire when the client
-	// said goodbye, and HTTP gives no ordering between two requests, so
-	// there is no moment at which the server can prove none is still coming.
-	// Dropping an entry to save memory would reintroduce the orphaned
-	// workspace this mechanism exists to prevent. The cost is one UUID per
-	// client process, and the server only outlives its clients for as long
-	// as sessions keep arriving inside the idle-shutdown window.
-	retired map[string]struct{}
-	mu      sync.Mutex
-
-	cfg         *config.ConfigStore
-	ctx         context.Context
-	shutdownFn  ShutdownFunc
-	createGrace time.Duration
-	lingerDelay time.Duration
-	detachGrace time.Duration
-
-	// tracker counts workspaces whose teardown hook has not yet
-	// returned. It is the only observable that reports resource
-	// release rather than map membership; see [workspaceTracker].
-	tracker workspaceTracker
+	retired       map[string]struct{}
+	cfg           *config.ConfigStore
+	pathIndex     map[string]string
+	workspaces    *csync.Map[string, *Workspace]
+	tracker       workspaceTracker
+	pending       int
+	createGrace   time.Duration
+	lingerDelay   time.Duration
+	detachGrace   time.Duration
+	mu            sync.Mutex
+	closing       bool
 }
 
 // clientState tracks one client's claim on a workspace.
@@ -168,76 +130,35 @@ type Backend struct {
 // timer is stopped the moment an SSE stream attaches), but both being
 // zero/nil means the entry has been released and should be removed.
 type clientState struct {
-	streams          int
 	holdTimer        *time.Timer
 	currentSessionID string
-	// sessionReported distinguishes a client that never reported a
-	// session (API clients predating session reporting) from one that
-	// explicitly cleared its selection.
-	sessionReported bool
-	released        bool
+	streams          int
+	sessionReported  bool
+	released         bool
 }
 
 // Workspace represents a running [app.App] workspace with its
 // associated resources and state.
 type Workspace struct {
-	*app.App
-	ID     string
-	Path   string
-	Cfg    *config.ConfigStore
-	Env    []string
-	Skills *skills.Manager
-
-	// a2aHost, when set, is where A2AHost finds the workspace's agent
-	// host instead of its app (#421); tests set it.
+	ctx     context.Context
 	a2aHost func() (*a2a.ServerFactory, <-chan struct{})
-
-	// resolvedPath is the path used as the dedup key in
-	// Backend.pathIndex. It is filepath.EvalSymlinks(filepath.Abs(Path))
-	// with fallback to the cleaned absolute path.
+	Cfg     *config.ConfigStore
+	*app.App
+	Skills       *skills.Manager
+	clients      map[string]*clientState
+	cancel       context.CancelFunc
+	tracker      *workspaceTracker
+	shutdownFn   func()
+	rootCache    sync.Map
+	Path         string
 	resolvedPath string
-
-	// ctx is the workspace-scoped run context. It is derived from
-	// the backend context in CreateWorkspace and lives for the
-	// lifetime of the workspace; cancel tears it down. Agent runs
-	// dispatched on behalf of this workspace are bound to ctx so
-	// their lifetime is owned by the workspace, not by any single
-	// client's HTTP request.
-	ctx    context.Context
-	cancel context.CancelFunc
-
-	// runMu guards closing and gates dispatch of new agent runs.
-	// closing is set by Shutdown so no new runs are accepted once
-	// teardown has begun. runWG tracks dispatched agent goroutines
-	// so Shutdown can wait for them to return before app cleanup.
-	runMu   sync.Mutex
-	closing bool
-	runWG   sync.WaitGroup
-
-	// clientsMu guards clients. It is held only briefly (no IO).
-	clientsMu sync.Mutex
-	// clients tracks each client's claim on this workspace. Refcount
-	// is a derived value: len(clients).
-	clients map[string]*clientState
-	// rootCache memoizes [Backend.RootSessionID] resolutions, keyed by
-	// session ID. Parentage is fixed at creation, so cached entries never
-	// go stale.
-	rootCache sync.Map // map[string]string
-
-	// shutdownFn is the function invoked by [Backend.teardown] to
-	// release the workspace's underlying resources. It defaults to the
-	// embedded [app.App.Shutdown]; tests may override it to avoid
-	// driving a full [app.App] through shutdown.
-	shutdownFn func()
-
-	// tracker, when non-nil, is the owning backend's lifecycle
-	// counter. invokeShutdown reports to it exactly once, after the
-	// teardown hook has returned. retiredOnce keeps that report
-	// single-shot: the losing-race paths in CreateWorkspace and
-	// teardown both funnel through invokeShutdown, and a workspace
-	// reaching it twice must not double-decrement the counter.
-	tracker     *workspaceTracker
-	retiredOnce sync.Once
+	ID           string
+	Env          []string
+	runWG        sync.WaitGroup
+	retiredOnce  sync.Once
+	clientsMu    sync.Mutex
+	runMu        sync.Mutex
+	closing      bool
 }
 
 // trackWith registers w with the backend's lifecycle counter. It must

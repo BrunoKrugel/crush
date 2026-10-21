@@ -85,17 +85,14 @@ func (t *MCPEventType) UnmarshalText(data []byte) error {
 
 // MCPEvent represents an event in the MCP system.
 type MCPEvent struct {
-	Type          MCPEventType `json:"type"`
-	Name          string       `json:"name"`
-	State         MCPState     `json:"state"`
-	Error         error        `json:"error,omitempty"`
-	ToolCount     int          `json:"tool_count,omitempty"`
-	PromptCount   int          `json:"prompt_count,omitempty"`
-	ResourceCount int          `json:"resource_count,omitempty"`
-	// ChannelMessage carries the rendered <channel> element for
-	// MCPEventChannelMessage events so channel pushes reach client/server
-	// sessions over the wire.
-	ChannelMessage string `json:"channel_message,omitempty"`
+	Error          error        `json:"error,omitempty"`
+	Type           MCPEventType `json:"type"`
+	Name           string       `json:"name"`
+	ChannelMessage string       `json:"channel_message,omitempty"`
+	State          MCPState     `json:"state"`
+	ToolCount      int          `json:"tool_count,omitempty"`
+	PromptCount    int          `json:"prompt_count,omitempty"`
+	ResourceCount  int          `json:"resource_count,omitempty"`
 }
 
 // MarshalJSON implements the [json.Marshaler] interface.
@@ -137,19 +134,14 @@ func (e *MCPEvent) UnmarshalJSON(data []byte) error {
 // MCPClientInfo is the wire-format representation of an MCP client's
 // state, suitable for JSON transport between server and client.
 type MCPClientInfo struct {
+	ConnectedAt   time.Time `json:"connected_at"`
+	Error         error     `json:"error,omitempty"`
 	Name          string    `json:"name"`
 	State         MCPState  `json:"state"`
-	Error         error     `json:"error,omitempty"`
 	ToolCount     int       `json:"tool_count,omitempty"`
 	PromptCount   int       `json:"prompt_count,omitempty"`
 	ResourceCount int       `json:"resource_count,omitempty"`
-	ConnectedAt   time.Time `json:"connected_at"`
-	// Channel reports whether this server is an active channel.
-	Channel bool `json:"channel,omitempty"`
-	// A2UITools lists the a2ui_* tools the server exposes, so a client can
-	// tell whether an A2UI surface interaction round-trips to the server
-	// without access to the server-side tool registry.
-	A2UITools []string `json:"a2ui_tools,omitempty"`
+	Channel       bool      `json:"channel,omitempty"`
 }
 
 type MCPPromptArgument struct {

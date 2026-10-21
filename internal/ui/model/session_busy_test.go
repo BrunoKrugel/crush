@@ -30,46 +30,36 @@ import (
 // method so tests can pin exactly which probes ran. The embedded interface
 // panics on anything unimplemented.
 type countingWorkspace struct {
+	model       workspace.AgentModel
+	allChildErr error
 	workspace.Workspace
-
-	ready     bool
-	agentBusy bool
-	// sessionBusy is the value AgentIsSessionBusy reports (fork: session-
-	// scoped busy).
-	sessionBusy    bool
-	yolo           bool
-	queued         []string
-	model          workspace.AgentModel
-	lspStates      map[string]workspace.LSPClientInfo
-	lspDiags       map[string]lsp.DiagnosticCounts
-	mcpStates      map[string]mcp.ClientInfo
-	mcpPendingAuth []mcp.PendingAuthServer
-
-	readyCalls     int
-	agentBusyCalls int
-	// sessionBusyCalls records each session ID AgentIsSessionBusy was probed
-	// with, in order (fork: session-scoped busy).
-	sessionBusyCalls []string
-	queuedCalls      int
-	queueListCalls   int
-	permCalls        int
-	permSetCalls     int
-	clearQueueCalls  int
-	cancelCalls      int
-	modelCalls       int
-	lspStateCalls    int
-	lspDiagCalls     int
-	mcpStateCalls    int
-	mcpPendingCalls  int
-
-	// sessions / childSessions serve the sessions picker; the child-fetch
-	// counters pin that Update performs no child fetch and that the
-	// picker's command fetches the whole tree exactly once (#409).
-	sessions          []session.Session
+	lspStates         map[string]workspace.LSPClientInfo
+	lspDiags          map[string]lsp.DiagnosticCounts
+	mcpStates         map[string]mcp.ClientInfo
+	sessionBusyCalls  []string
 	childSessions     []session.Session
-	allChildErr       error
-	listChildCalls    int
+	sessions          []session.Session
+	queued            []string
+	mcpPendingAuth    []mcp.PendingAuthServer
+	queuedCalls       int
+	modelCalls        int
+	readyCalls        int
 	listAllChildCalls int
+	queueListCalls    int
+	permCalls         int
+	permSetCalls      int
+	clearQueueCalls   int
+	cancelCalls       int
+	agentBusyCalls    int
+	lspStateCalls     int
+	lspDiagCalls      int
+	mcpStateCalls     int
+	mcpPendingCalls   int
+	listChildCalls    int
+	agentBusy         bool
+	ready             bool
+	sessionBusy       bool
+	yolo              bool
 }
 
 func (w *countingWorkspace) AgentIsReady() bool { w.readyCalls++; return w.ready }

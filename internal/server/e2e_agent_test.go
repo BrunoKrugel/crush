@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"uuid"
 
 	"charm.land/fantasy"
 	"github.com/bytedance/sonic"
@@ -24,7 +25,6 @@ import (
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/scheduler"
 	"github.com/stretchr/testify/require"
-	"uuid"
 )
 
 // scriptedCoordinator is an agent.Coordinator stub that mimics the
@@ -47,36 +47,20 @@ import (
 // codebase, so this stub reproduces the documented black-box outcome by
 // controlling run timing directly through blockEntered / release.
 type scriptedCoordinator struct {
-	app *app.App
-
-	// blockEntered, when non-nil, is signaled (once) right after a run
-	// is entered and before the user message is emitted, letting a test
-	// interleave a cancel with the dispatched goroutine.
-	blockEntered chan struct{}
-
-	mu sync.Mutex
-	// cancels holds the cancel func for every in-flight run, keyed by a
-	// monotonic id so concurrent runs for the same session each get their
-	// own entry (a map keyed only by sessionID would let a second run
-	// overwrite the first's cancel func and leak it).
-	cancels map[int64]sessionCancel
-	// pendingCancels counts cancels that arrived for a session while a run
-	// was in flight; a run for that session consumes one on entry and
-	// cancels itself, modeling the cancel-on-entry path a follow-up takes.
+	app            *app.App
+	blockEntered   chan struct{}
+	cancels        map[int64]sessionCancel
 	pendingCancels map[string]int
+	entered        chan int64
+	release        chan struct{}
 	nextRunID      int64
-	// entered carries the monotonic run id assigned to each run as it is
-	// entered, so a test can correlate a later assistant message back to a
-	// specific run (run 1 vs an accepted follow-up).
-	entered   chan int64
-	runStarts atomic.Int32
-
-	release chan struct{}
+	mu             sync.Mutex
+	runStarts      atomic.Int32
 }
 
 type sessionCancel struct {
-	sessionID string
 	cancel    context.CancelFunc
+	sessionID string
 }
 
 func newScriptedCoordinator(a *app.App) *scriptedCoordinator {

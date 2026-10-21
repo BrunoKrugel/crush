@@ -31,27 +31,14 @@ import (
 // embedded App has a live event broker. It is the minimum scaffolding
 // the multi-client end-to-end scenarios in PLAN item 6 need.
 type e2eHarness struct {
-	httpSrv     *httptest.Server
-	srv         *Server
-	backend     *backend.Backend
-	workspace   *backend.Workspace
-	app         *app.App
-	shutdownHit atomic.Bool
-
-	// sseWG tracks every SSE reader goroutine spawned by
-	// [e2eHarness.subscribeSSE]. The harness's cleanup hook waits on
-	// it after the httptest server has been closed so that the test
-	// cannot leave behind background readers (and therefore unclosed
-	// response bodies) after returning.
-	sseWG sync.WaitGroup
-
-	// afterWorkspaceTeardown, when set, runs inside the harness's
-	// cleanup immediately after the workspace-teardown wait returns.
-	// It is the only place a test can assert on state that becomes
-	// true only once every shutdown hook has completed: cleanups a
-	// test body registers itself run BEFORE the harness's, because
-	// t.Cleanup is LIFO and the harness registered first.
+	httpSrv                *httptest.Server
+	srv                    *Server
+	backend                *backend.Backend
+	workspace              *backend.Workspace
+	app                    *app.App
 	afterWorkspaceTeardown func()
+	sseWG                  sync.WaitGroup
+	shutdownHit            atomic.Bool
 }
 
 // installServer attaches a fresh Server (with a custom shutdown
@@ -510,8 +497,8 @@ func TestE2E_PermissionFlowCrossClient(t *testing.T) {
 	const sessionID = "s-perm"
 	const toolCallID = "tc-1"
 	type result struct {
-		granted bool
 		err     error
+		granted bool
 	}
 	done := make(chan result, 1)
 	go func() {

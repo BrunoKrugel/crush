@@ -5,13 +5,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"uuid"
 
 	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/backend"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/stretchr/testify/require"
-	"uuid"
 )
 
 // buildEmptyWorkspace returns a controller wired to a backend that owns

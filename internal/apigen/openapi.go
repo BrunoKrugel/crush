@@ -18,33 +18,33 @@ type Info struct {
 
 // document is an OpenAPI 3.1 document rooted at the API's base path.
 type document struct {
-	OpenAPI string              `json:"openapi"`
-	Info    Info                `json:"info"`
 	Paths   map[string]pathItem `json:"paths"`
+	Info    Info                `json:"info"`
+	OpenAPI string              `json:"openapi"`
 }
 
 type pathItem map[string]operation
 
 type operation struct {
+	RequestBody *requestBody            `json:"requestBody,omitempty"`
+	Responses   map[string]specResponse `json:"responses"`
 	Summary     string                  `json:"summary"`
 	Description string                  `json:"description,omitempty"`
 	Tags        []string                `json:"tags,omitempty"`
 	Parameters  []parameter             `json:"parameters,omitempty"`
-	RequestBody *requestBody            `json:"requestBody,omitempty"`
-	Responses   map[string]specResponse `json:"responses"`
 }
 
 type parameter struct {
+	Schema      *Schema `json:"schema"`
 	Name        string  `json:"name"`
 	In          string  `json:"in"`
 	Description string  `json:"description,omitempty"`
 	Required    bool    `json:"required"`
-	Schema      *Schema `json:"schema"`
 }
 
 type requestBody struct {
-	Required bool                 `json:"required"`
 	Content  map[string]mediaType `json:"content"`
+	Required bool                 `json:"required"`
 }
 
 type mediaType struct {
@@ -52,8 +52,8 @@ type mediaType struct {
 }
 
 type specResponse struct {
-	Description string               `json:"description"`
 	Content     map[string]mediaType `json:"content,omitempty"`
+	Description string               `json:"description"`
 }
 
 var errorSchema = &Schema{

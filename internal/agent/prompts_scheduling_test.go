@@ -3,18 +3,30 @@ package agent
 import (
 	"strings"
 	"testing"
+	"text/template"
 
 	"github.com/charmbracelet/crush/internal/agent/prompt"
 	"github.com/stretchr/testify/require"
 )
 
+// renderCoderTemplate executes the embedded coder template directly with the
+// given data — no ConfigStore, no filesystem discovery — so the test is
+// hermetic and fast.
+func renderCoderTemplate(t *testing.T, dat prompt.PromptDat) string {
+	t.Helper()
+	tpl, err := template.New("coder").Parse(string(coderPromptTmpl))
+	require.NoError(t, err)
+	var b strings.Builder
+	require.NoError(t, tpl.Execute(&b, dat))
+	return b.String()
+}
+
 // Scheduling section gate
 //
 // The <scheduling> section points the model at CronCreate / CronList /
-// CronDelete. Guidance follows the tool, so it is gated the same way the
-// A2UI section is: the coordinator turns it on because it registers the
-// cron tools, and callers that do not — the recorded agent tests among
-// them — leave it off.
+// CronDelete. Guidance follows the tool: the coordinator turns it on
+// because it registers the cron tools, and callers that do not — the
+// recorded agent tests among them — leave it off.
 //
 // That gate is also what keeps the VCR cassettes byte-stable. The system
 // prompt is part of every recorded request body, so an ungated section

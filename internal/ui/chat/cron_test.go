@@ -133,8 +133,8 @@ func TestCronTasksFromResultWithoutMetadata(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
 		opts *ToolRenderOpts
+		name string
 	}{
 		{
 			name: "no result",

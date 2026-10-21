@@ -29,9 +29,9 @@ import (
 // fails during the promoted turn's preparation, not during streaming.
 type preparationSessions struct {
 	session.Service
-	ready         atomic.Bool
 	err           error
 	beforeFailure func()
+	ready         atomic.Bool
 }
 
 func (s *preparationSessions) Save(ctx context.Context, sess session.Session) (session.Session, error) {

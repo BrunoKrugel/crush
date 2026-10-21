@@ -80,9 +80,9 @@ func holdLeaseElsewhere(t *testing.T, path string) {
 // scanTestEnv builds a repository and a provider whose worktrees live
 // outside it, so scan fixtures never fight the ignore file.
 type scanTestEnv struct {
+	p    *GitWorktreeProvider
 	repo string
 	dir  string
-	p    *GitWorktreeProvider
 }
 
 func newScanTestEnv(t *testing.T) scanTestEnv {

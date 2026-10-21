@@ -21,9 +21,9 @@ import (
 // deregistered once its teardown hook has *returned*, which is the only
 // point at which the release is genuinely complete.
 type workspaceTracker struct {
-	mu      sync.Mutex
-	live    int
 	waiters []chan struct{}
+	live    int
+	mu      sync.Mutex
 }
 
 // born records a workspace that now owns resources.

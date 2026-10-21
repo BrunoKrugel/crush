@@ -36,16 +36,16 @@ var (
 
 // Skill represents a parsed SKILL.md file.
 type Skill struct {
+	Metadata               map[string]string `yaml:"metadata,omitempty" json:"metadata,omitempty"`
 	Name                   string            `yaml:"name" json:"name"`
 	Description            string            `yaml:"description" json:"description"`
-	UserInvocable          bool              `yaml:"user-invocable" json:"user_invocable"`
-	DisableModelInvocation bool              `yaml:"disable-model-invocation" json:"disable_model_invocation"`
 	License                string            `yaml:"license,omitempty" json:"license,omitempty"`
 	Compatibility          string            `yaml:"compatibility,omitempty" json:"compatibility,omitempty"`
-	Metadata               map[string]string `yaml:"metadata,omitempty" json:"metadata,omitempty"`
 	Instructions           string            `yaml:"-" json:"instructions"`
 	Path                   string            `yaml:"-" json:"path"`
 	SkillFilePath          string            `yaml:"-" json:"skill_file_path"`
+	UserInvocable          bool              `yaml:"user-invocable" json:"user_invocable"`
+	DisableModelInvocation bool              `yaml:"disable-model-invocation" json:"disable_model_invocation"`
 	Builtin                bool              `yaml:"-" json:"builtin"`
 }
 
@@ -61,11 +61,11 @@ const (
 
 // SkillState represents the latest discovery status of a skill file.
 type SkillState struct {
+	Err    error
 	Name   string
 	Path   string
 	Source SourceType
 	State  DiscoveryState
-	Err    error
 }
 
 // Event is published when skill discovery completes.

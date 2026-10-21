@@ -32,12 +32,12 @@ const HaltExitCode = 49
 // HookMetadata is embedded in tool response metadata so the UI can
 // display a hook indicator.
 type HookMetadata struct {
-	HookCount    int        `json:"hook_count"`
 	Decision     string     `json:"decision"`
-	Halt         bool       `json:"halt,omitempty"`
 	Reason       string     `json:"reason,omitempty"`
-	InputRewrite bool       `json:"input_rewrite,omitempty"`
 	Hooks        []HookInfo `json:"hooks,omitempty"`
+	HookCount    int        `json:"hook_count"`
+	Halt         bool       `json:"halt,omitempty"`
+	InputRewrite bool       `json:"input_rewrite,omitempty"`
 }
 
 // HookInfo identifies a single hook that ran and its individual result.
@@ -45,8 +45,8 @@ type HookInfo struct {
 	Name         string `json:"name"`
 	Matcher      string `json:"matcher,omitempty"`
 	Decision     string `json:"decision"`
-	Halt         bool   `json:"halt,omitempty"`
 	Reason       string `json:"reason,omitempty"`
+	Halt         bool   `json:"halt,omitempty"`
 	InputRewrite bool   `json:"input_rewrite,omitempty"`
 }
 
@@ -75,22 +75,22 @@ func (d Decision) String() string {
 
 // HookResult holds the parsed output of a single hook execution.
 type HookResult struct {
-	Decision     Decision
-	Halt         bool   // If true, halt the whole turn.
-	Reason       string // Deny or halt reason (same field, different audience).
+	Reason       string
 	Context      string
-	UpdatedInput string // Shallow-merge patch against tool_input (opaque JSON).
+	UpdatedInput string
+	Decision     Decision
+	Halt         bool
 }
 
 // AggregateResult holds the combined outcome of all hooks for an event.
 type AggregateResult struct {
+	Reason       string
+	Context      string
+	UpdatedInput string
+	Hooks        []HookInfo
 	Decision     Decision
-	Halt         bool       // Any hook requested halt.
-	HookCount    int        // Number of hooks that ran.
-	Hooks        []HookInfo // Info about each hook that ran (config order).
-	Reason       string     // Concatenated deny/halt reasons (newline-separated).
-	Context      string     // Concatenated context from all hooks.
-	UpdatedInput string     // Merged tool_input JSON (empty if no patches).
+	HookCount    int
+	Halt         bool
 }
 
 // aggregate merges multiple HookResults into a single AggregateResult.

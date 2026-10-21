@@ -67,8 +67,8 @@ var reservedMetaKeys = map[string]struct{}{
 
 // channelParams is the wire shape of notifications/claude/channel params.
 type channelParams struct {
-	Content string            `json:"content"`
 	Meta    map[string]string `json:"meta"`
+	Content string            `json:"content"`
 }
 
 // parseChannelParams validates and sanitises a raw notifications/claude/channel
@@ -231,9 +231,9 @@ const (
 // or buffered. During capability negotiation the gate is undecided and
 // messages are buffered; once resolved, the buffer is drained or discarded.
 type channelGate struct {
-	state   atomic.Int32 // channelGateState
-	mu      sync.Mutex
 	pending []json.RawMessage
+	mu      sync.Mutex
+	state   atomic.Int32
 }
 
 func newChannelGate() *channelGate {
@@ -298,8 +298,8 @@ func (g *channelGate) accept(raw json.RawMessage) json.RawMessage {
 // to observe a custom notification is the transport's own connection.
 type channelTransport struct {
 	inner mcp.Transport
-	name  string
 	gate  *channelGate
+	name  string
 }
 
 // unwrapTransport implements [transportWrapper].
@@ -326,8 +326,8 @@ func (t *channelTransport) Connect(ctx context.Context) (mcp.Connection, error) 
 // the stream the SDK sees, dispatching them to the channel handler instead.
 type channelConn struct {
 	mcp.Connection
-	name string
 	gate *channelGate
+	name string
 }
 
 // Read intercepts notifications/claude/channel. Such messages are always

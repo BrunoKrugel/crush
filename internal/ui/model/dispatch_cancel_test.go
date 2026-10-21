@@ -32,10 +32,9 @@ import (
 // which session the binding targeted. Unimplemented methods panic through
 // the embedded interface, like the other model-test workspaces.
 type cancelDispatchWorkspace struct {
+	cancelErr error
 	slashCommandWorkspace
-
 	cancelCalls []string
-	cancelErr   error
 }
 
 func (w *cancelDispatchWorkspace) CancelAgentTask(_ context.Context, sessionID string) error {
@@ -144,8 +143,8 @@ func TestCancelAgentKeyWhileInspecting(t *testing.T) {
 // non-dispatch item, editor focus, and an empty chat are all inert.
 func TestCancelAgentKeyNonTargets(t *testing.T) {
 	tests := []struct {
-		name string
 		set  func(t *testing.T, m *UI)
+		name string
 	}{
 		{
 			name: "finished dispatch card selected",

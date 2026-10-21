@@ -609,7 +609,7 @@ func (w *AppWorkspace) ListMCPPrompts(context.Context) ([]commands.MCPPrompt, er
 }
 
 // CallMCPTool invokes a tool on a named MCP server and returns its text
-// content plus any A2UI surface payload it embedded.
+// content.
 func (w *AppWorkspace) CallMCPTool(ctx context.Context, name, toolName string, args map[string]any) (MCPToolCallResult, error) {
 	input, err := sonic.Marshal(args)
 	if err != nil {
@@ -620,9 +620,6 @@ func (w *AppWorkspace) CallMCPTool(ctx context.Context, name, toolName string, a
 		return MCPToolCallResult{}, err
 	}
 	out := MCPToolCallResult{Content: res.Content}
-	for _, s := range res.Surfaces {
-		out.Surfaces = append(out.Surfaces, MCPToolCallSurface{Payload: s.Payload, URI: s.URI})
-	}
 	return out, nil
 }
 

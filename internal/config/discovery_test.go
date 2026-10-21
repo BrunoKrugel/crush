@@ -735,8 +735,8 @@ func TestCloneForWrite_IsolatesProviderModels(t *testing.T) {
 // swapped mid-test, and counts the requests it receives.
 type modelsServer struct {
 	*httptest.Server
-	mu       sync.Mutex
 	ids      []string
+	mu       sync.Mutex
 	requests atomic.Int32
 }
 

@@ -32,11 +32,11 @@ type endpointView struct {
 	Path        string
 	Summary     string
 	Description string
-	Params      []Param
 	Request     string
 	Response    string
-	Status      int
+	Params      []Param
 	Errors      []int
+	Status      int
 	SSE         bool
 }
 

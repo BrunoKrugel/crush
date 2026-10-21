@@ -14,24 +14,19 @@ import (
 // Workspace represents a running app.App workspace with its associated
 // resources and state.
 type Workspace struct {
-	ID               string         `json:"id"`
-	Path             string         `json:"path"`
-	YOLO             bool           `json:"yolo,omitempty"`
-	AllowAllCommands bool           `json:"allow_all_commands,omitempty"`
-	AllowedCommands  []string       `json:"allowed_commands,omitempty"`
-	Debug            bool           `json:"debug,omitempty"`
+	Config           *config.Config `json:"config,omitempty"`
 	DataDir          string         `json:"data_dir,omitempty"`
+	ID               string         `json:"id"`
 	Version          string         `json:"version,omitempty"`
 	ClientID         string         `json:"client_id,omitempty"`
-	Config           *config.Config `json:"config,omitempty"`
+	Path             string         `json:"path"`
+	AllowedCommands  []string       `json:"allowed_commands,omitempty"`
 	Env              []string       `json:"env,omitempty"`
-	// Channels lists the MCP servers opted in as channels for this workspace
-	// (from the --channels flag).
-	Channels []string `json:"channels,omitempty"`
-	// Skills carries the snapshot of skill discovery state at workspace
-	// creation time. Subsequent updates flow through the SSE event
-	// stream.
-	Skills []SkillState `json:"skills,omitempty"`
+	Channels         []string       `json:"channels,omitempty"`
+	Skills           []SkillState   `json:"skills,omitempty"`
+	YOLO             bool           `json:"yolo,omitempty"`
+	AllowAllCommands bool           `json:"allow_all_commands,omitempty"`
+	Debug            bool           `json:"debug,omitempty"`
 }
 
 // Error represents an error response.
@@ -119,10 +114,10 @@ type SkillReadResult struct {
 
 // AgentInfo represents information about the agent.
 type AgentInfo struct {
-	IsBusy   bool                 `json:"is_busy"`
-	IsReady  bool                 `json:"is_ready"`
 	Model    catwalk.Model        `json:"model"`
 	ModelCfg config.SelectedModel `json:"model_cfg"`
+	IsBusy   bool                 `json:"is_busy"`
+	IsReady  bool                 `json:"is_ready"`
 }
 
 // IsZero checks if the AgentInfo is zero-valued.
@@ -156,18 +151,15 @@ const (
 // remains correct only when no other turns are in flight for the
 // same session.
 type AgentMessage struct {
-	// OperatorSteering allows an uncorrelated, non-channel submission to
-	// steer the active turn under its existing permission policy. If idle,
-	// the submission starts a turn with PermissionPolicy as usual.
-	OperatorSteering  bool                    `json:"operator_steering,omitempty"`
-	HiddenUserMessage bool                    `json:"hidden_user_message,omitempty"`
 	SessionID         string                  `json:"session_id"`
 	RunID             string                  `json:"run_id,omitempty"`
 	Channel           string                  `json:"channel,omitempty"`
 	Prompt            string                  `json:"prompt"`
-	ContentWidth      int                     `json:"content_width"`
 	PermissionPolicy  PermissionRequestPolicy `json:"permission_policy,omitempty"`
 	Attachments       []Attachment            `json:"attachments,omitempty"`
+	ContentWidth      int                     `json:"content_width"`
+	OperatorSteering  bool                    `json:"operator_steering,omitempty"`
+	HiddenUserMessage bool                    `json:"hidden_user_message,omitempty"`
 }
 
 // ShellCommandRequest represents a request to run a shell command directly.
@@ -235,9 +227,9 @@ type QuestionRequest struct {
 	ID                 string         `json:"id"`
 	SessionID          string         `json:"session_id"`
 	ToolCallID         string         `json:"tool_call_id"`
-	Questions          []QuestionItem `json:"questions"`
 	ConfirmTitle       string         `json:"confirm_title,omitempty"`
 	ConfirmDescription string         `json:"confirm_description,omitempty"`
+	Questions          []QuestionItem `json:"questions"`
 }
 
 // QuestionItem is a single question within a batch.
@@ -266,11 +258,11 @@ type QuestionAnswer struct {
 
 // QuestionResponse is a single answer within a batch response.
 type QuestionResponse struct {
-	QuestionID  string            `json:"request_id"`
-	SelectedIDs []string          `json:"selected_ids,omitempty"`
-	FillInText  string            `json:"fill_in_text,omitempty"`
 	Yes         *bool             `json:"yes,omitempty"`
 	Notes       map[string]string `json:"notes,omitempty"`
+	QuestionID  string            `json:"request_id"`
+	FillInText  string            `json:"fill_in_text,omitempty"`
+	SelectedIDs []string          `json:"selected_ids,omitempty"`
 }
 
 // QuestionAnswerResponse is the server's response to a
@@ -311,10 +303,10 @@ func (e *LSPEventType) UnmarshalText(data []byte) error {
 
 // LSPEvent represents an event in the LSP system.
 type LSPEvent struct {
+	Error           error           `json:"error,omitempty"`
 	Type            LSPEventType    `json:"type"`
 	Name            string          `json:"name"`
 	State           lsp.ServerState `json:"state"`
-	Error           error           `json:"error,omitempty"`
 	DiagnosticCount int             `json:"diagnostic_count,omitempty"`
 }
 
@@ -356,11 +348,11 @@ func (e *LSPEvent) UnmarshalJSON(data []byte) error {
 
 // LSPClientInfo holds information about an LSP client's state.
 type LSPClientInfo struct {
+	ConnectedAt     time.Time       `json:"connected_at"`
+	Error           error           `json:"error,omitempty"`
 	Name            string          `json:"name"`
 	State           lsp.ServerState `json:"state"`
-	Error           error           `json:"error,omitempty"`
 	DiagnosticCount int             `json:"diagnostic_count,omitempty"`
-	ConnectedAt     time.Time       `json:"connected_at"`
 }
 
 // MarshalJSON implements the [json.Marshaler] interface.

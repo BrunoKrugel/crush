@@ -18,19 +18,17 @@ import (
 // FreeText is an open-ended text input component for questions
 // that need a narrative answer rather than a selection.
 type FreeText struct {
-	Styles  *styles.Styles
-	Request question.Question
-	focused bool
-
 	editor       textarea.Model
-	scrollOffset int  // lines scrolled past the top of the textarea viewport
-	wheelActive  bool // wheel-scroll mode: skip cursor-follow until next key press
+	lastResponse question.Answer
+	Styles       *styles.Styles
+	Request      question.Question
 	keyEnter     key.Binding
 	keyNewline   key.Binding
 	keyClose     key.Binding
-
-	lastResponse question.Answer
+	scrollOffset int
 	lastWidth    int
+	focused      bool
+	wheelActive  bool
 }
 
 // freeTextMinEditorHeight and freeTextMaxEditorHeight bound the

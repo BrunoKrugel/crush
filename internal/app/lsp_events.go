@@ -19,21 +19,21 @@ const (
 
 // LSPEvent represents an event in the LSP system
 type LSPEvent struct {
+	Error           error
 	Type            LSPEventType
 	Name            string
 	State           lsp.ServerState
-	Error           error
 	DiagnosticCount int
 }
 
 // LSPClientInfo holds information about an LSP client's state
 type LSPClientInfo struct {
-	Name            string
-	State           lsp.ServerState
+	ConnectedAt     time.Time
 	Error           error
 	Client          *lsp.Client
+	Name            string
+	State           lsp.ServerState
 	DiagnosticCount int
-	ConnectedAt     time.Time
 }
 
 var (

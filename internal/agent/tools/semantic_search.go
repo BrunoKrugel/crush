@@ -75,13 +75,6 @@ func NewSemanticSearchTool(cfg *config.ConfigStore, store *semantic.Store, clien
 				}
 			}
 
-			// With a chat UI attached, the result card renders as a live
-			// A2UI surface in the tool bubble and the model gets the snippet-
-			// free digest; otherwise the tool behaves exactly as before.
-			if semanticDivert(ctx, cfg) {
-				resp := fantasy.NewTextResponse(semanticSearchDigest(hits, false))
-				return withSemanticSurface(resp, a2uiSurfaceIDPrefix+"search", semanticSearchSurface(params.Query, cfg.WorkingDir(), GetContentWidthFromContext(ctx), hits)), nil
-			}
 			return fantasy.NewTextResponse(semanticSearchDigest(hits, true)), nil
 		},
 	)

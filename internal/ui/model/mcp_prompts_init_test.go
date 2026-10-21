@@ -19,8 +19,8 @@ import (
 // connected servers that advertise them.
 type mcpPromptWorkspace struct {
 	workspace.Workspace
-	prompts []commands.MCPPrompt
 	dataDir string
+	prompts []commands.MCPPrompt
 	calls   int
 }
 

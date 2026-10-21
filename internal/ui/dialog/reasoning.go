@@ -25,11 +25,9 @@ const (
 
 // Reasoning represents a dialog for selecting reasoning effort.
 type Reasoning struct {
-	com   *common.Common
-	help  help.Model
-	list  *list.FilterableList
-	input textinput.Model
-
+	com    *common.Common
+	list   *list.FilterableList
+	help   help.Model
 	keyMap struct {
 		Select   key.Binding
 		Next     key.Binding
@@ -37,17 +35,18 @@ type Reasoning struct {
 		UpDown   key.Binding
 		Close    key.Binding
 	}
+	input textinput.Model
 }
 
 // ReasoningItem represents a reasoning effort list item.
 type ReasoningItem struct {
 	*list.Versioned
+	t         *styles.Styles
+	cache     map[int]string
 	effort    string
 	title     string
-	isCurrent bool
-	t         *styles.Styles
 	m         fuzzy.Match
-	cache     map[int]string
+	isCurrent bool
 	focused   bool
 }
 

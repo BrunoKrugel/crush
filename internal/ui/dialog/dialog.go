@@ -69,19 +69,11 @@ const (
 
 // Overlay manages multiple dialogs as an overlay.
 type Overlay struct {
-	dialogs []Dialog
-
-	// Grace period state for the front dialog. Only active when the
-	// dialog was opened via OpenDialogWithGrace.
 	graceOpenedAt    time.Time
 	graceLastInputAt time.Time
-
-	// Track recently closed dialog IDs so that reopening the same
-	// dialog type can skip the grace period. This prevents rapid
-	// successive dialogs (e.g. multiple permission prompts) from
-	// each eating a keystroke.
-	lastClosedID string
-	lastClosedAt time.Time
+	lastClosedAt     time.Time
+	lastClosedID     string
+	dialogs          []Dialog
 }
 
 // NewOverlay creates a new [Overlay] instance.

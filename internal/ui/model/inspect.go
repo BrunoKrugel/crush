@@ -48,18 +48,18 @@ type agentBlockRef struct {
 // transcript for the inspect view. seq is the inspect transition the
 // fetch started under; a later transition makes it stale.
 type inspectSessionLoadedMsg struct {
-	seq      int
 	sess     *session.Session
 	messages []message.Message
+	seq      int
 }
 
 // inspectRestoreMsg carries the parent transcript to restore on exit,
 // plus the scroll state captured on entry. seq is the exit transition
 // the fetch started under; a later transition makes it stale.
 type inspectRestoreMsg struct {
-	seq        int
 	sessionID  string
 	messages   []message.Message
+	seq        int
 	scrollIdx  int
 	scrollLine int
 	follow     bool
@@ -72,17 +72,17 @@ type inspectRestoreMsg struct {
 // into a transcript the snapshot is about to replace, and events the
 // snapshot cannot contain are replayed on top of it.
 type inspectWindow struct {
-	seq       int
 	sessionID string
 	events    []pubsub.Event[message.Message]
+	seq       int
 }
 
 // inspectFetchFailedMsg reports a failed inspect transition fetch. seq
 // matches it against the pending window, so a superseded failure can
 // never clear a live one.
 type inspectFetchFailedMsg struct {
-	seq int
 	err error
+	seq int
 }
 
 // isInspecting reports whether the UI is currently viewing a sub-agent
@@ -116,7 +116,6 @@ func (m *UI) clearInspectState() {
 	m.inspectDispatchTargets = nil
 	m.inspectSeq++
 	m.inspectWindow = nil
-	m.chat.SetA2UIReadOnly(false)
 }
 
 // agentBlocks enumerates the drill-in targets in the chat transcript in
@@ -389,7 +388,6 @@ func (m *UI) handleInspectLoaded(msg inspectSessionLoadedMsg) tea.Cmd {
 	// The viewed transcript is read-only (#407): a form it carries must
 	// not take focus or start a turn on the parent. Applied after
 	// setSessionMessages so any surface the rebuild focused is blurred.
-	m.chat.SetA2UIReadOnly(true)
 	if live {
 		// A running child keeps its spinners going; setSessionMessages
 		// gates the animation clock on the parent's busy state.

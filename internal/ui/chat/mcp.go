@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/bytedance/sonic"
-	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/ui/styles"
 )
@@ -76,17 +75,7 @@ func (b *MCPToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *T
 	bodyWidth := cappedWidth - toolBodyLeftPaddingTotal
 	widths := toolResultContentWidths{Body: bodyWidth, Diff: cappedWidth}
 
-	// An MCP tool result can carry an A2UI surface in its metadata: the
-	// server returned an application/a2ui+json EmbeddedResource, diverted
-	// so the model only sees a placeholder. Render the live surface (or
-	// static fallback) instead of raw text.
-	if opts.Result.Metadata != "" {
-		var meta tools.ReadMCPResourceResponseMetadata
-		if err := sonic.Unmarshal([]byte(opts.Result.Metadata), &meta); err == nil && len(meta.A2UISurfaces) > 0 {
-			return joinToolParts(header, renderToolA2UIResultBody(sty, meta, opts, widths))
-		}
-	}
-
+	// An MCP tool result can carry rich metadata: the
 	body := renderToolResultTextContent(sty, opts.Result.Content, widths, opts.ExpandedContent)
 	return joinToolParts(header, body)
 }

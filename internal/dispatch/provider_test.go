@@ -9,9 +9,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"uuid"
 
 	"github.com/stretchr/testify/require"
-	"uuid"
 
 	"github.com/charmbracelet/crush/internal/lock"
 )
@@ -973,8 +973,8 @@ func TestGitEnvScrubbed(t *testing.T) {
 func TestReleaseSelectivity(t *testing.T) {
 	ctx := t.Context()
 	tests := []struct {
-		name     string
 		work     func(t *testing.T, entry Entry)
+		name     string
 		wantKept bool
 	}{
 		{

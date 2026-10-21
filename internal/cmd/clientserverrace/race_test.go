@@ -105,9 +105,9 @@ func TestClientServerSpawnRace(t *testing.T) {
 	t.Cleanup(func() { shutdownServer(t, socketPath) })
 
 	type result struct {
-		idx    int
 		stdout string
 		stderr string
+		idx    int
 	}
 	results := make(chan result, numClients)
 

@@ -29,38 +29,30 @@ const (
 // It replaces the textarea temporarily, asking the user to switch to code
 // mode or request changes to the plan.
 type PlanHandoffInline struct {
-	com             *common.Common
-	selectedChoice  int
-	editing         bool
-	focused         bool
-	compositor      *lipgloss.Compositor
-	hoverX          int
-	hoverY          int
-	editor          textarea.Model
-	editorTextArea  image.Rectangle
-	selectionAnchor planHandoffSelectionPoint
-	selectionHead   planHandoffSelectionPoint
-	selectionSet    bool
-	selecting       bool
-
-	heightChanged bool
-
-	// OnConfirm receives whether the user chose coding with YOLO.
-	// The returned tea.Cmd is queued by the UI to perform the switch and
-	// start the coder agent.
-	OnConfirm func(yolo bool) tea.Cmd
-	// OnRequestChanges is called with the user's feedback when they submit it.
+	editor           textarea.Model
+	com              *common.Common
 	OnRequestChanges func(string) tea.Cmd
-
-	pendingCmd tea.Cmd // set during mouse confirmation; retrieved via PendingCmd
-
-	keyLeftRight key.Binding
-	keyEnter     key.Binding
-	keyNewline   key.Binding
-	keyCoding    key.Binding
-	keyYolo      key.Binding
-	keyNo        key.Binding
-	keyClose     key.Binding
+	OnConfirm        func(yolo bool) tea.Cmd
+	pendingCmd       tea.Cmd
+	compositor       *lipgloss.Compositor
+	keyEnter         key.Binding
+	keyCoding        key.Binding
+	keyNewline       key.Binding
+	keyYolo          key.Binding
+	keyLeftRight     key.Binding
+	keyNo            key.Binding
+	keyClose         key.Binding
+	editorTextArea   image.Rectangle
+	selectionAnchor  planHandoffSelectionPoint
+	selectionHead    planHandoffSelectionPoint
+	hoverY           int
+	hoverX           int
+	selectedChoice   int
+	heightChanged    bool
+	selecting        bool
+	selectionSet     bool
+	focused          bool
+	editing          bool
 }
 
 var (
@@ -79,8 +71,8 @@ const (
 
 type planHandoffChoiceLayout struct {
 	question string
-	buttons  []common.ButtonOpts
 	spacing  string
+	buttons  []common.ButtonOpts
 	height   int
 }
 

@@ -210,37 +210,20 @@ type sender interface {
 
 // Client reports Crush agent state to a running herdr instance.
 type Client struct {
-	socketPath string
-	paneID     string
-
-	mu sync.Mutex
-	// sessionID is the current top-level session, sent along with
-	// every state report.
-	sessionID string
-	// state and message hold the last reported pair; reports are
-	// deduplicated on both so a changed blocked reason still reaches
-	// herdr.
-	state   string
-	message string
-	// runActive tracks an in-flight agent turn, summarizing tracks
-	// context compaction. Blocks record the outstanding reasons the
-	// agent is waiting on the user, keyed by reason and request id;
-	// blockOrder keeps them oldest-first so the newest block's
-	// message can be picked for the report.
-	runActive   bool
-	summarizing bool
-	blocks      map[blockKey]string
-	blockOrder  []blockKey
-	seq         uint64
-	// pres holds the complete desired pane presentation (session
-	// title, session id, model); reportedPres holds the last set
-	// sent. herdr treats presentation fields as replace-all per
-	// source, so every metadata report carries the complete set and
-	// identical sets are deduplicated.
-	pres         presentation
+	snd          sender
+	blocks       map[blockKey]string
 	reportedPres presentation
-
-	snd sender
+	pres         presentation
+	socketPath   string
+	paneID       string
+	sessionID    string
+	state        string
+	message      string
+	blockOrder   []blockKey
+	seq          uint64
+	mu           sync.Mutex
+	summarizing  bool
+	runActive    bool
 }
 
 // presentation is the pane metadata crush reports to herdr. All
@@ -830,9 +813,9 @@ func (c *Client) newMetadataRequestLocked() reportRequest {
 // method-specific: reportParams for agent state, metadataParams for
 // pane presentation.
 type reportRequest struct {
+	Params any    `json:"params"`
 	ID     string `json:"id"`
 	Method string `json:"method"`
-	Params any    `json:"params"`
 }
 
 // reportParams carries the agent state payload. Message is the
@@ -845,8 +828,8 @@ type reportParams struct {
 	Agent          string `json:"agent"`
 	State          string `json:"state"`
 	Message        string `json:"message"`
-	Seq            uint64 `json:"seq"`
 	AgentSessionID string `json:"agent_session_id"`
+	Seq            uint64 `json:"seq"`
 }
 
 // metadataParams carries the pane presentation payload. Title is
@@ -854,10 +837,10 @@ type reportParams struct {
 // per source, so omission clears it. Tokens merge per key; a null
 // value clears that token.
 type metadataParams struct {
+	Tokens map[string]*string `json:"tokens"`
 	PaneID string             `json:"pane_id"`
 	Source string             `json:"source"`
 	Title  string             `json:"title,omitempty"`
-	Tokens map[string]*string `json:"tokens"`
 	Seq    uint64             `json:"seq"`
 }
 
@@ -874,9 +857,9 @@ type notificationParams struct {
 // serializes writes and avoids spawning unbounded goroutines under
 // high event throughput. Each report opens a short-lived connection.
 type unixSender struct {
-	socketPath string
 	ch         chan reportRequest
 	cancel     context.CancelFunc
+	socketPath string
 }
 
 func newUnixSender(socketPath string) *unixSender {

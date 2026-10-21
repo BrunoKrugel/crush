@@ -668,9 +668,9 @@ func TestList_F7_OffsetLineAtItemBoundary(t *testing.T) {
 
 	tests := []struct {
 		name     string
+		want     []string
 		gap      int
 		viewport int
-		want     []string
 	}{
 		{
 			name:     "gap zero jumps straight to next item",

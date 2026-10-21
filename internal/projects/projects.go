@@ -15,9 +15,9 @@ const projectsFileName = "projects.json"
 
 // Project represents a tracked project directory.
 type Project struct {
+	LastAccessed time.Time `json:"last_accessed"`
 	Path         string    `json:"path"`
 	DataDir      string    `json:"data_dir"`
-	LastAccessed time.Time `json:"last_accessed"`
 }
 
 // ProjectList holds the list of tracked projects.

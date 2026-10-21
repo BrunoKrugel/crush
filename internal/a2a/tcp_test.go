@@ -38,15 +38,13 @@ import (
 // ::1 written to disk the way a user configures one, and client
 // certificates kept in memory for the HTTPS clients.
 type testPKI struct {
-	dir string
-
-	ca     *x509.Certificate
-	caKey  *ecdsa.PrivateKey
-	caFile string
-
+	ca         *x509.Certificate
+	caKey      *ecdsa.PrivateKey
+	serverLeaf *x509.Certificate
+	dir        string
+	caFile     string
 	serverCert string
 	serverKey  string
-	serverLeaf *x509.Certificate
 }
 
 // newTestPKI generates the CA and the server certificate into a fresh
@@ -196,8 +194,8 @@ func bindRemote(t *testing.T, factory *ServerFactory, contextID string) {
 
 // rpcError is the JSON-RPC error a rejected call answers with.
 type rpcError struct {
-	Code    int    `json:"code"`
 	Message string `json:"message"`
+	Code    int    `json:"code"`
 }
 
 // sendOverTCP posts a message/send for the dispatch to the TCP listener
@@ -464,10 +462,10 @@ func TestTCPListenerMutualTLS(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	var listResp struct {
+		Error  any `json:"error"`
 		Result struct {
 			Tasks []*a2aspec.Task `json:"tasks"`
 		} `json:"result"`
-		Error any `json:"error"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&listResp))
 	require.Nil(t, listResp.Error)
@@ -612,10 +610,10 @@ func TestTCPListenerMutualTLSSeparatesCAs(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		var listResp struct {
+			Error  any `json:"error"`
 			Result struct {
 				Tasks []*a2aspec.Task `json:"tasks"`
 			} `json:"result"`
-			Error any `json:"error"`
 		}
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&listResp))
 		require.Nil(t, listResp.Error)
@@ -777,8 +775,8 @@ func TestTCPListenerStartupWarnings(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
-		name         string
 		host         tcpHost
+		name         string
 		noAdvertised bool
 		tokenOnly    bool
 	}{

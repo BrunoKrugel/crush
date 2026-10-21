@@ -19,21 +19,15 @@ import (
 // seam (#71), gating the stream so a test can inject mid-run exactly as
 // against the real loopback server.
 type gatedServingTransport struct {
-	fakeDispatchHost
-
-	gate     chan struct{}
-	gateOnce sync.Once
-	outcome  DispatchTransportOutcome
 	err      error
-
-	// taskID, when set, is reported through the stream params' OnTask
-	// before the gate opens — the first-event stamp the coordinator
-	// records on the registry entry (#349).
-	taskID string
-
-	mu       sync.Mutex
+	gate     chan struct{}
+	taskID   string
+	outcome  DispatchTransportOutcome
 	streamed []DispatchTransportParams
 	steered  []DispatchSteerParams
+	fakeDispatchHost
+	gateOnce sync.Once
+	mu       sync.Mutex
 }
 
 func newGatedServingTransport(outcome DispatchTransportOutcome) *gatedServingTransport {
@@ -379,14 +373,14 @@ func TestDispatchTerminalOutcomesEndToEnd(t *testing.T) {
 	t.Parallel()
 
 	type want struct {
+		summaryOf func(f *wanderKillFixture) string
 		status    dispatch.Status
 		reason    string
-		summaryOf func(f *wanderKillFixture) string
 	}
 	scenarios := []struct {
-		name  string
 		build func(t *testing.T, f *wanderKillFixture)
 		check func(t *testing.T, f *wanderKillFixture) want
+		name  string
 	}{
 		{
 			name: "hard timeout",

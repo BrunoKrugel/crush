@@ -18,19 +18,19 @@ type Hasher interface {
 // entry is a struct that holds a key-value pair. It is used as an element
 // in the evictionList of the MemoCache.
 type entry[T any] struct {
-	key   string
 	value T
+	key   string
 }
 
 // MemoCache is a struct that represents a cache with a set capacity. It
 // uses an LRU (Least Recently Used) eviction policy. It is safe for
 // concurrent use.
 type MemoCache[H Hasher, T any] struct {
+	cache         map[string]*list.Element
+	evictionList  *list.List
+	hashableItems map[string]T
 	capacity      int
 	mutex         sync.Mutex
-	cache         map[string]*list.Element // The cache holding the results
-	evictionList  *list.List               // A list to keep track of the order for LRU
-	hashableItems map[string]T             // This map keeps track of the original hashable items (optional)
 }
 
 // NewMemoCache is a function that creates a new MemoCache with a given

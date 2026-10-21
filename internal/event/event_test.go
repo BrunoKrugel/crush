@@ -21,8 +21,8 @@ func TestSetNonInteractive(t *testing.T) {
 
 	tests := []struct {
 		name                     string
-		nonInteractive           bool
 		crush                    string
+		nonInteractive           bool
 		wantNonInteractiveNested bool
 	}{
 		{

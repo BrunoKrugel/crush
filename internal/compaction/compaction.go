@@ -203,29 +203,13 @@ func ShouldCompact(used, contextWindow, maxOutputTokens int64) bool {
 
 // Cut is the outcome of measuring a transcript against a Policy.
 type Cut struct {
-	// Found is false when there is nothing worth compacting: the whole
-	// transcript already fits the retained tail, or no legal cut point
-	// exists ahead of it. Callers that still want a checkpoint (a manual
-	// summarize) should summarize everything.
-	Found bool
-	// Index is where the retained tail begins in the slice passed to Plan.
-	// Messages before Index are summarized; messages from Index on are kept
-	// exactly as they are.
-	Index int
-	// MessageID is the ID of the first retained message. It is persisted so
-	// later reads rebuild the same view instead of re-deriving a cut that
-	// may have moved as the session grew.
-	MessageID string
-	// Summarized and Kept count messages on each side of the cut.
+	MessageID  string
+	Index      int
 	Summarized int
 	Kept       int
-	// KeptTokens is the estimated size of the retained tail.
 	KeptTokens int64
-	// SplitTurn is true when the tail begins inside a user turn rather than at
-	// a turn boundary, which happens only when no whole-turn tail fits the
-	// ceiling. The summarized region still ends at a point where every tool
-	// call has its result, so nothing is orphaned.
-	SplitTurn bool
+	Found      bool
+	SplitTurn  bool
 }
 
 // OverCeiling reports whether the retained tail is larger than the policy

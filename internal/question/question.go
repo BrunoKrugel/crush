@@ -49,11 +49,11 @@ type Question struct {
 
 // Answer carries the user's response to a single Question.
 type Answer struct {
-	QuestionID  string            `json:"question_id"`
-	SelectedIDs []string          `json:"selected_ids,omitempty"`
-	FillInText  string            `json:"fill_in_text,omitempty"`
 	Yes         *bool             `json:"yes,omitempty"`
 	Notes       map[string]string `json:"notes,omitempty"`
+	QuestionID  string            `json:"question_id"`
+	FillInText  string            `json:"fill_in_text,omitempty"`
+	SelectedIDs []string          `json:"selected_ids,omitempty"`
 }
 
 // HasNotes reports whether any notes were attached.
@@ -66,9 +66,9 @@ type Request struct {
 	ID                 string     `json:"id"`
 	SessionID          string     `json:"session_id"`
 	ToolCallID         string     `json:"tool_call_id"`
-	Questions          []Question `json:"questions"`
 	ConfirmTitle       string     `json:"confirm_title,omitempty"`
 	ConfirmDescription string     `json:"confirm_description,omitempty"`
+	Questions          []Question `json:"questions"`
 }
 
 // Validate checks that a Request has valid fields. For multiple
@@ -198,11 +198,11 @@ type Service interface {
 type questionService struct {
 	broker             *pubsub.Broker[Request]
 	notificationBroker *pubsub.Broker[Notification]
-	mu                 sync.Mutex
 	pending            chan []Answer
 	cancelled          chan struct{}
 	pendingID          string
 	pendingReq         Request
+	mu                 sync.Mutex
 }
 
 // NewService creates a new question service.

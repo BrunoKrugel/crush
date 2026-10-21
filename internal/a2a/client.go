@@ -187,31 +187,15 @@ func (f *ServerFactory) StreamDispatch(ctx context.Context, p agent.DispatchTran
 // (#349, #352): the outcome folded so far, the served task's ID once the
 // first event named it, and the question the last stream parked on.
 type dispatchStream struct {
-	params  agent.DispatchTransportParams
-	client  *a2aclient.Client
-	decoder *metadataDecoder
-	outcome agent.DispatchTransportOutcome
-	taskID  a2aspec.TaskID
-	// question is the question the task is parked on (#352): set by an
-	// input-required status or task snapshot, cleared by any later
-	// non-terminal state; nil when the stream ended any other way.
-	question *agent.QuestionRequest
-	// permission is the permission request the task is parked on (#353),
-	// tracked like question; at most one of the two is set. A request
-	// whose typed payload did not decode parks as a non-nil prompt with
-	// no tool name, and is denied.
+	params     agent.DispatchTransportParams
+	client     *a2aclient.Client
+	decoder    *metadataDecoder
+	question   *agent.QuestionRequest
 	permission *agent.PermissionPrompt
-	// external, set on an external agent's stream (#434), folds the
-	// untrusted remote's output: artifacts are collected as text rather
-	// than read as crush's diff and result artifacts, a direct message
-	// reply ends the exchange, and auth-required parks the task like
-	// input-required so the caller can refuse it. Nil on a served
-	// dispatch, whose folding is unchanged.
-	external *externalFold
-	// onEvent, when set, observes every event the stream folds, the
-	// initial stream's and a resubscription's alike (#434): the
-	// external idle watch resets on it.
-	onEvent func()
+	external   *externalFold
+	onEvent    func()
+	taskID     a2aspec.TaskID
+	outcome    agent.DispatchTransportOutcome
 }
 
 // consume folds one stream's events into the dispatch's state. A stream

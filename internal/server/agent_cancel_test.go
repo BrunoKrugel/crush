@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"uuid"
 
 	"charm.land/fantasy"
 	"github.com/bytedance/sonic"
@@ -22,7 +23,6 @@ import (
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/scheduler"
 	"github.com/stretchr/testify/require"
-	"uuid"
 )
 
 // runCoordinator is a configurable agent.Coordinator stub for the
@@ -32,18 +32,16 @@ import (
 // ctx and the error returned to the caller are recorded for
 // assertions.
 type runCoordinator struct {
-	release  chan struct{}
-	returnFn func(ctx context.Context) error
-
-	mu         sync.Mutex
-	gotCtx     context.Context
-	ranCount   atomic.Int32
-	entered    chan struct{} // closed exactly once when Run is first entered.
-	enteredOne sync.Once
-
+	gotCtx           context.Context
 	setMainAgentErr  error
 	summarizeErr     error
 	lastMainAgentSet atomic.Value
+	release          chan struct{}
+	returnFn         func(ctx context.Context) error
+	entered          chan struct{}
+	enteredOne       sync.Once
+	mu               sync.Mutex
+	ranCount         atomic.Int32
 	busy             bool
 }
 

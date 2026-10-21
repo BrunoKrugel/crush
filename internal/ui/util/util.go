@@ -68,8 +68,8 @@ func ReportWarn(warn string) tea.Cmd {
 
 type (
 	InfoMsg struct {
-		Type InfoType
 		Msg  string
+		Type InfoType
 		TTL  time.Duration
 	}
 	// ClearStatusMsg retires the status message with sequence Seq.

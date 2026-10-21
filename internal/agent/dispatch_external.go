@@ -7,13 +7,13 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"uuid"
 
 	"charm.land/fantasy"
 	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/dispatch"
-	"uuid"
 )
 
 // External agents (#434): a runtime a2a agent definition replaces the
@@ -106,20 +106,10 @@ type ExternalAgent interface {
 // ExternalDispatchParams is one external dispatch's slice of the A2A
 // client (#434).
 type ExternalDispatchParams struct {
-	// Prompt is the task text sent to the external agent.
-	Prompt string
-	// OnTask, when set, receives the remote task's ID once the stream's
-	// first event names it, exactly like a served dispatch (#349).
-	OnTask func(taskID string)
-	// IdleTimeout ends a stream that delivers no event for this long:
-	// the run is killed with dispatch.ReasonIdleTimeout and its task is
-	// canceled. 0 disables it.
+	Kill        RunKill
+	OnTask      func(taskID string)
+	Prompt      string
 	IdleTimeout time.Duration
-	// Kill is the run's kill switch. The transport watches it: a kill
-	// ends the stream and cancels the remote task with the kill's
-	// reason, and the idle timeout trips it. Nil means the run cannot
-	// be killed from outside.
-	Kill RunKill
 }
 
 // RunKill is a dispatched run's kill switch as a transport sees it

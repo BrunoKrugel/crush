@@ -70,10 +70,10 @@ func nextID() int {
 type animCache struct {
 	initialFrames  [][]string
 	cyclingFrames  [][]string
-	width          int
-	labelWidth     int
 	label          []string
 	ellipsisFrames []string
+	width          int
+	labelWidth     int
 }
 
 var animCacheMap = csync.NewMap[string, *animCache]()
@@ -95,27 +95,16 @@ func FrameInterval() time.Duration {
 
 // Settings defines settings for the animation.
 type Settings struct {
-	ID          string
-	Size        int
-	Label       string
 	LabelColor  color.Color
 	GradColorA  color.Color
 	GradColorB  color.Color
-	CycleColors bool
-
-	// NoScramble disables the scrambled rune animation. The cycling
-	// character region is removed entirely so only the label and its
-	// animated ellipsis are visible. Useful for non-LLM contexts where
-	// scrambled glyphs imply "thinking" rather than "running".
-	NoScramble bool
-
-	// Suffix is an optional function that returns a dynamic suffix string
-	// to render after the label and ellipsis. Called on every Render().
-	Suffix func() string
-
-	// SuffixColor is the color used to render the suffix text.
-	// Falls back to LabelColor if unset.
 	SuffixColor color.Color
+	Suffix      func() string
+	ID          string
+	Label       string
+	Size        int
+	CycleColors bool
+	NoScramble  bool
 }
 
 // Default settings.
@@ -123,23 +112,23 @@ const ()
 
 // Anim is a Bubble for an animated spinner.
 type Anim struct {
-	width            int
-	cyclingCharWidth int
-	label            *csync.Slice[string]
-	labelWidth       int
 	labelColor       color.Color
-	birthSteps       []int
-	initialFrames    [][]string // frames for the initial characters
-	initialized      atomic.Bool
-	cyclingFrames    [][]string           // frames for the cycling characters
-	step             atomic.Int64         // current main frame step (wraps)
-	framesSinceStart atomic.Int64         // total Advance frames (does not wrap)
-	ellipsisStep     atomic.Int64         // current ellipsis frame step
-	ellipsisFrames   *csync.Slice[string] // ellipsis animation frames
-	id               string
-	suffix           func() string
 	suffixColor      color.Color
+	ellipsisFrames   *csync.Slice[string]
+	label            *csync.Slice[string]
+	suffix           func() string
+	id               string
+	initialFrames    [][]string
+	birthSteps       []int
+	cyclingFrames    [][]string
 	settings         Settings
+	framesSinceStart atomic.Int64
+	ellipsisStep     atomic.Int64
+	width            int
+	labelWidth       int
+	step             atomic.Int64
+	cyclingCharWidth int
+	initialized      atomic.Bool
 }
 
 // New creates a new Anim instance with the specified width and label.

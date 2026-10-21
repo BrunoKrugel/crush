@@ -64,58 +64,20 @@ const (
 // state, KeyFindings to the terminal status message text, DiffSummary to
 // the completion artifact, and SessionID is the follow-up query handle.
 type DispatchResult struct {
-	// DispatchID is the dispatch identifier — the registry key and the
-	// suffix of the branch and directory names.
-	DispatchID string `json:"dispatch_id"`
-	// Handle is the dispatch's @handle (#313): the address the human
-	// uses in the editor and the model uses with the message tool.
-	// Empty for results from before handles existed.
-	Handle string `json:"handle,omitempty"`
-	// Agent is the agent definition id the dispatch ran (#433). Empty
-	// for results from before the field existed.
-	Agent string `json:"agent,omitempty"`
-	// Source is the external Agent Card URL the dispatch ran against
-	// (#434). Set only for a runtime a2a agent: its findings and error
-	// are the remote's untrusted output, and it has no branch,
-	// workspace, or diff.
-	Source string `json:"source,omitempty"`
-	// Branch is the workspace branch, crush-dispatch-{id}.
-	Branch string `json:"branch"`
-	// WorkspacePath is the absolute workspace directory the dispatched
-	// agent is rooted at.
-	WorkspacePath string `json:"workspace_path"`
-	// SessionID is the ephemeral session backing the dispatched agent.
-	SessionID string `json:"session_id"`
-	// Status is the dispatch's lifecycle state: running while the agent
-	// works, completed, failed, or killed as its terminal state.
-	Status Status `json:"status"`
-	// KeyFindings is the dispatched agent's final message — the
-	// terminal status message text in the A2A mapping. Populated on
-	// completion; on a killed run it carries the run's last assistant
-	// state instead.
-	KeyFindings string `json:"key_findings,omitempty"`
-	// SteerReplies are the replies to steers that arrived as follow-up
-	// turns after the work finished (#397): a steer accepted while the
-	// final step was streaming runs as its own turn, and its reply is
-	// kept here, in turn order, rather than replacing KeyFindings.
-	// Empty when no such steer landed.
-	SteerReplies []string `json:"steer_replies,omitempty"`
-	// UndeliveredSteers are the steers the dispatched agent accepted but
-	// never consumed before its run ended (#398): a run that ends with an
-	// error, or is canceled, leaves its queued messages unread. Empty
-	// when every accepted steer reached the agent.
+	SessionID         string   `json:"session_id"`
+	Error             string   `json:"error,omitempty"`
+	Agent             string   `json:"agent,omitempty"`
+	Source            string   `json:"source,omitempty"`
+	Branch            string   `json:"branch"`
+	WorkspacePath     string   `json:"workspace_path"`
+	KeyFindings       string   `json:"key_findings,omitempty"`
+	DispatchID        string   `json:"dispatch_id"`
+	Handle            string   `json:"handle,omitempty"`
+	KilledReason      string   `json:"killed_reason,omitempty"`
+	Status            Status   `json:"status"`
+	DiffSummary       string   `json:"diff_summary,omitempty"`
 	UndeliveredSteers []string `json:"undelivered_steers,omitempty"`
-	// DiffSummary is the condensed work product: a per-file change stat
-	// followed by the diff itself, truncated at MaxDiffLines. Populated
-	// on completion and on kill (the salvageable work product); a
-	// capture failure is recorded inline rather than failing the result.
-	DiffSummary string `json:"diff_summary,omitempty"`
-	// Error carries the failure reason when Status is failed. A
-	// completed or killed run leaves it empty.
-	Error string `json:"error,omitempty"`
-	// KilledReason is why the run was deterministically canceled when
-	// Status is killed (#316): one of the Reason* constants.
-	KilledReason string `json:"killed_reason,omitempty"`
+	SteerReplies      []string `json:"steer_replies,omitempty"`
 }
 
 // Render returns the result as indented JSON, the stable wire shape the
@@ -211,11 +173,11 @@ func SummarizeDiff(diff string) string {
 	}
 
 	type fileStat struct {
-		added      int
-		removed    int
 		oldPath    string
 		newPath    string
 		display    string
+		added      int
+		removed    int
 		isRename   bool
 		renameOnly bool
 		binary     bool

@@ -23,13 +23,13 @@ type hyperClient interface {
 var _ syncer[catwalk.Provider] = (*hyperSync)(nil)
 
 type hyperSync struct {
-	once       sync.Once
 	result     catwalk.Provider
 	err        error
-	cache      cache[catwalk.Provider]
 	client     hyperClient
-	autoupdate bool
+	cache      cache[catwalk.Provider]
+	once       sync.Once
 	init       atomic.Bool
+	autoupdate bool
 }
 
 func (s *hyperSync) Init(client hyperClient, path string, autoupdate bool) {
@@ -120,9 +120,9 @@ func (s *hyperSync) fetch(ctx context.Context) {
 var _ hyperClient = realHyperClient{}
 
 type realHyperClient struct {
-	baseURL      string
 	resolveKey   func() string
 	refreshToken func(context.Context) error
+	baseURL      string
 }
 
 // Get implements hyperClient.

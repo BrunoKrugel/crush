@@ -33,16 +33,11 @@ const (
 )
 
 type Attachment struct {
-	FilePath string
-	FileName string
-	MimeType string
-	Content  []byte
-	// Kind distinguishes attachments whose presentation cannot be derived
-	// from MimeType. See [AttachmentKind].
-	Kind AttachmentKind
-	// PromptArgCount is the number of arguments a resolved MCP prompt was
-	// invoked with, shown on its chip. Only meaningful for
-	// [AttachmentKindMCPPrompt].
+	FilePath       string
+	FileName       string
+	MimeType       string
+	Kind           AttachmentKind
+	Content        []byte
 	PromptArgCount int
 }
 

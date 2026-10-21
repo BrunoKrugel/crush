@@ -27,9 +27,9 @@ const dataDirLockFile = "crush.lock"
 // authoritative state of ownership is the operating system flock on
 // the file descriptor.
 type dataDirOwnerInfo struct {
-	PID       int    `json:"pid"`
 	Version   string `json:"version,omitempty"`
 	StartedAt string `json:"started_at,omitempty"`
+	PID       int    `json:"pid"`
 }
 
 // dataDirLock represents an acquired exclusive lock on a data

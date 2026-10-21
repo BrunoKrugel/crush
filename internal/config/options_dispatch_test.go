@@ -11,8 +11,8 @@ func TestOptionsGetDispatchMaxConcurrent(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
 		options  *Options
+		name     string
 		expected int
 	}{
 		{

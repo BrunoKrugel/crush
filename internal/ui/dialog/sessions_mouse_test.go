@@ -189,8 +189,8 @@ func TestSessionMouseClickIgnoresUnsupportedClicks(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name   string
 		point  func(image.Rectangle) image.Point
+		name   string
 		button tea.MouseButton
 		mode   sessionsMode
 	}{

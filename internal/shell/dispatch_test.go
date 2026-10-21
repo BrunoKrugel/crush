@@ -81,8 +81,8 @@ func TestIsPathPrefixed(t *testing.T) {
 func TestParseShebang(t *testing.T) {
 	type want struct {
 		interp string
+		errSub string
 		args   []string
-		errSub string // substring expected in error message (empty → no error)
 	}
 	cases := []struct {
 		name string

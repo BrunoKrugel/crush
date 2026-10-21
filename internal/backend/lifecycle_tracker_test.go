@@ -5,9 +5,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/stretchr/testify/require"
-	"uuid"
 )
 
 // TestWaitForWorkspaceTeardown_BlocksUntilShutdownHookReturns pins the

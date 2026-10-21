@@ -64,12 +64,10 @@ const externalTestTokenValue = "s3cr3t-reviewer-token-d41d8c"
 // (#434): it records every resolution and hands out the fake agent.
 type fakeExternalHost struct {
 	runnerTransport
-
-	agent *fakeExternalAgent
-	err   error
-
-	mu       sync.Mutex
+	err      error
+	agent    *fakeExternalAgent
 	resolved []ExternalAgentParams
+	mu       sync.Mutex
 }
 
 func (h *fakeExternalHost) ResolveExternalAgent(_ context.Context, params ExternalAgentParams) (ExternalAgent, error) {
@@ -91,11 +89,10 @@ func (h *fakeExternalHost) resolutions() []ExternalAgentParams {
 // fakeExternalAgent is a resolved external agent whose stream runs the
 // test's script, recording what it was given.
 type fakeExternalAgent struct {
-	stream func(ctx context.Context, params ExternalDispatchParams) (DispatchTransportOutcome, error)
-
-	mu      sync.Mutex
-	params  []ExternalDispatchParams
+	stream  func(ctx context.Context, params ExternalDispatchParams) (DispatchTransportOutcome, error)
 	started chan struct{}
+	params  []ExternalDispatchParams
+	mu      sync.Mutex
 	closed  atomic.Bool
 }
 
@@ -433,8 +430,8 @@ func TestExternalDispatchRemoteOutcomes(t *testing.T) {
 	t.Setenv(externalTestTokenEnv, externalTestTokenValue)
 	cases := []struct {
 		name    string
-		outcome DispatchTransportOutcome
 		want    string
+		outcome DispatchTransportOutcome
 	}{
 		{
 			name:    "remote cancel spelling a kill reason",

@@ -14,11 +14,11 @@ import (
 // fakeCompactionHooks records the compaction events the agent fires and
 // decides what each one answers.
 type fakeCompactionHooks struct {
-	mu       sync.Mutex
-	fired    []string
 	denyFor  map[string]bool
 	failFor  map[string]bool
+	fired    []string
 	lastCall hooks.CompactionDetail
+	mu       sync.Mutex
 }
 
 func (f *fakeCompactionHooks) runnerFor(event string) CompactionHookRunner {

@@ -40,8 +40,8 @@ const externalCardPath = "/.well-known/agent-card.json"
 // recordedRequest is one request an external test server saw.
 type recordedRequest struct {
 	path   string
-	auth   []string
 	method string
+	auth   []string
 }
 
 // externalScenario is what the fake executor does with one task.
@@ -51,17 +51,13 @@ type externalScenario func(ctx context.Context, execCtx *a2asrv.ExecutorContext,
 // scenario, and records the Authorization header each execution saw and
 // the reason every cancel carried.
 type externalExecutor struct {
-	scenario externalScenario
-	// failCancel makes every cancel fail with an error that echoes the
-	// request's Authorization header back.
-	failCancel atomic.Bool
-	// executing, when set, is signaled each time an execution starts.
-	executing chan struct{}
-
-	mu            sync.Mutex
+	scenario      externalScenario
+	executing     chan struct{}
 	execAuth      [][]string
 	cancelReasons []string
 	cancelAuth    [][]string
+	mu            sync.Mutex
+	failCancel    atomic.Bool
 }
 
 func (e *externalExecutor) Execute(ctx context.Context, execCtx *a2asrv.ExecutorContext) iter.Seq2[a2aspec.Event, error] {
@@ -103,18 +99,13 @@ func (e *externalExecutor) canceled() []string {
 // agent: its card at externalCardPath, its JSON-RPC handler at /a2a, and
 // a record of every request's path and Authorization header.
 type externalServer struct {
-	srv  *httptest.Server
-	exec *externalExecutor
-	// card builds the served card from the server's own base URL; the
-	// tests swap it to tamper with the card.
-	card func(base string) *a2aspec.AgentCard
-	// cardHandler, when set, replaces the card endpoint outright.
+	srv         *httptest.Server
+	exec        *externalExecutor
+	card        func(base string) *a2aspec.AgentCard
 	cardHandler http.HandlerFunc
-	// callHandler, when set, replaces the JSON-RPC endpoint outright.
 	callHandler http.HandlerFunc
-
-	mu       sync.Mutex
-	requests []recordedRequest
+	requests    []recordedRequest
+	mu          sync.Mutex
 }
 
 // methods returns the JSON-RPC method of every call the server saw.
@@ -228,9 +219,9 @@ func resolveTestAgent(t *testing.T, es *externalServer) agent.ExternalAgent {
 
 // testKill is a RunKill for the transport tests: first reason wins.
 type testKill struct {
-	mu     sync.Mutex
-	reason string
 	done   chan struct{}
+	reason string
+	mu     sync.Mutex
 }
 
 func newTestKill() *testKill { return &testKill{done: make(chan struct{})} }
@@ -765,8 +756,8 @@ func TestExternalAgentNeverLogsToken(t *testing.T) {
 
 // syncBuffer is a bytes.Buffer safe for the logger's concurrent writes.
 type syncBuffer struct {
-	mu  sync.Mutex
 	buf bytes.Buffer
+	mu  sync.Mutex
 }
 
 func (b *syncBuffer) Write(p []byte) (int, error) {

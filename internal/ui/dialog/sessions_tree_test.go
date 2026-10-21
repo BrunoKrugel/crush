@@ -31,10 +31,8 @@ import (
 // fetches nothing (#409).
 type sessionsTreeWorkspace struct {
 	workspace.Workspace
-
-	parents  []session.Session
-	children map[string][]session.Session
-
+	children          map[string][]session.Session
+	parents           []session.Session
 	listChildCalls    int
 	listAllChildCalls int
 }

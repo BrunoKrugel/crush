@@ -135,8 +135,8 @@ func hasTodosTool(ts []fantasy.AgentTool) bool {
 // agent type, buildDispatchedAgent from the global options) and shared by
 // every run that agent serves; per-run state lives in todoEnforcementRun.
 type todoEnforcement struct {
-	settings config.TodoEnforcementSettings
 	sessions session.Service
+	settings config.TodoEnforcementSettings
 }
 
 // newTodoEnforcement returns the enforcement for the resolved settings,
@@ -158,31 +158,15 @@ func newTodoEnforcement(settings config.TodoEnforcementSettings, sessions sessio
 // future where #316's kill path observes escalation from another
 // goroutine.
 type todoEnforcementRun struct {
-	enforcement *todoEnforcement
-	// onKill is the wander-kill escalation (#316), wired only for
-	// dispatched agents: invoked once, when the run ignores its nudges
-	// past the kill threshold. Nil elsewhere, so the ladder tops out at
-	// nudging for the main agent and agent-tool sub-agents.
-	onKill func(reason string)
-
-	mu sync.Mutex
-	// tools maps the run's tool names to the tools themselves (a gated
-	// tool as its inner tool), so recordToolCall can classify each call
-	// against the tool, not just its name.
-	tools map[string]fantasy.AgentTool
-	// todosSatisfied records that the run's todos are alive: the session
-	// carried a todo list at run start, or the todos tool ran during it.
+	enforcement    *todoEnforcement
+	onKill         func(reason string)
+	tools          map[string]fantasy.AgentTool
+	toolCalls      int
+	nudges         int
+	mu             sync.Mutex
 	todosSatisfied bool
-	// toolCalls counts tool calls since the last nudge (or run start).
-	toolCalls int
-	// mutatingCall records that a mutating tool was called since the
-	// last nudge (or run start).
-	mutatingCall bool
-	// nudges counts nudges injected this run.
-	nudges int
-	// killed records that the kill already fired, so later windows do
-	// not re-invoke the hook.
-	killed bool
+	mutatingCall   bool
+	killed         bool
 }
 
 // newRun starts the ladder for one run, seeded with whether the session

@@ -60,33 +60,23 @@ const (
 
 // Completions represents the completions popup component.
 type Completions struct {
-	// Popup dimensions
-	width  int
-	height int
-
-	// State
-	open  bool
-	query string
-
-	// Key bindings
-	keyMap KeyMap
-
-	// List component
-	list *list.FilterableList
-
-	// Styling
 	normalStyle  lipgloss.Style
 	focusedStyle lipgloss.Style
 	matchStyle   lipgloss.Style
 	agentStyle   lipgloss.Style
-
-	allItems []list.FilterableItem
-	filtered []list.FilterableItem
+	list         *list.FilterableList
+	query        string
+	keyMap       KeyMap
+	allItems     []list.FilterableItem
+	filtered     []list.FilterableItem
+	width        int
+	height       int
+	open         bool
 }
 
 type namePriorityRule struct {
-	tier  int
 	match func(pathLower, baseLower, stemLower, queryLower string) bool
+	tier  int
 }
 
 var namePriorityRules = []namePriorityRule{

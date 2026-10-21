@@ -130,9 +130,9 @@ separately.
 ## What this fork does NOT have
 
 Anything not in the table above is plain upstream Crush or one of the merged
-branches named above. In particular there is **no A2UI rendering**: the A2UI
-compile-time plumbing from `brunokrugel/crush` is present only to keep the
-tree building, with no feature wiring — no `a2tea` integration, no cards,
-lists, buttons, forms, or dashboards drawn inline, and interactive surfaces do
-not round-trip to the model. There is also no prompt-side wizardry. If a page
-in these docs describes one of those, it does not apply to this fork.
+branches named above. In particular **A2UI was removed entirely** — the earlier
+`brunokrugel/crush` A2UI plumbing is gone: no `a2tea` dependency, no renderer
+for cards, lists, buttons, forms, or dashboards drawn inline, no prompt
+section inviting surfaces, no `disable_a2ui` config option, and no MCP
+capability advertisement. Inline `<a2ui-json>` blocks in a reply render as
+plain text.

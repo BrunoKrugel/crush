@@ -207,10 +207,10 @@ func requestToken(ctx context.Context, vals url.Values) (*oauth.Token, error) {
 // payload. Values are used only for routing requests, never for
 // authorization decisions.
 type Claims struct {
-	ChatGPTAccountID string `json:"chatgpt_account_id"`
-	Auth             *struct {
+	Auth *struct {
 		ChatGPTAccountID string `json:"chatgpt_account_id"`
 	} `json:"https://api.openai.com/auth"`
+	ChatGPTAccountID string `json:"chatgpt_account_id"`
 }
 
 // ParseJWTClaims decodes the payload segment of a JWT without verifying

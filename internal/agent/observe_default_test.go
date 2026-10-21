@@ -24,8 +24,8 @@ func TestObservesMemoryDefaultsOn(t *testing.T) {
 	on := true
 
 	tests := []struct {
-		name       string
 		compaction *config.CompactionOptions
+		name       string
 		hasLedger  bool
 		subAgent   bool
 		want       bool

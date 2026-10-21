@@ -18,11 +18,10 @@ import (
 // this host runs to completion.
 type fakeDispatchHost struct {
 	runnerTransport
-
-	mu      sync.Mutex
-	fail    bool
 	started []DispatchServerParams
 	stopped int
+	mu      sync.Mutex
+	fail    bool
 }
 
 func (f *fakeDispatchHost) StartDispatchServer(ctx context.Context, params DispatchServerParams) (string, any, func(), error) {

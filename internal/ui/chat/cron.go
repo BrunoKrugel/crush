@@ -215,14 +215,9 @@ func cronTasksFromResult(opts *ToolRenderOpts) []scheduler.Task {
 
 // cronListOpts controls how a scheduled-task list renders.
 type cronListOpts struct {
-	// expanded shows every task, each with its full prompt and run
-	// metadata, instead of one truncated line per task.
+	now      time.Time
 	expanded bool
-	// deleted renders the tasks as cancelled rather than live.
-	deleted bool
-	// now is the reference time the "next run" column is formatted
-	// against.
-	now time.Time
+	deleted  bool
 }
 
 // formatCronTasksList renders scheduled tasks as line items.

@@ -33,21 +33,18 @@ const (
 // appears, and the final success or error. The only local action it performs
 // is opening the URL in the user's browser.
 type AWSSSO struct {
-	com *common.Common
-
-	state   awsSSOState
-	command string
-
-	spinner spinner.Model
+	com     *common.Common
 	help    help.Model
+	command string
+	url     string
+	errMsg  string
 	keyMap  struct {
 		Open  key.Binding
 		Close key.Binding
 	}
-
-	width  int
-	url    string
-	errMsg string
+	spinner spinner.Model
+	state   awsSSOState
+	width   int
 }
 
 var _ Dialog = (*AWSSSO)(nil)

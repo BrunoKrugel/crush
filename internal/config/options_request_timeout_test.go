@@ -15,8 +15,8 @@ func TestOptionsGetRequestTimeout(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
 		options  *Options
+		name     string
 		expected time.Duration
 	}{
 		{

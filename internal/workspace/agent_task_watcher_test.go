@@ -21,14 +21,13 @@ import (
 // heldRunner is a dispatched agent whose turn holds until released or
 // canceled; it accepts steers while the turn is held.
 type heldRunner struct {
-	started  chan struct{}
-	release  chan struct{}
-	canceled chan struct{}
-
+	started    chan struct{}
+	release    chan struct{}
+	canceled   chan struct{}
+	steers     []string
 	once       sync.Once
 	cancelOnce sync.Once
 	mu         sync.Mutex
-	steers     []string
 	running    bool
 }
 

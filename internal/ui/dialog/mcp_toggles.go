@@ -17,23 +17,12 @@ const MCPTogglesID = "mcp_toggles"
 
 // MCPToggleItem describes one configured MCP server in the toggles dialog.
 type MCPToggleItem struct {
-	Name string
-	// Disabled is the repository-scoped override: when true the server's
-	// tools are hidden from every session in this repository.
-	Disabled bool
-	// ConfigDisabled is the server's disabled flag in the config, before
-	// any repository-scoped override. The Global scope reads and writes
-	// this flag.
-	ConfigDisabled bool
-	// EnabledOverride is the repository-scoped enabled override: a config
-	// server enabled locally for this repository. Only the Local scope
-	// considers it.
+	Name            string
+	Status          string
+	Disabled        bool
+	ConfigDisabled  bool
 	EnabledOverride bool
-	// Status is the human-readable connection status.
-	Status string
-	// Lazy is the effective lazy state: the server's tool schemas stay out
-	// of the model context until mcp_search loads them.
-	Lazy bool
+	Lazy            bool
 }
 
 // settingLabel names the setting for the row. A disabled server has no
@@ -152,12 +141,6 @@ func (s MCPToggleScope) String() string {
 // row through the settings.
 type MCPToggles struct {
 	com    *common.Common
-	width  int
-	items  []MCPToggleItem
-	cursor int
-	// offset is the first visible row; the window follows the cursor.
-	offset int
-	scope  MCPToggleScope
 	help   help.Model
 	keyMap struct {
 		Up     key.Binding
@@ -166,6 +149,11 @@ type MCPToggles struct {
 		Scope  key.Binding
 		Close  key.Binding
 	}
+	items  []MCPToggleItem
+	width  int
+	cursor int
+	offset int
+	scope  MCPToggleScope
 }
 
 var _ Dialog = (*MCPToggles)(nil)

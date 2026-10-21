@@ -96,60 +96,25 @@ var agentToolGroups = map[string][]string{
 // The resolved form lives in Agent, which the coordinator builds agents
 // from (#432); fields the runtime does not honor yet load and warn.
 type AgentDefinition struct {
-	// Role classifies the agent: main, subagent, or dispatch. It cannot
-	// be changed on a built-in, and a new id must be dispatch.
-	Role *string `json:"role,omitempty" jsonschema:"description=Agent role,enum=main,enum=subagent,enum=dispatch"`
-	// Runtime selects the execution path: builtin (in-process) or a2a
-	// (an external Agent Card). Only a2a is restricted: dispatch agents
-	// only, until #392.
-	Runtime *string `json:"runtime,omitempty" jsonschema:"description=Execution runtime,enum=builtin,enum=a2a"`
-	// Name and Description are display values resolved into the agent.
-	Name        *string `json:"name,omitempty" jsonschema:"description=Display name"`
-	Description *string `json:"description,omitempty" jsonschema:"description=Agent description"`
-	// Disabled removes the agent. coder cannot be disabled.
-	Disabled *bool `json:"disabled,omitempty" jsonschema:"description=Disable this agent"`
-	// Model is the "large" or "small" slot, or an explicit provider and
-	// model pin. The slot is honored; the pin is carried for #432.
-	Model *AgentModel `json:"model,omitempty" jsonschema:"description=The large or small model slot, or an explicit provider and model pin"`
-	// Prompt is builtin:<coder|plan|task|dispatch> or file:<path>, and
-	// prompt_append is file:<path>. Both are carried for #432.
-	Prompt       *string `json:"prompt,omitempty" jsonschema:"description=System prompt: builtin:<id> or file:<path>"`
-	PromptAppend *string `json:"prompt_append,omitempty" jsonschema:"description=Appended system prompt: file:<path>"`
-	// Tools allow and deny lists reference tool names or the @read and
-	// @write groups. Effective tools are allow minus deny minus the
-	// user's disabled_tools, so a definition never widens user policy.
-	Tools *AgentTools `json:"tools,omitempty" jsonschema:"description=Tool allow and deny lists; entries are tool names or the @read and @write groups"`
-	// MCP allow list entries are *, a server id, or server:tool.
-	MCP *AgentMCP `json:"mcp,omitempty" jsonschema:"description=MCP servers available to the agent: *, a server id, or server:tool"`
-	// Skills lists skill names for the agent; carried for #432.
-	Skills []string `json:"skills,omitempty" jsonschema:"description=Skill names for this agent"`
-	// ContextPaths overrides the agent's context file paths.
-	ContextPaths []string `json:"context_paths,omitempty" jsonschema:"description=Context file paths for this agent"`
-	// Workspace selects dispatch isolation: worktree or none. Only
-	// meaningful on dispatch agents. A runtime a2a agent always runs with
-	// none (#434); a builtin dispatch agent always runs in a worktree.
-	Workspace *string `json:"workspace,omitempty" jsonschema:"description=Dispatch workspace isolation,enum=worktree,enum=none"`
-	// Todos configures the nudge ladder knobs.
-	Todos *AgentTodos `json:"todos,omitempty" jsonschema:"description=Todo enforcement knobs for this agent"`
-	// Kill configures the deterministic kill thresholds; dispatch
-	// agents only.
-	Kill *AgentKill `json:"kill,omitempty" jsonschema:"description=Kill thresholds for this agent; dispatch agents only"`
-	// TodoEnforcement is the legacy alias for Todos and Kill (#402):
-	// PRs #325/#329 documented agents.<id>.todo_enforcement with the
-	// options.todo_enforcement shape before the todos and kill blocks
-	// existed, so the alias stays accepted for those configs. It
-	// carries the same fields: the nudge knobs map onto Todos, the
-	// kill knobs onto Kill. Setting it together with either block is a
-	// load error, and its kill fields are ignored on non-dispatch
-	// agents with a warning — kill is dispatch-only, the same rule the
-	// Kill block enforces as a load error.
+	Tools           *AgentTools            `json:"tools,omitempty" jsonschema:"description=Tool allow and deny lists; entries are tool names or the @read and @write groups"`
+	Todos           *AgentTodos            `json:"todos,omitempty" jsonschema:"description=Todo enforcement knobs for this agent"`
+	Name            *string                `json:"name,omitempty" jsonschema:"description=Display name"`
+	MCP             *AgentMCP              `json:"mcp,omitempty" jsonschema:"description=MCP servers available to the agent: *, a server id, or server:tool"`
+	Disabled        *bool                  `json:"disabled,omitempty" jsonschema:"description=Disable this agent"`
+	Model           *AgentModel            `json:"model,omitempty" jsonschema:"description=The large or small model slot, or an explicit provider and model pin"`
+	Prompt          *string                `json:"prompt,omitempty" jsonschema:"description=System prompt: builtin:<id> or file:<path>"`
+	PromptAppend    *string                `json:"prompt_append,omitempty" jsonschema:"description=Appended system prompt: file:<path>"`
+	Runtime         *string                `json:"runtime,omitempty" jsonschema:"description=Execution runtime,enum=builtin,enum=a2a"`
+	Transport       *AgentTransport        `json:"transport,omitempty" jsonschema:"description=Transport tuning for runtime a2a agents"`
+	Description     *string                `json:"description,omitempty" jsonschema:"description=Agent description"`
+	Auth            *AgentAuth             `json:"auth,omitempty" jsonschema:"description=Bearer auth for runtime a2a agents"`
+	Workspace       *string                `json:"workspace,omitempty" jsonschema:"description=Dispatch workspace isolation,enum=worktree,enum=none"`
+	Role            *string                `json:"role,omitempty" jsonschema:"description=Agent role,enum=main,enum=subagent,enum=dispatch"`
+	Kill            *AgentKill             `json:"kill,omitempty" jsonschema:"description=Kill thresholds for this agent; dispatch agents only"`
 	TodoEnforcement *TodoEnforcementConfig `json:"todo_enforcement,omitempty" jsonschema:"description=Legacy alias for the todos and kill blocks, with the options.todo_enforcement shape; cannot be combined with either block"`
-	// Card, Auth, and Transport configure runtime a2a agents (#434): the
-	// external Agent Card URL, the bearer token, and the idle timeout.
-	// Card is required on a runtime a2a agent.
-	Card      *string         `json:"card,omitempty" jsonschema:"description=External Agent Card URL for runtime a2a agents"`
-	Auth      *AgentAuth      `json:"auth,omitempty" jsonschema:"description=Bearer auth for runtime a2a agents"`
-	Transport *AgentTransport `json:"transport,omitempty" jsonschema:"description=Transport tuning for runtime a2a agents"`
+	Card            *string                `json:"card,omitempty" jsonschema:"description=External Agent Card URL for runtime a2a agents"`
+	ContextPaths    []string               `json:"context_paths,omitempty" jsonschema:"description=Context file paths for this agent"`
+	Skills          []string               `json:"skills,omitempty" jsonschema:"description=Skill names for this agent"`
 }
 
 // AgentTools is a definition's tool allow and deny lists.
@@ -218,10 +183,8 @@ type AgentTransport struct {
 // slot, or an explicit provider and model pin. It accepts a JSON
 // string or object.
 type AgentModel struct {
-	// Type is the slot; meaningful only when Ref is nil.
+	Ref  *AgentModelRef    `json:"-"`
 	Type SelectedModelType `json:"-"`
-	// Ref is the explicit pin; nil means the slot named by Type.
-	Ref *AgentModelRef `json:"-"`
 }
 
 // AgentModelRef pins an agent to an explicit provider and model.

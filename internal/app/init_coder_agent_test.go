@@ -55,9 +55,8 @@ func TestInitCoderAgent_BuildsCoordinatorOnGlobalContext(t *testing.T) {
 // reuse path under test must never reach them.
 type recordingCoordinator struct {
 	agent.Coordinator
-
-	mu    sync.Mutex
 	modes []bool
+	mu    sync.Mutex
 }
 
 func (r *recordingCoordinator) SetInteractive(_ context.Context, interactive bool) error {

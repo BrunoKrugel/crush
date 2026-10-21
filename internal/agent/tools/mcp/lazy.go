@@ -25,8 +25,8 @@ const MaxActivatedPerSession = 32
 var activationsBySession = &activationSet{bySession: map[string][]string{}}
 
 type activationSet struct {
-	mu        sync.Mutex
 	bySession map[string][]string
+	mu        sync.Mutex
 }
 
 // activate marks names visible for a session and returns the ones that were

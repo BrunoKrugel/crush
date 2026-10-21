@@ -19,10 +19,10 @@ func TestPermissionRequestParamsTypeAssertable(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		toolName string
 		params   any
 		assert   func(t *testing.T, got any)
+		name     string
+		toolName string
 	}{
 		{
 			name:     "bash",

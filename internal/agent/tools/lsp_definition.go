@@ -27,8 +27,8 @@ var definitionDescription string
 // DefinitionResponseMetadata carries structured data for the renderer.
 type DefinitionResponseMetadata struct {
 	FilePath string `json:"file_path"`
-	Line     int    `json:"line"`
 	Content  string `json:"content"`
+	Line     int    `json:"line"`
 }
 
 func NewDefinitionTool(lspManager *lsp.Manager) fantasy.AgentTool {

@@ -47,13 +47,13 @@ const (
 
 type Broker[T any] struct {
 	subs                 map[chan Event[T]]struct{}
-	mu                   sync.RWMutex
 	done                 chan struct{}
 	subCount             int
 	channelBufferSize    int
 	mustDeliverTimeout   time.Duration
 	dropCount            atomic.Uint64
 	mustDeliverDropCount atomic.Uint64
+	mu                   sync.RWMutex
 }
 
 func NewBroker[T any]() *Broker[T] {

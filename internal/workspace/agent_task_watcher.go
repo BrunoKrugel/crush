@@ -46,17 +46,15 @@ type agentClient interface {
 // agentTaskWatcher follows one agent index and serves the workspace's
 // agent surface from what it has seen.
 type agentTaskWatcher struct {
-	dial   agentDialer
-	client func() (agentClient, bool)
-
-	mu    sync.Mutex
-	tasks map[string]AgentTask // by dispatch id
-	order []string
-	send  func(tea.Msg)
-
-	startOnce sync.Once
+	dial      agentDialer
+	client    func() (agentClient, bool)
+	tasks     map[string]AgentTask
+	send      func(tea.Msg)
 	cancel    context.CancelFunc
 	done      chan struct{}
+	order     []string
+	startOnce sync.Once
+	mu        sync.Mutex
 }
 
 func newAgentTaskWatcher(dial agentDialer, client func() (agentClient, bool)) *agentTaskWatcher {

@@ -30,30 +30,22 @@ const (
 // foreground until it is answered, and a third choice lets the user send the
 // checkpoint back for another pass with their own notes attached.
 type CheckpointHandoffInline struct {
+	editor         textarea.Model
+	OnRedo         func(comments string) tea.Cmd
+	OnKeep         func() tea.Cmd
 	com            *common.Common
+	OnDiscard      func() tea.Cmd
+	keyNewline     key.Binding
+	keyLeftRight   key.Binding
+	keyEnter       key.Binding
+	keyKeep        key.Binding
+	keyDiscard     key.Binding
+	keyRedo        key.Binding
+	keyClose       key.Binding
 	selectedChoice int
+	heightChanged  bool
 	editing        bool
 	focused        bool
-	editor         textarea.Model
-
-	heightChanged bool
-
-	// OnKeep adopts the staged checkpoint.
-	OnKeep func() tea.Cmd
-	// OnDiscard throws it away and changes nothing.
-	OnDiscard func() tea.Cmd
-	// OnRedo receives the user's notes and is expected to discard the staged
-	// checkpoint before generating another, so a session does not accumulate
-	// previews the user never answered.
-	OnRedo func(comments string) tea.Cmd
-
-	keyLeftRight key.Binding
-	keyEnter     key.Binding
-	keyNewline   key.Binding
-	keyKeep      key.Binding
-	keyDiscard   key.Binding
-	keyRedo      key.Binding
-	keyClose     key.Binding
 }
 
 var (
@@ -75,8 +67,8 @@ const (
 
 type checkpointChoiceLayout struct {
 	question string
-	buttons  []common.ButtonOpts
 	spacing  string
+	buttons  []common.ButtonOpts
 	height   int
 }
 

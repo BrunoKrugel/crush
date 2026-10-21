@@ -19,22 +19,12 @@ const (
 
 // Info is the machine-written footer that accompanies a checkpoint summary.
 type Info struct {
-	// ReplacedMessages and ReplacedTokens describe the region the checkpoint
-	// stands in for.
+	TranscriptPath   string
 	ReplacedMessages int
 	ReplacedTokens   int64
-	// KeptMessages and KeptTokens describe the transcript that still follows
-	// the checkpoint verbatim.
-	KeptMessages int
-	KeptTokens   int64
-	// TranscriptPath, when non-empty, holds the full text of the replaced
-	// region outside the context window.
-	TranscriptPath string
-	// Observed counts the memory entries appended to this checkpoint verbatim,
-	// alongside a summary a model wrote. Those entries persist across every
-	// later compaction, which is how a session's rationale outlives generations
-	// of summaries.
-	Observed int
+	KeptMessages     int
+	KeptTokens       int64
+	Observed         int
 }
 
 // Render returns the footer, without any surrounding model output.

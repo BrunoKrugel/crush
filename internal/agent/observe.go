@@ -227,8 +227,8 @@ func (a *sessionAgent) askObserver(ctx context.Context, sessionID, transcript st
 type observation struct {
 	Kind      string   `json:"kind"`
 	Text      string   `json:"text"`
-	Relevance int      `json:"relevance"`
 	Sources   []string `json:"sources"`
+	Relevance int      `json:"relevance"`
 }
 
 // parseObservations reads the model's array, tolerating the code fences and

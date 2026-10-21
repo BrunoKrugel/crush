@@ -34,9 +34,9 @@ type Symbol struct {
 // error/fallback indicator if extraction could not proceed.
 type ExtractResult struct {
 	Path     string
+	Reason   string
 	Symbols  []Symbol
-	Fallback bool   // true if fixed-size chunking should be used instead
-	Reason   string // why fallback was triggered (empty if Symbols populated)
+	Fallback bool
 }
 
 // grammarCacheLimit bounds both the embedded grammar cache and the
@@ -61,8 +61,8 @@ type langTools struct {
 // goroutines. WalkAndExtract drives extraction from a single goroutine, so
 // this costs nothing there.
 type Extractor struct {
-	mu    sync.Mutex
 	tools map[string]*langTools
+	mu    sync.Mutex
 }
 
 // NewExtractor creates a symbol extractor. It configures the grammar

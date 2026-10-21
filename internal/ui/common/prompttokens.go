@@ -32,8 +32,8 @@ type PromptToken struct {
 // writer; renderers read it. This mirrors the package-level discovery-state
 // mirror in internal/skills.
 var promptSkills struct {
-	mu    sync.RWMutex
 	names []string
+	mu    sync.RWMutex
 }
 
 // SetPromptSkillNames replaces the known-skill set used to validate "/"

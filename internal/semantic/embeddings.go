@@ -34,8 +34,8 @@ func DefaultEmbeddingConfig() EmbeddingConfig {
 
 // Client generates embeddings via an OpenAI-compatible API.
 type Client struct {
-	cfg    EmbeddingConfig
 	client *http.Client
+	cfg    EmbeddingConfig
 }
 
 // NewClient creates an embedding client with the given configuration.
@@ -50,15 +50,15 @@ func NewClient(cfg EmbeddingConfig) *Client {
 
 // embeddingRequest is the request body for /v1/embeddings.
 type embeddingRequest struct {
-	Input      []string `json:"input"`
 	Model      string   `json:"model"`
+	Input      []string `json:"input"`
 	Dimensions int      `json:"dimensions,omitempty"`
 }
 
 // embeddingResponse is the response from /v1/embeddings.
 type embeddingResponse struct {
-	Data  []embeddingData `json:"data"`
 	Error *apiError       `json:"error,omitempty"`
+	Data  []embeddingData `json:"data"`
 }
 
 type embeddingData struct {

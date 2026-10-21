@@ -80,17 +80,12 @@ type SendMsg struct {
 }
 
 type highlightableMessageItem struct {
-	// version is the parent item's version counter. SetHighlight
-	// bumps it on every observable change so the F6 list memo and
-	// any frozen entry get invalidated when a selection drag enters
-	// or leaves the item.
-	version *list.Versioned
-
+	version     *list.Versioned
+	highlighter list.Highlighter
 	startLine   int
 	startCol    int
 	endLine     int
 	endCol      int
-	highlighter list.Highlighter
 }
 
 var _ list.Highlightable = (*highlightableMessageItem)(nil)
@@ -185,23 +180,10 @@ func ClearItemCaches(items []MessageItem) {
 // THOUGHT(kujtim): we should consider if its efficient to store the render for different widths
 // the issue with that could be memory usage
 type cachedMessageItem struct {
-	// rendered is the cached rendered string
-	rendered string
-	// width and height are the dimensions of the cached render
-	width  int
-	height int
-
-	// prefixedRendered caches the per-line-prefixed Render output (the
-	// result of splitting RawRender by newlines and prepending a focus
-	// or selection prefix to every line). Items rebuild this every
-	// frame today; caching it keyed by (prefixedWidth, prefixedKey)
-	// turns Render into a pointer return when item state is stable.
-	//
-	// Invalidation lives in clearCache; callers must additionally
-	// bypass this cache whenever the prefixed output would not be
-	// stable (spinner ticks, active highlight ranges) by not calling
-	// setCachedPrefixedRender for those frames.
+	rendered         string
 	prefixedRendered string
+	width            int
+	height           int
 	prefixedWidth    int
 	prefixedKey      uint64
 }
@@ -443,10 +425,9 @@ func ChannelInfoID(messageID string) string {
 type ChannelInfoItem struct {
 	*list.Versioned
 	*cachedMessageItem
-
-	id      string
 	message *message.Message
 	sty     *styles.Styles
+	id      string
 }
 
 // NewChannelInfoItem creates a new ChannelInfoItem.

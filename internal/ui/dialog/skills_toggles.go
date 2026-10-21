@@ -17,22 +17,11 @@ const SkillsTogglesID = "skills_toggles"
 
 // SkillToggleItem describes one skill in the toggles dialog.
 type SkillToggleItem struct {
-	Name string
-	// Disabled is the repository-scoped override: when true the skill is
-	// hidden from the agent in this repository.
-	Disabled bool
-	// ConfigDisabled is the skill's disabled state in the config, before
-	// any repository-scoped override. The Global scope reads and writes
-	// this flag.
-	ConfigDisabled bool
-	// EnabledOverride is the repository-scoped enabled override: a
-	// config-disabled skill the user enabled here. Only the Local scope
-	// considers it.
+	Name            string
+	Error           string
+	Disabled        bool
+	ConfigDisabled  bool
 	EnabledOverride bool
-	// Error is non-empty when the skill failed discovery (malformed
-	// frontmatter, unreadable file, ...). Errored skills show a red ×
-	// and the error on the right edge instead of the enabled check.
-	Error string
 }
 
 // localDisabled returns the effective local state: a config-disabled
@@ -55,12 +44,6 @@ type ActionToggleSkill struct {
 // current repository (Local, the default) or in the config (Global).
 type SkillToggles struct {
 	com    *common.Common
-	width  int
-	items  []SkillToggleItem
-	cursor int
-	// offset is the first visible row; the window follows the cursor.
-	offset int
-	scope  MCPToggleScope
 	help   help.Model
 	keyMap struct {
 		Up     key.Binding
@@ -69,6 +52,11 @@ type SkillToggles struct {
 		Scope  key.Binding
 		Close  key.Binding
 	}
+	items  []SkillToggleItem
+	width  int
+	cursor int
+	offset int
+	scope  MCPToggleScope
 }
 
 var _ Dialog = (*SkillToggles)(nil)

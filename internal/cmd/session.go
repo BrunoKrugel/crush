@@ -566,11 +566,11 @@ type sessionShowMeta struct {
 	Title            string             `json:"title"`
 	Created          string             `json:"created"`
 	Modified         string             `json:"modified"`
+	Skills           []sessionShowSkill `json:"skills,omitempty"`
 	Cost             float64            `json:"cost"`
 	PromptTokens     int64              `json:"prompt_tokens"`
 	CompletionTokens int64              `json:"completion_tokens"`
 	TotalTokens      int64              `json:"total_tokens"`
-	Skills           []sessionShowSkill `json:"skills,omitempty"`
 }
 
 type sessionShowSkill struct {
@@ -589,36 +589,22 @@ type sessionShowMessage struct {
 }
 
 type sessionShowPart struct {
-	Type string `json:"type"`
-
-	// Text content
-	Text string `json:"text,omitempty"`
-
-	// Reasoning
+	URL        string `json:"url,omitempty"`
+	Type       string `json:"type"`
 	Thinking   string `json:"thinking,omitempty"`
-	StartedAt  int64  `json:"started_at,omitempty"`
-	FinishedAt int64  `json:"finished_at,omitempty"`
-
-	// Tool call
-	ToolCallID string `json:"tool_call_id,omitempty"`
+	Reason     string `json:"reason,omitempty"`
 	Name       string `json:"name,omitempty"`
+	ToolCallID string `json:"tool_call_id,omitempty"`
+	Text       string `json:"text,omitempty"`
+	Detail     string `json:"detail,omitempty"`
+	Content    string `json:"content,omitempty"`
 	Input      string `json:"input,omitempty"`
-
-	// Tool result
-	Content  string `json:"content,omitempty"`
-	IsError  bool   `json:"is_error,omitempty"`
-	MIMEType string `json:"mime_type,omitempty"`
-
-	// Binary
-	Size int64 `json:"size,omitempty"`
-
-	// Image URL
-	URL    string `json:"url,omitempty"`
-	Detail string `json:"detail,omitempty"`
-
-	// Finish
-	Reason string `json:"reason,omitempty"`
-	Time   int64  `json:"time,omitempty"`
+	MIMEType   string `json:"mime_type,omitempty"`
+	FinishedAt int64  `json:"finished_at,omitempty"`
+	Size       int64  `json:"size,omitempty"`
+	StartedAt  int64  `json:"started_at,omitempty"`
+	Time       int64  `json:"time,omitempty"`
+	IsError    bool   `json:"is_error,omitempty"`
 }
 
 func extractSkillsFromMessages(msgs []*message.Message) []sessionShowSkill {

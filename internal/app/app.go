@@ -56,57 +56,30 @@ type UpdateAvailableMsg struct {
 }
 
 type App struct {
-	Sessions    session.Service
-	Messages    message.Service
-	History     history.Service
-	Permissions permission.Service
-	Questions   question.Service
-	FileTracker filetracker.Service
-
-	AgentCoordinator agent.Coordinator
-
-	LSPManager *lsp.Manager
-
-	Skills *skills.Manager
-
-	config *config.ConfigStore
-
-	// conn is the shared project database handle, retained so the
-	// semantic index store can be (re)built against it when the coder
-	// agent initialises.
-	conn *sql.DB
-
-	serviceEventsWG *sync.WaitGroup
-	eventsCtx       context.Context
-	events          *pubsub.Broker[tea.Msg]
-	tuiWG           *sync.WaitGroup
-
-	// global context and cleanup functions
+	eventsCtx          context.Context
+	Sessions           session.Service
+	History            history.Service
+	Permissions        permission.Service
+	Questions          question.Service
+	FileTracker        filetracker.Service
 	globalCtx          context.Context
-	cleanupFuncs       []func(context.Context) error
+	AgentCoordinator   agent.Coordinator
+	Messages           message.Service
+	runCompletions     *pubsub.Broker[notify.RunComplete]
+	conn               *sql.DB
+	LSPManager         *lsp.Manager
+	newCoordinator     func(context.Context, agent.CoordinatorOptions) (agent.Coordinator, error)
+	events             *pubsub.Broker[tea.Msg]
+	config             *config.ConfigStore
+	Skills             *skills.Manager
+	herdrClient        *herdr.Client
 	agentNotifications *pubsub.Broker[notify.Notification]
-	// runCompletions is the authoritative per-run completion signal,
-	// emitted once per top-level agent turn after all message
-	// updates have been flushed. Bridged into app.events so SSE
-	// subscribers (notably `crush run` in client/server mode) can
-	// drive their exit on a deterministic, payload-bearing event
-	// instead of guessing from message finish parts.
-	runCompletions *pubsub.Broker[notify.RunComplete]
-
-	// a2aHost is the process's A2A host, set once when the coder agent
-	// initializes; a2aHostReady is closed then. A UI watching dispatched
-	// agents over A2A (#421) dials the host's agent index through it.
-	a2aHostMu    sync.Mutex
-	a2aHost      *a2a.ServerFactory
-	a2aHostReady chan struct{}
-
-	// herdrClient reports agent state to herdr when running inside
-	// a herdr-managed pane. Nil when not in a herdr environment.
-	herdrClient *herdr.Client
-
-	// newCoordinator is the seam used to build the agent coordinator,
-	// so tests can capture the lifetime context it receives.
-	newCoordinator func(context.Context, agent.CoordinatorOptions) (agent.Coordinator, error)
+	tuiWG              *sync.WaitGroup
+	serviceEventsWG    *sync.WaitGroup
+	a2aHost            *a2a.ServerFactory
+	a2aHostReady       chan struct{}
+	cleanupFuncs       []func(context.Context) error
+	a2aHostMu          sync.Mutex
 }
 
 // New initializes a new application instance. skillsMgr carries the

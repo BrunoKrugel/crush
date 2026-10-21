@@ -16,9 +16,9 @@ var dockerMCPVersionRunner = func(ctx context.Context) error {
 const dockerMCPAvailabilityTTL = 10 * time.Second
 
 var dockerMCPAvailabilityCache struct {
+	checkedAt time.Time
 	mu        sync.Mutex
 	available bool
-	checkedAt time.Time
 	known     bool
 }
 

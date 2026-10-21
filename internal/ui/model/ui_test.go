@@ -127,22 +127,19 @@ func newTestUIWithConfig(t *testing.T, cfg *config.Config) *UI {
 type testWorkspace struct {
 	workspace.Workspace
 	cfg               *config.Config
-	setMainCalledWith string
-	updateCalls       int
-	agentReady        bool
-	agentBusy         bool
-	runPrompts        []string
-	yolo              bool
-	runHidden         []bool
-	runSteering       []bool
-	compactCalls      []bool
 	mcpStates         map[string]mcp.ClientInfo
-
-	// Calls the checkpoint handoff drives, recorded so the tests can assert
-	// which workspace method each answer reaches.
-	previewCalls []string
-	confirmCalls []string
-	discardCalls []string
+	setMainCalledWith string
+	runSteering       []bool
+	runPrompts        []string
+	runHidden         []bool
+	compactCalls      []bool
+	previewCalls      []string
+	confirmCalls      []string
+	discardCalls      []string
+	updateCalls       int
+	agentBusy         bool
+	yolo              bool
+	agentReady        bool
 }
 
 func (w *testWorkspace) Config() *config.Config {
@@ -848,9 +845,9 @@ func TestApplyNerdFontsOption(t *testing.T) {
 
 	on, off := true, false
 	tests := []struct {
+		opts      *config.Options
 		name      string
 		nerdFonts string
-		opts      *config.Options
 		want      bool
 	}{
 		{

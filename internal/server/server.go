@@ -87,15 +87,12 @@ func DefaultHost() string {
 
 // Server represents a Crush server bound to a specific address.
 type Server struct {
-	// Addr can be a TCP address, a Unix socket path, or a Windows named pipe.
-	Addr    string
-	network string
-
-	h  *http.Server
-	ln net.Listener
-
+	ln      net.Listener
+	h       *http.Server
 	backend *backend.Backend
 	logger  *slog.Logger
+	Addr    string
+	network string
 }
 
 // SetLogger sets the logger for the server.

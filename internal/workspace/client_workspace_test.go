@@ -549,22 +549,16 @@ func agentInfoWorkspace(t *testing.T, info proto.AgentInfo) *ClientWorkspace {
 // event subscriptions for stale workspace IDs, mints a new ID on create,
 // and records what the client did.
 type recoveryServer struct {
-	mu sync.Mutex
-	// liveID is the only workspace ID whose event stream is served.
-	liveID string
-	// nextID names the workspace the next create hands back.
-	nextID string
-	// createErr, when set, fails creates instead of serving them.
-	createErr func() int
-	// hangUpOnCreate drops the connection mid-response so the client
-	// never learns the ID of a workspace the server did register.
+	createErr      func() int
+	liveID         string
+	nextID         string
+	sessionPosts   []string
+	retired        []string
+	deleted        []string
+	creates        int
+	streams        int
+	mu             sync.Mutex
 	hangUpOnCreate bool
-
-	creates      int
-	streams      int
-	sessionPosts []string
-	retired      []string
-	deleted      []string
 }
 
 func (s *recoveryServer) start(t *testing.T) *client.Client {
@@ -644,8 +638,8 @@ func (s *recoveryServer) snapshot(f func(*recoveryServer)) {
 // connectionRecorder collects the ConnectionEvents the subscription loop
 // reports to the UI.
 type connectionRecorder struct {
-	mu     sync.Mutex
 	events []ConnectionEvent
+	mu     sync.Mutex
 }
 
 func (r *connectionRecorder) send(msg tea.Msg) {

@@ -21,9 +21,9 @@ const (
 )
 
 type paletteSlot struct {
-	name string
 	get  func(styles.Palette) string
 	set  func(*styles.Palette, string)
+	name string
 }
 
 // ThemeEditor edits a theme palette with live preview. name is the theme
@@ -32,21 +32,20 @@ type paletteSlot struct {
 type ThemeEditor struct {
 	com     *common.Common
 	help    help.Model
-	input   textinput.Model
+	palette styles.Palette
 	name    string
 	base    string
-	palette styles.Palette
-	slots   []paletteSlot
-	index   int
-	scroll  int
-	invalid bool
-
-	keyMap struct {
+	keyMap  struct {
 		Save     key.Binding
 		Next     key.Binding
 		Previous key.Binding
 		Close    key.Binding
 	}
+	slots   []paletteSlot
+	input   textinput.Model
+	index   int
+	scroll  int
+	invalid bool
 }
 
 var _ Dialog = (*ThemeEditor)(nil)

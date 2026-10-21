@@ -12,8 +12,8 @@ import (
 )
 
 type mockCatwalkClient struct {
-	providers []catwalk.Provider
 	err       error
+	providers []catwalk.Provider
 	callCount int
 }
 

@@ -34,8 +34,8 @@ type ScriptedToolCall struct {
 // ScriptedStep is one model turn of an e2e dispatch: tool calls keep the
 // run going, final text ends it.
 type ScriptedStep struct {
-	ToolCalls []ScriptedToolCall
 	Text      string
+	ToolCalls []ScriptedToolCall
 }
 
 // NewScriptedModel builds a fantasy.LanguageModel replaying the steps,
@@ -159,13 +159,12 @@ func (m *FailingAfterGateModel) Stream(ctx context.Context, call fantasy.Call) (
 // the dispatch over the A2A client, and the terminal result assembles
 // and delivers to a real parent session.
 type DispatchHarness struct {
+	tool     fantasy.AgentTool
 	c        *coordinator
 	main     *fakeMainAgent
-	tool     fantasy.AgentTool
-	parentID string
-
-	mu       sync.Mutex
 	terminal map[string]int
+	parentID string
+	mu       sync.Mutex
 }
 
 // NewDispatchHarness builds the harness: a git-rooted coordinator, the

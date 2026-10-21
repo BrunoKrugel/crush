@@ -31,25 +31,22 @@ const (
 
 // MCPAuth handles the MCP OAuth authentication dialog.
 type MCPAuth struct {
-	com   *common.Common
-	width int
-
-	pending   []mcptools.PendingAuthServer
-	current   int
-	state     MCPAuthState
-	err       error
-	authURLFn func(name string) string
-
+	err        error
+	com        *common.Common
+	authURLFn  func(name string) string
 	cancelAuth context.CancelFunc
-
-	spinner spinner.Model
-	help    help.Model
-	keyMap  struct {
+	help       help.Model
+	keyMap     struct {
 		Submit key.Binding
 		Copy   key.Binding
 		Skip   key.Binding
 		Close  key.Binding
 	}
+	pending []mcptools.PendingAuthServer
+	spinner spinner.Model
+	width   int
+	current int
+	state   MCPAuthState
 }
 
 var _ Dialog = (*MCPAuth)(nil)

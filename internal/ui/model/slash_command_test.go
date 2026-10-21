@@ -18,10 +18,10 @@ import (
 // slashCommandWorkspace is a minimal workspace stub for slash command tests.
 type slashCommandWorkspace struct {
 	workspace.Workspace
-	ready    bool
-	busy     map[string]bool
 	summErr  error
+	busy     map[string]bool
 	summCall string
+	ready    bool
 }
 
 func (w *slashCommandWorkspace) AgentIsReady() bool { return w.ready }

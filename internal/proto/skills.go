@@ -18,8 +18,8 @@ const (
 type SkillState struct {
 	Name  string              `json:"name"`
 	Path  string              `json:"path"`
-	State SkillDiscoveryState `json:"state"`
 	Error string              `json:"error,omitempty"`
+	State SkillDiscoveryState `json:"state"`
 }
 
 // SkillsEvent is the wire representation of skills.Event.

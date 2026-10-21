@@ -645,8 +645,8 @@ func protoWS(path, dataDir, clientID string) proto.Workspace {
 // syncBuffer is a thread-safe buffer that can be safely read and written
 // from multiple goroutines.
 type syncBuffer struct {
-	mu  sync.Mutex
 	buf bytes.Buffer
+	mu  sync.Mutex
 }
 
 func (sb *syncBuffer) Write(p []byte) (n int, err error) {
@@ -692,8 +692,8 @@ func xdgIsolated(t *testing.T) {
 // not overwritten.
 func TestFirstWinsMismatch_LogsOnFlagDifferences(t *testing.T) {
 	tests := []struct {
-		name   string
 		mutate func(*proto.Workspace)
+		name   string
 	}{
 		{
 			name:   "yolo",

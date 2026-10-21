@@ -25,15 +25,15 @@ import (
 // stub honest about what the code under test depends on.
 type channelWorkspace struct {
 	workspace.Workspace
-	ready        bool
-	routesRemote bool
 	createErr    error
-	newSession   session.Session
-	createCalls  int
-	runCalls     []channelRun
 	runErr       error
 	channelErr   error
+	runCalls     []channelRun
 	channels     []string
+	newSession   session.Session
+	createCalls  int
+	ready        bool
+	routesRemote bool
 }
 
 type channelRun struct {
@@ -202,6 +202,24 @@ func channelErrorMsgs(msgs []tea.Msg) []util.InfoMsg {
 // channel-driven turn surfaces in the TUI the way a failed typed prompt
 // does, instead of only being logged, and that busy/queue state is still
 // refreshed.
+// runCmdTree flattens a tea.Cmd's immediate message, expanding a
+// tea.BatchMsg one level at a time, so tests can assert on the messages a
+// handler produced without running nested commands.
+func runCmdTree(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var msgs []tea.Msg
+		for _, c := range batch {
+			msgs = append(msgs, runCmdTree(c)...)
+		}
+		return msgs
+	}
+	return []tea.Msg{msg}
+}
+
 func TestHandleChannelMessageReportsRunError(t *testing.T) {
 	t.Parallel()
 	ws := &channelWorkspace{ready: true, runErr: errors.New("context window exceeded")}

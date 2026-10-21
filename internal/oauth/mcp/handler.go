@@ -70,30 +70,15 @@ var callbackPorts = []int{
 // InitialTokenSource injects a restored token at startup. That removes
 // the need to hand-roll authorization-server discovery.
 type Handler struct {
-	inner    auth.OAuthHandler
-	receiver *callbackReceiver
-
-	// openURL opens the authorization URL in the user's browser. It is
-	// a field so tests can simulate a headless environment or drive the
-	// callback directly.
-	openURL func(string) error
-
-	// interactive permits the browser authorization flow. It is false for
-	// background connections (startup) so a missing or unrefreshable token
-	// surfaces as a needs-auth state instead of opening a browser and
-	// blocking initialization.
-	interactive bool
-
-	mu             sync.Mutex
-	cachedToken    *oauth2.Token
-	authURL        string
-	serverURL      string
-	onTokenRefresh func(*oauth.Token)
-
-	// suppressBrowser, when true, prevents openURL from being invoked
-	// (the authorization URL is still recorded and logged). Used when
-	// the flow is driven remotely, e.g. by a connected client that opens
-	// the browser on its own machine.
+	inner           auth.OAuthHandler
+	receiver        *callbackReceiver
+	openURL         func(string) error
+	cachedToken     *oauth2.Token
+	onTokenRefresh  func(*oauth.Token)
+	authURL         string
+	serverURL       string
+	mu              sync.Mutex
+	interactive     bool
 	suppressBrowser bool
 }
 
@@ -423,42 +408,25 @@ func (h *Handler) Close() {
 // the callback port is occupied only for the few seconds an actual login
 // is in flight.
 type callbackReceiver struct {
-	handler *Handler
-	// serverName labels the callback page so the user can see which MCP
-	// server they just authorized.
+	handler    *Handler
+	flight     *authFlight
+	server     *http.Server
 	serverName string
-
-	// fixedPort, when > 0, is the OAuthCallbackPort config: the single
-	// port the registered redirect URI points at. When 0, a port is
-	// chosen from callbackPorts at bind time.
-	fixedPort int
-
-	mu sync.Mutex
-	// flight is the authorization currently awaiting a redirect, if any.
-	// Connecting to a server can issue several requests at once, so more
-	// than one of them can meet a 401 and ask to authorize. They share a
-	// single flight rather than each opening their own browser tab and
-	// racing for one redirect.
-	flight *authFlight
-	// server and port describe the live listener. They are set only while
-	// an authorization is in flight and cleared the moment it settles.
-	server *http.Server
-	port   int
-	closed bool
+	fixedPort  int
+	port       int
+	mu         sync.Mutex
+	closed     bool
 }
 
 // authFlight is one authorization attempt: a browser tab was opened and a
 // redirect is expected. It settles exactly once, whichever arrives first —
 // a result, an error, or the receiver shutting down.
 type authFlight struct {
-	done   chan struct{}
-	once   sync.Once
-	result *auth.AuthorizationResult
 	err    error
-	// refs counts the callers sharing this flight: the creator plus every
-	// joiner waiting on the same redirect. Tests use it to wait for all
-	// concurrent callers to arrive before letting the redirect land.
-	refs atomic.Int64
+	done   chan struct{}
+	result *auth.AuthorizationResult
+	refs   atomic.Int64
+	once   sync.Once
 }
 
 // settle records the outcome of the flight and wakes everyone waiting on

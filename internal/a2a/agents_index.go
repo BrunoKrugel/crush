@@ -56,49 +56,23 @@ const maxFinishedDescriptors = 500
 // registry. State follows the dispatch's own task only; the tasks that
 // steers open on the same context never move it.
 type AgentDescriptor struct {
-	// ID is the dispatch's registry id; the host routes
-	// /agents/<ID> to it.
-	ID string `json:"id"`
-	// Endpoint is the dispatch's card URL, and Card the served card the
-	// A2A client dials it through.
-	Endpoint string             `json:"endpoint"`
-	Card     *a2aspec.AgentCard `json:"card,omitempty"`
-	// Handle and Role are the dispatch's @handle and one-line role: the
-	// card's name and description.
-	Handle string `json:"handle"`
-	Role   string `json:"role,omitempty"`
-	// ContextID is the dispatch's A2A context, its task session (#350):
-	// a steer addresses it. ParentSessionID is the session the dispatch
-	// was created from (#399).
-	ContextID       string `json:"context_id"`
-	ParentSessionID string `json:"parent_session_id,omitempty"`
-	// TaskID is the dispatch's own task, empty until the dispatch's
-	// first message creates it.
-	TaskID string `json:"task_id,omitempty"`
-	// State is the task's state as a dispatch status token
-	// (DispatchStatusWorking and its siblings); empty before the task
-	// exists. StatusText is the latest status message's text.
-	State      string `json:"state,omitempty"`
-	StatusText string `json:"status_text,omitempty"`
-	// Progress is the latest todos/v1 value the task carried, and Usage
-	// the latest usage/v1 value: live while the agent works, final once
-	// the task ends.
-	Progress *agent.TodoProgress `json:"progress,omitempty"`
-	Usage    *agent.Usage        `json:"usage,omitempty"`
-	// Served is true while the dispatch's route is up. A finished
-	// dispatch stays on the index with Served false, so its @handle keeps
-	// resolving and its card keeps its last state.
-	Served bool `json:"served"`
-	// StartedAt is when the route came up, UpdatedAt the descriptor's
-	// last change, and FinishedAt when the task reached a terminal state.
-	StartedAt  time.Time  `json:"started_at"`
-	UpdatedAt  time.Time  `json:"updated_at"`
-	FinishedAt *time.Time `json:"finished_at,omitempty"`
-	// Revision increases with every change to any descriptor on the
-	// index, so a watcher keeps the newer of two copies of one dispatch
-	// and publishes only what changed. It starts from the host's start
-	// time, so a restarted host's revisions are newer still.
-	Revision uint64 `json:"revision"`
+	UpdatedAt       time.Time           `json:"updated_at"`
+	StartedAt       time.Time           `json:"started_at"`
+	Progress        *agent.TodoProgress `json:"progress,omitempty"`
+	FinishedAt      *time.Time          `json:"finished_at,omitempty"`
+	Card            *a2aspec.AgentCard  `json:"card,omitempty"`
+	Usage           *agent.Usage        `json:"usage,omitempty"`
+	State           string              `json:"state,omitempty"`
+	TaskID          string              `json:"task_id,omitempty"`
+	ID              string              `json:"id"`
+	StatusText      string              `json:"status_text,omitempty"`
+	ParentSessionID string              `json:"parent_session_id,omitempty"`
+	ContextID       string              `json:"context_id"`
+	Role            string              `json:"role,omitempty"`
+	Handle          string              `json:"handle"`
+	Endpoint        string              `json:"endpoint"`
+	Revision        uint64              `json:"revision"`
+	Served          bool                `json:"served"`
 }
 
 // meaningfulEqual reports whether two copies of a descriptor differ only
@@ -122,20 +96,20 @@ func (d AgentDescriptor) Terminal() bool {
 // AgentIndexEvent is one event on the index stream: a full Snapshot when
 // the stream opens, then one Upsert per descriptor change.
 type AgentIndexEvent struct {
-	Snapshot []AgentDescriptor `json:"snapshot,omitempty"`
 	Upsert   *AgentDescriptor  `json:"upsert,omitempty"`
+	Snapshot []AgentDescriptor `json:"snapshot,omitempty"`
 }
 
 // agentIndex is the factory's index state: the descriptors by dispatch
 // id in listing order, and the open streams.
 type agentIndex struct {
-	mu     sync.Mutex
 	byID   map[string]*AgentDescriptor
-	order  []string
 	subs   map[chan AgentIndexEvent]struct{}
-	rev    uint64
-	closed bool
 	now    func() time.Time
+	order  []string
+	rev    uint64
+	mu     sync.Mutex
+	closed bool
 }
 
 func newAgentIndex() *agentIndex {

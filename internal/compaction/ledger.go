@@ -51,23 +51,13 @@ const (
 
 // Entry is one append-only record.
 type Entry struct {
-	// Seq orders entries within a session. It is assigned by the store rather
-	// than the caller so a render does not depend on insert timing.
-	Seq int
-	// ID names the entry so reflections and drops can cite it.
-	ID string
-	// Kind is one of the EntryKind constants.
-	Kind EntryKind
-	// Text is what to remember, written to be read without the transcript.
-	Text string
-	// Relevance weights Text against the render budget.
+	ID        string
+	Kind      EntryKind
+	Text      string
+	Sources   []string
+	Retires   []int
+	Seq       int
 	Relevance Relevance
-	// Sources lists message ids the entry was distilled from. Keeping them
-	// makes the ledger checkable against the transcript instead of a second
-	// story nobody can verify.
-	Sources []string
-	// Retires names the Seqs this entry supersedes. Only KindDrop uses it.
-	Retires []int
 }
 
 // Ledger is the projection a checkpoint renders from.

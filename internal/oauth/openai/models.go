@@ -14,18 +14,15 @@ import (
 
 // ModelInfo mirrors one entry of the Codex backend model catalog.
 type ModelInfo struct {
-	Slug          string `json:"slug"`
-	DisplayName   string `json:"display_name"`
-	Description   string `json:"description"`
-	Visibility    string `json:"visibility"`
-	ContextWindow int64  `json:"context_window"`
-
-	DefaultReasoningLevel string `json:"default_reasoning_level"`
-	// SupportedReasoningLevels is a list of {effort, description}
-	// presets in the backend's own shape.
+	Slug                     string `json:"slug"`
+	DisplayName              string `json:"display_name"`
+	Description              string `json:"description"`
+	Visibility               string `json:"visibility"`
+	DefaultReasoningLevel    string `json:"default_reasoning_level"`
 	SupportedReasoningLevels []struct {
 		Effort string `json:"effort"`
 	} `json:"supported_reasoning_levels"`
+	ContextWindow int64 `json:"context_window"`
 }
 
 type modelsResponse struct {

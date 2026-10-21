@@ -27,11 +27,11 @@ import (
 // runner from its own goroutine, so tests read the record while a run
 // may still be in flight.
 type mockSessionAgent struct {
-	model     Model
-	runFunc   func(ctx context.Context, call SessionAgentCall) (*fantasy.AgentResult, error)
-	cancelMu  sync.Mutex
-	cancelled []string
 	readyErr  error
+	runFunc   func(ctx context.Context, call SessionAgentCall) (*fantasy.AgentResult, error)
+	model     Model
+	cancelled []string
+	cancelMu  sync.Mutex
 }
 
 func (m *mockSessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy.AgentResult, error) {
@@ -898,9 +898,9 @@ func TestCallTopK(t *testing.T) {
 	knownCustomProviderCfg := config.ProviderConfig{ID: "ollama", Type: "ollama"}
 
 	tests := []struct {
+		want        *int64
 		name        string
 		providerCfg config.ProviderConfig
-		want        *int64
 	}{
 		{
 			name:        "suppressed for known custom providers",

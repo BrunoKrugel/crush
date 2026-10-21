@@ -25,21 +25,11 @@ var spillPointerPattern = regexp.MustCompile(`full output: (\S+)`)
 
 // PrunePolicy bounds what a pruning pass may remove.
 type PrunePolicy struct {
-	// Disabled turns the pass off entirely.
-	Disabled bool
-	// ProtectTokens is how much of the most recent tool output is always
-	// left alone, regardless of how many turns back it is.
-	ProtectTokens int64
-	// ProtectTurns is the number of recent user turns whose tool output is
-	// always left alone.
-	ProtectTurns int
-	// MinimumReclaim is the smallest saving worth a rewrite for. Pruning
-	// rewrites history and so costs a prompt-cache miss; a handful of tokens
-	// is not worth that.
-	MinimumReclaim int64
-	// ProtectedTools name tools whose output is worth keeping in full: state
-	// the model cannot re-derive, or words the user typed.
 	ProtectedTools []string
+	ProtectTokens  int64
+	ProtectTurns   int
+	MinimumReclaim int64
+	Disabled       bool
 }
 
 // DefaultPrunePolicy protects the recent working set and only acts when it can

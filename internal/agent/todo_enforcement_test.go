@@ -29,8 +29,8 @@ type scriptedToolCall struct {
 // scriptedStep is one model turn: either tool calls (the run continues)
 // or final text (the run ends).
 type scriptedStep struct {
-	toolCalls []scriptedToolCall
 	text      string
+	toolCalls []scriptedToolCall
 }
 
 // scriptedModel is a fantasy.LanguageModel replaying a fixed script, one
@@ -40,10 +40,10 @@ type scriptedStep struct {
 // need: the injected nudges must land in the recorded prompts at exactly
 // the scripted step.
 type scriptedModel struct {
-	mu      sync.Mutex
 	steps   []scriptedStep
-	pos     int
 	prompts []fantasy.Call
+	pos     int
+	mu      sync.Mutex
 }
 
 func (m *scriptedModel) Provider() string { return "fake" }

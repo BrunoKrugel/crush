@@ -42,8 +42,8 @@ type PermissionRequest struct {
 func (p *PermissionRequest) UnmarshalJSON(data []byte) error {
 	type Alias PermissionRequest
 	aux := &struct {
-		Params json.RawMessage `json:"params"`
 		*Alias
+		Params json.RawMessage `json:"params"`
 	}{
 		Alias: (*Alias)(p),
 	}
@@ -65,8 +65,8 @@ func (p *PermissionRequest) UnmarshalJSON(data []byte) error {
 func (p *CreatePermissionRequest) UnmarshalJSON(data []byte) error {
 	type Alias CreatePermissionRequest
 	aux := &struct {
-		Params json.RawMessage `json:"params"`
 		*Alias
+		Params json.RawMessage `json:"params"`
 	}{
 		Alias: (*Alias)(p),
 	}

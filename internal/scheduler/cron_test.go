@@ -251,10 +251,10 @@ func TestNextAcrossDSTSpringForward(t *testing.T) {
 	withLocalTZ(t, "America/New_York")
 
 	for _, tc := range []struct {
-		name string
-		expr string
 		from time.Time
 		want time.Time
+		name string
+		expr string
 	}{
 		{
 			name: "weekly Sunday midnight spans the transition",

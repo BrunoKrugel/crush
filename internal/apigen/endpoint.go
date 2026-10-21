@@ -30,18 +30,18 @@ type Param struct {
 // endpoint. Construct it with the fluent builders ([Get], [Post], ...);
 // only [endpointBuilder.Handle] produces a complete Endpoint.
 type Endpoint struct {
+	request     any
+	response    any
+	handler     http.HandlerFunc
 	method      string
 	path        string
 	summary     string
 	description string
 	tags        []string
 	params      []Param
-	request     any
-	response    any
-	status      int
 	errors      []int
+	status      int
 	sse         bool
-	handler     http.HandlerFunc
 }
 
 // Method returns the HTTP method, e.g. "GET".

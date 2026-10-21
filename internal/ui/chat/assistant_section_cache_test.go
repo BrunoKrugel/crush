@@ -317,8 +317,8 @@ func TestAssistantSectionCache_ByteIdenticalToFreshRender(t *testing.T) {
 	const width = 83
 
 	type step struct {
-		name string
 		msg  *message.Message
+		name string
 	}
 	startedAt := testStartedAt
 	finishedAt := testFinishedAt

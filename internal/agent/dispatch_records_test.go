@@ -21,13 +21,10 @@ import (
 // records (#355): it answers the redelivery list from seeded memory and
 // records the stamps it is given.
 type fakeRecordStore struct {
-	mu sync.Mutex
-	// undelivered is what UndeliveredTerminal answers.
+	err         error
 	undelivered []dispatch.UndeliveredDispatch
-	// delivered records every RecordDelivered dispatch ID in order.
-	delivered []string
-	// errors, when set, fails every read with it.
-	err error
+	delivered   []string
+	mu          sync.Mutex
 }
 
 func (f *fakeRecordStore) RecordStarted(dispatch.DispatchResult, string) error { return nil }

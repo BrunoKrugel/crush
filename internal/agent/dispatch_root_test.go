@@ -21,11 +21,10 @@ import (
 // running. It records the context the run was started with: that context
 // is the dispatch's root (#371), and teardown must cancel it.
 type blockingDispatchAgent struct {
-	dispatchTestAgent
+	runCtx  context.Context
 	release chan struct{}
-
-	mu     sync.Mutex
-	runCtx context.Context
+	dispatchTestAgent
+	mu sync.Mutex
 }
 
 func (b *blockingDispatchAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy.AgentResult, error) {
@@ -71,12 +70,11 @@ func (r *recordingPermissionService) requestCalls() int {
 // the dispatched agent blocks until released. The parent turn is already
 // over when the fixture returns: the tool call's context is canceled.
 type liveDispatchFixture struct {
-	c         *coordinator
-	parent    *recordingPermissionService
-	toolchain *DispatchToolchain
-	handle    dispatch.DispatchResult
-	agent     *blockingDispatchAgent
-
+	c           *coordinator
+	parent      *recordingPermissionService
+	toolchain   *DispatchToolchain
+	agent       *blockingDispatchAgent
+	handle      dispatch.DispatchResult
 	releaseOnce sync.Once
 }
 

@@ -36,18 +36,18 @@ type MultiEditPermissionsParams struct {
 }
 
 type FailedEdit struct {
-	Index int                `json:"index"`
 	Error string             `json:"error"`
 	Edit  MultiEditOperation `json:"edit"`
+	Index int                `json:"index"`
 }
 
 type MultiEditResponseMetadata struct {
-	Additions    int          `json:"additions"`
-	Removals     int          `json:"removals"`
 	OldContent   string       `json:"old_content,omitempty"`
 	NewContent   string       `json:"new_content,omitempty"`
-	EditsApplied int          `json:"edits_applied"`
 	EditsFailed  []FailedEdit `json:"edits_failed,omitempty"`
+	Additions    int          `json:"additions"`
+	Removals     int          `json:"removals"`
+	EditsApplied int          `json:"edits_applied"`
 }
 
 const MultiEditToolName = "multiedit"

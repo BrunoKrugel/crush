@@ -68,13 +68,8 @@ const (
 // recovered transitions of the client-server link. Local (in-process)
 // workspaces never emit it.
 type ConnectionEvent struct {
+	Err   error
 	State ConnectionState
-	// Err is the most recent failure, set when State is
-	// ConnectionDegraded.
-	Err error
-	// Stuck marks a degraded connection that has resisted repeated
-	// recovery attempts. The loop keeps retrying regardless; the UI
-	// should escalate from a transient notice to a persistent error.
 	Stuck bool
 }
 
@@ -82,11 +77,11 @@ type ConnectionEvent struct {
 // the frontend-facing type; implementations translate from the
 // underlying app or proto representation.
 type LSPClientInfo struct {
+	ConnectedAt     time.Time
+	Error           error
 	Name            string
 	State           lsp.ServerState
-	Error           error
 	DiagnosticCount int
-	ConnectedAt     time.Time
 }
 
 // LSPEventType represents the type of LSP event.
@@ -99,10 +94,10 @@ const (
 
 // LSPEvent represents an LSP event forwarded to the TUI.
 type LSPEvent struct {
+	Error           error
 	Type            LSPEventType
 	Name            string
 	State           lsp.ServerState
-	Error           error
 	DiagnosticCount int
 }
 
@@ -302,10 +297,7 @@ type Workspace interface {
 	ReadMCPResource(ctx context.Context, name, uri string) ([]MCPResourceContents, error)
 	ListMCPPrompts(ctx context.Context) ([]commands.MCPPrompt, error)
 	// CallMCPTool invokes a tool on a named MCP server and returns its
-	// text content plus any A2UI surface payload it embedded. It backs the
-	// A2UI action round-trip: a button press on an MCP-served surface
-	// routes back to the owning server as an a2ui_action (or a render
-	// failure as an a2ui_error) without an agent turn.
+	// text content.
 	CallMCPTool(ctx context.Context, name, toolName string, args map[string]any) (MCPToolCallResult, error)
 	GetMCPPrompt(clientID, promptID string, args map[string]string) (string, error)
 	EnableDockerMCP(ctx context.Context) error
@@ -348,17 +340,8 @@ type MCPResourceContents struct {
 	Blob     []byte `json:"blob,omitempty"`
 }
 
-// MCPToolCallResult holds the model-facing text and any A2UI surface
-// payloads from an MCP tool call.
+// MCPToolCallResult holds the model-facing text from an MCP tool call.
 type MCPToolCallResult struct {
 	// Content is the result's text (its TextContent, joined).
 	Content string `json:"content"`
-	// Surfaces carries any A2UI surface payloads the result embedded.
-	Surfaces []MCPToolCallSurface `json:"surfaces,omitempty"`
-}
-
-// MCPToolCallSurface is a single A2UI surface payload from a tool call.
-type MCPToolCallSurface struct {
-	Payload string `json:"payload"`
-	URI     string `json:"uri"`
 }

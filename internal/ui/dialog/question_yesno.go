@@ -18,22 +18,20 @@ import (
 // YesNo is an inline yes/no confirmation component. For open-ended
 // responses, use FreeText instead. Notes can be added via alt+n.
 type YesNo struct {
+	lastResponse question.Answer
+	compositor   *lipgloss.Compositor
 	questionEditor
-	Request    question.Question
-	selectedNo bool
-	focused    bool
-	compositor *lipgloss.Compositor
-	hoverX     int
-	hoverY     int
-
+	Request      question.Question
+	keyYes       key.Binding
+	keyClose     key.Binding
+	keyNo        key.Binding
 	keyLeftRight key.Binding
 	keyEnter     key.Binding
-	keyYes       key.Binding
-	keyNo        key.Binding
-	keyClose     key.Binding
-
-	lastResponse question.Answer
+	hoverY       int
+	hoverX       int
 	lastWidth    int
+	focused      bool
+	selectedNo   bool
 }
 
 // NewYesNo creates a new inline yes/no question component.

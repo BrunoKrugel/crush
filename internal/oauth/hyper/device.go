@@ -196,13 +196,13 @@ func ExchangeToken(ctx context.Context, refreshToken string) (*oauth.Token, erro
 
 // IntrospectTokenResponse contains the response from the token introspection endpoint.
 type IntrospectTokenResponse struct {
-	Active bool   `json:"active"`
 	Sub    string `json:"sub,omitempty"`
 	OrgID  string `json:"org_id,omitempty"`
-	Exp    int64  `json:"exp,omitempty"`
-	Iat    int64  `json:"iat,omitempty"`
 	Iss    string `json:"iss,omitempty"`
 	Jti    string `json:"jti,omitempty"`
+	Exp    int64  `json:"exp,omitempty"`
+	Iat    int64  `json:"iat,omitempty"`
+	Active bool   `json:"active"`
 }
 
 // IntrospectToken validates an access token using the introspection endpoint.

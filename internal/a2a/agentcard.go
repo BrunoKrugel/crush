@@ -26,36 +26,13 @@ const skillTag = "crush-skill"
 // DispatchAgent tool (#64) takes: the agent definition, the skills loaded for
 // it, and the endpoint it serves A2A on.
 type CardParams struct {
-	// Agent is the dispatched agent's configuration — name, description,
-	// model, tools. Required.
-	Agent config.Agent
-
-	// Skills are the Crush skills loaded for this agent. Each becomes one
-	// A2A skill entry on the card. Optional.
-	Skills []*skills.Skill
-
-	// Endpoint is the base URL the agent serves A2A on (the process's
-	// unix-socket host in Phase 1, #346). Required for a resolvable card.
-	Endpoint string
-
-	// TLSEndpoint is the agent's URL on the host's optional TCP listener
-	// (#358), https://<host:port>/agents/<id>. When set, the card lists
-	// it as a second interface after Endpoint, so a client that picks
-	// the first interface it supports keeps dialing the socket. Empty
-	// (no TCP listener) lists Endpoint alone.
+	Endpoint    string
 	TLSEndpoint string
-
-	// MutualTLS declares the TCP listener's client-certificate scheme
-	// (#358) as an alternative to the bearer token. Only meaningful with
-	// TLSEndpoint.
-	MutualTLS bool
-
-	// Transport is the protocol binding served at Endpoint. Defaults to
-	// JSON-RPC over HTTP — the Phase 1 transport — when empty.
-	Transport a2aspec.TransportProtocol
-
-	// Version is the agent/build version advertised on the card.
-	Version string
+	Transport   a2aspec.TransportProtocol
+	Version     string
+	Skills      []*skills.Skill
+	Agent       config.Agent
+	MutualTLS   bool
 }
 
 // BuildAgentCard derives a spec-valid A2A AgentCard from a dispatched agent's

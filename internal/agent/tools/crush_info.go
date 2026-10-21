@@ -144,8 +144,8 @@ func writeLSP(b *strings.Builder, lspManager *lsp.Manager, cfg *config.ConfigSto
 	if lspManager != nil && lspManager.Clients().Len() > 0 {
 		type entry struct {
 			name      string
-			state     lsp.ServerState
 			fileTypes []string
+			state     lsp.ServerState
 		}
 		var entries []entry
 		for name, client := range lspManager.Clients().Seq2() {
@@ -236,15 +236,13 @@ func writeMCP(b *strings.Builder, states map[string]mcp.ClientInfo, cfg *config.
 	// Write runtime MCP states
 	if len(states) > 0 {
 		type entry struct {
-			name        string
-			state       mcp.State
 			err         error
+			name        string
+			connectedAt string
+			state       mcp.State
 			tools       int
 			resources   int
-			connectedAt string
-			// lazy marks a server whose tools stay out of the model
-			// context until mcp_search loads them.
-			lazy bool
+			lazy        bool
 		}
 		var entries []entry
 		configured := cfg.Config()

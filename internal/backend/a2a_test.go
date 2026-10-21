@@ -35,11 +35,11 @@ func TestA2AHostBeforeTheHostStarts(t *testing.T) {
 // set, with a channel closed when it is. read is closed on the first
 // look at it.
 type hostSource struct {
-	mu       sync.Mutex
 	host     *a2a.ServerFactory
 	ready    chan struct{}
 	read     chan struct{}
 	readOnce sync.Once
+	mu       sync.Mutex
 }
 
 func newHostSource() *hostSource {

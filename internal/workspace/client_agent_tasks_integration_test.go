@@ -5,10 +5,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"uuid"
 
 	"charm.land/fantasy"
 	"github.com/stretchr/testify/require"
-	"uuid"
 
 	"github.com/charmbracelet/crush/internal/a2a"
 	"github.com/charmbracelet/crush/internal/agent"
@@ -21,10 +21,10 @@ import (
 // steeredRunner is a served agent that runs until it is canceled and
 // takes every steer it is sent.
 type steeredRunner struct {
-	mu      sync.Mutex
-	steers  []string
 	started chan struct{}
+	steers  []string
 	once    sync.Once
+	mu      sync.Mutex
 }
 
 func (r *steeredRunner) Run(ctx context.Context, _ agent.SessionAgentCall) (*fantasy.AgentResult, error) {

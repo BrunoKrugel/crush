@@ -123,11 +123,11 @@ func TestHarnessServesCardAndSendMessage(t *testing.T) {
 					Parts []map[string]any `json:"parts"`
 				} `json:"artifacts"`
 				Status struct {
-					State   string `json:"state"`
 					Message *struct {
 						Role  string           `json:"role"`
 						Parts []map[string]any `json:"parts"`
 					} `json:"message"`
+					State string `json:"state"`
 				} `json:"status"`
 				History []struct {
 					Role  string           `json:"role"`

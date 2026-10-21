@@ -39,14 +39,9 @@ const (
 // as "(no changes)". Field names are lowerCamelCase per the A2A wire
 // format (TCK DM-SERIAL-001).
 type DispatchOutcome struct {
-	// DiffBytes is the diff's size in bytes; 0 when capture failed or
-	// the run changed nothing.
-	DiffBytes int `json:"diffBytes"`
-	// DiffError carries the diff-capture error's message, empty on
-	// success. A run with a diff error still completes.
-	DiffError string `json:"diffError,omitempty"`
-	// FilesChanged counts the per-file sections of the diff.
-	FilesChanged int `json:"filesChanged"`
+	DiffError    string `json:"diffError,omitempty"`
+	DiffBytes    int    `json:"diffBytes"`
+	FilesChanged int    `json:"filesChanged"`
 }
 
 // The SDK's task store persists artifact parts through encoding/gob, and a

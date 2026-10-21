@@ -65,101 +65,39 @@ const (
 )
 
 type SelectedModel struct {
-	// The model id as used by the provider API.
-	// Required.
-	Model string `json:"model" jsonschema:"required,description=The model ID as used by the provider API,example=gpt-4o"`
-	// The model provider, same as the key/id used in the providers config.
-	// Required.
-	Provider string `json:"provider" jsonschema:"required,description=The model provider ID that matches a key in the providers config,example=openai"`
-
-	// Only used by models that use the openai provider and need this set.
-	ReasoningEffort string `json:"reasoning_effort,omitempty" jsonschema:"description=Reasoning effort level for OpenAI models that support it,enum=low,enum=medium,enum=high"`
-
-	// Used by anthropic models that can reason to indicate if the model should think.
-	Think bool `json:"think,omitempty" jsonschema:"description=Enable thinking mode for Anthropic models that support reasoning"`
-
-	// Overrides the default model configuration.
-	MaxTokens        int64    `json:"max_tokens,omitempty" jsonschema:"description=Maximum number of tokens for model responses,maximum=200000,example=4096"`
-	Temperature      *float64 `json:"temperature,omitempty" jsonschema:"description=Sampling temperature,minimum=0,maximum=1,example=0.7"`
-	TopP             *float64 `json:"top_p,omitempty" jsonschema:"description=Top-p (nucleus) sampling parameter,minimum=0,maximum=1,example=0.9"`
-	TopK             *int64   `json:"top_k,omitempty" jsonschema:"description=Top-k sampling parameter"`
-	FrequencyPenalty *float64 `json:"frequency_penalty,omitempty" jsonschema:"description=Frequency penalty to reduce repetition"`
-	PresencePenalty  *float64 `json:"presence_penalty,omitempty" jsonschema:"description=Presence penalty to increase topic diversity"`
-
-	// Override provider specific options.
-	ProviderOptions map[string]any `json:"provider_options,omitempty" jsonschema:"description=Additional provider-specific options for the model"`
+	Temperature      *float64       `json:"temperature,omitempty" jsonschema:"description=Sampling temperature,minimum=0,maximum=1,example=0.7"`
+	TopP             *float64       `json:"top_p,omitempty" jsonschema:"description=Top-p (nucleus) sampling parameter,minimum=0,maximum=1,example=0.9"`
+	TopK             *int64         `json:"top_k,omitempty" jsonschema:"description=Top-k sampling parameter"`
+	FrequencyPenalty *float64       `json:"frequency_penalty,omitempty" jsonschema:"description=Frequency penalty to reduce repetition"`
+	PresencePenalty  *float64       `json:"presence_penalty,omitempty" jsonschema:"description=Presence penalty to increase topic diversity"`
+	ProviderOptions  map[string]any `json:"provider_options,omitempty" jsonschema:"description=Additional provider-specific options for the model"`
+	Model            string         `json:"model" jsonschema:"required,description=The model ID as used by the provider API,example=gpt-4o"`
+	Provider         string         `json:"provider" jsonschema:"required,description=The model provider ID that matches a key in the providers config,example=openai"`
+	ReasoningEffort  string         `json:"reasoning_effort,omitempty" jsonschema:"description=Reasoning effort level for OpenAI models that support it,enum=low,enum=medium,enum=high"`
+	MaxTokens        int64          `json:"max_tokens,omitempty" jsonschema:"description=Maximum number of tokens for model responses,maximum=200000,example=4096"`
+	Think            bool           `json:"think,omitempty" jsonschema:"description=Enable thinking mode for Anthropic models that support reasoning"`
 }
 
 type ProviderConfig struct {
-	// The provider's id.
-	ID string `json:"id,omitempty" jsonschema:"description=Unique identifier for the provider,example=openai"`
-	// The provider's name, used for display purposes.
-	Name string `json:"name,omitempty" jsonschema:"description=Human-readable name for the provider,example=OpenAI"`
-	// The provider's API endpoint.
-	BaseURL string `json:"base_url,omitempty" jsonschema:"description=Base URL for the provider's API,format=uri,example=https://api.openai.com/v1"`
-	// The provider type, e.g. "openai", "anthropic", etc. if empty it defaults to openai.
-	Type catwalk.Type `json:"type,omitempty" jsonschema:"description=Provider type that determines the API format,default=openai"`
-	// The provider's API key.
-	APIKey string `json:"api_key,omitempty" jsonschema:"description=API key for authentication with the provider,example=$OPENAI_API_KEY"`
-	// The original API key template before resolution (for re-resolution on auth errors).
-	APIKeyTemplate string `json:"-"`
-	// OAuthToken for providers that use OAuth2 authentication.
-	OAuthToken *oauth.Token `json:"oauth,omitempty" jsonschema:"description=OAuth2 token for authentication with the provider"`
-	// Marks the provider as disabled.
-	Disable bool `json:"disable,omitempty" jsonschema:"description=Whether this provider is disabled,default=false"`
-
-	// Custom system prompt prefix.
-	SystemPromptPrefix string `json:"system_prompt_prefix,omitempty" jsonschema:"description=Custom prefix to add to system prompts for this provider"`
-
-	// Extra headers to send with each request to the provider. Values
-	// run through shell expansion at config-load time, so $VAR and
-	// $(cmd) work the same way they do in MCP headers. A header whose
-	// value resolves to the empty string (unset bare $VAR under
-	// lenient nounset, $(echo), or literal "") is omitted from the
-	// outgoing request rather than sent as "Header:".
-	ExtraHeaders map[string]string `json:"extra_headers,omitempty" jsonschema:"description=Additional HTTP headers to send with requests"`
-	// ExtraBody is merged verbatim into OpenAI-compatible request
-	// bodies. String values are NOT shell-expanded: this is a plain
-	// JSON passthrough so that arbitrary provider-extension fields
-	// (numbers, nested objects, booleans) round-trip without a
-	// recursive walker guessing at intent. If you need an env-var-
-	// driven value at request time, put it in extra_headers, or in
-	// the provider's top-level api_key / base_url, all of which do
-	// expand.
-	ExtraBody map[string]any `json:"extra_body,omitempty" jsonschema:"description=Additional fields to include in request bodies\\, only works with openai-compatible providers"`
-
-	ProviderOptions map[string]any `json:"provider_options,omitempty" jsonschema:"description=Additional provider-specific options for this provider"`
-
-	// Used to pass extra parameters to the provider.
-	ExtraParams map[string]string `json:"-"`
-
-	// AWSAuthRefresh is a shell command run when Bedrock returns a
-	// credential error. Output is discarded to avoid corrupting the TUI.
-	AWSAuthRefresh string `json:"aws_auth_refresh,omitempty" jsonschema:"description=Shell command to run when AWS credentials expire (Bedrock only)."`
-
-	// Skip cost accumulation for this provider when using subscription or flat rate billing.
-	FlatRate bool `json:"flat_rate,omitempty" jsonschema:"description=Flat-rate mode for this provider"`
-
-	// AutoDiscoverModels controls model discovery via /v1/models endpoint.
-	// When Models is empty and this is nil or true, Crush auto-discovers
-	// models. When true and Models is non-empty, discovered models are
-	// merged in (user-specified models take precedence). When false,
-	// only explicitly listed models are used.
-	AutoDiscoverModels *bool `json:"discover_models,omitempty" jsonschema:"description=Auto-discover models from /v1/models endpoint. When true with existing models they are merged (yours win),default=true"`
-
-	// The provider models
-	Models []catwalk.Model `json:"models,omitempty" jsonschema:"description=List of models available from this provider"`
-
-	// ChatGPTModels lists the models the ChatGPT (Codex) backend grants
-	// when the provider is authenticated with a ChatGPT account. It is
-	// the provider's whole catalog in that case: the API-key models in
-	// Models are not served by the subscription.
-	ChatGPTModels []catwalk.Model `json:"chatgpt_models,omitempty" jsonschema:"-"`
-
-	// GrokModels lists the models the Grok plan grants when the provider
-	// is authenticated with a Grok account. Like ChatGPTModels, it is
-	// the provider's whole catalog in that case.
-	GrokModels []catwalk.Model `json:"grok_models,omitempty" jsonschema:"-"`
+	OAuthToken         *oauth.Token      `json:"oauth,omitempty" jsonschema:"description=OAuth2 token for authentication with the provider"`
+	AutoDiscoverModels *bool             `json:"discover_models,omitempty" jsonschema:"description=Auto-discover models from /v1/models endpoint. When true with existing models they are merged (yours win),default=true"`
+	ExtraParams        map[string]string `json:"-"`
+	ProviderOptions    map[string]any    `json:"provider_options,omitempty" jsonschema:"description=Additional provider-specific options for this provider"`
+	ExtraBody          map[string]any    `json:"extra_body,omitempty" jsonschema:"description=Additional fields to include in request bodies\\, only works with openai-compatible providers"`
+	ExtraHeaders       map[string]string `json:"extra_headers,omitempty" jsonschema:"description=Additional HTTP headers to send with requests"`
+	APIKey             string            `json:"api_key,omitempty" jsonschema:"description=API key for authentication with the provider,example=$OPENAI_API_KEY"`
+	SystemPromptPrefix string            `json:"system_prompt_prefix,omitempty" jsonschema:"description=Custom prefix to add to system prompts for this provider"`
+	APIKeyTemplate     string            `json:"-"`
+	ID                 string            `json:"id,omitempty" jsonschema:"description=Unique identifier for the provider,example=openai"`
+	Type               catwalk.Type      `json:"type,omitempty" jsonschema:"description=Provider type that determines the API format,default=openai"`
+	BaseURL            string            `json:"base_url,omitempty" jsonschema:"description=Base URL for the provider's API,format=uri,example=https://api.openai.com/v1"`
+	AWSAuthRefresh     string            `json:"aws_auth_refresh,omitempty" jsonschema:"description=Shell command to run when AWS credentials expire (Bedrock only)."`
+	Name               string            `json:"name,omitempty" jsonschema:"description=Human-readable name for the provider,example=OpenAI"`
+	Models             []catwalk.Model   `json:"models,omitempty" jsonschema:"description=List of models available from this provider"`
+	ChatGPTModels      []catwalk.Model   `json:"chatgpt_models,omitempty" jsonschema:"-"`
+	GrokModels         []catwalk.Model   `json:"grok_models,omitempty" jsonschema:"-"`
+	Disable            bool              `json:"disable,omitempty" jsonschema:"description=Whether this provider is disabled,default=false"`
+	FlatRate           bool              `json:"flat_rate,omitempty" jsonschema:"description=Flat-rate mode for this provider"`
 }
 
 // ToProvider converts the [ProviderConfig] to a [catwalk.Provider].
@@ -216,88 +154,26 @@ const (
 )
 
 type MCPConfig struct {
-	// Lazy keeps this server's tools out of the model context until loaded.
-	Lazy          *bool             `json:"lazy,omitempty" jsonschema:"description=Keep this server's tools out of the model context until the agent loads them with mcp_search,default=true"`
-	Command       string            `json:"command,omitempty" jsonschema:"description=Command to execute for stdio MCP servers,example=npx"`
-	Env           map[string]string `json:"env,omitempty" jsonschema:"description=Environment variables to set for the MCP server"`
-	Args          []string          `json:"args,omitempty" jsonschema:"description=Arguments to pass to the MCP server command"`
-	Type          MCPType           `json:"type" jsonschema:"required,description=Type of MCP connection,enum=stdio,enum=sse,enum=http,default=stdio"`
-	URL           string            `json:"url,omitempty" jsonschema:"description=URL for HTTP or SSE MCP servers,format=uri,example=http://localhost:3000/mcp"`
-	Disabled      bool              `json:"disabled,omitempty" jsonschema:"description=Whether this MCP server is disabled,default=false"`
-	DisabledTools []string          `json:"disabled_tools,omitempty" jsonschema:"description=List of tools from this MCP server to disable,example=get-library-doc"`
-	EnabledTools  []string          `json:"enabled_tools,omitempty" jsonschema:"description=Allow list of tools from this MCP server,example=get-library-doc"`
-	Timeout       int               `json:"timeout,omitempty" jsonschema:"description=Timeout in seconds for MCP server connections,default=10,example=30,example=60,example=120"`
-
-	// Sessionless marks a server that does not maintain an MCP session (it
-	// never issues a Mcp-Session-Id). When true, Crush omits the
-	// tools/prompts/resources list-changed handlers: the go-sdk opens a
-	// SEP-2575 "subscriptions/listen" stream whenever any of those handlers
-	// is set, and sessionless streamable-HTTP servers (e.g. GitHub MCP)
-	// answer that POST with 404 ("session not found"), which the SDK treats
-	// as fatal. The cost is no live list-changed notifications from this
-	// server.
-	//
-	// When nil, Crush auto-detects a set of known sessionless servers (see
-	// IsSessionless); set it explicitly to override that detection.
-	Sessionless *bool `json:"sessionless,omitempty" jsonschema:"description=Mark a sessionless MCP server (no Mcp-Session-Id) so Crush skips the subscriptions/listen stream it would otherwise reject. Leave unset to auto-detect known sessionless servers (e.g. GitHub MCP),default=false"`
-
-	// Headers are HTTP headers for HTTP/SSE MCP servers. Values run
-	// through shell expansion at MCP startup, so $VAR and $(cmd)
-	// work. A header whose value resolves to the empty string (unset
-	// bare $VAR under lenient nounset, $(echo), or literal "") is
-	// omitted from the outgoing request rather than sent as
-	// "Header:".
-	Headers map[string]string `json:"headers,omitempty" jsonschema:"description=HTTP headers for HTTP/SSE MCP servers"`
-
-	// ChannelEnabled enables an MCP server as a channel directly from config,
-	// equivalent to passing its name via --channels on the CLI. This lets
-	// channels be declared persistently in crush.json without needing a CLI
-	// flag on every launch.
-	ChannelEnabled bool `json:"channel_enabled,omitempty" jsonschema:"description=Enable this MCP server as a channel (equivalent to --channels),default=false"`
-
-	// ChannelReply, when set on a server enabled as a channel, makes Crush
-	// route the final assistant response of every turn that originated from
-	// this channel back through one of the server's own tools, so a message
-	// received on the channel gets a reply on the channel even when the
-	// model only produced terminal output.
-	ChannelReply *MCPChannelReply `json:"channel_reply,omitempty" jsonschema:"description=Automatically route replies for turns originating from this channel back through one of the server's tools"`
-
-	// OAuth enables the MCP OAuth 2.1 authorization flow for HTTP
-	// transport servers. When true, the client uses dynamic client
-	// registration and opens a browser for the user to authorize.
-	// Tokens are persisted automatically. Only supported for type=http.
-	OAuth bool `json:"oauth,omitempty" jsonschema:"description=Enable OAuth 2.1 authorization flow for this MCP server (HTTP transport only),default=false"`
-
-	// OAuthClientID is an optional pre-registered OAuth client ID. Set
-	// it for servers that do not support dynamic client registration
-	// (e.g. GitHub, Slack) and instead issue client credentials when you
-	// register an OAuth app. Values run through shell expansion, so
-	// $VAR and $(cmd) work.
-	OAuthClientID string `json:"oauth_client_id,omitempty" jsonschema:"description=Pre-registered OAuth client ID for servers without dynamic client registration"`
-
-	// OAuthClientSecret is the optional secret paired with
-	// OAuthClientID for confidential clients. Values run through shell
-	// expansion, so $VAR and $(cmd) work.
-	OAuthClientSecret string `json:"oauth_client_secret,omitempty" jsonschema:"description=Pre-registered OAuth client secret paired with oauth_client_id"`
-
-	// OAuthClientIDMetadata is the URL of an OAuth Client ID Metadata
-	// Document (SEP-991) used as the client_id for servers that
-	// advertise client_id_metadata_document_supported but offer no
-	// dynamic client registration endpoint (e.g. Home Assistant). The
-	// URL must serve an OAuth client metadata document listing Crush's
-	// redirect URIs. Values run through shell expansion, so $VAR and
-	// $(cmd) work.
-	OAuthClientIDMetadata string `json:"oauth_client_id_metadata,omitempty" jsonschema:"description=URL of an OAuth Client ID Metadata Document (SEP-991) sent as the client_id for servers that advertise client_id_metadata_document_supported but have no registration endpoint"`
-
-	// OAuthCallbackPort pins the localhost port used for the OAuth
-	// redirect listener. Set this when the OAuth provider requires an
-	// exact-match callback URL (e.g. GitHub OAuth Apps). When omitted,
-	// Crush picks the first free port from its default range.
-	OAuthCallbackPort int `json:"oauth_callback_port,omitempty" jsonschema:"description=Fixed localhost port for the OAuth callback, required by providers that enforce exact-match redirect URIs"`
-
-	// OAuthToken is the persisted OAuth token for this server. It is
-	// managed internally and stored in the global data config.
-	OAuthToken *oauth.Token `json:"oauth_token,omitempty" jsonschema:"-"`
+	Sessionless           *bool             `json:"sessionless,omitempty" jsonschema:"description=Mark a sessionless MCP server (no Mcp-Session-Id) so Crush skips the subscriptions/listen stream it would otherwise reject. Leave unset to auto-detect known sessionless servers (e.g. GitHub MCP),default=false"`
+	OAuthToken            *oauth.Token      `json:"oauth_token,omitempty" jsonschema:"-"`
+	Env                   map[string]string `json:"env,omitempty" jsonschema:"description=Environment variables to set for the MCP server"`
+	ChannelReply          *MCPChannelReply  `json:"channel_reply,omitempty" jsonschema:"description=Automatically route replies for turns originating from this channel back through one of the server's tools"`
+	Headers               map[string]string `json:"headers,omitempty" jsonschema:"description=HTTP headers for HTTP/SSE MCP servers"`
+	Lazy                  *bool             `json:"lazy,omitempty" jsonschema:"description=Keep this server's tools out of the model context until the agent loads them with mcp_search,default=true"`
+	URL                   string            `json:"url,omitempty" jsonschema:"description=URL for HTTP or SSE MCP servers,format=uri,example=http://localhost:3000/mcp"`
+	OAuthClientID         string            `json:"oauth_client_id,omitempty" jsonschema:"description=Pre-registered OAuth client ID for servers without dynamic client registration"`
+	Command               string            `json:"command,omitempty" jsonschema:"description=Command to execute for stdio MCP servers,example=npx"`
+	OAuthClientIDMetadata string            `json:"oauth_client_id_metadata,omitempty" jsonschema:"description=URL of an OAuth Client ID Metadata Document (SEP-991) sent as the client_id for servers that advertise client_id_metadata_document_supported but have no registration endpoint"`
+	OAuthClientSecret     string            `json:"oauth_client_secret,omitempty" jsonschema:"description=Pre-registered OAuth client secret paired with oauth_client_id"`
+	Type                  MCPType           `json:"type" jsonschema:"required,description=Type of MCP connection,enum=stdio,enum=sse,enum=http,default=stdio"`
+	Args                  []string          `json:"args,omitempty" jsonschema:"description=Arguments to pass to the MCP server command"`
+	DisabledTools         []string          `json:"disabled_tools,omitempty" jsonschema:"description=List of tools from this MCP server to disable,example=get-library-doc"`
+	EnabledTools          []string          `json:"enabled_tools,omitempty" jsonschema:"description=Allow list of tools from this MCP server,example=get-library-doc"`
+	Timeout               int               `json:"timeout,omitempty" jsonschema:"description=Timeout in seconds for MCP server connections,default=10,example=30,example=60,example=120"`
+	OAuthCallbackPort     int               `json:"oauth_callback_port,omitempty" jsonschema:"description=Fixed localhost port for the OAuth callback, required by providers that enforce exact-match redirect URIs"`
+	OAuth                 bool              `json:"oauth,omitempty" jsonschema:"description=Enable OAuth 2.1 authorization flow for this MCP server (HTTP transport only),default=false"`
+	ChannelEnabled        bool              `json:"channel_enabled,omitempty" jsonschema:"description=Enable this MCP server as a channel (equivalent to --channels),default=false"`
+	Disabled              bool              `json:"disabled,omitempty" jsonschema:"description=Whether this MCP server is disabled,default=false"`
 }
 
 // MCPChannelReply configures deterministic reply routing for an MCP server
@@ -340,33 +216,29 @@ func (m MCPConfig) isOrphanedToken() bool {
 }
 
 type LSPConfig struct {
-	Disabled    bool              `json:"disabled,omitempty" jsonschema:"description=Whether this LSP server is disabled,default=false"`
-	Command     string            `json:"command,omitempty" jsonschema:"description=Command to execute for the LSP server,example=gopls"`
-	Args        []string          `json:"args,omitempty" jsonschema:"description=Arguments to pass to the LSP server command"`
 	Env         map[string]string `json:"env,omitempty" jsonschema:"description=Environment variables to set to the LSP server command"`
-	FileTypes   []string          `json:"filetypes,omitempty" jsonschema:"description=File types this LSP server handles,example=go,example=mod,example=rs,example=c,example=js,example=ts"`
-	RootMarkers []string          `json:"root_markers,omitempty" jsonschema:"description=Files or directories that indicate the project root,example=go.mod,example=package.json,example=Cargo.toml"`
 	InitOptions map[string]any    `json:"init_options,omitempty" jsonschema:"description=Initialization options passed to the LSP server during initialize request"`
 	Options     map[string]any    `json:"options,omitempty" jsonschema:"description=LSP server-specific settings passed during initialization"`
+	Command     string            `json:"command,omitempty" jsonschema:"description=Command to execute for the LSP server,example=gopls"`
+	Args        []string          `json:"args,omitempty" jsonschema:"description=Arguments to pass to the LSP server command"`
+	FileTypes   []string          `json:"filetypes,omitempty" jsonschema:"description=File types this LSP server handles,example=go,example=mod,example=rs,example=c,example=js,example=ts"`
+	RootMarkers []string          `json:"root_markers,omitempty" jsonschema:"description=Files or directories that indicate the project root,example=go.mod,example=package.json,example=Cargo.toml"`
 	Timeout     int               `json:"timeout,omitempty" jsonschema:"description=Timeout in seconds for LSP server initialization,default=30,example=60,example=120"`
+	Disabled    bool              `json:"disabled,omitempty" jsonschema:"description=Whether this LSP server is disabled,default=false"`
 }
 
 type TUIOptions struct {
-	CompactMode bool        `json:"compact_mode,omitempty" jsonschema:"description=Enable compact mode for the TUI interface,default=false"`
-	DiffMode    string      `json:"diff_mode,omitempty" jsonschema:"description=Diff mode for the TUI interface,enum=unified,enum=split"`
-	ActiveTheme string      `json:"active_theme,omitempty" jsonschema:"description=Name of the currently active theme,default=charmtone-panther,example=charmtone-panther,example=gruvbox-dark"`
-	Completions Completions `json:"completions,omitzero" jsonschema:"description=Completions UI options"`
-	Transparent *bool       `json:"transparent,omitempty" jsonschema:"description=Enable transparent background for the TUI interface,default=false"`
-	Scrollbar   string      `json:"scrollbar,omitempty" jsonschema:"description=Chat scrollbar visibility,enum=default,enum=always,enum=never,default=default"`
-	Mouse       *bool       `json:"mouse,omitempty" jsonschema:"description=Enable terminal mouse capture for selection\\, clicks\\, and scrolling in the TUI. Disable to let the terminal emulator or tmux handle text selection and copy/paste,default=true"`
-	// WorkingDirFormat controls how the working directory is rendered in
-	// the header. Supported placeholders: {cwd}, {user}, {host}.
-	WorkingDirFormat string     `json:"working_dir_format,omitempty" jsonschema:"description=Format for the working directory shown in the header. Supported placeholders: {cwd} for the path\\, {user} for the current user\\, {host} for the hostname.,default={user}@{host}:{cwd},example={cwd},example={host}:{cwd}"`
-	ExitBanner       ExitBanner `json:"exit_banner,omitempty" jsonschema:"description=Exit banner style after quitting Crush,enum=default,enum=compact,enum=none,default=default"`
-	// NerdFonts overrides Nerd Font glyph detection for the TUI.
-	// ScrollSpeed overrides the TUI scroll step in lines per wheel tick.
-	ScrollSpeed *float64 `json:"scroll_speed,omitempty" jsonschema:"description=Multiplier applied to mouse wheel scroll distance in the TUI,default=1"`
-	NerdFonts   *bool    `json:"nerd_fonts,omitempty" jsonschema:"description=Override Nerd Font glyph detection for the TUI: true forces glyphs on, false forces them off, and unset keeps automatic detection"`
+	Completions      Completions `json:"completions,omitzero" jsonschema:"description=Completions UI options"`
+	Transparent      *bool       `json:"transparent,omitempty" jsonschema:"description=Enable transparent background for the TUI interface,default=false"`
+	Mouse            *bool       `json:"mouse,omitempty" jsonschema:"description=Enable terminal mouse capture for selection\\, clicks\\, and scrolling in the TUI. Disable to let the terminal emulator or tmux handle text selection and copy/paste,default=true"`
+	ScrollSpeed      *float64    `json:"scroll_speed,omitempty" jsonschema:"description=Multiplier applied to mouse wheel scroll distance in the TUI,default=1"`
+	NerdFonts        *bool       `json:"nerd_fonts,omitempty" jsonschema:"description=Override Nerd Font glyph detection for the TUI: true forces glyphs on, false forces them off, and unset keeps automatic detection"`
+	DiffMode         string      `json:"diff_mode,omitempty" jsonschema:"description=Diff mode for the TUI interface,enum=unified,enum=split"`
+	ActiveTheme      string      `json:"active_theme,omitempty" jsonschema:"description=Name of the currently active theme,default=charmtone-panther,example=charmtone-panther,example=gruvbox-dark"`
+	Scrollbar        string      `json:"scrollbar,omitempty" jsonschema:"description=Chat scrollbar visibility,enum=default,enum=always,enum=never,default=default"`
+	WorkingDirFormat string      `json:"working_dir_format,omitempty" jsonschema:"description=Format for the working directory shown in the header. Supported placeholders: {cwd} for the path\\, {user} for the current user\\, {host} for the hostname.,default={user}@{host}:{cwd},example={cwd},example={host}:{cwd}"`
+	ExitBanner       ExitBanner  `json:"exit_banner,omitempty" jsonschema:"description=Exit banner style after quitting Crush,enum=default,enum=compact,enum=none,default=default"`
+	CompactMode      bool        `json:"compact_mode,omitempty" jsonschema:"description=Enable compact mode for the TUI interface,default=false"`
 }
 
 // IsTransparent reports whether the TUI draws a transparent background. The
@@ -460,8 +332,8 @@ const (
 )
 
 type Attribution struct {
-	TrailerStyle  TrailerStyle `json:"trailer_style,omitempty" jsonschema:"description=Style of attribution trailer to add to commits,enum=none,enum=co-authored-by,enum=assisted-by,default=assisted-by"`
 	CoAuthoredBy  *bool        `json:"co_authored_by,omitempty" jsonschema:"description=Deprecated: use trailer_style instead"`
+	TrailerStyle  TrailerStyle `json:"trailer_style,omitempty" jsonschema:"description=Style of attribution trailer to add to commits,enum=none,enum=co-authored-by,enum=assisted-by,default=assisted-by"`
 	GeneratedWith bool         `json:"generated_with,omitempty" jsonschema:"description=Add Generated with Crush line to commit messages and issues and PRs,default=true"`
 }
 
@@ -475,54 +347,33 @@ func (Attribution) JSONSchemaExtend(schema *jsonschema.Schema) {
 }
 
 type Options struct {
-	ContextPaths         []string    `json:"context_paths,omitempty" jsonschema:"description=Paths to files containing context information for the AI,example=.cursorrules,example=CRUSH.md"`
-	GlobalContextPaths   []string    `json:"global_context_paths,omitempty" jsonschema:"description=Paths to files containing global context information for the AI,default=~/.config/crush/CRUSH.md,default=~/.config/AGENTS.md"`
-	SkillsPaths          []string    `json:"skills_paths,omitempty" jsonschema:"description=Paths to directories containing Agent Skills (folders with SKILL.md files),example=~/.config/crush/skills,example=./skills"`
-	TUI                  *TUIOptions `json:"tui,omitempty" jsonschema:"description=Terminal user interface options"`
-	Debug                bool        `json:"debug,omitempty" jsonschema:"description=Enable debug logging,default=false"`
-	DebugLSP             bool        `json:"debug_lsp,omitempty" jsonschema:"description=Enable debug logging for LSP servers,default=false"`
-	DisableAutoSummarize bool        `json:"disable_auto_summarize,omitempty" jsonschema:"description=Disable automatic conversation summarization,default=false"`
-	// DataDirectory is where Crush keeps per-project state such as
-	// the SQLite database and workspace overrides. Relative paths are
-	// resolved against the working directory; absolute paths are used
-	// verbatim. After defaulting the stored value is always absolute.
-	DataDirectory             string       `json:"data_directory,omitempty" jsonschema:"description=Directory for storing application data. Relative paths are resolved against the working directory; absolute paths are used as-is.,default=.crush,example=.crush"`
-	DisabledTools             []string     `json:"disabled_tools,omitempty" jsonschema:"description=List of built-in tools to disable and hide from the agent,example=bash,example=sourcegraph"`
-	DisableProviderAutoUpdate bool         `json:"disable_provider_auto_update,omitempty" jsonschema:"description=Disable providers auto-update,default=false"`
-	DisableDefaultProviders   bool         `json:"disable_default_providers,omitempty" jsonschema:"description=Ignore all default/embedded providers. When enabled\\, providers must be fully specified in the config file with base_url\\, models\\, and api_key - no merging with defaults occurs,default=false"`
-	Attribution               *Attribution `json:"attribution,omitempty" jsonschema:"description=Attribution settings for generated content"`
-	DisableMetrics            bool         `json:"disable_metrics,omitempty" jsonschema:"description=Disable sending metrics,default=false"`
-	InitializeAs              string       `json:"initialize_as,omitempty" jsonschema:"description=Name of the context file to create/update during project initialization,default=AGENTS.md,example=AGENTS.md,example=CRUSH.md,example=CLAUDE.md,example=docs/LLMs.md"`
-	AutoLSP                   *bool        `json:"auto_lsp,omitempty" jsonschema:"description=Automatically setup LSPs based on root markers,default=true"`
-	Progress                  *bool        `json:"progress,omitempty" jsonschema:"description=Show indeterminate progress updates during long operations,default=true"`
-	Notifications             string       `json:"notifications,omitempty" jsonschema:"description=Notification style to use. Options: auto (default)\\, native\\, osc\\, bell\\, disabled. Auto selects based on environment: native for local sessions\\, osc for SSH (with automatic OSC 99/777 detection).,enum=auto,enum=native,enum=osc,enum=bell,enum=disabled,default=auto"`
-	DisabledSkills            []string     `json:"disabled_skills,omitempty" jsonschema:"description=List of skill names to disable and hide from the agent,example=crush-config"`
-	DisableA2UI               bool         `json:"disable_a2ui,omitempty" jsonschema:"description=Disable A2UI entirely: drops the prompt section inviting the model to emit renderable <a2ui-json> surfaces and stops advertising the a2ui capability to MCP servers,default=false"`
-	// AllowedCommands specifies commands that should be removed from the default
-	// banned commands list, allowing the agent to execute them via the bash tool.
-	// This provides a way to selectively enable commands like "ssh" or "curl"
-	// that are blocked by default for security reasons. It only subtracts from
-	// the exact-command block list; package-manager argument blocks such as
-	// "apt install" or "npm -g" are unaffected. Allowed commands are still
-	// subject to the normal permission prompt (they are not auto-approved).
-	AllowedCommands []string `json:"allowed_commands,omitempty" jsonschema:"description=List of commands to allow that are normally banned. Only affects the exact-command block list; package-manager argument blocks (e.g. 'apt install') are unaffected. Allowed commands still require permission approval.,example=ssh,example=curl,example=scp"`
-	// AllowAllCommands removes all restrictions from the banned commands list,
-	// allowing the agent to execute any command via the bash tool. Unlike
-	// allowed_commands, this also removes the package-manager argument blocks.
-	// This is a dangerous option and should be used with caution.
-	AllowAllCommands  bool               `json:"allow_all_commands,omitempty" jsonschema:"description=Remove all command restrictions from the bash tool, including package-manager argument blocks (dangerous). Commands still require permission approval unless yolo mode is enabled.,default=false"`
-	RequestTimeout    *int               `json:"request_timeout,omitempty" jsonschema:"description=Timeout in seconds for each LLM API request. Streaming responses are aborted only after this much inactivity\\, so slow but active streams are never killed. 0 disables it\\, negative values are invalid.,default=60,example=120,example=300,example=0"`
-	MaxBackgroundJobs *int               `json:"max_background_jobs,omitempty" jsonschema:"description=How many background shell jobs may run at once. Jobs that have finished never count against it. 0 or negative restores the default.,default=50,example=10,example=200"`
-	LazyMCP           *bool              `json:"lazy_mcp,omitempty" jsonschema:"description=Keep MCP tools out of the model context until the agent loads them with mcp_search. Individual servers override it with mcp.<name>.lazy,default=true"`
-	Compaction        *CompactionOptions `json:"compaction,omitempty" jsonschema:"description=Context compaction settings"`
-
-	// TodoEnforcement carries the global todo enforcement defaults
-	// (#315); per agent type overrides live on the agent definitions.
-	TodoEnforcement *TodoEnforcementConfig `json:"todo_enforcement,omitempty" jsonschema:"description=Proactive todo enforcement: inject a nudge when an agent works without a todo list, and optionally reject mutating tools until one exists"`
-	// Dispatch carries the dispatch_agent tool's limits (#390).
-	Dispatch *DispatchOptions `json:"dispatch,omitempty" jsonschema:"description=Dispatched agent options"`
-	// A2A carries the A2A host's optional TCP listener (#358).
-	A2A *A2AOptions `json:"a2a,omitempty" jsonschema:"description=A2A host options: an optional TLS-only TCP listener beside the per-process unix socket"`
+	RequestTimeout            *int                   `json:"request_timeout,omitempty" jsonschema:"description=Timeout in seconds for each LLM API request. Streaming responses are aborted only after this much inactivity\\, so slow but active streams are never killed. 0 disables it\\, negative values are invalid.,default=60,example=120,example=300,example=0"`
+	Attribution               *Attribution           `json:"attribution,omitempty" jsonschema:"description=Attribution settings for generated content"`
+	A2A                       *A2AOptions            `json:"a2a,omitempty" jsonschema:"description=A2A host options: an optional TLS-only TCP listener beside the per-process unix socket"`
+	TUI                       *TUIOptions            `json:"tui,omitempty" jsonschema:"description=Terminal user interface options"`
+	AutoLSP                   *bool                  `json:"auto_lsp,omitempty" jsonschema:"description=Automatically setup LSPs based on root markers,default=true"`
+	Dispatch                  *DispatchOptions       `json:"dispatch,omitempty" jsonschema:"description=Dispatched agent options"`
+	TodoEnforcement           *TodoEnforcementConfig `json:"todo_enforcement,omitempty" jsonschema:"description=Proactive todo enforcement: inject a nudge when an agent works without a todo list, and optionally reject mutating tools until one exists"`
+	Compaction                *CompactionOptions     `json:"compaction,omitempty" jsonschema:"description=Context compaction settings"`
+	MaxBackgroundJobs         *int                   `json:"max_background_jobs,omitempty" jsonschema:"description=How many background shell jobs may run at once. Jobs that have finished never count against it. 0 or negative restores the default.,default=50,example=10,example=200"`
+	Progress                  *bool                  `json:"progress,omitempty" jsonschema:"description=Show indeterminate progress updates during long operations,default=true"`
+	LazyMCP                   *bool                  `json:"lazy_mcp,omitempty" jsonschema:"description=Keep MCP tools out of the model context until the agent loads them with mcp_search. Individual servers override it with mcp.<name>.lazy,default=true"`
+	DataDirectory             string                 `json:"data_directory,omitempty" jsonschema:"description=Directory for storing application data. Relative paths are resolved against the working directory; absolute paths are used as-is.,default=.crush,example=.crush"`
+	InitializeAs              string                 `json:"initialize_as,omitempty" jsonschema:"description=Name of the context file to create/update during project initialization,default=AGENTS.md,example=AGENTS.md,example=CRUSH.md,example=CLAUDE.md,example=docs/LLMs.md"`
+	Notifications             string                 `json:"notifications,omitempty" jsonschema:"description=Notification style to use. Options: auto (default)\\, native\\, osc\\, bell\\, disabled. Auto selects based on environment: native for local sessions\\, osc for SSH (with automatic OSC 99/777 detection).,enum=auto,enum=native,enum=osc,enum=bell,enum=disabled,default=auto"`
+	GlobalContextPaths        []string               `json:"global_context_paths,omitempty" jsonschema:"description=Paths to files containing global context information for the AI,default=~/.config/crush/CRUSH.md,default=~/.config/AGENTS.md"`
+	SkillsPaths               []string               `json:"skills_paths,omitempty" jsonschema:"description=Paths to directories containing Agent Skills (folders with SKILL.md files),example=~/.config/crush/skills,example=./skills"`
+	DisabledTools             []string               `json:"disabled_tools,omitempty" jsonschema:"description=List of built-in tools to disable and hide from the agent,example=bash,example=sourcegraph"`
+	DisabledSkills            []string               `json:"disabled_skills,omitempty" jsonschema:"description=List of skill names to disable and hide from the agent,example=crush-config"`
+	ContextPaths              []string               `json:"context_paths,omitempty" jsonschema:"description=Paths to files containing context information for the AI,example=.cursorrules,example=CRUSH.md"`
+	AllowedCommands           []string               `json:"allowed_commands,omitempty" jsonschema:"description=List of commands to allow that are normally banned. Only affects the exact-command block list; package-manager argument blocks (e.g. 'apt install') are unaffected. Allowed commands still require permission approval.,example=ssh,example=curl,example=scp"`
+	AllowAllCommands          bool                   `json:"allow_all_commands,omitempty" jsonschema:"description=Remove all command restrictions from the bash tool, including package-manager argument blocks (dangerous). Commands still require permission approval unless yolo mode is enabled.,default=false"`
+	DisableProviderAutoUpdate bool                   `json:"disable_provider_auto_update,omitempty" jsonschema:"description=Disable providers auto-update,default=false"`
+	Debug                     bool                   `json:"debug,omitempty" jsonschema:"description=Enable debug logging,default=false"`
+	DisableMetrics            bool                   `json:"disable_metrics,omitempty" jsonschema:"description=Disable sending metrics,default=false"`
+	DisableAutoSummarize      bool                   `json:"disable_auto_summarize,omitempty" jsonschema:"description=Disable automatic conversation summarization,default=false"`
+	DebugLSP                  bool                   `json:"debug_lsp,omitempty" jsonschema:"description=Enable debug logging for LSP servers,default=false"`
+	DisableDefaultProviders   bool                   `json:"disable_default_providers,omitempty" jsonschema:"description=Ignore all default/embedded providers. When enabled\\, providers must be fully specified in the config file with base_url\\, models\\, and api_key - no merging with defaults occurs,default=false"`
 }
 
 // DefaultMaxBackgroundJobs is how many background shell jobs may run at once
@@ -817,17 +668,13 @@ func (c *TodoEnforcementConfig) Validate(path string) error {
 // TodoEnforcementSettings is the resolved enforcement ladder: the per-agent
 // override layered over the global options with defaults applied.
 type TodoEnforcementSettings struct {
-	Enabled        bool
-	NudgeThreshold int
-	HardGate       bool
-	// Wander kill (#316). KillAfterNudges is the number of ignored
-	// nudges that trip the kill; StallWindow and HardTimeout are 0 when
-	// disabled. InactivityTimeout is the A2A-level backstop (#360), also
-	// 0 when disabled.
+	NudgeThreshold    int
 	KillAfterNudges   int
 	StallWindow       time.Duration
 	HardTimeout       time.Duration
 	InactivityTimeout time.Duration
+	Enabled           bool
+	HardGate          bool
 }
 
 const (
@@ -1139,66 +986,26 @@ func (l LSPConfig) ResolvedEnv(r VariableResolver) (map[string]string, error) {
 }
 
 type Agent struct {
-	ID          string `json:"id,omitempty"`
-	Name        string `json:"name,omitempty"`
-	Description string `json:"description,omitempty"`
-	// This is the id of the system prompt used by the agent
-	Disabled bool `json:"disabled,omitempty"`
-
-	Model SelectedModelType `json:"model" jsonschema:"required,description=The model type to use for this agent,enum=large,enum=small,default=large"`
-
-	// The available tools for the agent
-	//  if this is nil, all tools are available
-	AllowedTools []string `json:"allowed_tools,omitempty"`
-
-	// this tells us which MCPs are available for this agent
-	//  if this is empty all mcps are available
-	//  the string array is the list of tools from the AllowedMCP the agent has available
-	//  if the string array is nil, all tools from the AllowedMCP are available
-	AllowedMCP map[string][]string `json:"allowed_mcp,omitempty"`
-
-	// ContextPaths overrides options.context_paths for this agent's
-	// prompt (#432). Nil inherits the global paths at render time, so a
-	// dispatch renders the workspace's own context files.
-	ContextPaths []string `json:"context_paths,omitempty"`
-
-	// TodoEnforcement overrides the global todo enforcement settings
-	// (#315) for this agent type, field by field.
+	AllowedMCP      map[string][]string    `json:"allowed_mcp,omitempty"`
+	Transport       *AgentTransport        `json:"-"`
+	Auth            *AgentAuth             `json:"-"`
+	ModelRef        *AgentModelRef         `json:"-"`
 	TodoEnforcement *TodoEnforcementConfig `json:"todo_enforcement,omitempty" jsonschema:"description=Todo enforcement overrides for this agent: nudge injection and the opt-in mutating-tool gate"`
-
-	// The fields below come from the agent's definition (#333). They are
-	// resolved runtime values, not config: no config file loads them.
-	//
-	// Role classifies the agent: main, subagent, or dispatch.
-	Role string `json:"-"`
-	// Runtime selects the execution path: builtin or a2a. A runtime a2a
-	// dispatch agent runs behind its external Agent Card (#434).
-	Runtime string `json:"-"`
-	// Prompt is builtin:<id> or file:<path> (#432).
-	Prompt string `json:"-"`
-	// PromptAppend is a file:<path> appended to the prompt (#432).
-	PromptAppend string `json:"-"`
-	// ModelRef pins an explicit provider and model, overriding the
-	// large/small slot (#432).
-	ModelRef *AgentModelRef `json:"-"`
-	// Skills lists skill names for the agent (#432).
-	Skills []string `json:"-"`
-	// Workspace selects dispatch isolation: worktree or none. A builtin
-	// dispatch always runs in a worktree; a runtime a2a agent resolves
-	// to none (#434).
-	Workspace string `json:"-"`
-	// Card is the external Agent Card URL for runtime a2a agents (#434).
-	Card string `json:"-"`
-	// Auth configures bearer auth for runtime a2a agents (#434). Token
-	// is the unresolved reference; the dispatch resolves it per call.
-	Auth *AgentAuth `json:"-"`
-	// Transport tunes an a2a agent's connection (#434).
-	Transport *AgentTransport `json:"-"`
-	// Unusable is why a runtime a2a definition cannot be dispatched
-	// (#434): a missing or refused card URL, auth without a token, or a
-	// negative idle timeout. The config still loads; dispatch refuses
-	// the agent with this reason. Empty for every usable agent.
-	Unusable string `json:"-"`
+	Workspace       string                 `json:"-"`
+	PromptAppend    string                 `json:"-"`
+	Unusable        string                 `json:"-"`
+	Model           SelectedModelType      `json:"model" jsonschema:"required,description=The model type to use for this agent,enum=large,enum=small,default=large"`
+	Role            string                 `json:"-"`
+	Runtime         string                 `json:"-"`
+	Prompt          string                 `json:"-"`
+	Name            string                 `json:"name,omitempty"`
+	Description     string                 `json:"description,omitempty"`
+	Card            string                 `json:"-"`
+	ID              string                 `json:"id,omitempty"`
+	Skills          []string               `json:"-"`
+	AllowedTools    []string               `json:"allowed_tools,omitempty"`
+	ContextPaths    []string               `json:"context_paths,omitempty"`
+	Disabled        bool                   `json:"disabled,omitempty"`
 }
 
 type Tools struct {
@@ -1290,45 +1097,20 @@ func (c *Config) ResolvedEmbeddings() (EmbeddingsConfig, bool) {
 
 // Config holds the configuration for crush.
 type Config struct {
-	Schema string `json:"$schema,omitempty"`
-
-	// We currently only support large/small as values here.
-	Models map[SelectedModelType]SelectedModel `json:"models,omitempty" jsonschema:"description=Model configurations for different model types,example={\"large\":{\"model\":\"gpt-4o\",\"provider\":\"openai\"}}"`
-
-	// Recently used models stored in the data directory config.
-	RecentModels map[SelectedModelType][]SelectedModel `json:"recent_models,omitempty" jsonschema:"-"`
-
-	// The providers that are configured
-	Providers *csync.Map[string, ProviderConfig] `json:"providers,omitempty" jsonschema:"description=AI provider configurations"`
-
-	MCP MCPs `json:"mcp,omitempty" jsonschema:"description=Model Context Protocol server configurations"`
-
-	LSP LSPs `json:"lsp,omitempty" jsonschema:"description=Language Server Protocol configurations"`
-
-	// Embeddings enables the semantic_search tool. Nil (the default)
-	// leaves the tool unregistered.
-	Embeddings *EmbeddingsConfig `json:"embeddings,omitempty" jsonschema:"description=Embedding provider configuration for semantic search"`
-
-	Options *Options `json:"options,omitempty" jsonschema:"description=General application options"`
-
-	Permissions *Permissions `json:"permissions,omitempty" jsonschema:"description=Permission settings for tool usage"`
-
-	Tools Tools `json:"tools,omitzero" jsonschema:"description=Tool configurations"`
-
-	Hooks map[string][]HookConfig `json:"hooks,omitempty" jsonschema:"description=User-defined shell commands that fire on hook events (e.g. PreToolUse)"`
-
-	// Env is a map of environment variables set on startup.
-	Env map[string]string `json:"env,omitempty" jsonschema:"description=Environment variables to set on startup"`
-
-	// AgentDefinitions is the user's agents block (#333): built-in
-	// agents overlaid field by field, plus new dispatch agents. The
-	// resolved form lives in Agents; validation runs in ValidateAgents.
-	AgentDefinitions map[string]AgentDefinition `json:"agents,omitempty" jsonschema:"description=Agent definitions: override a built-in agent field by field, or add dispatch agents"`
-
-	// Agents is the resolved agent map the coordinator reads. It is
-	// built by SetupAgents from the built-in definitions plus
-	// AgentDefinitions, so it is never loaded from a config file.
-	Agents map[string]Agent `json:"-"`
+	Tools            Tools                                 `json:"tools,omitzero" jsonschema:"description=Tool configurations"`
+	Providers        *csync.Map[string, ProviderConfig]    `json:"providers,omitempty" jsonschema:"description=AI provider configurations"`
+	RecentModels     map[SelectedModelType][]SelectedModel `json:"recent_models,omitempty" jsonschema:"-"`
+	MCP              MCPs                                  `json:"mcp,omitempty" jsonschema:"description=Model Context Protocol server configurations"`
+	LSP              LSPs                                  `json:"lsp,omitempty" jsonschema:"description=Language Server Protocol configurations"`
+	Embeddings       *EmbeddingsConfig                     `json:"embeddings,omitempty" jsonschema:"description=Embedding provider configuration for semantic search"`
+	Options          *Options                              `json:"options,omitempty" jsonschema:"description=General application options"`
+	Permissions      *Permissions                          `json:"permissions,omitempty" jsonschema:"description=Permission settings for tool usage"`
+	Models           map[SelectedModelType]SelectedModel   `json:"models,omitempty" jsonschema:"description=Model configurations for different model types,example={\"large\":{\"model\":\"gpt-4o\",\"provider\":\"openai\"}}"`
+	Hooks            map[string][]HookConfig               `json:"hooks,omitempty" jsonschema:"description=User-defined shell commands that fire on hook events (e.g. PreToolUse)"`
+	Env              map[string]string                     `json:"env,omitempty" jsonschema:"description=Environment variables to set on startup"`
+	AgentDefinitions map[string]AgentDefinition            `json:"agents,omitempty" jsonschema:"description=Agent definitions: override a built-in agent field by field, or add dispatch agents"`
+	Agents           map[string]Agent                      `json:"-"`
+	Schema           string                                `json:"$schema,omitempty"`
 }
 
 // cloneForWrite returns a copy of c that the store's typed field mutators
@@ -1845,23 +1627,9 @@ func (o *Options) GetLazyMCP() bool {
 }
 
 type CompactionOptions struct {
-	// PruneToolResults replaces the output of tool calls that are no longer
-	// part of the recent working set with a one-line skeleton naming what ran
-	// and how much was dropped. The tool call itself stays, so the model
-	// knows what it already tried and can run it again. Stored transcripts
-	// are never modified.
 	PruneToolResults *bool `json:"prune_tool_results,omitempty" jsonschema:"description=Replace the output of stale tool calls with a one-line skeleton naming what ran; stored history is never modified,default=true"`
-	// TailTokens is how much of the most recent conversation a compaction
-	// keeps verbatim instead of folding into its checkpoint.
-	TailTokens int `json:"tail_tokens,omitempty" jsonschema:"description=Tokens of recent conversation a compaction keeps verbatim. When unset this is 15% of the model's context window,example=8000,example=40000"`
-	// ObserveMemory distills each completed turn into a session memory
-	// ledger using the small model. Recorded memory is attached to every
-	// checkpoint verbatim, so decisions and constraints persist across
-	// compactions instead of being re-summarized generation after
-	// generation. It costs one cheap model call per turn with enough new
-	// material to be worth reading, which is why it can be turned off; it
-	// is on unless explicitly disabled.
-	ObserveMemory *bool `json:"observe_memory,omitempty" jsonschema:"description=Record session memory at the end of each turn; memory is kept verbatim beside every checkpoint, so decisions survive compaction,default=true"`
+	ObserveMemory    *bool `json:"observe_memory,omitempty" jsonschema:"description=Record session memory at the end of each turn; memory is kept verbatim beside every checkpoint, so decisions survive compaction,default=true"`
+	TailTokens       int   `json:"tail_tokens,omitempty" jsonschema:"description=Tokens of recent conversation a compaction keeps verbatim. When unset this is 15% of the model's context window,example=8000,example=40000"`
 }
 
 // applySelectedModels stores the resolved selections, dropping any type

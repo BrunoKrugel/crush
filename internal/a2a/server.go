@@ -75,84 +75,26 @@ const traceparentHeader = "traceparent"
 // executor's artifact and progress events, and Name/Description/Skills
 // shape the served AgentCard.
 type ServerParams struct {
-	// DispatchID is the registry entry's id the served dispatch answers
-	// as (#346). Required: the host routes /agents/<DispatchID> here.
-	DispatchID string
-	// Runner is the dispatched agent's SessionAgent — the a2a.Runner
-	// slice of it. Required.
-	Runner Runner
-	// SessionID is the ephemeral task session backing the dispatch.
-	// Required.
-	SessionID string
-	// ContextID is the A2A context the dispatch's tasks carry (#350):
-	// the client sends it as Message.ContextID and the executor resolves
-	// it through the host's context registry to this dispatch's runner,
-	// session, and call template. Production sets it to SessionID — the
-	// A2A context IS the task session. Required: the binding lives from
-	// StartServer until the dispatch's Server stops (handle lifetime =
-	// run lifetime), and a task naming an unknown, foreign, or unbound
-	// context is rejected.
-	ContextID string
-	// Diff collects the completion artifact. Optional; the a2a.GitDiff
-	// or dispatch.WorkspaceProvider.Diff contracts both fit.
-	Diff DiffFunc
-	// Todos streams per-session progress as TaskStatusUpdateEvents
-	// (#174). Optional; the production source is the dispatch
-	// registry's todo collector.
-	Todos TodoSource
-	// Name is the agent's display name on the card — the dispatch's
-	// @handle. Defaults to a generic label.
-	Name string
-	// Description is the agent's one-line card description — the
-	// dispatch's role.
-	Description string
-	// Skills are the Crush skills the dispatch was given; each becomes
-	// one A2A skill entry on the card.
-	Skills []*skills.Skill
-	// Version advertised on the card. Defaults to the build version.
-	Version string
-	// Call is the template every served turn runs with (#71) — the
-	// dispatch's full call shaping; the prompt is overridden per message.
-	Call agent.SessionAgentCall
-	// InactivityTimeout is the A2A-level backstop (#360): a served run
-	// that yields no events for this long is ended by the executor with
-	// a Failed status carrying the reason. 0 (the default) disables it;
-	// when set, the SDK's own inactivity guard also runs, one minute
-	// later, as an outer net for a wedged executor.
+	Todos             TodoSource
+	hooks             executorHooks
+	Runner            Runner
+	TaskStore         taskstore.Store
+	Permissions       PermissionSource
+	Questions         QuestionSource
+	CancelReason      func() string
+	Diff              DiffFunc
+	Usage             func(ctx context.Context) (agent.Usage, error)
+	Name              string
+	SessionID         string
+	Description       string
+	ParentSessionID   string
+	Version           string
+	DispatchID        string
+	ContextID         string
+	Skills            []*skills.Skill
+	Call              agent.SessionAgentCall
 	InactivityTimeout time.Duration
-	// CancelReason reports why the dispatched run was killed (#316), for
-	// the Canceled status an out-of-band cancel emits (#342). Optional;
-	// the production value is the dispatch run's kill reason. A nil func
-	// or an empty string falls back to "canceled".
-	CancelReason func() string
-	// Usage reads the dispatched session's final usage once its run has
-	// ended (#364). The executor attaches it to every post-run terminal
-	// status under the usage/v1 extension. Optional; nil emits no usage
-	// metadata.
-	Usage func(ctx context.Context) (agent.Usage, error)
-	// Questions is the dispatched agent's own question service (#352):
-	// the executor parks the run in input-required on each question and
-	// resolves it with the answer on the same task. Optional; nil means
-	// the agent cannot ask.
-	Questions QuestionSource
-	// Listed puts the route on the host's agent index (#421) with its
-	// card, handle, role and context, and tracks its task's state there.
-	Listed bool
-	// ParentSessionID is the session the dispatch was created from
-	// (#399), carried on the index.
-	ParentSessionID string
-	// Permissions is the dispatched agent's scoped permission service
-	// (#353): the executor parks the run in input-required on each
-	// request that needs a person and resolves it with the decision on
-	// the same task. Optional; nil leaves requests to other subscribers.
-	Permissions PermissionSource
-	// TaskStore persists served tasks durably (#354) instead of the
-	// SDK's in-process default, so task state survives a restart.
-	// Optional; the production store arrives with #355. nil keeps
-	// today's in-memory behavior.
-	TaskStore taskstore.Store
-	// hooks are the executor's test-only seams; zero in production.
-	hooks executorHooks
+	Listed            bool
 }
 
 // Server is one dispatched agent's slice of the process-wide A2A host
@@ -161,21 +103,15 @@ type ServerParams struct {
 // context (#350). The socket, the HTTP server, the route table, and the
 // context registry belong to the [ServerFactory].
 type Server struct {
-	// Endpoint is the card URL the dispatch serves:
-	// http://<a2aURLHost>/agents/<dispatch id>.
-	Endpoint string
-	// Card is the served AgentCard — the same object registered on the
-	// dispatch registry entry, so in-memory discovery can never disagree
-	// with what a client dials.
-	Card *a2aspec.AgentCard
-
+	stopErr   error
+	Card      *a2aspec.AgentCard
 	factory   *ServerFactory
 	executor  *Executor
+	stopped   chan struct{}
+	Endpoint  string
 	id        string
 	contextID string
 	stopOnce  sync.Once
-	stopped   chan struct{}
-	stopErr   error
 }
 
 // servedRunStopWait bounds how long Stop waits for the route's run
@@ -223,84 +159,30 @@ func (s *Server) Stop(ctx context.Context) error {
 // package's [agent.DispatchHost] seam, which is how the dependency
 // stays one-way: a2a imports agent, never the reverse.
 type ServerFactory struct {
-	dataDir string
-
-	// contexts is the host's context registry (#350): the A2A context ID
-	// each running dispatch owns, mapped to the binding its turns run
-	// against. An executor resolves a task's context here at execute
-	// time, so a run's end — which unbinds — is visible to the very next
-	// message.
-	contexts *ContextRegistry
-
-	// token is the host's per-process bearer token (#357), generated
-	// when the socket binds, read by the host auth interceptor through
-	// authToken and attached to dispatch calls by the client side.
-	token string
-
-	// creds scopes the host token per dispatch session for the client
-	// side's [a2aclient.AuthInterceptor] (#357).
-	creds *a2aclient.InMemoryCredentialsStore
-
-	// taskStore is the process-wide default served tasks persist to
-	// (#355): the durable SQLite store rooted at the session database,
-	// wired once by the app so the agent package never touches the
-	// taskstore types. A ServerParams.TaskStore set per dispatch wins
-	// over it (tests); when both are unset, served tasks keep the SDK's
-	// in-process default and do not survive a restart.
-	taskStore taskstore.Store
-
-	// httpClient, when set, replaces the factory's unix-socket dispatch
-	// client in StreamDispatch — the test injection seam (#344), used
-	// to bound phases of the wire protocol independently of the
-	// defaults.
-	httpClient *http.Client
-
-	// externalTransport, when set, is the base transport external agent
-	// calls dial through under the origin pin (#434) — the test seam
-	// for TLS test servers. Production leaves it nil, and each external
-	// agent gets a transport of its own.
+	taskStore         taskstore.Store
+	listener          net.Listener
 	externalTransport http.RoundTripper
-
-	// externalLookup, when set, replaces the resolver the plain-http
-	// loopback check uses (#434) — the test seam that makes localhost
-	// resolve somewhere else.
-	externalLookup func(ctx context.Context, host string) ([]net.IPAddr, error)
-
-	// tcpOpts configures the optional TLS-only TCP listener (#358),
-	// started with the socket; nil keeps the host on its socket alone.
-	tcpOpts *config.A2AOptions
-
-	// logger, when set, replaces slog.Default for the TCP listener's
-	// lines (#358) — the test seam for its audit log.
-	logger *slog.Logger
-
-	mu         sync.Mutex
-	started    bool
-	closed     bool
-	listener   net.Listener
-	sockPath   string
-	httpServer *http.Server
-	done       chan struct{}
-	routes     map[string]*route
-
-	// tcp is the running TCP listener (#358); nil when none is
-	// configured or it failed to start.
-	tcp *tcpHost
-
-	// definitions is the card listing (#392): every agent definition
-	// published on the host, keyed by its config id. Distinct from the
-	// route table, which also carries per-run served agents.
-	definitions map[string]*a2aspec.AgentCard
-
-	// index is the agent index (#421): one descriptor per listed
-	// dispatch, served at AgentsIndexPath.
-	index *agentIndex
-	// startedCh is closed once the host is up, so a watcher waiting to
-	// dial its index (#421) wakes instead of polling for the socket.
-	startedCh chan struct{}
-	// indexClient is the one client the index is read through (#421).
-	indexClientOnce sync.Once
-	indexClient     *http.Client
+	tcp               *tcpHost
+	definitions       map[string]*a2aspec.AgentCard
+	httpClient        *http.Client
+	indexClient       *http.Client
+	externalLookup    func(ctx context.Context, host string) ([]net.IPAddr, error)
+	tcpOpts           *config.A2AOptions
+	logger            *slog.Logger
+	startedCh         chan struct{}
+	index             *agentIndex
+	creds             *a2aclient.InMemoryCredentialsStore
+	contexts          *ContextRegistry
+	routes            map[string]*route
+	httpServer        *http.Server
+	done              chan struct{}
+	sockPath          string
+	dataDir           string
+	token             string
+	indexClientOnce   sync.Once
+	mu                sync.Mutex
+	closed            bool
+	started           bool
 }
 
 // route is one dispatch's slice of the host: its JSON-RPC handler, the
@@ -1097,9 +979,9 @@ func writeVersionNotSupported(w http.ResponseWriter, r *http.Request) {
 		JSONRPC string          `json:"jsonrpc"`
 		ID      json.RawMessage `json:"id"`
 		Error   struct {
-			Code    int               `json:"code"`
 			Message string            `json:"message"`
 			Data    []json.RawMessage `json:"data,omitempty"`
+			Code    int               `json:"code"`
 		} `json:"error"`
 	}{JSONRPC: "2.0", ID: id}
 	envelope.Error.Code = -32009
@@ -1239,16 +1121,10 @@ func Resolve(entry dispatch.Entry) (*a2aspec.AgentCard, string, bool) {
 // session), the call template its turns run with, and when the dispatch
 // bound it.
 type ContextBinding struct {
+	Started   time.Time
 	Runner    Runner
 	SessionID string
 	Call      agent.SessionAgentCall
-	Started   time.Time
-	// LocalOnly keeps the binding off the TCP listener (#358): a call
-	// that arrived over TCP resolves it to nothing, exactly like an
-	// unknown context. Every binding today is a local dispatch or
-	// sub-agent run started in this process, so StartServer always sets
-	// it; agents meant to be called remotely arrive with the peer
-	// registry (#334).
 	LocalOnly bool
 }
 
@@ -1259,8 +1135,8 @@ type ContextBinding struct {
 // ended — or one naming a context that belongs to another dispatch —
 // resolves to nothing and the executor rejects it.
 type ContextRegistry struct {
-	mu       sync.RWMutex
 	bindings map[string]ContextBinding
+	mu       sync.RWMutex
 }
 
 // NewContextRegistry returns an empty context registry.

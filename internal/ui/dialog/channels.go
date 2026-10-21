@@ -23,11 +23,11 @@ const ChannelsID = "channels"
 
 // ChannelItem wraps a channel server's ClientInfo as a filterable list item.
 type ChannelItem struct {
+	info mcp.ClientInfo
 	*list.Versioned
-	info    mcp.ClientInfo
 	t       *styles.Styles
-	m       fuzzy.Match
 	cache   map[int]string
+	m       fuzzy.Match
 	focused bool
 }
 
@@ -96,18 +96,12 @@ func (c *ChannelItem) Render(width int) string {
 // Channels is a dialog that lists channel-capable MCP servers and provides
 // per-channel actions.
 type Channels struct {
-	com    *common.Common
-	help   help.Model
-	list   *list.FilterableList
-	input  textinput.Model
 	ws     workspace.Workspace
-	keyMap struct {
-		Reconnect,
-		Next,
-		Previous,
-		UpDown,
-		Close key.Binding
-	}
+	com    *common.Common
+	list   *list.FilterableList
+	help   help.Model
+	keyMap struct{ Reconnect, Next, Previous, UpDown, Close key.Binding }
+	input  textinput.Model
 }
 
 var _ Dialog = (*Channels)(nil)

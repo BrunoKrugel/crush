@@ -28,15 +28,15 @@ var runShell = shell.Run
 // compiledHook pairs a HookConfig with its compiled matcher regex. A nil
 // matcher means "match every tool".
 type compiledHook struct {
-	cfg     config.HookConfig
 	matcher *regexp.Regexp
+	cfg     config.HookConfig
 }
 
 // Runner executes hook commands and aggregates their results.
 type Runner struct {
-	hooks      []compiledHook
 	cwd        string
 	projectDir string
+	hooks      []compiledHook
 }
 
 // NewRunner creates a Runner from the given hook configs. Each hook's

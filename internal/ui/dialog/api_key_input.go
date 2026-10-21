@@ -34,23 +34,20 @@ const APIKeyInputID = "api_key_input"
 
 // APIKeyInput represents a model selection dialog.
 type APIKeyInput struct {
-	com          *common.Common
-	isOnboarding bool
-
 	provider  catwalk.Provider
 	model     config.SelectedModel
+	com       *common.Common
+	help      help.Model
 	modelType config.SelectedModelType
-
-	width int
-	state APIKeyInputState
-
-	keyMap struct {
+	keyMap    struct {
 		Submit key.Binding
 		Close  key.Binding
 	}
-	input   textinput.Model
-	spinner spinner.Model
-	help    help.Model
+	input        textinput.Model
+	spinner      spinner.Model
+	width        int
+	state        APIKeyInputState
+	isOnboarding bool
 }
 
 var _ Dialog = (*APIKeyInput)(nil)

@@ -34,35 +34,13 @@ const (
 
 // Session is a session selector dialog.
 type Session struct {
-	com                *common.Common
-	help               help.Model
-	list               *list.FilterableList
-	input              textinput.Model
-	selectedSessionInx int
-	sessions           []session.Session
-	// children maps a parent session ID to its inspectable sub-agent
-	// task sessions (#314). They nest under their parent through the
-	// same sub-menu pattern the commands dialog uses. It starts empty:
-	// the batch is fetched off the Update loop (#409) and applied by
-	// SetChildren once it lands.
-	children map[string][]session.Session
-	// childrenLoaded reports whether the child-session batch has
-	// landed. Until it has, ctrl+] reports "Loading" instead of
-	// "no sub-agent sessions" — empty means unknown, not none.
-	childrenLoaded bool
-
-	// menuStack / breadcrumb implement the sub-menu: one level per
-	// entered parent, mirroring dialog/commands.go.
-	menuStack  []sessionsMenuLevel
-	breadcrumb []string
-
-	sessionsMode  sessionsMode
-	bodyArea      image.Rectangle
-	mouseScrolled bool
 	lastClickTime time.Time
+	list          *list.FilterableList
+	com           *common.Common
+	children      map[string][]session.Session
+	help          help.Model
 	lastClickID   string
-
-	keyMap struct {
+	keyMap        struct {
 		Select        key.Binding
 		Agents        key.Binding
 		Next          key.Binding
@@ -76,6 +54,15 @@ type Session struct {
 		CancelDelete  key.Binding
 		Close         key.Binding
 	}
+	sessions           []session.Session
+	menuStack          []sessionsMenuLevel
+	breadcrumb         []string
+	input              textinput.Model
+	bodyArea           image.Rectangle
+	selectedSessionInx int
+	mouseScrolled      bool
+	sessionsMode       sessionsMode
+	childrenLoaded     bool
 }
 
 // sessionsMenuLevel is one pushed sub-menu level: the items to restore

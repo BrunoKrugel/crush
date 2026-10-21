@@ -222,7 +222,7 @@ func LoadProviders(ctx context.Context, cfg *Config, refreshHyper HyperTokenRefr
 			// the user's config: dropping it signs a logged-in user out.
 			item, err := hyperSyncer.Get(ctx)
 			if err != nil {
-				hyperErr = fmt.Errorf("Crush was unable to fetch updated information from Hyper: %w", err) //nolint:staticcheck
+				hyperErr = fmt.Errorf("crush was unable to fetch updated information from Hyper: %w", err)
 			}
 			hyperProvider = item
 		})

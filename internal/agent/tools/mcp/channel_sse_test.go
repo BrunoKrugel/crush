@@ -48,8 +48,8 @@ func newStreamableChannelServer(t *testing.T, name string, doorbell func(w http.
 			body, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
 			var req struct {
-				ID     json.RawMessage `json:"id"`
 				Method string          `json:"method"`
+				ID     json.RawMessage `json:"id"`
 			}
 			require.NoError(t, sonic.Unmarshal(body, &req))
 			id := string(bytes.Trim(req.ID, "null"))

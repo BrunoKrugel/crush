@@ -94,13 +94,11 @@ func formatWorkingDir(format, cwd, user, host string) string {
 }
 
 type header struct {
-	// cached logo and compact logo
+	com         *common.Common
 	logo        string
 	compactLogo string
-
-	com     *common.Common
-	width   int
-	compact bool
+	width       int
+	compact     bool
 }
 
 // newHeader creates a new header model.

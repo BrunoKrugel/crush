@@ -39,11 +39,9 @@ var AllNotificationStyles = []NotificationStyle{
 
 // Notifications represents a dialog for selecting notification style.
 type Notifications struct {
-	com   *common.Common
-	help  help.Model
-	list  *list.FilterableList
-	input textinput.Model
-
+	com    *common.Common
+	list   *list.FilterableList
+	help   help.Model
 	keyMap struct {
 		Select   key.Binding
 		Next     key.Binding
@@ -51,16 +49,17 @@ type Notifications struct {
 		UpDown   key.Binding
 		Close    key.Binding
 	}
+	input textinput.Model
 }
 
 // NotificationItem represents a notification style list item.
 type NotificationItem struct {
 	*list.Versioned
-	style     NotificationStyle
-	isCurrent bool
 	t         *styles.Styles
-	m         fuzzy.Match
 	cache     map[int]string
+	style     NotificationStyle
+	m         fuzzy.Match
+	isCurrent bool
 	focused   bool
 }
 

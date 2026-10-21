@@ -18,10 +18,10 @@ import (
 // plain (unmodified) clicks, since terminals only act on OSC 8 links for
 // modifier-clicks while the application holds mouse reporting.
 type hyperlinkSpan struct {
+	url      string
 	row      int
 	colStart int
 	colEnd   int
-	url      string
 }
 
 // parseHyperlinkSpans walks a rendered string, decodes OSC 8 hyperlink

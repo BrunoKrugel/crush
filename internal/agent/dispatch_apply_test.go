@@ -84,8 +84,8 @@ func requireWorkspaceGone(t *testing.T, c *coordinator, entry dispatch.Entry, ha
 // entry, and frees the handle — the full teardown, by ID and by handle.
 func TestDismissDispatchRemovesWorkspace(t *testing.T) {
 	tests := []struct {
-		name   string
 		params func(dispatch.Entry) DismissDispatchParams
+		name   string
 	}{
 		{
 			name:   "by dispatch id",

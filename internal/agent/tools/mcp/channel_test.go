@@ -20,11 +20,11 @@ func TestParseChannelParams(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
+		meta    map[string]string
 		name    string
 		raw     string
-		wantOK  bool
 		content string
-		meta    map[string]string
+		wantOK  bool
 	}{
 		{
 			name:    "valid with meta",
@@ -174,8 +174,8 @@ func TestParseChannelParamsMetaLimits(t *testing.T) {
 // no untrusted value broke out of its element or attribute.
 type parsedChannel struct {
 	XMLName xml.Name   `xml:"channel"`
-	Attrs   []xml.Attr `xml:",any,attr"`
 	Content string     `xml:",chardata"`
+	Attrs   []xml.Attr `xml:",any,attr"`
 }
 
 func parseRendered(t *testing.T, s string) parsedChannel {

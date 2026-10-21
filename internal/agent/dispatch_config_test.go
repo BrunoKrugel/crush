@@ -72,8 +72,8 @@ func TestBuildDispatchToolchainIgnoresWorkspaceConfig(t *testing.T) {
 	events := tc.Permissions().Subscribe(t.Context())
 
 	type bashOutcome struct {
-		resp fantasy.ToolResponse
 		err  error
+		resp fantasy.ToolResponse
 	}
 	outcome := make(chan bashOutcome, 1)
 	go func() {

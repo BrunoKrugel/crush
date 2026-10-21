@@ -111,9 +111,9 @@ func installChannelSSEFilter(t *mcp.StreamableClientTransport, name string, gate
 // health for the health check.
 type channelSSEFilter struct {
 	inner  http.RoundTripper
-	name   string
 	gate   *channelGate
 	health *channelStreamHealth
+	name   string
 }
 
 func (f *channelSSEFilter) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -172,13 +172,12 @@ const maxUnboundedBuffer = 1 << 20
 type channelSSEBody struct {
 	ctx        context.Context
 	body       io.ReadCloser
+	readErr    error
 	filter     *channelSSEFilter
+	buf        []byte
+	out        bytes.Buffer
 	standalone bool
-
-	out     bytes.Buffer // filtered bytes not yet consumed by the reader
-	buf     []byte       // raw bytes awaiting an event boundary
-	eof     bool
-	readErr error
+	eof        bool
 }
 
 // Read returns filtered stream data, blocking on the underlying body only

@@ -24,10 +24,10 @@ import (
 // Subsequent Stream calls (e.g. the recursive run draining the queue)
 // proceed immediately.
 type gatedStreamModel struct {
-	text     string
 	gate     chan struct{}
 	entered  chan struct{}
 	policies chan permission.RequestPolicy
+	text     string
 	calls    atomic.Int64
 }
 

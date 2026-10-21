@@ -11,9 +11,9 @@ import (
 // It is safe for concurrent use from multiple goroutines (e.g. stdout and
 // stderr writing simultaneously).
 type progressWriter struct {
-	mu         sync.Mutex
-	buf        bytes.Buffer
 	onProgress func(string)
+	buf        bytes.Buffer
+	mu         sync.Mutex
 }
 
 func (w *progressWriter) Write(p []byte) (int, error) {

@@ -31,17 +31,17 @@ const MaxTasksPerSession = 50
 
 // Task is a single scheduled prompt.
 type Task struct {
+	CreatedAt time.Time  `json:"createdAt"`
+	NextRunAt time.Time  `json:"nextRunAt"`
+	LastRunAt *time.Time `json:"lastRunAt,omitempty"`
 	ID        string     `json:"id"`
 	SessionID string     `json:"sessionId"`
 	Prompt    string     `json:"prompt"`
 	Cron      string     `json:"cron"`
-	Recurring bool       `json:"recurring"`
-	Durable   bool       `json:"durable"`
-	CreatedAt time.Time  `json:"createdAt"`
-	NextRunAt time.Time  `json:"nextRunAt"`
-	LastRunAt *time.Time `json:"lastRunAt,omitempty"`
 	LastError string     `json:"lastError,omitempty"`
 	RunCount  int        `json:"runCount"`
+	Recurring bool       `json:"recurring"`
+	Durable   bool       `json:"durable"`
 }
 
 // NewTaskID returns a random 8-character hex ID, matching the ID shape
@@ -107,29 +107,14 @@ const claimWindow = 2 * time.Minute
 // advanced on disk under that same lock — before it is fired, so a fire
 // happens exactly once no matter how many processes are running.
 type Store struct {
-	mu       sync.RWMutex
-	tasks    map[string]*Task // keyed by ID
-	filePath string           // durable persistence path; "" disables durable tasks
-	now      func() time.Time // for tests
-
-	// removedSinceSync tracks durable task IDs deleted in this process
-	// since the last successful on-disk sync, so a merge write removes
-	// them even if another process rewrote the file in between.
+	lastModTime      time.Time
+	tasks            map[string]*Task
+	now              func() time.Time
 	removedSinceSync map[string]bool
-	// dirtySinceSync tracks durable task IDs this process has modified
-	// since the last successful on-disk sync, so a merge write only
-	// overwrites a task's disk entry when this process actually changed
-	// it. A process holding a stale in-memory copy (loaded at startup,
-	// advanced on disk by another process since) must not let that copy
-	// win over the newer NextRunAt / RunCount / LastError on disk.
-	dirtySinceSync map[string]bool
-	// lastDiskIDs holds the task IDs present on disk as of the last
-	// successful sync, so a durable task another process deleted from
-	// the file is not resurrected by this process's next write.
-	lastDiskIDs map[string]bool
-	// lastModTime is the persistence file's mtime as of the last read,
-	// gating refreshes to one stat call per tick when nothing changed.
-	lastModTime time.Time
+	dirtySinceSync   map[string]bool
+	lastDiskIDs      map[string]bool
+	filePath         string
+	mu               sync.RWMutex
 }
 
 // NewStore returns a Store persisting durable tasks at filePath. An

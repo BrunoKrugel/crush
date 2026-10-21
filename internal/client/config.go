@@ -15,9 +15,9 @@ import (
 // SetConfigField sets a config key/value pair on the server.
 func (c *Client) SetConfigField(ctx context.Context, id string, scope config.Scope, key string, value any) error {
 	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/config/set", id), nil, jsonBody(struct {
-		Scope config.Scope `json:"scope"`
-		Key   string       `json:"key"`
 		Value any          `json:"value"`
+		Key   string       `json:"key"`
+		Scope config.Scope `json:"scope"`
 	}{Scope: scope, Key: key, Value: value}), http.Header{"Content-Type": []string{"application/json"}})
 	if err != nil {
 		return fmt.Errorf("failed to set config field: %w", err)
@@ -32,8 +32,8 @@ func (c *Client) SetConfigField(ctx context.Context, id string, scope config.Sco
 // RemoveConfigField removes a config key on the server.
 func (c *Client) RemoveConfigField(ctx context.Context, id string, scope config.Scope, key string) error {
 	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/config/remove", id), nil, jsonBody(struct {
-		Scope config.Scope `json:"scope"`
 		Key   string       `json:"key"`
+		Scope config.Scope `json:"scope"`
 	}{Scope: scope, Key: key}), http.Header{"Content-Type": []string{"application/json"}})
 	if err != nil {
 		return fmt.Errorf("failed to remove config field: %w", err)
@@ -48,9 +48,9 @@ func (c *Client) RemoveConfigField(ctx context.Context, id string, scope config.
 // UpdatePreferredModel updates the preferred model on the server.
 func (c *Client) UpdatePreferredModel(ctx context.Context, id string, scope config.Scope, modelType config.SelectedModelType, model config.SelectedModel) error {
 	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/config/model", id), nil, jsonBody(struct {
-		Scope     config.Scope             `json:"scope"`
-		ModelType config.SelectedModelType `json:"model_type"`
 		Model     config.SelectedModel     `json:"model"`
+		ModelType config.SelectedModelType `json:"model_type"`
+		Scope     config.Scope             `json:"scope"`
 	}{Scope: scope, ModelType: modelType, Model: model}), http.Header{"Content-Type": []string{"application/json"}})
 	if err != nil {
 		return fmt.Errorf("failed to update preferred model: %w", err)
@@ -150,8 +150,8 @@ func (c *Client) ImportCopilot(ctx context.Context, id string) (*oauth.Token, bo
 // server.
 func (c *Client) RefreshOAuthToken(ctx context.Context, id string, scope config.Scope, providerID string) error {
 	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/config/refresh-oauth", id), nil, jsonBody(struct {
-		Scope      config.Scope `json:"scope"`
 		ProviderID string       `json:"provider_id"`
+		Scope      config.Scope `json:"scope"`
 	}{Scope: scope, ProviderID: providerID}), http.Header{"Content-Type": []string{"application/json"}})
 	if err != nil {
 		return fmt.Errorf("failed to refresh OAuth token: %w", err)
@@ -292,17 +292,9 @@ type MCPResourceContents struct {
 	Blob     []byte `json:"blob,omitempty"`
 }
 
-// MCPToolCallResult holds the model-facing text and any A2UI surface
-// payloads from an MCP tool call.
+// MCPToolCallResult holds the model-facing text from an MCP tool call.
 type MCPToolCallResult struct {
-	Content  string               `json:"content"`
-	Surfaces []MCPToolCallSurface `json:"surfaces,omitempty"`
-}
-
-// MCPToolCallSurface is a single A2UI surface payload from a tool call.
-type MCPToolCallSurface struct {
-	Payload string `json:"payload"`
-	URI     string `json:"uri"`
+	Content string `json:"content"`
 }
 
 // EnableDockerMCP enables the Docker MCP server on the workspace.
@@ -503,9 +495,9 @@ func (c *Client) ListMCPPrompts(ctx context.Context, id string) ([]proto.MCPProm
 // CallMCPTool calls a tool on a named MCP server.
 func (c *Client) CallMCPTool(ctx context.Context, id, name, toolName string, args map[string]any) (MCPToolCallResult, error) {
 	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/mcp/call-tool", id), nil, jsonBody(struct {
+		Args     map[string]any `json:"args"`
 		Name     string         `json:"name"`
 		ToolName string         `json:"tool_name"`
-		Args     map[string]any `json:"args"`
 	}{Name: name, ToolName: toolName, Args: args}), http.Header{"Content-Type": []string{"application/json"}})
 	if err != nil {
 		return MCPToolCallResult{}, fmt.Errorf("failed to call MCP tool: %w", err)
@@ -524,9 +516,9 @@ func (c *Client) CallMCPTool(ctx context.Context, id, name, toolName string, arg
 // GetMCPPrompt retrieves a prompt from a named MCP server.
 func (c *Client) GetMCPPrompt(ctx context.Context, id, clientID, promptID string, args map[string]string) (string, error) {
 	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/mcp/get-prompt", id), nil, jsonBody(struct {
+		Args     map[string]string `json:"args"`
 		ClientID string            `json:"client_id"`
 		PromptID string            `json:"prompt_id"`
-		Args     map[string]string `json:"args"`
 	}{ClientID: clientID, PromptID: promptID, Args: args}), http.Header{"Content-Type": []string{"application/json"}})
 	if err != nil {
 		return "", fmt.Errorf("failed to get MCP prompt: %w", err)

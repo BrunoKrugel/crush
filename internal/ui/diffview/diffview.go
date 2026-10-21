@@ -35,41 +35,33 @@ const (
 
 // DiffView represents a view for displaying differences between two files.
 type DiffView struct {
-	layout          layout
+	style           Style
+	cachedLexer     chroma.Lexer
+	err             error
+	syntaxCache     map[string]string
+	chromaStyle     *chroma.Style
 	before          file
 	after           file
 	fileName        string
-	contextLines    int
-	lineNumbers     bool
+	unified         udiff.UnifiedDiff
+	splitHunks      []splitHunk
+	edits           []udiff.Edit
 	height          int
-	width           int
-	xOffset         int
+	layout          layout
+	contextLines    int
+	afterNumDigits  int
 	yOffset         int
-	infiniteYScroll bool
-	style           Style
+	xOffset         int
+	width           int
 	tabWidth        int
-	chromaStyle     *chroma.Style
-
-	isComputed bool
-	err        error
-	unified    udiff.UnifiedDiff
-	edits      []udiff.Edit
-
-	splitHunks []splitHunk
-
 	totalLines      int
 	codeWidth       int
-	fullCodeWidth   int  // with leading symbols
-	extraColOnAfter bool // add extra column on after panel
+	fullCodeWidth   int
 	beforeNumDigits int
-	afterNumDigits  int
-
-	// Cache lexer to avoid expensive file pattern matching on every line
-	cachedLexer chroma.Lexer
-
-	// Cache highlighted lines to avoid re-highlighting the same content
-	// Key: hash of (content + background color), Value: highlighted string
-	syntaxCache map[string]string
+	extraColOnAfter bool
+	isComputed      bool
+	lineNumbers     bool
+	infiniteYScroll bool
 }
 
 // New creates a new DiffView with default settings.

@@ -11,8 +11,8 @@ import (
 // finishing in one session must not reset the elapsed time shown in
 // another.
 var turnClock = struct {
-	mu      sync.Mutex
 	started map[string]time.Time
+	mu      sync.Mutex
 }{started: map[string]time.Time{}}
 
 // StartTurn starts sessionID's turn clock from now, replacing any earlier

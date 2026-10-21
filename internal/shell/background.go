@@ -47,29 +47,25 @@ func (sb *syncBuffer) String() string {
 
 // BackgroundShell represents a shell running in the background.
 type BackgroundShell struct {
-	ID string
-	// SessionID is the session that owns the job; it tags the shell so
-	// the job can be killed with its session (a dispatch teardown kills
-	// its session's jobs, #385). Empty for jobs started without a
-	// session.
-	SessionID   string
-	Command     string
-	Description string
-	Shell       *Shell
-	WorkingDir  string
 	ctx         context.Context
+	exitErr     error
+	stderr      *syncBuffer
+	Shell       *Shell
 	cancel      context.CancelFunc
 	stdout      *syncBuffer
-	stderr      *syncBuffer
 	done        chan struct{}
-	exitErr     error
-	completedAt atomic.Int64 // Unix timestamp when job completed (0 if still running)
+	Description string
+	WorkingDir  string
+	Command     string
+	ID          string
+	SessionID   string
+	completedAt atomic.Int64
 }
 
 // BackgroundShellManager manages background shell instances.
 type BackgroundShellManager struct {
-	mu     sync.Mutex
 	shells map[string]*BackgroundShell
+	mu     sync.Mutex
 }
 
 var (

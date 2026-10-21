@@ -17,7 +17,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/clipperhouse/displaywidth"
 	"github.com/clipperhouse/uax29/v2/words"
-	a2ui "github.com/tmc/a2ui"
 )
 
 // Constants for multi-click detection.
@@ -76,82 +75,35 @@ func scrollbarHideCmd(seq int) tea.Cmd {
 // Chat represents the chat UI model that handles chat interactions and
 // messages.
 type Chat struct {
-	com      *common.Common
-	list     *list.List
-	idInxMap map[string]int // Map of message IDs to their indices in the list
-
-	// animRunning is true while the shared animation clock has a tick
-	// outstanding. The clock stops itself when no visible item is spinning
-	// and is re-armed by EnsureAnimating once one is. animGen identifies
-	// the current clock: a tick carrying an older generation belongs to a
-	// clock that was superseded and is ignored, so a delayed tick can
-	// never run alongside a replacement. animArmedAt lets EnsureAnimating
-	// recover if a tick is ever lost.
-	animRunning bool
-	animGen     uint64
-	animArmedAt time.Time
-	// animNow is an injectable clock for tests (nil == real time).
-	animNow func() time.Time
-
-	// animAllowed gates the shared clock. setSessionMessages clears it when
-	// reloading a session whose agent is not busy so ghost spinners (an
-	// assistant message that never got a Finish part) stay still; the
-	// message handlers re-enable it when new work arrives.
-	animAllowed bool
-
-	// Mouse state
-	mouseDown     bool
-	mouseDownItem int // Item index where mouse was pressed
-	mouseDownX    int // X position in item content (character offset)
-	mouseDownY    int // Y position in item (line offset)
-	mouseDragItem int // Current item index being dragged over
-	mouseDragX    int // Current X in item content
-	mouseDragY    int // Current Y in item
-
-	// Click tracking for double/triple clicks
-	lastClickTime time.Time
-	lastClickX    int
-	lastClickY    int
-	clickCount    int
-
-	// Pending single click action (delayed to detect double-click)
-	pendingClickID int // Incremented on each click to invalidate old pending clicks
-
-	// follow is a flag to indicate whether the view should auto-scroll to
-	// bottom on new messages.
-	follow bool
-
-	// a2uiReadOnly renders every A2UI surface the chat holds in its
-	// read-only state (#407): while an inspected transcript is on screen,
-	// its surfaces must not take focus or keys. Items set or appended
-	// while it is on inherit it, so a live message landing mid-inspect is
-	// non-interactive from the start.
-	a2uiReadOnly bool
-
-	// drawCache memoizes the decoded form of the last list.Render output so
-	// repeat frames with byte-identical content skip the per-cell ANSI
-	// reparse that uv.StyledString.Draw performs every call. See F9
-	// (docs/notes/2026-05-12-chat-rendering-perf.md §4.8). Bounded to one
-	// entry; invalidated implicitly by string inequality on the next Draw.
-	drawCache *chatDrawCache
-
-	// Scrollbar visibility state
-	scrollbarVisible bool
-	scrollbarHideSeq int    // current sequence number for hide timer
-	scrollbarMode    string // "default", "always", or "never"
-	// scrollbarHideArmed is the hide timeout already scheduled, or zero when
-	// none is outstanding. The tick is armed from the UI's Update tail rather
-	// than returned by the scroll calls, so a caller ignoring a command can
-	// no longer lose the auto-hide.
+	lastClickTime      time.Time
+	animArmedAt        time.Time
+	list               *list.List
+	idInxMap           map[string]int
+	drawCache          *chatDrawCache
+	animNow            func() time.Time
+	com                *common.Common
+	scrollbarMode      string
+	resizeSettleSeq    int
+	scrollbarHideSeq   int
+	mouseDownY         int
+	mouseDownX         int
+	mouseDragItem      int
+	mouseDragX         int
+	mouseDragY         int
+	mouseDownItem      int
+	lastClickX         int
+	lastClickY         int
+	clickCount         int
+	pendingClickID     int
 	scrollbarHideArmed int
-
-	// resizing suppresses the O(N) total-height scan while a resize is in
-	// flight (and during the incremental warm afterward), so a drag only
-	// reflows the visible items. resizeSettleSeq guards stale settle/warm
-	// timers; warmNext tracks warming progress through the message list.
-	resizing        bool
-	resizeSettleSeq int
-	warmNext        int
+	animGen            uint64
+	warmNext           int
+	animAllowed        bool
+	scrollbarVisible   bool
+	follow             bool
+	resizing           bool
+	mouseDown          bool
+	animRunning        bool
 }
 
 // scrollbarHideDuration is how long the scrollbar remains visible after scroll activity.
@@ -172,8 +124,8 @@ const scrollbarHideDuration = 2 * time.Second
 // ANSI re-parse on hit.
 type chatDrawCache struct {
 	rendered string
-	method   ansi.Method
 	buf      uv.ScreenBuffer
+	method   ansi.Method
 }
 
 // NewChat creates a new instance of [Chat] that handles chat interactions and
@@ -445,7 +397,6 @@ func (m *Chat) SetMessages(msgs ...chat.MessageItem) tea.Cmd {
 		}
 		items[i] = msg
 	}
-	m.stampA2UIReadOnly(msgs)
 	m.list.SetItems(items...)
 	m.ScrollToBottom()
 	return nil
@@ -474,34 +425,7 @@ func (m *Chat) AppendMessages(msgs ...chat.MessageItem) {
 		}
 		items[i] = msg
 	}
-	m.stampA2UIReadOnly(msgs)
 	m.list.AppendItems(items...)
-}
-
-// stampA2UIReadOnly applies the chat's read-only state to the given items
-// (#407), so items added while the chat is read-only start out
-// non-interactive instead of waiting for a flag sweep.
-func (m *Chat) stampA2UIReadOnly(msgs []chat.MessageItem) {
-	if !m.a2uiReadOnly {
-		return
-	}
-	for _, msg := range msgs {
-		if ro, ok := msg.(interface{ SetA2UIReadOnly(bool) }); ok {
-			ro.SetA2UIReadOnly(true)
-		}
-	}
-}
-
-// SetA2UIReadOnly toggles read-only rendering of every A2UI surface the
-// chat holds (#407): items currently in the list get the flag applied,
-// and items set or appended while it is on inherit it.
-func (m *Chat) SetA2UIReadOnly(readOnly bool) {
-	m.a2uiReadOnly = readOnly
-	for i := range m.list.Len() {
-		if item, ok := m.list.ItemAt(i).(interface{ SetA2UIReadOnly(bool) }); ok {
-			item.SetA2UIReadOnly(readOnly)
-		}
-	}
 }
 
 // UpdateNestedToolIDs updates the ID map for nested tools within a container.
@@ -1017,96 +941,6 @@ func (m *Chat) ItemAt(index int) chat.MessageItem {
 		return nil
 	}
 	return item
-}
-
-// RetireA2UISurface finds the assistant message holding the live A2UI
-// surface with the given ID, reads its current field values, and retires the
-// surface so the form cannot be re-submitted (#45). It reports the gathered
-// values and whether a matching surface was found.
-func (m *Chat) RetireA2UISurface(surfaceID string) (map[string]any, bool) {
-	for i := range m.list.Len() {
-		item, ok := m.list.ItemAt(i).(*chat.AssistantMessageItem)
-		if !ok {
-			continue
-		}
-		if values, ok := item.RetireA2UISurface(surfaceID); ok {
-			return values, true
-		}
-	}
-	return nil, false
-}
-
-// HasAssistantA2UISurface reports whether a live assistant-authored surface
-// carries the given ID. Assistant items do not implement A2UISurfaceItem and
-// are absent from the MCP provenance registry, so without this check a
-// surface ID an assistant happens to share with an MCP server (both default
-// to "default") resolves as MCP-owned and the user's submission is shipped
-// to that server instead of starting an agent turn.
-func (m *Chat) HasAssistantA2UISurface(surfaceID string) bool {
-	for i := range m.list.Len() {
-		item, ok := m.list.ItemAt(i).(*chat.AssistantMessageItem)
-		if ok && item.HasLiveA2UISurface(surfaceID) {
-			return true
-		}
-	}
-	return false
-}
-
-// a2uiSurfaceItem locates the chat item holding the named MCP surface.
-// Surface IDs are only unique within a server — invoking the same tool twice
-// appends two items carrying the same ID — so the focused surface wins: that
-// is the one the user is actually interacting with. Only when nothing is
-// focused does it fall back to the first match.
-func (m *Chat) a2uiSurfaceItem(surfaceID string) (chat.A2UISurfaceItem, bool) {
-	var first chat.A2UISurfaceItem
-	for i := range m.list.Len() {
-		item, ok := m.list.ItemAt(i).(chat.A2UISurfaceItem)
-		if !ok || !item.HasA2UISurface(surfaceID) {
-			continue
-		}
-		if item.A2UISurfaceIsFocused(surfaceID) {
-			return item, true
-		}
-		if first == nil {
-			first = item
-		}
-	}
-	return first, first != nil
-}
-
-// A2UISurfaceOwner returns the MCP server that served the named surface,
-// resolved through the item that owns it rather than the global
-// surfaceID-keyed registry, so two servers using the same surface ID cannot
-// route each other's interactions.
-func (m *Chat) A2UISurfaceOwner(surfaceID string) (string, bool) {
-	item, ok := m.a2uiSurfaceItem(surfaceID)
-	if !ok {
-		return "", false
-	}
-	return item.A2UISurfaceOwner(surfaceID)
-}
-
-// A2UISurfaceFieldValues reads the named MCP surface's current input values,
-// for building an a2ui_action context. It reports whether a tool item held
-// the surface.
-func (m *Chat) A2UISurfaceFieldValues(surfaceID string) (map[string]any, bool) {
-	item, ok := m.a2uiSurfaceItem(surfaceID)
-	if !ok {
-		return nil, false
-	}
-	return item.ToolA2UIFieldValues(surfaceID), true
-}
-
-// ApplyA2UISurfaceUpdate feeds a batch of A2UI server messages back into the
-// named MCP surface (the response to an a2ui_action round-trip). It reports
-// whether the surface still has renderable state afterward — false means no
-// item held it, or the server deleted it.
-func (m *Chat) ApplyA2UISurfaceUpdate(surfaceID string, msgs []a2ui.ServerMessage) bool {
-	item, ok := m.a2uiSurfaceItem(surfaceID)
-	if !ok {
-		return false
-	}
-	return item.ApplyToolA2UIUpdate(surfaceID, msgs)
 }
 
 // ToggleExpandedSelectedItem expands the selected message item if it is expandable.

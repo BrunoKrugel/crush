@@ -68,7 +68,6 @@ import (
 	"github.com/charmbracelet/ultraviolet/screen"
 	"github.com/charmbracelet/x/editor"
 	xstrings "github.com/charmbracelet/x/exp/strings"
-	a2uievent "github.com/joestump-agent/a2tea/event"
 )
 
 // Compact mode breakpoints.
@@ -150,9 +149,9 @@ type shellResultMsg struct {
 
 // shellStreamMsg carries incremental output from a streaming shell command.
 type shellStreamMsg struct {
+	streamCh  <-chan string
 	PendingID string
 	Chunk     string
-	streamCh  <-chan string // unexported; used to continue draining
 }
 
 type (
@@ -227,8 +226,8 @@ type (
 	// newly discovered models (or an error) so the dialog can refresh its
 	// list and the user can be told what happened.
 	modelsDiscoveryReloadedMsg struct {
-		added int
 		err   error
+		added int
 	}
 	// hyperCreditsPollMsg is sent by the Hyper credits poll timer.
 	hyperCreditsPollMsg struct{}
@@ -246,382 +245,146 @@ type (
 
 // UI represents the main user interface model.
 type UI struct {
-	com          *common.Common
-	session      *session.Session
-	sessionFiles []SessionFile
-
-	// keeps track of read files while we don't have a session id
-	sessionFileReads []string
-
-	// initialSessionID is set when loading a specific session on startup.
-	initialSessionID string
-	// continueLastSession is set to continue the most recent session on startup.
-	continueLastSession bool
-
-	lastUserMessageTime int64
-
-	// The width and height of the terminal in cells.
-	width  int
-	height int
-	layout uiLayout
-
-	isTransparent bool
-
-	// mouseEnabled controls whether Bubble Tea mouse reporting is active.
-	// When false, the terminal emulator (or tmux) handles text selection,
-	// copy/paste, right-click, and scrolling instead of Crush.
-	mouseEnabled bool
-
-	// themeKey identifies the currently applied theme so applyTheme can
-	// skip the expensive style rebuild when switching to a provider that
-	// resolves to the same theme.
-	themeKey string
-
-	// userThemeSelected records that the user explicitly chose a theme
-	// during this session. It guards against provider-driven theme swaps
-	// discarding that choice, even in client/server mode where the
-	// config round-trip may not reflect the selection immediately.
-	userThemeSelected bool
-
-	focus uiFocusState
-	state uiState
-	mode  uiInputMode
-
-	// Frame memoization (see framecache.go). scrollOnlyUpdate is set by
-	// handlers that change nothing but the chat scroll position; frameDirty
-	// overrides it when a layout change happens in the same update.
-	frames           *frameCache
-	scrollOnlyUpdate bool
-	frameDirty       bool
-	frameSkipPut     bool
-	frameGCArmed     bool
-	// planReadySessionID holds the session whose plan run emitted the
-	// plan-ready marker but has not been confirmed for execution yet. It
-	// lets the user reopen the handoff prompt after dismissing it.
-	planReadySessionID string
-	// modeSwitching is true while the async agent-model update kicked off
-	// by setInputMode is still in flight; sending is blocked meanwhile.
-	modeSwitching bool
-
-	// cycleYolo is true while YOLO was enabled by the Shift+Tab input-mode
-	// cycle, which is the only case where the cycle may disable it again.
-	cycleYolo bool
-
-	keyMap KeyMap
-	keyenh tea.KeyboardEnhancementsMsg
-
-	dialog *dialog.Overlay
-	status *Status
-
-	// isCanceling tracks whether the user has pressed escape once to cancel.
-	isCanceling bool
-
-	// bangMode tracks whether the editor is in bang (!) shell mode.
-	bangMode     bool
-	bangWasEmpty bool // true when bang prompt became empty on last keystroke
-
-	// pendingBangCommand holds a shell command that was issued before
-	// the session finished loading. The loadSessionMsg handler creates
-	// the pending UI item and starts execution once the chat list is
-	// stable, eliminating races between session load and shell output.
-	pendingBangCommand string
-
-	// bangCancel cancels a running bang-mode shell command. Nil when no
-	// bang command is in progress. Set by runShellCommand, cleared by
-	// shellResultMsg. Checked by isAgentBusy and cancelAgent so that
-	// Escape works for bang commands the same way it does for agent runs.
-	bangCancel context.CancelFunc
-
-	header *header
-
-	// sendProgressBar instructs the TUI to send progress bar updates to the
-	// terminal.
-	sendProgressBar    bool
-	progressBarEnabled bool
-
-	// turnOutcome is the result of the last agent turn (done or error),
-	// reported to the terminal until the user has seen it. See
-	// trackTurnOutcome.
-	turnOutcome tea.ProgramState
-
-	// caps hold different terminal capabilities that we query for.
-	caps common.Capabilities
-
-	// Editor components
-	textarea textarea.Model
-
-	// Active inline editor replaces the textarea when non-nil.
-	activeInline dialog.InlineEditor
-	// inlineCursor stores the cursor from the last inline editor
-	// Draw call, used by the cursor positioning logic below.
-	inlineCursor *tea.Cursor
-
-	// Attachment list
-	attachments *attachments.Attachments
-
-	readyPlaceholder   string
-	workingPlaceholder string
-
-	// Completions state
-	completions              *completions.Completions
-	completionsOpen          bool
-	completionsTrigger       completions.Trigger
-	completionsStartIndex    int
-	completionsQuery         string
-	completionsPositionStart image.Point // x,y where user typed the trigger
-
-	// lastCompletionEnd tracks the end index of the most recently
-	// inserted completion text so that a single backspace can delete
-	// the entire inserted path/name at once instead of one character.
-	// lastCompletionText is the exact run that was inserted; the range
-	// is only honoured while the textarea still holds it, so a whole-value
-	// replacement (history recall, paste) cannot make a stale range point
-	// at unrelated text that happens to be the same length.
-	lastCompletionStart    int
-	lastCompletionEnd      int
-	lastCompletionText     string
-	lastCompletionFilePath string // non-empty when the last completion attached a file
-	// mentionAttachments maps a token in the prompt to the attachments it
-	// owns, so deleting the token can take the attachment with it. The
-	// value is a list because the same token text can appear more than
-	// once: two insertions of "/server:prompt" differ only in their
-	// resolved bodies, so each gets its own entry here and a backspace
-	// pops exactly one. Only tokens put entries here, so a pasted image
-	// or a dropped file — which has no token — is never touched.
-	mentionAttachments map[string][]string
-	// discardedMentions holds attachment keys whose token was deleted before
-	// the (asynchronous) read that produces the attachment came back. The
-	// attachment is dropped on arrival rather than landing as an orphan chip
-	// with nothing in the prompt referring to it.
-	discardedMentions map[string]bool
-	// promptAttachSeq makes each MCP prompt attachment's key unique, so
-	// inserting one prompt twice yields two independently removable chips.
-	promptAttachSeq int
-	// pendingPromptTrigger is the "/query" text still sitting in the editor
-	// while the arguments dialog is open. Cancelling the dialog takes it
-	// back out; without that the query lingers and — since prompt names
-	// validate "/" tokens — renders as a perfectly good prompt token with
-	// no body behind it.
-	pendingPromptTrigger struct {
-		start int
-		text  string
-	}
-
-	// promptHighlighter styles @file and /skill tokens inline as the user
-	// types. Installed on the textarea via SetHighlighter.
-	promptHighlighter *promptHighlighter
-
-	// Chat components
-	chat *Chat
-
-	// Inspect mode (#314): viewing a sub-agent's session read-only in
-	// the chat while the parent stays the active session. inspecting is
-	// nil when not inspecting. The scroll pair and follow flag are the
-	// parent chat state captured on entry and restored on exit.
-	// inspectRing enumerates the live agent blocks (in transcript order)
-	// at the moment inspect mode was entered; ctrl+] cycles it.
-	// inspectDispatchTargets marks which ring members are dispatch blocks
-	// (vs plain agent tools), so ctrl+x only offers a cancel for them.
-	// inspectSeq numbers inspect transitions so a child load that lands
-	// after a later one is dropped. inspectWindow holds the transition
-	// whose snapshot is in flight: its target session and the message
-	// events buffered for it until the snapshot lands (#406).
-	// inspectPending is a task session picked from the sessions dialog,
-	// waiting for its parent to load. inspectTask caches the viewed
-	// agent's workspace task (handle, role, status, current todo),
-	// resolved once per inspect load and refreshed by handleAgentTask —
-	// never per frame, which would be a workspace round-trip in
-	// client/server mode.
-	inspecting             *session.Session
-	inspectTask            *workspace.AgentTask
-	inspectScroll          [2]int
-	inspectFollow          bool
-	inspectRing            []string
-	inspectRingPos         int
-	inspectDispatchTargets map[string]bool
-	inspectSeq             int
-	inspectWindow          *inspectWindow
-	inspectPending         *session.Session
-
-	// onboarding state
-	onboarding struct {
-		yesInitializeSelected bool
-	}
-
-	// lspStates / lspDiagnostics memoize the workspace LSP state and
-	// per-server severity counts (each probe behind them is a synchronous
-	// HTTP round-trip in client/server mode, and the sidebar, landing view,
-	// and compact header render them every frame). LSP events refresh them
-	// off-thread with a TTL backstop; see lsp.go.
-	lspStates        map[string]workspace.LSPClientInfo
-	lspDiagnostics   map[string]lsp.DiagnosticCounts
-	lspFetchInFlight bool
-	// lspRefreshQueued records that an LSP event arrived while a fetch was
-	// already in flight; applyLSPStates re-dispatches so the freshest state
-	// still lands.
-	lspRefreshQueued bool
-	lspCheckedAt     time.Time
-
-	// mcpStates memoizes the workspace MCP state (a synchronous probe in
-	// client/server mode) and its off-thread refresh bookkeeping. MCP
-	// state_changed events refresh it off-thread with a TTL backstop and a
-	// retry loop while servers are starting; see mcp.go.
-	mcpStates        map[string]mcp.ClientInfo
-	mcpFetchInFlight bool
-	// mcpRefreshQueued records that a refresh was requested while a fetch
-	// was already in flight; applyMCPStates re-dispatches so the freshest
-	// state still lands.
-	mcpRefreshQueued bool
-	mcpCheckedAt     time.Time
-	// mcpStartingRetries counts the consecutive starting-state re-probes
-	// driving the retry loop's exponential backoff. Event-driven refreshes
-	// renew the budget; settled states reset it.
-	mcpStartingRetries int
-
-	// skills
-	skillStates []*skills.SkillState
-	// skillsDisabledOverrides mirrors the repository-scoped disabled set
-	// so the sidebar can filter without blocking on workspace calls.
+	textarea                textarea.Model
+	agentModel              workspace.AgentModel
+	lspCheckedAt            time.Time
+	mcpCheckedAt            time.Time
+	lastClickTime           time.Time
+	promptQueueCheckedAt    time.Time
+	activeInline            dialog.InlineEditor
+	notifyBackend           notification.Backend
+	lspDiagnostics          map[string]lsp.DiagnosticCounts
+	inspectPending          *session.Session
+	chat                    *Chat
+	promptHighlighter       *promptHighlighter
+	inspectTask             *workspace.AgentTask
+	discardedMentions       map[string]bool
+	mentionAttachments      map[string][]string
+	com                     *common.Common
+	preThemeStyles          *styles.Styles
+	frames                  *frameCache
+	hyperCredits            *int
+	inspectDispatchTargets  map[string]bool
+	inspectWindow           *inspectWindow
+	sessionActivities       map[string]*sessionActivity
+	lspStates               map[string]workspace.LSPClientInfo
+	inspecting              *session.Session
+	completions             *completions.Completions
+	attachments             *attachments.Attachments
+	pendingPreview          *compaction.Preview
+	dialog                  *dialog.Overlay
+	status                  *Status
+	skillsEnabledOverrides  map[string]bool
 	skillsDisabledOverrides map[string]bool
-	// skillsEnabledOverrides mirrors the repository-scoped enabled set
-	// (config-disabled skills re-enabled for this repository).
-	skillsEnabledOverrides map[string]bool
-	// pendingPreview holds a checkpoint the user has not accepted or
-	// discarded yet.
-	pendingPreview *compaction.Preview
-
-	// summarizingNote is the progress note publishedSummarizing last set,
-	// cleared when the compaction ends.
-	summarizingNote string
-
-	// summarizingNoteSession is the session the note belongs to, so another
-	// session's compaction never bleeds into this status line.
-	summarizingNoteSession string
-
-	// submissionGen/pendingSubmissions track in-flight submissions so the
-	// status bar can show work that is queued behind the current turn.
-	submissionGen      uint64
-	pendingSubmissions int
-	// sessionActivities tracks per-session optimistic busy state.
-	sessionActivities map[string]*sessionActivity
-	// turnStopPending waits for a stop request to land before the next submit.
-	turnStopPending bool
-
-	// wheelRemainder accumulates sub-line wheel scrolls so fractional speeds
-	// still scroll over successive events.
-	wheelRemainder float64
-
-	// skillCatalog is the effective visible skill set (post-override,
-	// post-disable) with frontmatter descriptions, refreshed alongside the
-	// custom commands. It backs the '/' completions popup.
-	skillCatalog []skills.CatalogEntry
-
-	// sidebarLogo keeps a cached version of the sidebar sidebarLogo.
-	sidebarLogo string
-
-	sidebarDrawLogo string // logo to render (may differ from sidebarLogo for short heights)
-
-	// Notification state
-	notifyBackend       notification.Backend
-	notifyWindowFocused bool
-	// custom commands & mcp commands
-	customCommands []commands.CustomCommand
-	mcpPrompts     []commands.MCPPrompt
-
-	// forceCompactMode tracks whether compact mode is forced by user toggle
-	forceCompactMode bool
-
-	// isCompact tracks whether we're currently in compact layout mode (either
-	// by user toggle or auto-switch based on window size)
-	isCompact bool
-
-	// detailsOpen tracks whether the details panel is open (in compact mode)
-	detailsOpen bool
-
-	// pills state
-	pillsExpanded     bool
-	pillsAutoExpanded bool
-	// promptQueue / promptQueueItems mirror the session's queued prompts.
-	// They are event-driven with a TTL backstop, fetched off-thread by
-	// dispatchPromptQueueRefresh (see workspace_cache.go); promptQueue is
-	// always len(promptQueueItems).
-	promptQueue          int
-	promptQueueItems     []string
-	promptQueueCheckedAt time.Time
-	promptQueueInFlight  bool
-	// sessionBusyCache / agentBusyCache / yoloCache memoize the workspace
-	// busy and permission probes (synchronous HTTP round-trips in
-	// client/server mode). Reads never probe; refreshes happen off-thread
-	// (see workspace_cache.go).
-	sessionBusyCache  ttlCache
-	agentBusyCache    ttlCache
-	yoloCache         ttlCache
-	busyFetchInFlight bool
-	// agentReady / agentModel memoize the coordinator readiness and
-	// selected model (AgentIsReady/AgentModel are synchronous HTTP GETs in
-	// client/server mode, and modelInfo renders them every frame). Seeded
-	// once at construction and refreshed by the same off-thread probe as
-	// agentBusyCache.
-	agentReady bool
-	agentModel workspace.AgentModel
-	// busyFetchGen is bumped by every busy/permission state transition;
-	// like promptQueueGen it lets a stale in-flight probe result be
-	// discarded and re-fetched instead of clobbering newer state.
-	busyFetchGen uint64
-	// probedSessionBusy is the last busy probe of probedSession, covering
-	// runs this client did not start.
-	probedSession     string
-	probedSessionBusy bool
-	// promptQueueGen is bumped by every queue state transition; an
-	// in-flight fetch captures it at dispatch and its result is discarded
-	// if the generation has moved on (see workspace_cache.go).
-	promptQueueGen uint64
-	// sessionsChildrenGen is bumped every time the sessions picker is
-	// opened; the child-session batch fetched for it (#409) captures the
-	// generation at dispatch and is dropped if the picker was closed or
-	// reopened before the batch landed.
-	sessionsChildrenGen uint64
-	sidebarScroll       int
-
-	// cronTasks holds the scheduled tasks for the current session,
-	// refreshed on session load and after cron tool results.
-	cronTasks []scheduler.Task
-	pillsView string
-
-	// Todo spinner
-	todoSpinner    spinner.Model
-	todoIsSpinning bool
-
-	// pending is the turn this client sent; the placeholder items in the
-	// chat are derived from it by syncPendingItem.
-	pending pendingTurn
-
-	// preThemeStyles stores the styles before a theme preview so we can revert.
-	preThemeStyles *styles.Styles
-
-	// mouse highlighting related state
-	lastClickTime time.Time
-	hoverX        int
-	hoverY        int
-
-	// hyperCredits is the remaining Hyper credits as last fetched from
-	// the /v1/credits endpoint. It is nil when no fetch has reported a
-	// balance yet, or when the team has hypercredit display disabled, and
-	// no balance is rendered in either case.
-	hyperCredits *int
-
-	// gitBranch is the workspace's checked-out branch as of the last poll,
-	// empty when there is none to show. Reading it costs a file read
-	// locally and a request in client/server mode, so renders take it from
-	// here rather than asking the workspace per frame.
-	gitBranch string
-
-	// Prompt history for up/down navigation through previous messages.
-	promptHistory struct {
+	inlineCursor            *tea.Cursor
+	session                 *session.Session
+	bangCancel              context.CancelFunc
+	header                  *header
+	mcpStates               map[string]mcp.ClientInfo
+	pending                 pendingTurn
+	sessionBusyCache        ttlCache
+	promptHistory           struct {
 		messages []string
 		index    int
 		draft    string
 	}
+	yoloCache            ttlCache
+	agentBusyCache       ttlCache
+	pendingPromptTrigger struct {
+		start int
+		text  string
+	}
+	lastCompletionFilePath   string
+	sidebarDrawLogo          string
+	workingPlaceholder       string
+	summarizingNote          string
+	summarizingNoteSession   string
+	planReadySessionID       string
+	pillsView                string
+	completionsQuery         string
+	sidebarLogo              string
+	readyPlaceholder         string
+	probedSession            string
+	lastCompletionText       string
+	gitBranch                string
+	initialSessionID         string
+	pendingBangCommand       string
+	themeKey                 string
+	turnOutcome              tea.ProgramState
+	keyMap                   KeyMap
+	caps                     common.Capabilities
+	inspectRing              []string
+	sessionFiles             []SessionFile
+	customCommands           []commands.CustomCommand
+	mcpPrompts               []commands.MCPPrompt
+	skillCatalog             []skills.CatalogEntry
+	promptQueueItems         []string
+	skillStates              []*skills.SkillState
+	sessionFileReads         []string
+	cronTasks                []scheduler.Task
+	todoSpinner              spinner.Model
+	layout                   uiLayout
+	inspectScroll            [2]int
+	completionsPositionStart image.Point
+	completionsStartIndex    int
+	inspectSeq               int
+	width                    int
+	height                   int
+	hoverX                   int
+	hoverY                   int
+	lastCompletionEnd        int
+	mcpStartingRetries       int
+	promptAttachSeq          int
+	sidebarScroll            int
+	sessionsChildrenGen      uint64
+	keyenh                   tea.KeyboardEnhancementsMsg
+	promptQueueGen           uint64
+	busyFetchGen             uint64
+	submissionGen            uint64
+	pendingSubmissions       int
+	lastUserMessageTime      int64
+	promptQueue              int
+	wheelRemainder           float64
+	lastCompletionStart      int
+	inspectRingPos           int
+	completionsTrigger       completions.Trigger
+	scrollOnlyUpdate         bool
+	modeSwitching            bool
+	frameDirty               bool
+	frameSkipPut             bool
+	forceCompactMode         bool
+	isCompact                bool
+	detailsOpen              bool
+	pillsExpanded            bool
+	pillsAutoExpanded        bool
+	turnStopPending          bool
+	frameGCArmed             bool
+	mode                     uiInputMode
+	promptQueueInFlight      bool
+	state                    uiState
+	focus                    uiFocusState
+	userThemeSelected        bool
+	busyFetchInFlight        bool
+	agentReady               bool
+	mouseEnabled             bool
+	notifyWindowFocused      bool
+	isTransparent            bool
+	probedSessionBusy        bool
+	cycleYolo                bool
+	isCanceling              bool
+	bangMode                 bool
+	bangWasEmpty             bool
+	mcpRefreshQueued         bool
+	mcpFetchInFlight         bool
+	todoIsSpinning           bool
+	sendProgressBar          bool
+	progressBarEnabled       bool
+	lspRefreshQueued         bool
+	lspFetchInFlight         bool
+	completionsOpen          bool
+	continueLastSession      bool
+	onboarding               struct{ yesInitializeSelected bool }
+	inspectFollow            bool
 }
 
 // New creates a new instance of the [UI] model.
@@ -1234,21 +997,6 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case sendMessageMsg:
 		cmds = append(cmds, m.sendMessage(msg.Content, msg.Attachments...))
-
-	case a2uievent.ButtonClicked:
-		// A button on a live A2UI surface was activated (#45): retire the
-		// surface and, unless the button reads as a cancel, turn the
-		// submission into a new agent turn.
-		if cmd := m.handleA2UIButtonClicked(msg); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-
-	case a2uiActionResultMsg:
-		// An a2ui_action round-trip returned: update the originating
-		// surface in place (or land plain text) without an agent turn.
-		if cmd := m.handleA2UIActionResult(msg); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
 
 	case userCommandsLoadedMsg:
 		m.customCommands = msg.Commands
@@ -4274,7 +4022,7 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					cmds = append(cmds, cmd)
 				}
 			case key.Matches(msg, m.keyMap.Tab):
-				// A selected live A2UI surface consumes Tab for its own
+				// A focused item consumes Tab for its own
 				// focus ring (#44); pane switching applies only when no
 				// item claims the key.
 				if ok, cmd := m.chat.HandleKeyMsg(msg); ok {
@@ -5590,10 +5338,10 @@ func (m *UI) applyModeSwitch(msg modeSwitchedMsg) []tea.Cmd {
 // modeSwitchedMsg reports that the async agent switch started by
 // setInputMode has finished (successfully or not).
 type modeSwitchedMsg struct {
+	err               error
 	continueSessionID string
 	mode              uiInputMode
 	yolo              bool
-	err               error
 }
 
 // closeCompletions closes the completions popup and resets state.
@@ -6221,10 +5969,10 @@ func (m *UI) attachMCPPrompt(name, mcpName, promptID string, args map[string]str
 // promptResolveFailedMsg asks the editor to take back a prompt token whose
 // body could not be resolved.
 type promptResolveFailedMsg struct {
-	name  string
-	start int
-	text  string
 	err   error
+	name  string
+	text  string
+	start int
 }
 
 // removePromptToken deletes a previously inserted prompt token, provided the
@@ -6309,13 +6057,9 @@ func (m *UI) isCurrentSessionBusy() bool {
 // watch for the rest of the turn so the elapsed clock is stopped whichever
 // way the turn ends.
 type pendingTurn struct {
-	// sessionID is the session running the turn; empty when none.
+	echo      chat.MessageItem
+	spinner   chat.MessageItem
 	sessionID string
-	// echo shows the prompt until the stored user message replaces it.
-	echo chat.MessageItem
-	// spinner is the placeholder, kept so moving it keeps its animation.
-	spinner chat.MessageItem
-	// handedOff records that an assistant message now carries the spinner.
 	handedOff bool
 }
 
@@ -6704,12 +6448,6 @@ func (m *UI) sendMessageInternal(content string, hidden bool, attachments ...mes
 		return nil
 	})
 
-	// The turn's content width hint: tools that read width-sensitive remote
-	// content (A2UI surfaces with server-pre-rendered bar geometry) get the
-	// surface card's interior width so the server sizes its rows to fill
-	// the card. The chat package owns the computation — it must track the
-	// real render chain, not constants copied here.
-	contentWidth := chat.ToolA2UISurfaceWidth(m.layout.main.Dx())
 	// Optimistically mark the agent busy: the prompt we are about to submit
 	// either starts a run or is enqueued behind one. This keeps esc pressed
 	// right after enter routing to cancelAgent instead of reading a stale
@@ -6725,7 +6463,7 @@ func (m *UI) sendMessageInternal(content string, hidden bool, attachments ...mes
 		// been accepted (HTTP 202) or synchronously with a validation
 		// or transport error. Run failures and cancellation surface
 		// through SSE-derived events, not this return value.
-		runCtx := agent.WithContentWidth(context.Background(), contentWidth)
+		runCtx := agent.WithContentWidth(context.Background(), m.layout.main.Dx())
 		// Prompt submissions amend the active turn (operator steering)
 		// whether or not they are generated plan continuations.
 		runCtx = message.WithOperatorSteering(runCtx, true)
@@ -6739,226 +6477,6 @@ func (m *UI) sendMessageInternal(content string, hidden bool, attachments ...mes
 		return agentRunSubmittedMsg{sessionID: sessionID, err: err}
 	})
 	return tea.Batch(cmds...)
-}
-
-// handleA2UIButtonClicked turns an activated A2UI button into an agent turn
-// (#45). The surface that emitted the event is retired first — its field
-// values are read and it stops accepting focus and keys, so the form cannot
-// be re-submitted. A button that reads as a cancel (see
-// chat.A2UIButtonIsCancel) only dismisses; any other button starts a new
-// turn carrying the button and the gathered field values, through the same
-// prompt path a typed message uses (sendMessage → AgentRun, which enqueues
-// behind a running turn).
-//
-// While a sub-agent transcript is being inspected (#407) the click is
-// refused outright: the parent never asked the question, so the surface is
-// left live and nothing is sent anywhere.
-//
-// The retire lookup may miss — e.g. the message content was rescanned and
-// the surface rebuilt without an ID — in which case the submission still
-// goes out with just the button identity rather than being dropped.
-func (m *UI) handleA2UIButtonClicked(clicked a2uievent.ButtonClicked) tea.Cmd {
-	// A surface in an inspected transcript is read-only (#407): the click
-	// must not retire the surface, start a parent turn, or round-trip to
-	// an MCP server.
-	if m.isInspecting() {
-		return util.ReportInfo("This form belongs to a sub-agent transcript and is read-only")
-	}
-	// A cancel/dismiss button only ever dismisses the surface locally —
-	// it never starts an agent turn nor round-trips to an MCP server.
-	// Checked first, before any provenance branch.
-	if chat.A2UIButtonIsCancel(clicked) {
-		m.chat.RetireA2UISurface(clicked.SurfaceID)
-		return nil
-	}
-	// MCP-served surface: route the interaction back to the owning server
-	// when it speaks the action round-trip, instead of starting an agent
-	// turn. The button press is itself the consent, so the a2ui_action
-	// call is not gated on permission. The surface is long-lived — it is
-	// NOT retired, and a surface payload in the response updates it in
-	// place.
-	// Provenance resolves through the item that owns the surface, falling
-	// back to the global surfaceID-keyed registry only when no live item
-	// claims it: surface IDs are server-scoped (typically "default"), so two
-	// servers would otherwise clobber each other in that registry and route
-	// one another's clicks.
-	// An assistant-authored surface is never MCP-owned, whatever the
-	// registries say. It is checked first because assistant items are
-	// invisible to both lookups below — they do not implement
-	// A2UISurfaceItem, and the global registry is keyed by surface ID alone
-	// — so a shared ID would otherwise route this submission to a server
-	// that has nothing to do with it.
-	mcpName, isMCP := "", false
-	if !m.chat.HasAssistantA2UISurface(clicked.SurfaceID) {
-		mcpName, isMCP = m.chat.A2UISurfaceOwner(clicked.SurfaceID)
-		if !isMCP {
-			mcpName, isMCP = chat.A2UISurfaceProvenance(clicked.SurfaceID)
-		}
-	}
-	if isMCP && clicked.Action != nil {
-		if m.mcpServesTool(mcpName, "a2ui_action") {
-			return m.runA2UIAction(mcpName, clicked)
-		}
-		// The server serves surfaces but not the action round-trip: keep
-		// today's behavior so a dumb server still works.
-	}
-	// RetireA2UISurface only matches assistant items, so an MCP surface's
-	// values must be read from the tool item that holds it — otherwise the
-	// fallback submits the button identity with everything the user typed
-	// silently dropped.
-	values, ok := m.chat.RetireA2UISurface(clicked.SurfaceID)
-	if !ok {
-		values, _ = m.chat.A2UISurfaceFieldValues(clicked.SurfaceID)
-	}
-	return m.sendMessage(chat.A2UISubmissionPrompt(clicked, values))
-}
-
-// mcpServesTool reports whether the named MCP server exposes toolName.
-//
-// It reads the workspace's published MCP state rather than mcp.HasTool: that
-// registry is only populated in the process that owns the MCP sessions, so
-// in client/server mode it is permanently empty and every HasTool gate is
-// false — which silently disabled the whole A2UI action round-trip on a
-// remote client and left its /mcp/call-tool route unreachable.
-func (m *UI) mcpServesTool(mcpName, toolName string) bool {
-	if mcpName == "" {
-		return false
-	}
-	info, ok := m.com.Workspace.MCPGetStates()[mcpName]
-	if !ok {
-		return false
-	}
-	return info.ServesA2UITool(toolName)
-}
-
-// a2uiActionResultMsg carries the outcome of an a2ui_action round-trip back
-// to the UI so the surface updates in place (or a plain-text reply lands as
-// tool output) without an agent turn.
-type a2uiActionResultMsg struct {
-	surfaceID string
-	mcpName   string
-	// surfaces holds any A2UI payloads the response embedded, applied to
-	// the surface in place. content holds plain text from the response.
-	surfaces []string
-	content  string
-	err      error
-}
-
-// runA2UIAction calls the owning server's a2ui_action tool with the
-// button's action name and the surface's resolved input values as the
-// context. The call runs off the UI goroutine; the result returns as an
-// a2uiActionResultMsg.
-func (m *UI) runA2UIAction(mcpName string, clicked a2uievent.ButtonClicked) tea.Cmd {
-	values, _ := m.chat.A2UISurfaceFieldValues(clicked.SurfaceID)
-	if values == nil {
-		values = map[string]any{}
-	}
-	args := map[string]any{
-		"name":    clicked.Action.Name,
-		"context": values,
-	}
-	surfaceID := clicked.SurfaceID
-	return func() tea.Msg {
-		res, err := m.com.Workspace.CallMCPTool(context.Background(), mcpName, "a2ui_action", args)
-		if err != nil {
-			return a2uiActionResultMsg{surfaceID: surfaceID, mcpName: mcpName, err: err}
-		}
-		out := a2uiActionResultMsg{surfaceID: surfaceID, mcpName: mcpName, content: res.Content}
-		for _, s := range res.Surfaces {
-			out.surfaces = append(out.surfaces, s.Payload)
-		}
-		return out
-	}
-}
-
-// handleA2UIActionResult applies an a2ui_action response: any A2UI payload
-// updates the originating surface in place (the surface stays live), and any
-// plain text lands as an informational note. A transport/server error is
-// surfaced as an error note — the surface is left untouched.
-func (m *UI) handleA2UIActionResult(msg a2uiActionResultMsg) tea.Cmd {
-	if msg.err != nil {
-		return util.ReportError(fmt.Errorf("A2UI action failed: %w", msg.err))
-	}
-	var cmds []tea.Cmd
-	for _, payload := range msg.surfaces {
-		if cmd := m.applyA2UIPayloadToSurface(msg.mcpName, msg.surfaceID, payload); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-	}
-	if msg.content != "" {
-		cmds = append(cmds, util.ReportInfo(msg.content))
-	}
-	if len(cmds) == 0 {
-		return nil
-	}
-	return tea.Batch(cmds...)
-}
-
-// applyA2UIPayloadToSurface scans an A2UI payload and feeds its server
-// messages into the surface the payload targets, which updates in place. A
-// payload that does not scan, or that targets a surface nothing holds, is
-// reported back to the owning server as an a2ui_error when it exposes that
-// tool. clickedID is the surface the interaction came from — the fallback
-// target for a payload that declares no surface of its own — and mcpName is
-// the server that sent it, which is who any error is reported to.
-func (m *UI) applyA2UIPayloadToSurface(mcpName, clickedID, payload string) tea.Cmd {
-	msgs, err := chat.A2UIMessagesFromPayload(payload)
-	if err != nil {
-		return m.reportA2UIError(mcpName, clickedID, "INVALID_JSON",
-			"Failed to parse A2UI payload.")
-	}
-	if len(msgs) == 0 {
-		// The payload parsed but carried no server messages — it scanned
-		// as prose, not A2UI. Applying it would be a silent no-op, which
-		// looks to the user like a dead button.
-		return m.reportA2UIError(mcpName, clickedID, "INVALID_PAYLOAD",
-			"Payload carried no A2UI server messages.")
-	}
-	// Honor the surface the payload itself declares: a server may answer an
-	// action by updating a sibling surface, not the clicked one. Forcing
-	// every payload onto the clicked ID would corrupt that surface instead.
-	target := chat.A2UIMessagesSurfaceID(msgs)
-	if target == "" {
-		target = clickedID
-	}
-	if !m.chat.ApplyA2UISurfaceUpdate(target, msgs) {
-		// Either nothing holds that surface, or the server just deleted
-		// it. A delete is the expected end of a surface's life; a payload
-		// aimed at a surface we never had is a real mismatch worth
-		// reporting back.
-		if !chat.A2UIMessagesDeleteSurface(msgs) {
-			return m.reportA2UIError(mcpName, target, "SURFACE_NOT_FOUND",
-				fmt.Sprintf("No live surface %q to apply the payload to.", target))
-		}
-	}
-	return nil
-}
-
-// reportA2UIError reports a render failure to mcpName via its a2ui_error
-// tool, when it exposes one. Otherwise the failure is only shown to the user
-// (the existing render-failure alert path). mcpName may be empty when the
-// caller only holds a surface ID, in which case the owner is resolved from
-// the surface — item-scoped first, same as the action path, because the
-// global registry is keyed by surface ID alone and two servers sharing an ID
-// clobber each other there.
-func (m *UI) reportA2UIError(mcpName, surfaceID, code, message string) tea.Cmd {
-	ok := mcpName != ""
-	if !ok {
-		if mcpName, ok = m.chat.A2UISurfaceOwner(surfaceID); !ok {
-			mcpName, ok = chat.A2UISurfaceProvenance(surfaceID)
-		}
-	}
-	if !ok || !m.mcpServesTool(mcpName, "a2ui_error") {
-		return nil
-	}
-	args := map[string]any{"code": code, "message": message, "surfaceId": surfaceID}
-	return func() tea.Msg {
-		_, err := m.com.Workspace.CallMCPTool(context.Background(), mcpName, "a2ui_error", args)
-		if err != nil {
-			return util.InfoMsg{Type: util.InfoTypeError, Msg: fmt.Sprintf("A2UI error report failed: %v", err)}
-		}
-		return nil
-	}
 }
 
 // handleChannelMessage injects a channel event pushed by an MCP server into a
@@ -7340,9 +6858,9 @@ func (m *UI) openChannelsDialog() {
 // whose generation no longer matches was fetched for a picker that was
 // closed or reopened and is dropped.
 type sessionChildrenLoadedMsg struct {
-	gen      uint64
-	children []session.Session
 	err      error
+	children []session.Session
+	gen      uint64
 }
 
 // openSessionsDialog opens the sessions dialog. If the dialog is already open,

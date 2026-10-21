@@ -15,8 +15,8 @@ import (
 // history rather than consuming a queue, so one stage's wait cannot
 // steal a snapshot a later stage is waiting for.
 type recordingSink struct {
-	mu        sync.Mutex
 	snapshots []TodoSnapshot
+	mu        sync.Mutex
 }
 
 func newRecordingSink() *recordingSink {

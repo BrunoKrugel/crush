@@ -42,8 +42,8 @@ func TestCommands_SubMenuNavigation(t *testing.T) {
 	tests := []struct {
 		name       string
 		keys       []tea.KeyPressMsg
-		wantStack  int
 		wantBread  []string
+		wantStack  int
 		wantClose  bool
 		wantAction bool
 	}{

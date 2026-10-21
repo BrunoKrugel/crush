@@ -49,10 +49,9 @@ var promptQueueTTL = 2 * time.Second
 // to be three hand-rolled val/checkedAt field pairs so invalidation cannot
 // drift apart between them.
 type ttlCache struct {
-	val bool
-	at  time.Time
-	// session scopes the value to a session ID; empty for global probes.
+	at      time.Time
 	session string
+	val     bool
 }
 
 // fresh reports whether the cached value is within its TTL.
@@ -88,44 +87,28 @@ func (c *ttlCache) invalidate() {
 
 // busyStateMsg delivers the result of an off-thread busy/permission probe.
 type busyStateMsg struct {
-	// gen is the busy generation captured when the probe was dispatched.
-	// A result whose generation no longer matches m.busyFetchGen started
-	// before a newer state transition (optimistic send, invalidation,
-	// session switch, ...) and is discarded, then re-fetched, so the
-	// authoritative refresh is never lost to an older in-flight request.
-	gen       uint64
-	ready     bool
-	agentBusy bool
-	yolo      bool
-	// forSession is the session sessionBusy was probed for.
-	forSession string
-	// sessionBusy reports whether forSession itself has a run in flight,
-	// unlike agentBusy, which any session or shell command sets.
+	model       workspace.AgentModel
+	forSession  string
+	gen         uint64
+	ready       bool
+	agentBusy   bool
+	yolo        bool
 	sessionBusy bool
-	// model is the coordinator's selected model, fetched by the same probe
-	// so the sidebar/landing model info renders from memoized state. Zero
-	// (and ignored) when ready is false.
-	model workspace.AgentModel
 }
 
 // promptQueueMsg delivers the queued prompts fetched off-thread.
 type promptQueueMsg struct {
-	// forSession is the session the fetch was scoped to; a result that
-	// raced a session switch is discarded and re-fetched.
 	forSession string
-	// gen is the queue generation captured at dispatch; like
-	// busyStateMsg.gen it guards against a stale in-flight result
-	// overwriting newer optimistic or invalidated queue state.
-	gen     uint64
-	prompts []string
+	prompts    []string
+	gen        uint64
 }
 
 // agentRunSubmittedMsg reports whether AgentRun accepted a prompt. A
 // rejected prompt gets no RunComplete, so err must end its turn.
 type agentRunSubmittedMsg struct {
+	err       error
 	sessionID string
 	gen       uint64
-	err       error
 }
 
 // agentModelChangedMsg reports that the coordinator's model was updated
@@ -404,9 +387,9 @@ func (m *UI) activityFor(sessionID string) *sessionActivity {
 
 // sessionActivity retains only submissions and completion checks still pending.
 type sessionActivity struct {
+	completion *notify.Notification
 	pending    int
 	gen        uint64
-	completion *notify.Notification
 }
 
 func (m *UI) submissionFinished(sessionID string, gen uint64, err error, summary bool) tea.Cmd {
@@ -463,7 +446,7 @@ func (m *UI) dispatchCompletionCheck(n *notify.Notification) tea.Cmd {
 // completionCheckedMsg carries a session-scoped idle probe for a successful
 // completion. Its generation prevents newer observed work being overwritten.
 type completionCheckedMsg struct {
+	notification *notify.Notification
 	busyGen      uint64
 	busy         bool
-	notification *notify.Notification
 }

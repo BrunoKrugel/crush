@@ -31,8 +31,8 @@ func TestIsStaleSocketErr(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		err  error
+		name string
 		want bool
 	}{
 		{name: "nil", err: nil, want: false},

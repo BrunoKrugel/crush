@@ -98,10 +98,10 @@ type (
 	// collect first, a non-nil Args marks that the values arrived, and
 	// Instructions carries the user's emphasis for the checkpoint.
 	ActionSummarize struct {
-		SessionID    string
-		Arguments    []commands.Argument
 		Args         map[string]string
+		SessionID    string
 		Instructions string
+		Arguments    []commands.Argument
 	}
 	// ActionSelectReasoningEffort is a message indicating a reasoning effort
 	// has been selected.
@@ -114,10 +114,10 @@ type (
 	}
 	// ActionRunCustomCommand is a message to run a custom command.
 	ActionRunCustomCommand struct {
+		Args      map[string]string
+		Skill     *skills.Skill
 		Content   string
 		Arguments []commands.Argument
-		Args      map[string]string // Actual argument values
-		Skill     *skills.Skill     // Set when this is a skill command
 	}
 	// ActionAttachSkill is sent when a skill is selected from the commands
 	// dialog to be attached to the conversation as a markdown attachment.
@@ -127,12 +127,12 @@ type (
 	}
 	// ActionRunMCPPrompt is a message to run a custom command.
 	ActionRunMCPPrompt struct {
+		Args        map[string]string
 		Title       string
 		Description string
 		PromptID    string
 		ClientID    string
 		Arguments   []commands.Argument
-		Args        map[string]string // Actual argument values
 	}
 	// ActionEnableDockerMCP is a message to enable Docker MCP.
 	ActionEnableDockerMCP struct{}
@@ -157,8 +157,8 @@ type (
 	// using the provided context, which the dialog will cancel if the
 	// user closes it.
 	ActionMCPAuthStarted struct {
-		Name string
 		Ctx  context.Context
+		Name string
 	}
 
 	// ActionMCPAuthComplete is sent when MCP authentication succeeds.
@@ -168,8 +168,8 @@ type (
 
 	// ActionMCPAuthErrored is sent when MCP authentication fails.
 	ActionMCPAuthErrored struct {
-		Name  string
 		Error error
+		Name  string
 	}
 )
 
@@ -191,8 +191,8 @@ type (
 	ActionInitiateOAuth struct {
 		DeviceCode      string
 		UserCode        string
-		ExpiresIn       int
 		VerificationURL string
+		ExpiresIn       int
 		Interval        int
 	}
 
@@ -231,17 +231,11 @@ type (
 // ActionRunMCPPrompt does. It is produced by the inline "/" completion, where
 // the user is mid-sentence and the prompt is one ingredient of their message.
 type ActionInsertMCPPrompt struct {
-	// Name is the server-qualified "server:prompt" form shown in the editor.
-	Name     string
-	MCPName  string
-	PromptID string
-	// Arguments the prompt declares; Args is what the user supplied.
-	Arguments []commands.Argument
-	Args      map[string]string
-	// StartIndex is where the token replaces the trigger text in the
-	// editor. It travels on the action because the completions popup — and
-	// with it the model's own start index — is closed before this dialog
-	// opens.
+	Args       map[string]string
+	Name       string
+	MCPName    string
+	PromptID   string
+	Arguments  []commands.Argument
 	StartIndex int
 }
 

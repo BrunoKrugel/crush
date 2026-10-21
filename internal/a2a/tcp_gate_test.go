@@ -79,9 +79,9 @@ func (b *countingBody) bytesRead() int64 {
 // logCapture is a slog sink a test can read and wait on: every write
 // signals, so a test waits for a line without polling or sleeping.
 type logCapture struct {
-	mu    sync.Mutex
-	buf   bytes.Buffer
 	wrote chan struct{}
+	buf   bytes.Buffer
+	mu    sync.Mutex
 }
 
 func newLogCapture() *logCapture {

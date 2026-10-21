@@ -33,17 +33,11 @@ const wellKnownCardPath = "/.well-known/agent-card.json"
 // dispatch's A2A context stamped on messages that start a task without
 // one (#350).
 type Proxy struct {
-	listener net.Listener
-	server   *http.Server
-	// cardJSON is the rewritten card the proxy serves at the well-known
-	// path: the host's card with every interface URL pointed here, and
-	// the security requirements in the spec's on-the-wire shape.
-	cardJSON []byte
-	// cardETag and cardLastModified are the caching headers the card
-	// response carries (TCK CARD-CACHE-001/002/003): a content hash,
-	// and the moment the proxy built the card.
-	cardETag         string
 	cardLastModified time.Time
+	listener         net.Listener
+	server           *http.Server
+	cardETag         string
+	cardJSON         []byte
 }
 
 // NewProxy starts the proxy on 127.0.0.1:port (port 0 picks a free

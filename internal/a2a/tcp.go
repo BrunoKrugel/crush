@@ -70,8 +70,8 @@ type remotePeerContextKey struct{}
 // client certificate was verified against client_ca, and whose it is.
 // It never carries a uid; TCP has no peer credentials.
 type remotePeer struct {
-	certVerified bool
 	certIdentity string
+	certVerified bool
 }
 
 // remotePeerFromContext returns the TCP caller stamped on the serve
@@ -121,32 +121,17 @@ func (socketListener) cardFor(card *a2aspec.AgentCard, _ *http.Request, _ string
 // check of its own and the TCP caller stamped on every serve context.
 // Every field is set before Serve starts and never changes after.
 type tcpHost struct {
-	factory  *ServerFactory
-	listener net.Listener
-	server   *http.Server
-	done     chan struct{}
-
-	// listen is the configured address, bound the address the listener
-	// actually bound (they differ for port 0), and advertised the
-	// host:port the cards list — empty when there is none to dial.
+	listener   net.Listener
+	factory    *ServerFactory
+	server     *http.Server
+	done       chan struct{}
+	leaf       *x509.Certificate
+	logger     *slog.Logger
 	listen     string
 	bound      string
 	advertised string
-
-	// leaf is the server certificate; its DNS and IP SANs are Host
-	// names the listener answers to.
-	leaf *x509.Certificate
-
-	// mutualTLS reports that client certificates are required and
-	// verified against client_ca.
-	mutualTLS bool
-
-	// maxBody caps a request body (maxTCPRequestBody; tests lower it).
-	maxBody int64
-
-	// logger receives the listener's audit lines: rejected requests and,
-	// through the server's ErrorLog, failed handshakes.
-	logger *slog.Logger
+	maxBody    int64
+	mutualTLS  bool
 }
 
 var _ hostListener = (*tcpHost)(nil)

@@ -18,8 +18,8 @@ import (
 )
 
 type FileInfo struct {
-	Path    string
 	ModTime time.Time
+	Path    string
 }
 
 func SkipHidden(path string) bool {

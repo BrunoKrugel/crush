@@ -727,21 +727,15 @@ func (r *cancelGateRunner) Cancel(string) {
 // parkedCancelRace is one served asking agent whose execution the test
 // can hold at the points where a parked task's cancel races it (#352).
 type parkedCancelRace struct {
-	factory *ServerFactory
-	server  *Server
-	runner  *cancelGateRunner
-	// release lets the parked execution's producer return; until then
-	// the SDK keeps the execution registered and its event pipe open.
-	release chan struct{}
-	// canceled is closed once the first Cancel has yielded its Canceled.
-	canceled chan struct{}
-	// named is closed once the stream named the task; id holds it.
-	named chan struct{}
-	id    string
-	// releaseProducer and resumeCancel close release and the runner's
-	// resume, once.
+	factory         *ServerFactory
+	server          *Server
+	runner          *cancelGateRunner
+	release         chan struct{}
+	canceled        chan struct{}
+	named           chan struct{}
 	releaseProducer func()
 	resumeCancel    func()
+	id              string
 }
 
 // task waits for the stream to name the task and returns its ID.
@@ -814,10 +808,8 @@ func startParkedCancelRace(t *testing.T) *parkedCancelRace {
 // no-execution path, and the task ends Canceled with the reason.
 func TestStreamDispatchParkedCancelRace(t *testing.T) {
 	tests := []struct {
-		name string
-		// interleave runs once the stream started; it lets the parked
-		// execution go at the point that forces the case.
 		interleave func(t *testing.T, race *parkedCancelRace)
+		name       string
 	}{
 		{
 			name: "cancel resolves to the parked state",
@@ -1160,9 +1152,8 @@ func jsonrpcRequestMethod(req *http.Request) string {
 // first event boundary are lost with the connection.
 type cutAfterFirstEventBody struct {
 	io.ReadCloser
-
-	primed bool
 	buf    []byte
+	primed bool
 }
 
 func (b *cutAfterFirstEventBody) Read(p []byte) (int, error) {
@@ -1407,9 +1398,8 @@ func TestStreamDispatchGivesUpAfterRetries(t *testing.T) {
 // carries, then dials through the wrapped transport.
 type capturingTransport struct {
 	inner http.RoundTripper
-
-	mu   sync.Mutex
-	auth [][]string
+	auth  [][]string
+	mu    sync.Mutex
 }
 
 func (c *capturingTransport) RoundTrip(req *http.Request) (*http.Response, error) {

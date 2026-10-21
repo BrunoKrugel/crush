@@ -47,42 +47,26 @@ type dockerMCPAvailabilityCheckedMsg struct {
 }
 
 type Commands struct {
-	com    *common.Common
-	keyMap struct {
-		Select,
-		UpDown,
-		Next,
-		Previous,
-		Tab,
-		ShiftTab,
-		Back,
-		Close key.Binding
-	}
-
-	sessionID  string
-	hasSession bool
-	hasTodos   bool
-	hasQueue   bool
-	hasCron    bool
-	selected   CommandType
-
-	spinner spinner.Model
-	loading bool
-
-	help  help.Model
-	input textinput.Model
-	list  *list.FilterableList
-
-	windowWidth int
-
-	customCommands []commands.CustomCommand
-	mcpPrompts     []commands.MCPPrompt
-
 	dockerMCPAvailable     *bool
+	com                    *common.Common
+	list                   *list.FilterableList
+	help                   help.Model
+	sessionID              string
+	keyMap                 struct{ Select, UpDown, Next, Previous, Tab, ShiftTab, Back, Close key.Binding }
+	mcpPrompts             []commands.MCPPrompt
+	customCommands         []commands.CustomCommand
+	breadcrumb             []string
+	menuStack              []menuLevel
+	input                  textinput.Model
+	spinner                spinner.Model
+	selected               CommandType
+	windowWidth            int
+	hasCron                bool
+	hasTodos               bool
+	hasSession             bool
 	dockerMCPCheckInFlight bool
-
-	menuStack  []menuLevel
-	breadcrumb []string
+	hasQueue               bool
+	loading                bool
 }
 
 var _ Dialog = (*Commands)(nil)

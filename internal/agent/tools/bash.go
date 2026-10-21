@@ -39,13 +39,13 @@ type BashPermissionsParams struct {
 }
 
 type BashResponseMetadata struct {
-	StartTime        int64  `json:"start_time"`
-	EndTime          int64  `json:"end_time"`
 	Output           string `json:"output"`
 	Description      string `json:"description"`
 	WorkingDirectory string `json:"working_directory"`
-	Background       bool   `json:"background,omitempty"`
 	ShellID          string `json:"shell_id,omitempty"`
+	StartTime        int64  `json:"start_time"`
+	EndTime          int64  `json:"end_time"`
+	Background       bool   `json:"background,omitempty"`
 }
 
 const (
@@ -66,9 +66,9 @@ var bashDescriptionTpl = template.Must(
 
 type bashDescriptionData struct {
 	BannedCommands  string
-	MaxOutputLength int
-	Attribution     config.Attribution
 	ModelID         string
+	Attribution     config.Attribution
+	MaxOutputLength int
 	RgAvailable     bool
 	GhAvailable     bool
 }

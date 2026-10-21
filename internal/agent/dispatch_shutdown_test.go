@@ -22,17 +22,15 @@ import (
 // stubborn ones only the root cancel, and wedged ones neither.
 type shutdownDispatchAgent struct {
 	SessionAgent
-	model   Model
-	started chan struct{}
-
+	started       chan struct{}
 	cancelCh      chan struct{}
+	unblockCh     chan struct{}
+	startedOnce   chan struct{}
+	model         Model
+	cancelOnce    sync.Once
+	startOnce     sync.Once
 	ignoreCancel  bool
 	ignoreContext bool
-	unblockCh     chan struct{}
-
-	cancelOnce  sync.Once
-	startOnce   sync.Once
-	startedOnce chan struct{}
 }
 
 func newShutdownDispatchAgent(ignoreCancel, ignoreContext bool) *shutdownDispatchAgent {
@@ -84,14 +82,11 @@ func (g *shutdownDispatchAgent) hasStarted() bool {
 // parent delivery turn, while the main agent itself is still canceled.
 type shutdownMainAgent struct {
 	SessionAgent
-	model      Model
-	mu         sync.Mutex
-	runs       []SessionAgentCall
-	cancelAlls int
-	// onCancelAll, when set, runs inside CancelAll: it models what a
-	// real agent's cancel triggers while CancelAll waits, such as a run
-	// ending on the parent session.
 	onCancelAll func()
+	model       Model
+	runs        []SessionAgentCall
+	cancelAlls  int
+	mu          sync.Mutex
 }
 
 func (m *shutdownMainAgent) Run(_ context.Context, call SessionAgentCall) (*fantasy.AgentResult, error) {
@@ -335,8 +330,8 @@ func TestDeliverDispatchResultSkippedWhileShuttingDown(t *testing.T) {
 func TestCancelAllRaisesShutdownBeforeCancelingAgents(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
-		name    string
 		trigger func(c *coordinator, parentID string)
+		name    string
 	}{
 		{
 			name: "run end flush",

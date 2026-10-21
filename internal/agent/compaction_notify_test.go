@@ -16,8 +16,8 @@ import (
 // recordNotifier collects agent notifications so tests can assert on what
 // observers were told.
 type recordNotifier struct {
-	mu   sync.Mutex
 	sent []notify.Notification
+	mu   sync.Mutex
 }
 
 func (r *recordNotifier) Publish(_ pubsub.EventType, n notify.Notification) {

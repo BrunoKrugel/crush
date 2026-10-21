@@ -37,13 +37,10 @@ type frameKey struct {
 }
 
 type frameEntry struct {
-	content string
-	cursor  *tea.Cursor
-	// at is the render time and drives TTL expiry; lastUsed is the last hit
-	// and drives eviction, so a hot frame (e.g. the clamped bottom during
-	// overscroll) is kept while still expiring on schedule.
 	at       time.Time
 	lastUsed time.Time
+	cursor   *tea.Cursor
+	content  string
 }
 
 // frameCache memoizes fully rendered frames keyed by chat scroll position.
@@ -54,14 +51,12 @@ type frameEntry struct {
 // moment ago. Serving those frames from memory keeps the event loop
 // draining instead of blocking input behind redraw work.
 type frameCache struct {
-	entries map[frameKey]*frameEntry
-	ttl     time.Duration
-	max     int
-	now     func() time.Time
-
-	hits, misses int
-	// putSkips counts frames dropped because the state moved while Draw
-	// was rendering them.
+	entries  map[frameKey]*frameEntry
+	now      func() time.Time
+	ttl      time.Duration
+	max      int
+	hits     int
+	misses   int
 	putSkips int
 }
 

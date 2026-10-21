@@ -38,9 +38,9 @@ type SQLiteStoreConfig struct {
 // production wiring lands with #355; ServerParams.TaskStore takes one
 // today.
 type SQLiteStore struct {
+	config SQLiteStoreConfig
 	q      *db.Queries
 	hostID string
-	config SQLiteStoreConfig
 }
 
 var _ taskstore.Store = (*SQLiteStore)(nil)

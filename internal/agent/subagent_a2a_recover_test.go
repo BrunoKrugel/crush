@@ -24,10 +24,10 @@ import (
 // a terminal state, optionally after naming a task, so the recovery
 // branches are reachable without a real server.
 type breakingStreamHost struct {
-	mu      sync.Mutex
-	taskID  string
 	started DispatchServerParams
+	taskID  string
 	stopped int
+	mu      sync.Mutex
 }
 
 func (h *breakingStreamHost) StartDispatchServer(_ context.Context, params DispatchServerParams) (string, any, func(), error) {

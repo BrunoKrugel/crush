@@ -25,26 +25,17 @@ const FilePickerID = "filepicker"
 
 // FilePicker is a dialog that allows users to select files or directories.
 type FilePicker struct {
-	com *common.Common
-
-	imgEnc                      fimage.Encoding
-	imgPrevWidth, imgPrevHeight int
-	cellSizeW, cellSizeH        int
-
 	fp              filepicker.Model
+	com             *common.Common
 	help            help.Model
-	previewingImage bool // indicates if an image is being previewed
+	km              struct{ Select, Down, Up, Forward, Backward, Navigate, Close key.Binding }
+	imgPrevWidth    int
+	imgPrevHeight   int
+	cellSizeW       int
+	cellSizeH       int
+	imgEnc          fimage.Encoding
+	previewingImage bool
 	isTmux          bool
-
-	km struct {
-		Select,
-		Down,
-		Up,
-		Forward,
-		Backward,
-		Navigate,
-		Close key.Binding
-	}
 }
 
 // CellSize returns the cell size used for image rendering.

@@ -27,22 +27,21 @@ const (
 // ShellItem renders a bang-mode shell command result in the chat with a
 // vertical bar on the left and plain-text output.
 type ShellItem struct {
-	*list.Versioned
+	sty *styles.Styles
 	*highlightableMessageItem
 	*cachedMessageItem
 	*focusableMessageItem
-
+	*list.Versioned
+	anim            *anim.Anim
 	id              string
 	command         string
 	output          strings.Builder
+	hyperlinks      []hyperlinkSpan
+	xOffset         int
+	maxLineWidth    int
 	exitCode        int
 	expandedContent bool
-	xOffset         int
-	maxLineWidth    int             // computed during render, used to clamp xOffset
-	hyperlinks      []hyperlinkSpan // OSC 8 spans in the last render, for click-to-open
-	sty             *styles.Styles
 	pending         bool
-	anim            *anim.Anim
 }
 
 var (

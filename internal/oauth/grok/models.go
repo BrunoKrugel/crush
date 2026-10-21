@@ -21,26 +21,17 @@ var modelsEndpoint = APIBaseURL + "/models"
 
 // modelCapabilities mirrors the request parameters a model accepts.
 type modelCapabilities struct {
-	// ReasoningEffort lists the effort values the model honors.
-	ReasoningEffort []string `json:"reasoning_effort"`
-	// DefaultReasoningEffort is used when no effort is selected.
-	DefaultReasoningEffort string `json:"default_reasoning_effort"`
+	DefaultReasoningEffort string   `json:"default_reasoning_effort"`
+	ReasoningEffort        []string `json:"reasoning_effort"`
 }
 
 // modelInfo mirrors one entry of the xAI model listing.
 type modelInfo struct {
-	ID string `json:"id"`
-	// ContextLength is the maximum context length in tokens.
-	ContextLength int64 `json:"context_length"`
-	// CompletionTextTokenPrice is in USD cents per 100M tokens and is
-	// set only for text-generating models; image and video generation
-	// models carry image_price instead. Its presence is the
-	// language-model filter.
-	CompletionTextTokenPrice *int64 `json:"completion_text_token_price"`
-	// PromptImageTokenPrice is in USD cents per 100M tokens; a non-zero
-	// value marks models that accept image input.
-	PromptImageTokenPrice int64              `json:"prompt_image_token_price"`
-	Capabilities          *modelCapabilities `json:"capabilities"`
+	CompletionTextTokenPrice *int64             `json:"completion_text_token_price"`
+	Capabilities             *modelCapabilities `json:"capabilities"`
+	ID                       string             `json:"id"`
+	ContextLength            int64              `json:"context_length"`
+	PromptImageTokenPrice    int64              `json:"prompt_image_token_price"`
 }
 
 type modelsResponse struct {

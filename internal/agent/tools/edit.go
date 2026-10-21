@@ -35,10 +35,10 @@ type EditPermissionsParams struct {
 }
 
 type EditResponseMetadata struct {
-	Additions  int    `json:"additions"`
-	Removals   int    `json:"removals"`
 	OldContent string `json:"old_content,omitempty"`
 	NewContent string `json:"new_content,omitempty"`
+	Additions  int    `json:"additions"`
+	Removals   int    `json:"removals"`
 }
 
 const EditToolName = "edit"

@@ -25,11 +25,9 @@ import "sync"
 // teardown (joestump-agent/crush#515): the system-prompt render runs git in
 // the working directory and outlived the dispatch tests' TempDir removal.
 type readiness struct {
+	err  error
 	done chan struct{}
 	once sync.Once
-	// err is written before done is closed, so a waiter that observes the
-	// close also observes the error.
-	err error
 }
 
 // newReadiness returns an unsatisfied latch for work that is about to start.
