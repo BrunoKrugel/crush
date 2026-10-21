@@ -741,6 +741,13 @@ a directory accessible only to its owner; processes running as that same user
 can still connect. Stop the server with Ctrl+C when finished, then remove the
 temporary directory.
 
+### Memory
+
+Crush can remember what you work on across sessions, backed by
+[Honcho](https://honcho.dev). Pick **Connect Memory** in the command
+palette, or run `crush login honcho`. It is off by default. For
+details, see [the memory guide](./docs/memory/).
+
 ### Sharing a workspace across clients
 
 When Crush is run against a shared backend (for example two TUIs talking to
