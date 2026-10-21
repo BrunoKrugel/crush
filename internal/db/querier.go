@@ -13,6 +13,21 @@ type Querier interface {
 	// CountLedgerEntries counts the memory entries recorded for a session.
 	CountLedgerEntries(ctx context.Context, sessionID string) (int64, error)
 
+	// CreateSnapshot records a filesystem snapshot for a session message.
+	CreateSnapshot(ctx context.Context, arg CreateSnapshotParams) (Snapshot, error)
+
+	// GetLatestSnapshotBySession returns a session's most recent snapshot.
+	GetLatestSnapshotBySession(ctx context.Context, sessionID string) (Snapshot, error)
+
+	// GetSnapshot returns one snapshot by ID.
+	GetSnapshot(ctx context.Context, id string) (Snapshot, error)
+
+	// GetSnapshotByMessageID returns the snapshot tied to a session message.
+	GetSnapshotByMessageID(ctx context.Context, arg GetSnapshotByMessageIDParams) (Snapshot, error)
+
+	// ListSnapshotsBySession returns a session's snapshots newest first.
+	ListSnapshotsBySession(ctx context.Context, sessionID string) ([]Snapshot, error)
+
 	// CreateLedgerEntry records one memory entry and returns its row ID.
 	CreateLedgerEntry(ctx context.Context, arg CreateLedgerEntryParams) (int64, error)
 
@@ -30,6 +45,7 @@ type Querier interface {
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	DeleteFile(ctx context.Context, id string) error
+	DeleteSnapshotsBySession(ctx context.Context, sessionID string) error
 	DeleteMCPDisabledServer(ctx context.Context, name string) error
 	DeleteMCPEnabledServer(ctx context.Context, name string) error
 	DeleteMessage(ctx context.Context, id string) error

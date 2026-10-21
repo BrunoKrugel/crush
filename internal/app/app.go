@@ -39,6 +39,7 @@ import (
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/shell"
 	"github.com/charmbracelet/crush/internal/skills"
+	"github.com/charmbracelet/crush/internal/snapshot"
 	"github.com/charmbracelet/crush/internal/ui/anim"
 	"github.com/charmbracelet/crush/internal/ui/styles"
 	"github.com/charmbracelet/crush/internal/update"
@@ -917,6 +918,18 @@ func (app *App) initCoderAgent(ctx context.Context, interactive bool) error {
 	if app.conn != nil {
 		dispatchRecords = dispatch.NewSQLiteRecordStore(app.conn, hostID)
 	}
+	var snapshots *snapshot.Service
+	if app.conn != nil && app.config.Config().SnapshotsEnabled() && snapshot.IsSupported(app.config.WorkingDir()) {
+		if svc, err := snapshot.New(snapshot.Options{
+			ProjectRoot: app.config.WorkingDir(),
+			Exclude:     app.config.Config().SnapshotExclusions(),
+		}); err == nil {
+			svc.Store = snapshot.NewDBStore(db.New(app.conn))
+			snapshots = svc
+		} else {
+			slog.Warn("Filesystem snapshots disabled", "error", err)
+		}
+	}
 	coordinatorOpts := agent.CoordinatorOptions{
 		Config:      app.config,
 		Sessions:    app.Sessions,
@@ -940,6 +953,7 @@ func (app *App) initCoderAgent(ctx context.Context, interactive bool) error {
 		// finished-but-undelivered results. nil without a database keeps
 		// every record write a no-op.
 		DispatchRecords: dispatchRecords,
+		Snapshots:       snapshots,
 	}
 
 	// Semantic search is opt-in: only wire the store and client when an

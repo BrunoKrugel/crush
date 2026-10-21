@@ -139,6 +139,12 @@ func handleOption(ctx context.Context, args []string, stdin io.Reader, stdout, s
 		return nil
 	}
 
+	// The snapshots-* keys write into the top-level snapshots block,
+	// the same special-case pattern as the a2a-* keys.
+	if strings.HasPrefix(key, "snapshots-") {
+		return handleSnapshotsOption(b, key, val, stderr)
+	}
+
 	// The a2a-* keys write into the nested options.a2a block (#358),
 	// the same nested-section pattern as dispatch-default-agent.
 	if jsonKey, ok := a2aOptions[key]; ok {
@@ -270,6 +276,31 @@ var optionSpecs = map[string]optionSpec{
 	"global-context-path": {jsonKey: "global_context_paths", kind: optList},
 	"skill-path":          {jsonKey: "skills_paths", kind: optList},
 	"disable-skill":       {jsonKey: "disabled_skills", kind: optList},
+}
+
+// handleSnapshotsOption implements the snapshots-* keys, which write the
+// top-level snapshots block: snapshots-enabled (bool) and
+// snapshots-exclude (each call appends one pattern).
+func handleSnapshotsOption(b *ConfigBuilder, key, val string, stderr io.Writer) error {
+	snapshots := b.section("snapshots")
+	switch key {
+	case "snapshots-enabled":
+		parsed, err := parseBool(val)
+		if err != nil {
+			return usage(stderr, fmt.Sprintf("option snapshots-enabled expects true/false, got %q", val))
+		}
+		snapshots["enabled"] = parsed
+	case "snapshots-exclude":
+		if val == "" {
+			return usage(stderr, "usage: option snapshots-exclude <pattern>")
+		}
+		existing, _ := snapshots["exclude"].([]any)
+		snapshots["exclude"] = append(existing, val)
+	default:
+		return usage(stderr, fmt.Sprintf("option: unknown key %q", key))
+	}
+	slog.Info("Option set in shell config", "key", key, "value", val)
+	return nil
 }
 
 // a2aOptions maps the a2a-* keys to their field under options.a2a

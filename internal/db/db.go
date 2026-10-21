@@ -57,6 +57,24 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.maxLedgerSeqStmt, err = db.PrepareContext(ctx, maxLedgerSeq); err != nil {
 		return nil, fmt.Errorf("error preparing query MaxLedgerSeq: %w", err)
 	}
+	if q.createSnapshotStmt, err = db.PrepareContext(ctx, createSnapshot); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateSnapshot: %w", err)
+	}
+	if q.getSnapshotStmt, err = db.PrepareContext(ctx, getSnapshot); err != nil {
+		return nil, fmt.Errorf("error preparing query GetSnapshot: %w", err)
+	}
+	if q.getSnapshotByMessageIDStmt, err = db.PrepareContext(ctx, getSnapshotByMessageID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetSnapshotByMessageID: %w", err)
+	}
+	if q.listSnapshotsBySessionStmt, err = db.PrepareContext(ctx, listSnapshotsBySession); err != nil {
+		return nil, fmt.Errorf("error preparing query ListSnapshotsBySession: %w", err)
+	}
+	if q.getLatestSnapshotBySessionStmt, err = db.PrepareContext(ctx, getLatestSnapshotBySession); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLatestSnapshotBySession: %w", err)
+	}
+	if q.deleteSnapshotsBySessionStmt, err = db.PrepareContext(ctx, deleteSnapshotsBySession); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteSnapshotsBySession: %w", err)
+	}
 	if q.addSessionUsageStmt, err = db.PrepareContext(ctx, addSessionUsage); err != nil {
 		return nil, fmt.Errorf("error preparing query AddSessionUsage: %w", err)
 	}
@@ -275,6 +293,36 @@ func (q *Queries) Close() error {
 	if q.maxLedgerSeqStmt != nil {
 		if cerr := q.maxLedgerSeqStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing maxLedgerSeqStmt: %w", cerr)
+		}
+	}
+	if q.createSnapshotStmt != nil {
+		if cerr := q.createSnapshotStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createSnapshotStmt: %w", cerr)
+		}
+	}
+	if q.getSnapshotStmt != nil {
+		if cerr := q.getSnapshotStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getSnapshotStmt: %w", cerr)
+		}
+	}
+	if q.getSnapshotByMessageIDStmt != nil {
+		if cerr := q.getSnapshotByMessageIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getSnapshotByMessageIDStmt: %w", cerr)
+		}
+	}
+	if q.listSnapshotsBySessionStmt != nil {
+		if cerr := q.listSnapshotsBySessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listSnapshotsBySessionStmt: %w", cerr)
+		}
+	}
+	if q.getLatestSnapshotBySessionStmt != nil {
+		if cerr := q.getLatestSnapshotBySessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLatestSnapshotBySessionStmt: %w", cerr)
+		}
+	}
+	if q.deleteSnapshotsBySessionStmt != nil {
+		if cerr := q.deleteSnapshotsBySessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteSnapshotsBySessionStmt: %w", cerr)
 		}
 	}
 	if q.deleteSkillsDisabledStmt != nil {
@@ -678,6 +726,12 @@ type Queries struct {
 	createLedgerEntryStmt                *sql.Stmt
 	listLedgerEntriesStmt                *sql.Stmt
 	maxLedgerSeqStmt                     *sql.Stmt
+	createSnapshotStmt                   *sql.Stmt
+	getSnapshotStmt                      *sql.Stmt
+	getSnapshotByMessageIDStmt           *sql.Stmt
+	listSnapshotsBySessionStmt           *sql.Stmt
+	getLatestSnapshotBySessionStmt       *sql.Stmt
+	deleteSnapshotsBySessionStmt         *sql.Stmt
 	deleteSkillsDisabledStmt             *sql.Stmt
 	deleteSkillsEnabledStmt              *sql.Stmt
 	insertSkillsDisabledStmt             *sql.Stmt
@@ -775,6 +829,13 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		createLedgerEntryStmt:  q.createLedgerEntryStmt,
 		listLedgerEntriesStmt:  q.listLedgerEntriesStmt,
 		maxLedgerSeqStmt:       q.maxLedgerSeqStmt,
+
+		createSnapshotStmt:             q.createSnapshotStmt,
+		getSnapshotStmt:                q.getSnapshotStmt,
+		getSnapshotByMessageIDStmt:     q.getSnapshotByMessageIDStmt,
+		listSnapshotsBySessionStmt:     q.listSnapshotsBySessionStmt,
+		getLatestSnapshotBySessionStmt: q.getLatestSnapshotBySessionStmt,
+		deleteSnapshotsBySessionStmt:   q.deleteSnapshotsBySessionStmt,
 
 		addSessionUsageStmt:                  q.addSessionUsageStmt,
 		countA2ATasksStmt:                    q.countA2ATasksStmt,

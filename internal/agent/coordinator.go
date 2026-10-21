@@ -48,6 +48,7 @@ import (
 	"github.com/charmbracelet/crush/internal/semantic"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/skills"
+	"github.com/charmbracelet/crush/internal/snapshot"
 	"github.com/charmbracelet/crush/internal/symbols"
 	"golang.org/x/sync/errgroup"
 
@@ -191,6 +192,7 @@ type liveDispatch struct {
 
 type coordinator struct {
 	ledger                   ledger.Service
+	snapshots                *snapshot.Service
 	dispatchRecords          dispatch.DispatchRecords
 	sessions                 session.Service
 	messages                 message.Service
@@ -242,6 +244,7 @@ type coordinator struct {
 // positional parameter list.
 type CoordinatorOptions struct {
 	Ledger          ledger.Service
+	Snapshots       *snapshot.Service
 	RunComplete     pubsub.Publisher[notify.RunComplete]
 	Messages        message.Service
 	Permissions     permission.Service
@@ -1036,6 +1039,7 @@ func (c *coordinator) buildAgent(ctx context.Context, agent config.Agent, isSubA
 		Notify:               c.notify,
 		RunComplete:          c.runComplete,
 		Ledger:               c.ledger,
+		Snapshots:            c.snapshots,
 		ObserveMemory:        c.observesMemory(isSubAgent),
 		CompactionHooks:      c.compactionHooks(isSubAgent),
 		// The todo enforcement ladder (#315) applies to every agent the

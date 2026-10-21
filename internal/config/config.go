@@ -1102,6 +1102,7 @@ type Config struct {
 	MCP              MCPs                                  `json:"mcp,omitempty" jsonschema:"description=Model Context Protocol server configurations"`
 	LSP              LSPs                                  `json:"lsp,omitempty" jsonschema:"description=Language Server Protocol configurations"`
 	Embeddings       *EmbeddingsConfig                     `json:"embeddings,omitempty" jsonschema:"description=Embedding provider configuration for semantic search"`
+	Snapshots        *SnapshotsConfig                      `json:"snapshots,omitempty" jsonschema:"description=Git-backed filesystem snapshots captured at each user message"`
 	Options          *Options                              `json:"options,omitempty" jsonschema:"description=General application options"`
 	Permissions      *Permissions                          `json:"permissions,omitempty" jsonschema:"description=Permission settings for tool usage"`
 	Models           map[SelectedModelType]SelectedModel   `json:"models,omitempty" jsonschema:"description=Model configurations for different model types,example={\"large\":{\"model\":\"gpt-4o\",\"provider\":\"openai\"}}"`
@@ -1623,6 +1624,31 @@ func ptrValOr[T any](t *T, el T) T {
 // existing config.
 func (o *Options) GetLazyMCP() bool {
 	return o == nil || o.LazyMCP == nil || *o.LazyMCP
+}
+
+// DefaultSnapshotExclusions lists the paths snapshots never capture when
+// the user has not configured their own exclusions.
+var DefaultSnapshotExclusions = []string{"node_modules", "vendor", "dist", "build"}
+
+// SnapshotsConfig configures the git-backed filesystem snapshots.
+type SnapshotsConfig struct {
+	// Enabled is nil when unset, which means snapshots are on.
+	Enabled *bool `json:"enabled,omitempty" jsonschema:"description=Capture a filesystem snapshot at each user message into the project's private snapshot store,default=true"`
+	// Exclude holds glob or prefix patterns skipped during the snapshot walk.
+	Exclude []string `json:"exclude,omitempty" jsonschema:"description=Path patterns excluded from snapshots,example=node_modules"`
+}
+
+// SnapshotsEnabled reports whether snapshots are on; they are on by default.
+func (c *Config) SnapshotsEnabled() bool {
+	return c.Snapshots == nil || c.Snapshots.Enabled == nil || *c.Snapshots.Enabled
+}
+
+// SnapshotExclusions returns the configured exclusions or the defaults.
+func (c *Config) SnapshotExclusions() []string {
+	if c.Snapshots == nil || len(c.Snapshots.Exclude) == 0 {
+		return DefaultSnapshotExclusions
+	}
+	return c.Snapshots.Exclude
 }
 
 type CompactionOptions struct {

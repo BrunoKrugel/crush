@@ -552,3 +552,24 @@ func TestOption_A2ARequiresValue(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unknown key")
 }
+
+func TestOptionSnapshots(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	script := `option snapshots-enabled false
+option snapshots-exclude dist
+option snapshots-exclude target`
+	path := filepath.Join(dir, "crushrc")
+
+	jsonBytes, err := LoadShellConfig(t.Context(), path, []byte(script))
+	require.NoError(t, err)
+
+	var result map[string]any
+	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
+
+	snaps, ok := result["snapshots"].(map[string]any)
+	require.True(t, ok, "snapshots section should exist")
+	require.Equal(t, false, snaps["enabled"])
+	require.Equal(t, []any{"dist", "target"}, snaps["exclude"])
+}

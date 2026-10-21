@@ -214,6 +214,22 @@ Plain TCP is refused: `a2a-listen` without both `a2a-tls-cert` and
 `~/`; a relative one fails the load, since it would resolve against
 whichever project Crush runs in.
 
+## Snapshots
+
+The `snapshots-*` keys configure the
+[filesystem snapshots](/features/snapshots) captured at each user message.
+The JSON form keeps them under the top-level `snapshots` block.
+
+```bash
+option snapshots-enabled false
+option snapshots-exclude dist
+option snapshots-exclude target
+```
+
+`snapshots-enabled` takes a boolean (default `true`); each
+`snapshots-exclude` call appends one glob or prefix pattern to the exclusion
+list, which defaults to `node_modules`, `vendor`, `dist`, and `build`.
+
 ## Security
 
 Both `crushrc` and `crush.json` are **trusted code**. `crushrc` runs in a full

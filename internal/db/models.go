@@ -117,6 +117,16 @@ type CompactionLedger struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
+type Snapshot struct {
+	ID               string         `json:"id"`
+	SessionID        string         `json:"session_id"`
+	MessageID        string         `json:"message_id"`
+	ParentSnapshotID sql.NullString `json:"parent_snapshot_id"`
+	GitCommitHash    string         `json:"git_commit_hash"`
+	Description      sql.NullString `json:"description"`
+	CreatedAt        int64          `json:"created_at"`
+}
+
 type SkillsDisabledServer struct {
 	Name string `json:"name"`
 }

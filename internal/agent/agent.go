@@ -49,6 +49,7 @@ import (
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/session"
+	"github.com/charmbracelet/crush/internal/snapshot"
 	"github.com/charmbracelet/crush/internal/stringext"
 	"github.com/charmbracelet/crush/internal/version"
 	"github.com/charmbracelet/x/ansi"
@@ -233,6 +234,7 @@ type sessionAgent struct {
 	isSubAgent           bool
 	isYolo               bool
 	disableAutoSummarize bool
+	snapshots            *snapshot.Service
 }
 
 type SessionAgentOptions struct {
@@ -255,6 +257,9 @@ type SessionAgentOptions struct {
 	IsYolo               bool
 	DisableAutoSummarize bool
 	IsSubAgent           bool
+	// Snapshots, when non-nil, captures a filesystem snapshot at each
+	// top-level user message.
+	Snapshots *snapshot.Service
 }
 
 func NewSessionAgent(
@@ -284,6 +289,7 @@ func newSessionAgent(opts SessionAgentOptions) *sessionAgent {
 		runComplete:          opts.RunComplete,
 		ledger:               opts.Ledger,
 		observeMemory:        opts.ObserveMemory,
+		snapshots:            opts.Snapshots,
 		compactionHooks:      opts.CompactionHooks,
 		messageQueue:         csync.NewMap[string, []SessionAgentCall](),
 		activeRequests:       csync.NewMap[string, *activeCancel](),
@@ -1064,11 +1070,12 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 	}
 
 	// Add the user message to the session.
-	_, err = a.createUserMessage(ctx, call)
+	userMsg, err := a.createUserMessage(ctx, call)
 	if err != nil {
 		return nil, err
 	}
 	userMsgCreated = true
+	a.snapshotForMessage(call, userMsg)
 
 	// Add the session to the context. The run context (genCtx) and its
 	// cancel func were already created and registered under the dispatch
@@ -1482,7 +1489,6 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 			},
 		},
 	})
-
 
 	// Final writes use a context detached from the run: workspace shutdown
 	// cancels ctx before agent goroutines finish, and the turn's ending
@@ -2292,6 +2298,23 @@ func sessionHeaders(sessionID string) map[string]string {
 		"x-session-id":       hash,
 		"x-session-affinity": hash,
 	}
+}
+
+// snapshotForMessage captures the working tree in the background after a
+// top-level user message. Failures are logged and never block the run.
+func (a *sessionAgent) snapshotForMessage(call SessionAgentCall, msg message.Message) {
+	if a.snapshots == nil || a.isSubAgent || call.HiddenUserMessage || call.Steer {
+		return
+	}
+	description := call.Prompt
+	if len(description) > 80 {
+		description = description[:80]
+	}
+	go func() {
+		if _, err := a.snapshots.SnapshotForMessage(call.SessionID, msg.ID, description); err != nil {
+			slog.Warn("Failed to capture filesystem snapshot", "error", err)
+		}
+	}()
 }
 
 func (a *sessionAgent) createUserMessage(ctx context.Context, call SessionAgentCall) (message.Message, error) {
