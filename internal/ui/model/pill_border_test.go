@@ -41,14 +41,14 @@ func TestQueuePillAlwaysHasBorder(t *testing.T) {
 
 	cases := []struct {
 		name     string
-		expanded bool
 		todos    []session.Todo
 		queue    int
+		expanded bool
 	}{
-		{"collapsed only queue", false, nil, 2},
-		{"collapsed queue+todos", false, incompleteTodos, 2},
-		{"expanded only queue", true, nil, 2},
-		{"expanded queue+todos", true, incompleteTodos, 2},
+		{name: "collapsed only queue", expanded: false, todos: nil, queue: 2},
+		{name: "collapsed queue+todos", expanded: false, todos: incompleteTodos, queue: 2},
+		{name: "expanded only queue", expanded: true, todos: nil, queue: 2},
+		{name: "expanded queue+todos", expanded: true, todos: incompleteTodos, queue: 2},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

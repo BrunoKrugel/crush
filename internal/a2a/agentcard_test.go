@@ -127,12 +127,12 @@ func TestCardNameFallbacks(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		agent config.Agent
 		want  string
+		agent config.Agent
 	}{
-		{"name wins", config.Agent{ID: "id", Name: "Name"}, "Name"},
-		{"id fallback", config.Agent{ID: "id"}, "id"},
-		{"generic fallback", config.Agent{}, "crush-agent"},
+		{name: "name wins", agent: config.Agent{ID: "id", Name: "Name"}, want: "Name"},
+		{name: "id fallback", agent: config.Agent{ID: "id"}, want: "id"},
+		{name: "generic fallback", agent: config.Agent{}, want: "crush-agent"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

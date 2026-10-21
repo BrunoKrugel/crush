@@ -215,9 +215,9 @@ type taskRun struct {
 	pending           *question.Request
 	permCh            <-chan pubsub.Event[permission.PermissionRequest]
 	pendingPermission *permission.PermissionRequest
-	binding           ContextBinding
 	taskID            string
 	lastTodos         []session.Todo
+	binding           ContextBinding
 }
 
 // Option configures an [Executor].

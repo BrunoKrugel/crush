@@ -27,7 +27,6 @@ type ReadMCPResourcePermissionsParams struct {
 
 const ReadMCPResourceToolName = "read_mcp_resource"
 
-
 // splitMCPResourceContents flattens resource contents into model-facing text
 // parts, skipping nil and empty entries.
 func splitMCPResourceContents(contents []*mcp.ResourceContents) []string {
@@ -51,7 +50,6 @@ func splitMCPResourceContents(contents []*mcp.ResourceContents) []string {
 
 //go:embed read_mcp_resource.md
 var readMCPResourceDescription string
-
 
 func NewReadMCPResourceTool(cfg *config.ConfigStore, permissions permission.Service) fantasy.AgentTool {
 	return fantasy.NewParallelAgentTool(

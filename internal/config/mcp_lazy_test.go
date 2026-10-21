@@ -27,9 +27,9 @@ func TestMCPConfigIsLazy(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		server   MCPConfig
 		options  *Options
 		name     string
+		server   MCPConfig
 		expected bool
 	}{
 		{

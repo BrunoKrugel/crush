@@ -7,8 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
-
 func TestGetContentWidthFromContext(t *testing.T) {
 	t.Parallel()
 

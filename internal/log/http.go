@@ -101,11 +101,11 @@ const maxRecordedBodyBytes = 1 << 20
 // which is how a stream gets aborted, so the buffer is guarded.
 type recordingBody struct {
 	inner     io.ReadCloser
-	mu        sync.Mutex
+	log       func(body string, truncated bool)
 	buf       bytes.Buffer
+	mu        sync.Mutex
 	truncated bool
 	logged    bool
-	log       func(body string, truncated bool)
 }
 
 func (r *recordingBody) Read(p []byte) (int, error) {

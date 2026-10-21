@@ -22,9 +22,9 @@ func TestToolItemStopsSpinningOnceItHasAResult(t *testing.T) {
 	}
 
 	tests := []struct {
+		result   *message.ToolResult
 		name     string
 		toolCall message.ToolCall
-		result   *message.ToolResult
 		want     bool
 	}{
 		{

@@ -71,8 +71,8 @@ func TestScrollbarDefault_ClampedScrollRevealsScrollbar(t *testing.T) {
 // op is one user action that the PR treats as (or routes through) a
 // scroll-only update.
 type op struct {
-	name string
 	run  func(u *UI) tea.Cmd
+	name string
 }
 
 func wheel(u *UI, dx, dy float64) tea.Cmd {
@@ -91,18 +91,18 @@ func keyOp(k rune) func(*UI) tea.Cmd {
 }
 
 var frameOps = []op{
-	{"wheel down", func(u *UI) tea.Cmd { return wheel(u, 0, 1) }},
-	{"wheel up", func(u *UI) tea.Cmd { return wheel(u, 0, -1) }},
-	{"wheel down x5", func(u *UI) tea.Cmd { return wheel(u, 0, 5) }},
-	{"wheel up x5", func(u *UI) tea.Cmd { return wheel(u, 0, -5) }},
-	{"wheel diagonal", func(u *UI) tea.Cmd { return wheel(u, 4, 1) }},
-	{"wheel diagonal back", func(u *UI) tea.Cmd { return wheel(u, -4, -1) }},
-	{"key up", keyOp(tea.KeyUp)},
-	{"key down", keyOp(tea.KeyDown)},
-	{"pgup", keyOp(tea.KeyPgUp)},
-	{"pgdown", keyOp(tea.KeyPgDown)},
-	{"frame gc", func(u *UI) tea.Cmd { _, cmd := u.Update(frameGCMsg{}); return cmd }},
-	{"scrollbar hide timer", func(u *UI) tea.Cmd {
+	{name: "wheel down", run: func(u *UI) tea.Cmd { return wheel(u, 0, 1) }},
+	{name: "wheel up", run: func(u *UI) tea.Cmd { return wheel(u, 0, -1) }},
+	{name: "wheel down x5", run: func(u *UI) tea.Cmd { return wheel(u, 0, 5) }},
+	{name: "wheel up x5", run: func(u *UI) tea.Cmd { return wheel(u, 0, -5) }},
+	{name: "wheel diagonal", run: func(u *UI) tea.Cmd { return wheel(u, 4, 1) }},
+	{name: "wheel diagonal back", run: func(u *UI) tea.Cmd { return wheel(u, -4, -1) }},
+	{name: "key up", run: keyOp(tea.KeyUp)},
+	{name: "key down", run: keyOp(tea.KeyDown)},
+	{name: "pgup", run: keyOp(tea.KeyPgUp)},
+	{name: "pgdown", run: keyOp(tea.KeyPgDown)},
+	{name: "frame gc", run: func(u *UI) tea.Cmd { _, cmd := u.Update(frameGCMsg{}); return cmd }},
+	{name: "scrollbar hide timer", run: func(u *UI) tea.Cmd {
 		_, cmd := u.Update(scrollbarHideMsg{seq: u.chat.scrollbarHideSeq})
 		return cmd
 	}},

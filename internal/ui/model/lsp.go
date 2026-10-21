@@ -35,8 +35,8 @@ type lspStatesMsg struct {
 
 // LSPInfo wraps LSP client information with diagnostic counts by severity.
 type LSPInfo struct {
-	workspace.LSPClientInfo
 	Diagnostics map[protocol.DiagnosticSeverity]int
+	workspace.LSPClientInfo
 }
 
 // requestLSPRefresh schedules an off-thread refresh of the memoized LSP

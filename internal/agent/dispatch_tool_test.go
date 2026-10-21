@@ -35,21 +35,13 @@ const testMaxJobs = 50
 // the interface so only the exercised methods are implemented.
 type dispatchTestAgent struct {
 	SessionAgent
-	model  Model
-	result *fantasy.AgentResult
 	err    error
-	// mu guards calls: the concurrency-cap tests run several dispatches
-	// against the same fake, whose turns then append from separate
-	// goroutines.
-	mu sync.Mutex
-	// gate, when non-nil, blocks each turn until it is closed — the
-	// seam the concurrency-cap tests use to hold a dispatch running.
-	gate chan struct{}
-	// onRun, when set, runs before each turn returns — the seam the
-	// background-job tests use to start a job tagged with the dispatch
-	// session from inside the run (#385).
-	onRun func(call SessionAgentCall)
-	calls []SessionAgentCall
+	result *fantasy.AgentResult
+	gate   chan struct{}
+	onRun  func(call SessionAgentCall)
+	calls  []SessionAgentCall
+	model  Model
+	mu     sync.Mutex
 }
 
 func (f *dispatchTestAgent) Run(_ context.Context, call SessionAgentCall) (*fantasy.AgentResult, error) {
@@ -166,10 +158,10 @@ func decodeDispatchHandle(t *testing.T, resp fantasy.ToolResponse) dispatch.Disp
 // default config, and sub-agents keep the existing exclusion.
 func TestBuildToolsGatesDispatchOnInteractive(t *testing.T) {
 	tests := []struct {
+		want        map[string]bool
 		name        string
 		interactive bool
 		subAgent    bool
-		want        map[string]bool
 	}{
 		{
 			name:        "interactive main agent keeps all dispatch tools",
@@ -275,11 +267,11 @@ func mustWorktreesDir(t *testing.T, c *coordinator) string {
 // finding <repo>/.crush, and a custom data directory outside the repo.
 func TestDispatchWorktreesLiveUnderDataDirectory(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
 		dataDir func(*testing.T) string
+		name    string
 	}{
-		{"data directory inside the repo", func(*testing.T) string { return "" }},
-		{"custom data directory outside the repo", func(t *testing.T) string { return t.TempDir() }},
+		{name: "data directory inside the repo", dataDir: func(*testing.T) string { return "" }},
+		{name: "custom data directory outside the repo", dataDir: func(t *testing.T) string { return t.TempDir() }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			agent := &dispatchTestAgent{
@@ -920,19 +912,14 @@ func toolNamesOf(a SessionAgent) []string {
 // delivery turn runs on its own goroutine.
 type fakeMainAgent struct {
 	SessionAgent
-	model Model
-	mu    sync.Mutex
-	runs  []SessionAgentCall
-	// busy reports the session busy so a delivery flush parks in the
-	// pending set instead of starting a turn.
-	busy atomic.Bool
-	// failures makes the next N Run calls fail, driving the retry path.
+	runs     []SessionAgentCall
+	model    Model
 	failures atomic.Int64
-	// queue makes Run answer as the busy branch does: the call is
-	// recorded as if enqueued, and Run returns nil, nil.
-	queue   atomic.Bool
-	cancels atomic.Int64
-	clears  atomic.Int64
+	cancels  atomic.Int64
+	clears   atomic.Int64
+	mu       sync.Mutex
+	busy     atomic.Bool
+	queue    atomic.Bool
 }
 
 func (f *fakeMainAgent) Run(_ context.Context, call SessionAgentCall) (*fantasy.AgentResult, error) {
@@ -1307,8 +1294,8 @@ func TestQueueKeepsSystemDeliveriesAcrossClearAndCancel(t *testing.T) {
 // snapshot a later stage is waiting for when the registry and session
 // streams interleave differently under load.
 type agentSink struct {
-	mu        sync.Mutex
 	snapshots []dispatch.TodoSnapshot
+	mu        sync.Mutex
 }
 
 func newAgentSink() *agentSink {

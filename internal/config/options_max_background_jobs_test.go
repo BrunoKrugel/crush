@@ -11,15 +11,15 @@ func TestOptionsGetMaxBackgroundJobs(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
 		options  *Options
+		name     string
 		expected int
 	}{
-		{"nil options", nil, DefaultMaxBackgroundJobs},
-		{"unset", &Options{}, DefaultMaxBackgroundJobs},
-		{"zero means default", &Options{MaxBackgroundJobs: new(0)}, DefaultMaxBackgroundJobs},
-		{"negative means default", &Options{MaxBackgroundJobs: new(-5)}, DefaultMaxBackgroundJobs},
-		{"configured", &Options{MaxBackgroundJobs: new(200)}, 200},
+		{name: "nil options", options: nil, expected: DefaultMaxBackgroundJobs},
+		{name: "unset", options: &Options{}, expected: DefaultMaxBackgroundJobs},
+		{name: "zero means default", options: &Options{MaxBackgroundJobs: new(0)}, expected: DefaultMaxBackgroundJobs},
+		{name: "negative means default", options: &Options{MaxBackgroundJobs: new(-5)}, expected: DefaultMaxBackgroundJobs},
+		{name: "configured", options: &Options{MaxBackgroundJobs: new(200)}, expected: 200},
 	}
 
 	for _, tt := range tests {

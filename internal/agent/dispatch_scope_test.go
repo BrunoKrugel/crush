@@ -64,12 +64,12 @@ func finishedDispatchWithPrompting(t *testing.T, mutate func(workspacePath strin
 // the agent is never canceled — and the dispatching session still can.
 func TestCancelDispatchScopedToCallerSession(t *testing.T) {
 	tests := []struct {
-		name string
 		ref  func(dispatch.DispatchResult) string
+		name string
 	}{
-		{"by dispatch ID", func(h dispatch.DispatchResult) string { return h.DispatchID }},
-		{"by handle", func(h dispatch.DispatchResult) string { return "@" + h.Handle }},
-		{"by session ID", func(h dispatch.DispatchResult) string { return h.SessionID }},
+		{name: "by dispatch ID", ref: func(h dispatch.DispatchResult) string { return h.DispatchID }},
+		{name: "by handle", ref: func(h dispatch.DispatchResult) string { return "@" + h.Handle }},
+		{name: "by session ID", ref: func(h dispatch.DispatchResult) string { return h.SessionID }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -102,8 +102,8 @@ func TestCancelDispatchScopedToCallerSession(t *testing.T) {
 // to the unscoped path, and the dispatching session's call kills the run.
 func TestCancelDispatchToolScopedToCallerSession(t *testing.T) {
 	tests := []struct {
-		name   string
 		params func(dispatch.DispatchResult) CancelDispatchParams
+		name   string
 	}{
 		{
 			name: "by dispatch id",
@@ -170,14 +170,14 @@ func TestApplyAndDismissScopedToCallerSession(t *testing.T) {
 	require.Equal(t, "dispatch-parent-session", entry.ParentSessionID)
 
 	calls := []struct {
-		name   string
 		tool   fantasy.AgentTool
 		params any
+		name   string
 	}{
-		{"apply by id", c.applyDispatchTool(), ApplyDispatchParams{DispatchID: entry.ID}},
-		{"apply by handle", c.applyDispatchTool(), ApplyDispatchParams{Handle: "@tester"}},
-		{"dismiss by id", c.dismissDispatchTool(), DismissDispatchParams{DispatchID: entry.ID}},
-		{"dismiss by handle", c.dismissDispatchTool(), DismissDispatchParams{Handle: "tester"}},
+		{name: "apply by id", tool: c.applyDispatchTool(), params: ApplyDispatchParams{DispatchID: entry.ID}},
+		{name: "apply by handle", tool: c.applyDispatchTool(), params: ApplyDispatchParams{Handle: "@tester"}},
+		{name: "dismiss by id", tool: c.dismissDispatchTool(), params: DismissDispatchParams{DispatchID: entry.ID}},
+		{name: "dismiss by handle", tool: c.dismissDispatchTool(), params: DismissDispatchParams{Handle: "tester"}},
 	}
 	for _, tc := range calls {
 		name := tc.tool.Info().Name

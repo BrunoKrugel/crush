@@ -41,7 +41,6 @@ const (
 // OAuth and an API key, before starting either flow.
 type AuthMethod struct {
 	provider      catwalk.Provider
-	model         config.SelectedModel
 	lastClickTime time.Time
 	com           *common.Common
 	help          help.Model
@@ -51,6 +50,7 @@ type AuthMethod struct {
 		Select key.Binding
 		Close  key.Binding
 	}
+	model          config.SelectedModel
 	oauthCardArea  image.Rectangle
 	apiKeyCardArea image.Rectangle
 	selected       int

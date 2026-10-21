@@ -13,12 +13,12 @@ import (
 
 // promptWorkspace resolves MCP prompts to a canned body.
 type promptWorkspace struct {
-	slashCommandWorkspace
-	body     string
 	err      error
 	gotArgs  map[string]string
+	body     string
 	gotName  string
 	gotPromp string
+	slashCommandWorkspace
 }
 
 func (w *promptWorkspace) GetMCPPrompt(clientID, promptID string, args map[string]string) (string, error) {

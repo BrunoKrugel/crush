@@ -390,15 +390,15 @@ func TestHasRefreshableToken(t *testing.T) {
 	t.Parallel()
 	full := &oauth.Token{AccessToken: "a", Client: &oauth.OAuthClient{TokenURL: "https://x/token"}}
 	tests := []struct {
-		name string
 		tok  *oauth.Token
+		name string
 		want bool
 	}{
-		{"nil", nil, false},
-		{"no access token", &oauth.Token{Client: &oauth.OAuthClient{TokenURL: "x"}}, false},
-		{"no client", &oauth.Token{AccessToken: "a"}, false},
-		{"no token url", &oauth.Token{AccessToken: "a", Client: &oauth.OAuthClient{}}, false},
-		{"complete", full, true},
+		{name: "nil", tok: nil, want: false},
+		{name: "no access token", tok: &oauth.Token{Client: &oauth.OAuthClient{TokenURL: "x"}}, want: false},
+		{name: "no client", tok: &oauth.Token{AccessToken: "a"}, want: false},
+		{name: "no token url", tok: &oauth.Token{AccessToken: "a", Client: &oauth.OAuthClient{}}, want: false},
+		{name: "complete", tok: full, want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

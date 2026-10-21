@@ -32,12 +32,12 @@ import (
 
 // fakeRunner is a test double for the SessionAgent slice the Executor drives.
 type fakeRunner struct {
-	gotCall         agent.SessionAgentCall
 	err             error
 	panicValue      any
 	result          *fantasy.AgentResult
 	canceledFor     string
 	enqueuedCalls   []agent.SessionAgentCall
+	gotCall         agent.SessionAgentCall
 	delay           time.Duration
 	mu              sync.Mutex
 	enqueueAccepted bool
@@ -1685,9 +1685,9 @@ func TestExecuteSteerWhileParkedStaysASteer(t *testing.T) {
 type requestingRunner struct {
 	svc      permission.Service
 	verdicts chan permissionVerdict
+	calls    []string
 	fakeRunner
-	calls []string
-	runs  atomic.Int32
+	runs atomic.Int32
 }
 
 type permissionVerdict struct {

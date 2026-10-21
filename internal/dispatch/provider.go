@@ -526,12 +526,12 @@ func (p *GitWorktreeProvider) Sweep(ctx context.Context) error {
 	entries := p.reg.List()
 	p.mu.Lock()
 	type sweepEntry struct {
-		entry   Entry
 		release func()
+		entry   Entry
 	}
 	items := make([]sweepEntry, 0, len(entries))
 	for _, e := range entries {
-		items = append(items, sweepEntry{e, p.leases[e.ID]})
+		items = append(items, sweepEntry{entry: e, release: p.leases[e.ID]})
 		delete(p.leases, e.ID)
 	}
 	p.mu.Unlock()

@@ -40,16 +40,14 @@ func newQuestionTextarea(sty *styles.Styles, placeholder string, charLimit int) 
 // this struct and call its methods instead of reimplementing editor
 // logic.
 type questionEditor struct {
-	Styles *styles.Styles
-
+	Styles        *styles.Styles
+	notes         map[string]string
+	activeNoteKey string
+	keyNote       key.Binding
+	navUp         key.Binding
+	navDown       key.Binding
 	fillIn        textarea.Model
 	noteEditor    textarea.Model
-	activeNoteKey string // non-empty when a note editor is open
-	notes         map[string]string
-
-	keyNote key.Binding
-	navUp   key.Binding
-	navDown key.Binding
 }
 
 // newQuestionEditor creates a questionEditor with configured

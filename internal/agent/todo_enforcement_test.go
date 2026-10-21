@@ -908,13 +908,13 @@ func gateErrorCount(t *testing.T, env fakeEnv, sessID string) int {
 func TestTodoHardGate_RejectsNewlyClassifiedMutatingTools(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name string
 		make func(calls *int) fantasy.AgentTool
+		name string
 	}{
-		{"lsp_rename", func(calls *int) fantasy.AgentTool { return countingTool(tools.RenameToolName, calls) }},
-		{"lsp_replace_symbol", func(calls *int) fantasy.AgentTool { return countingTool(tools.ReplaceSymbolToolName, calls) }},
-		{"download", func(calls *int) fantasy.AgentTool { return countingTool(tools.DownloadToolName, calls) }},
-		{"mcp without hint", func(calls *int) fantasy.AgentTool {
+		{name: "lsp_rename", make: func(calls *int) fantasy.AgentTool { return countingTool(tools.RenameToolName, calls) }},
+		{name: "lsp_replace_symbol", make: func(calls *int) fantasy.AgentTool { return countingTool(tools.ReplaceSymbolToolName, calls) }},
+		{name: "download", make: func(calls *int) fantasy.AgentTool { return countingTool(tools.DownloadToolName, calls) }},
+		{name: "mcp without hint", make: func(calls *int) fantasy.AgentTool {
 			return &fakeMCPToolNoHint{countingTool("mcp_fake-server_run", calls)}
 		}},
 	}

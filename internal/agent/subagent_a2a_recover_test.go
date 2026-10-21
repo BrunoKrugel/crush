@@ -24,8 +24,8 @@ import (
 // a terminal state, optionally after naming a task, so the recovery
 // branches are reachable without a real server.
 type breakingStreamHost struct {
-	started DispatchServerParams
 	taskID  string
+	started DispatchServerParams
 	stopped int
 	mu      sync.Mutex
 }
@@ -58,9 +58,9 @@ func (h *breakingStreamHost) servedParams() DispatchServerParams {
 // whose tasks/get answers with a canned terminal status, covering the
 // branch where the protocol cancel cannot be delivered.
 type failingCancelHost struct {
-	breakingStreamHost
 	cancelErr  error
 	taskStatus DispatchTaskStatus
+	breakingStreamHost
 }
 
 func (h *failingCancelHost) CancelDispatch(_ context.Context, _ DispatchCancelParams) error {

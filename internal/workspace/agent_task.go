@@ -17,16 +17,16 @@ import (
 type AgentTask struct {
 	StartedAt        time.Time
 	FinishedAt       time.Time
-	descriptor       a2a.AgentDescriptor
-	SessionID        string
+	StatusText       string
+	CurrentTodo      string
 	ParentSessionID  string
 	Handle           string
 	Role             string
 	Status           dispatch.Status
-	StatusText       string
-	CurrentTodo      string
 	DispatchID       string
+	SessionID        string
 	Todos            []session.Todo
+	descriptor       a2a.AgentDescriptor
 	CompletionTokens int64
 	Cost             float64
 	PromptTokens     int64

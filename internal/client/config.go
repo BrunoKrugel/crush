@@ -48,8 +48,8 @@ func (c *Client) RemoveConfigField(ctx context.Context, id string, scope config.
 // UpdatePreferredModel updates the preferred model on the server.
 func (c *Client) UpdatePreferredModel(ctx context.Context, id string, scope config.Scope, modelType config.SelectedModelType, model config.SelectedModel) error {
 	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/config/model", id), nil, jsonBody(struct {
-		Model     config.SelectedModel     `json:"model"`
 		ModelType config.SelectedModelType `json:"model_type"`
+		Model     config.SelectedModel     `json:"model"`
 		Scope     config.Scope             `json:"scope"`
 	}{Scope: scope, ModelType: modelType, Model: model}), http.Header{"Content-Type": []string{"application/json"}})
 	if err != nil {

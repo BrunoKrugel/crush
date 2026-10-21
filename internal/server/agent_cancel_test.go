@@ -143,13 +143,13 @@ func buildAgentWorkspace(t *testing.T, coord agent.Coordinator) (*controllerV1, 
 func TestSummaryOutcome(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
-		name   string
 		err    error
+		name   string
 		status int
 	}{
-		{"success", nil, http.StatusOK},
-		{"cancelled", context.Canceled, http.StatusConflict},
-		{"failure", context.DeadlineExceeded, http.StatusInternalServerError},
+		{name: "success", err: nil, status: http.StatusOK},
+		{name: "cancelled", err: context.Canceled, status: http.StatusConflict},
+		{name: "failure", err: context.DeadlineExceeded, status: http.StatusInternalServerError},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

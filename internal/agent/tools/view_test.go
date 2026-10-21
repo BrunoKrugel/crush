@@ -31,9 +31,9 @@ func TestReadTextFileBoundaryCases(t *testing.T) {
 
 	tests := []struct {
 		name        string
+		wantContent string
 		offset      int
 		limit       int
-		wantContent string
 		wantHasMore bool
 	}{
 		{
@@ -340,17 +340,17 @@ func TestSniffImageMimeType(t *testing.T) {
 
 	cases := []struct {
 		name     string
-		data     []byte
 		fallback string
 		want     string
+		data     []byte
 	}{
-		{"jpeg bytes in .png file uses sniffed", jpegMagic, "image/png", "image/jpeg"},
-		{"png bytes in .jpg file uses sniffed", pngMagic, "image/jpeg", "image/png"},
-		{"gif bytes uses sniffed", gifMagic, "image/png", "image/gif"},
-		{"webp bytes uses sniffed", webpMagic, "image/png", "image/webp"},
-		{"matching extension and content keeps sniffed", pngMagic, "image/png", "image/png"},
-		{"unsniffable content falls back", random, "image/png", "image/png"},
-		{"empty content falls back", nil, "image/jpeg", "image/jpeg"},
+		{name: "jpeg bytes in .png file uses sniffed", data: jpegMagic, fallback: "image/png", want: "image/jpeg"},
+		{name: "png bytes in .jpg file uses sniffed", data: pngMagic, fallback: "image/jpeg", want: "image/png"},
+		{name: "gif bytes uses sniffed", data: gifMagic, fallback: "image/png", want: "image/gif"},
+		{name: "webp bytes uses sniffed", data: webpMagic, fallback: "image/png", want: "image/webp"},
+		{name: "matching extension and content keeps sniffed", data: pngMagic, fallback: "image/png", want: "image/png"},
+		{name: "unsniffable content falls back", data: random, fallback: "image/png", want: "image/png"},
+		{name: "empty content falls back", data: nil, fallback: "image/jpeg", want: "image/jpeg"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

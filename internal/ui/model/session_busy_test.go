@@ -30,7 +30,6 @@ import (
 // method so tests can pin exactly which probes ran. The embedded interface
 // panics on anything unimplemented.
 type countingWorkspace struct {
-	model       workspace.AgentModel
 	allChildErr error
 	workspace.Workspace
 	lspStates         map[string]workspace.LSPClientInfo
@@ -41,16 +40,17 @@ type countingWorkspace struct {
 	sessions          []session.Session
 	queued            []string
 	mcpPendingAuth    []mcp.PendingAuthServer
-	queuedCalls       int
-	modelCalls        int
-	readyCalls        int
+	model             workspace.AgentModel
 	listAllChildCalls int
+	agentBusyCalls    int
+	readyCalls        int
+	queuedCalls       int
 	queueListCalls    int
 	permCalls         int
 	permSetCalls      int
 	clearQueueCalls   int
 	cancelCalls       int
-	agentBusyCalls    int
+	modelCalls        int
 	lspStateCalls     int
 	lspDiagCalls      int
 	mcpStateCalls     int

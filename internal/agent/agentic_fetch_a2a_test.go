@@ -27,9 +27,9 @@ import (
 // cannedA2AHost records every served turn and streamed drive, answering
 // the stream with one canned terminal outcome.
 type cannedA2AHost struct {
-	outcome DispatchTransportOutcome
 	started []DispatchServerParams
 	streams []DispatchTransportParams
+	outcome DispatchTransportOutcome
 	stopped int
 	mu      sync.Mutex
 }

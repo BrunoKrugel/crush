@@ -49,12 +49,12 @@ func waitTerminalDispatch(t *testing.T, c *coordinator, dispatchID string, want 
 // survives long enough to capture the diff.
 func TestCancelDispatchStopsRunningDispatch(t *testing.T) {
 	tests := []struct {
-		name string
 		ref  func(dispatch.DispatchResult) string
+		name string
 	}{
-		{"by dispatch ID", func(h dispatch.DispatchResult) string { return h.DispatchID }},
-		{"by handle", func(h dispatch.DispatchResult) string { return "@" + h.Handle }},
-		{"by session ID", func(h dispatch.DispatchResult) string { return h.SessionID }},
+		{name: "by dispatch ID", ref: func(h dispatch.DispatchResult) string { return h.DispatchID }},
+		{name: "by handle", ref: func(h dispatch.DispatchResult) string { return "@" + h.Handle }},
+		{name: "by session ID", ref: func(h dispatch.DispatchResult) string { return h.SessionID }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

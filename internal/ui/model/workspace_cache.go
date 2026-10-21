@@ -87,8 +87,8 @@ func (c *ttlCache) invalidate() {
 
 // busyStateMsg delivers the result of an off-thread busy/permission probe.
 type busyStateMsg struct {
-	model       workspace.AgentModel
 	forSession  string
+	model       workspace.AgentModel
 	gen         uint64
 	ready       bool
 	agentBusy   bool

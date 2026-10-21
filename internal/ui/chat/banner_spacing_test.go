@@ -21,14 +21,14 @@ func TestFinishBannerIsSetOffFromContent(t *testing.T) {
 	sty := styles.CharmtonePantera()
 
 	for _, tc := range []struct {
-		name string
 		msg  *message.Message
+		name string
 	}{
-		{"refusal", assistantWith(
+		{name: "refusal", msg: assistantWith(
 			message.TextContent{Text: "Now the real test, replay:"},
 			message.Finish{Reason: message.FinishReasonContentFilter, Time: 1},
 		)},
-		{"cancelled", assistantWith(
+		{name: "cancelled", msg: assistantWith(
 			message.TextContent{Text: "Now the real test, replay:"},
 			message.Finish{Reason: message.FinishReasonCanceled, Time: 1},
 		)},

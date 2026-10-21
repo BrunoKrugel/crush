@@ -354,8 +354,8 @@ func TestStreamDispatchChargesOnlyTerminalUsage(t *testing.T) {
 	var taskID string
 	gotTask := make(chan struct{})
 	type result struct {
-		outcome agent.DispatchTransportOutcome
 		err     error
+		outcome agent.DispatchTransportOutcome
 	}
 	done := make(chan result, 1)
 	go func() {
@@ -363,7 +363,7 @@ func TestStreamDispatchChargesOnlyTerminalUsage(t *testing.T) {
 			Endpoint: server.Endpoint, Card: server.Card, Prompt: "work", ContextID: "dispatch-session",
 			OnTask: func(id string) { taskID = id; close(gotTask) },
 		})
-		done <- result{outcome, err}
+		done <- result{outcome: outcome, err: err}
 	}()
 	<-runner.started
 	<-gotTask

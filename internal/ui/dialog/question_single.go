@@ -18,8 +18,8 @@ import (
 // rendering scaffold.
 type SingleChoice struct {
 	lastResponse question.Answer
+	keyEnter     key.Binding
 	choiceList
-	keyEnter key.Binding
 }
 
 // NewSingleChoice creates a new inline single-choice component.

@@ -30,18 +30,18 @@ const (
 // foreground until it is answered, and a third choice lets the user send the
 // checkpoint back for another pass with their own notes attached.
 type CheckpointHandoffInline struct {
-	editor         textarea.Model
+	OnDiscard      func() tea.Cmd
 	OnRedo         func(comments string) tea.Cmd
 	OnKeep         func() tea.Cmd
 	com            *common.Common
-	OnDiscard      func() tea.Cmd
+	keyKeep        key.Binding
 	keyNewline     key.Binding
 	keyLeftRight   key.Binding
 	keyEnter       key.Binding
-	keyKeep        key.Binding
 	keyDiscard     key.Binding
 	keyRedo        key.Binding
 	keyClose       key.Binding
+	editor         textarea.Model
 	selectedChoice int
 	heightChanged  bool
 	editing        bool

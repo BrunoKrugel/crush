@@ -29,8 +29,8 @@ func TestProviderWantsDiscovery(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		pc         ProviderConfig
 		userModels []catwalk.Model
+		pc         ProviderConfig
 		want       bool
 	}{
 		{

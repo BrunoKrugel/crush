@@ -188,13 +188,13 @@ type AssistantMessageItem struct {
 	*highlightableMessageItem
 	thinkingHashSample string
 	hyperlinks         []hyperlinkSpan
-	errorSec           assistantSection
-	thinkingSec        assistantSection
-	contentSec         assistantSection
 	streamingThinking  streamingMarkdown
 	streamingSummary   streamingMarkdown
 	streamingPlan      streamingMarkdown
 	streamingContent   streamingMarkdown
+	thinkingSec        assistantSection
+	contentSec         assistantSection
+	errorSec           assistantSection
 	thinkingHash       uint64
 	thinkingHashLen    int
 	copyIconColEnd     int

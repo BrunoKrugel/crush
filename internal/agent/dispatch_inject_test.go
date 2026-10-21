@@ -24,9 +24,9 @@ type gatedDispatchAgent struct {
 	entered    chan struct{}
 	result     *fantasy.AgentResult
 	cancelCh   chan struct{}
-	model      Model
-	queued     []SessionAgentCall
 	canceled   []string
+	queued     []SessionAgentCall
+	model      Model
 	enterOnce  sync.Once
 	gateOnce   sync.Once
 	cancelOnce sync.Once
@@ -502,9 +502,9 @@ type refusingDispatchAgent struct {
 	busyCh       chan struct{}
 	cancelCh     chan struct{}
 	lastCall     *SessionAgentCall
-	model        Model
-	queued       []SessionAgentCall
 	canceled     []string
+	queued       []SessionAgentCall
+	model        Model
 	startOnce    sync.Once
 	enterOnce    sync.Once
 	busyOnce     sync.Once

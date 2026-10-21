@@ -19,11 +19,10 @@ import (
 // the answers channel — or returns err at once when set — and gives up
 // when its context ends.
 type fakeQuestionService struct {
-	answers chan []question.Answer
 	err     error
-
-	mu    sync.Mutex
-	asked []question.Request
+	answers chan []question.Answer
+	asked   []question.Request
+	mu      sync.Mutex
 }
 
 func newFakeQuestionService() *fakeQuestionService {
@@ -91,8 +90,8 @@ func dispatchedQuestion() QuestionRequest {
 func TestDispatchToolchainQuestionToolFollowsInteractive(t *testing.T) {
 	tests := []struct {
 		name        string
-		interactive bool
 		disabled    []string
+		interactive bool
 		wantTool    bool
 	}{
 		{name: "interactive parent", interactive: true, wantTool: true},
@@ -131,11 +130,11 @@ func TestAnswerDispatchQuestion(t *testing.T) {
 
 	answered := []question.Answer{{QuestionID: "q-1", FillInText: "postgres"}}
 	tests := []struct {
+		askErr      error
 		name        string
+		want        QuestionAnswer
 		interactive bool
 		noService   bool
-		askErr      error
-		want        QuestionAnswer
 		wantAsked   bool
 	}{
 		{
@@ -175,13 +174,13 @@ func TestAnswerDispatchQuestion(t *testing.T) {
 			req := dispatchedQuestion()
 
 			type result struct {
-				answer QuestionAnswer
 				err    error
+				answer QuestionAnswer
 			}
 			done := make(chan result, 1)
 			go func() {
 				answer, err := c.answerDispatchQuestion(t.Context(), dispatchRun{kill: &dispatchKill{}}, "tester", req)
-				done <- result{answer, err}
+				done <- result{answer: answer, err: err}
 			}()
 			if tt.wantAsked && tt.askErr == nil {
 				fake.answers <- answered
@@ -266,9 +265,8 @@ func TestAnswerDispatchQuestionTakesTurns(t *testing.T) {
 // question (#352): StreamDispatch hands it to the coordinator's
 // OnInputRequired, reports the answer, and completes.
 type questionAskingHost struct {
-	fakeDispatchHost
-
 	answered chan QuestionAnswer
+	fakeDispatchHost
 }
 
 func (h *questionAskingHost) StreamDispatch(ctx context.Context, p DispatchTransportParams) (DispatchTransportOutcome, error) {
@@ -289,8 +287,8 @@ func (h *questionAskingHost) StreamDispatch(ctx context.Context, p DispatchTrans
 func TestDispatchQuestionReachesParent(t *testing.T) {
 	tests := []struct {
 		name        string
-		interactive bool
 		want        string
+		interactive bool
 	}{
 		{name: "interactive parent", interactive: true, want: "postgres"},
 		{name: "non-interactive parent", want: NoInteractiveUserAnswer},

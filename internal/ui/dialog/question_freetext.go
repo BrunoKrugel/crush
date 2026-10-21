@@ -18,13 +18,13 @@ import (
 // FreeText is an open-ended text input component for questions
 // that need a narrative answer rather than a selection.
 type FreeText struct {
-	editor       textarea.Model
-	lastResponse question.Answer
 	Styles       *styles.Styles
 	Request      question.Question
+	lastResponse question.Answer
 	keyEnter     key.Binding
 	keyNewline   key.Binding
 	keyClose     key.Binding
+	editor       textarea.Model
 	scrollOffset int
 	lastWidth    int
 	focused      bool

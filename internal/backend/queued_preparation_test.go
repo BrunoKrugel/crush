@@ -75,9 +75,9 @@ func (m *preparationMessages) Create(ctx context.Context, sessionID string, para
 }
 
 type completedDispatch struct {
+	err    error
 	runID  string
 	marked bool
-	err    error
 }
 
 // Observe the real coordinator's completion marker without changing its
@@ -89,7 +89,7 @@ type observedCoordinator struct {
 
 func (c *observedCoordinator) RunAccepted(ctx context.Context, accept *agent.AcceptedRun, sessionID, prompt string, attachments ...message.Attachment) (*fantasy.AgentResult, error) {
 	result, err := c.Coordinator.RunAccepted(ctx, accept, sessionID, prompt, attachments...)
-	c.returned <- completedDispatch{agent.RunIDFromContext(ctx), agent.RunCompletePublished(ctx), err}
+	c.returned <- completedDispatch{runID: agent.RunIDFromContext(ctx), marked: agent.RunCompletePublished(ctx), err: err}
 	return result, err
 }
 

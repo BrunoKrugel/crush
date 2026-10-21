@@ -616,8 +616,8 @@ func TestStreamDispatchReportsUndeliveredSteers(t *testing.T) {
 	factory, server := startSteeringServer(t, runner)
 
 	type result struct {
-		outcome agent.DispatchTransportOutcome
 		err     error
+		outcome agent.DispatchTransportOutcome
 	}
 	done := make(chan result, 1)
 	go func() {
@@ -627,7 +627,7 @@ func TestStreamDispatchReportsUndeliveredSteers(t *testing.T) {
 			Prompt:    "do the work",
 			ContextID: "dispatch-session",
 		})
-		done <- result{outcome, err}
+		done <- result{outcome: outcome, err: err}
 	}()
 	<-runner.started
 
@@ -849,8 +849,8 @@ func TestStreamDispatchParkedCancelRace(t *testing.T) {
 			race := startParkedCancelRace(t)
 
 			type result struct {
-				outcome agent.DispatchTransportOutcome
 				err     error
+				outcome agent.DispatchTransportOutcome
 			}
 			done := make(chan result, 1)
 			go func() {
@@ -864,7 +864,7 @@ func TestStreamDispatchParkedCancelRace(t *testing.T) {
 						return agent.QuestionAnswer{}, errors.New("wander kill: hard timeout")
 					},
 				})
-				done <- result{outcome, err}
+				done <- result{outcome: outcome, err: err}
 			}()
 
 			tt.interleave(t, race)

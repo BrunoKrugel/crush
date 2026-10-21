@@ -23,11 +23,11 @@ const ChannelsID = "channels"
 
 // ChannelItem wraps a channel server's ClientInfo as a filterable list item.
 type ChannelItem struct {
-	info mcp.ClientInfo
 	*list.Versioned
 	t       *styles.Styles
 	cache   map[int]string
 	m       fuzzy.Match
+	info    mcp.ClientInfo
 	focused bool
 }
 

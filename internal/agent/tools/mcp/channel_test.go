@@ -291,16 +291,16 @@ func TestUpdateStatePropagatesChannel(t *testing.T) {
 func TestChannelEnabled(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		enabled []string
 		name    string
+		enabled []string
 		want    bool
 	}{
-		{[]string{"webhook"}, "webhook", true},
-		{[]string{"server:webhook"}, "webhook", true},
-		{[]string{"  server:webhook  "}, "webhook", true},
-		{[]string{"other"}, "webhook", false},
-		{nil, "webhook", false},
-		{[]string{"SERVER:webhook"}, "webhook", true},
+		{name: "webhook", enabled: []string{"webhook"}, want: true},
+		{name: "webhook", enabled: []string{"server:webhook"}, want: true},
+		{name: "webhook", enabled: []string{"  server:webhook  "}, want: true},
+		{name: "webhook", enabled: []string{"other"}, want: false},
+		{name: "webhook", enabled: nil, want: false},
+		{name: "webhook", enabled: []string{"SERVER:webhook"}, want: true},
 	}
 	for _, tt := range tests {
 		if got := ChannelEnabled(tt.enabled, tt.name); got != tt.want {
@@ -313,17 +313,17 @@ func TestChannelOptIn(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name       string
-		cfgEnabled bool
-		overrides  []string
 		server     string
+		overrides  []string
+		cfgEnabled bool
 		want       bool
 	}{
-		{"neither source", false, nil, "webhook", false},
-		{"config only", true, nil, "webhook", true},
-		{"override only", false, []string{"webhook"}, "webhook", true},
-		{"both sources", true, []string{"webhook"}, "webhook", true},
-		{"override for a different server", false, []string{"other"}, "webhook", false},
-		{"config-enabled with unrelated override", true, []string{"server:other"}, "webhook", true},
+		{name: "neither source", cfgEnabled: false, overrides: nil, server: "webhook", want: false},
+		{name: "config only", cfgEnabled: true, overrides: nil, server: "webhook", want: true},
+		{name: "override only", cfgEnabled: false, overrides: []string{"webhook"}, server: "webhook", want: true},
+		{name: "both sources", cfgEnabled: true, overrides: []string{"webhook"}, server: "webhook", want: true},
+		{name: "override for a different server", cfgEnabled: false, overrides: []string{"other"}, server: "webhook", want: false},
+		{name: "config-enabled with unrelated override", cfgEnabled: true, overrides: []string{"server:other"}, server: "webhook", want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

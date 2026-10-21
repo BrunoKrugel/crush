@@ -425,8 +425,8 @@ func TestCreateSession_ResolutionFailureUpdatesState(t *testing.T) {
 	tests := []struct {
 		name            string
 		mcpName         string
-		cfg             config.MCPConfig
 		wantErrContains string
+		cfg             config.MCPConfig
 	}{
 		{
 			name:    "stdio env failure",
@@ -550,16 +550,16 @@ func TestReconcile(t *testing.T) {
 	// config the server last connected with (Config), and, for a server
 	// mid-connect, the config that attempt is connecting with (PendingConfig).
 	type server struct {
-		state   State
-		config  config.MCPConfig
 		pending *config.MCPConfig
+		config  config.MCPConfig
+		state   State
 	}
 
 	tests := []struct {
-		name    string
 		servers map[string]server
 		current config.MCPs
 		want    map[string]reinitAction
+		name    string
 	}{
 		{
 			name:    "new server starts",
@@ -942,8 +942,8 @@ func TestIsOAuthInitErrTokenEndpointRejections(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		err  error
+		name string
 		want bool
 	}{
 		{

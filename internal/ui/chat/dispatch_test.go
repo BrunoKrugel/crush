@@ -507,15 +507,15 @@ func TestDispatchStateLabelCanceledVsKilled(t *testing.T) {
 // and clamps negative durations to zero (#428).
 func TestFormatDispatchElapsed(t *testing.T) {
 	tests := []struct {
-		in   time.Duration
 		want string
+		in   time.Duration
 	}{
-		{0, "0s"},
-		{59900 * time.Millisecond, "59s"},
-		{time.Minute, "1m00s"},
-		{134 * time.Second, "2m14s"},
-		{time.Hour + 4*time.Minute + 30*time.Second, "1h04m"},
-		{-time.Second, "0s"},
+		{in: 0, want: "0s"},
+		{in: 59900 * time.Millisecond, want: "59s"},
+		{in: time.Minute, want: "1m00s"},
+		{in: 134 * time.Second, want: "2m14s"},
+		{in: time.Hour + 4*time.Minute + 30*time.Second, want: "1h04m"},
+		{in: -time.Second, want: "0s"},
 	}
 	for _, tt := range tests {
 		require.Equal(t, tt.want, formatDispatchElapsed(tt.in), "in %v", tt.in)

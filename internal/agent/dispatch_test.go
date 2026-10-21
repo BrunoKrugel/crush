@@ -152,12 +152,9 @@ func reapDispatchRuns(t *testing.T, c *coordinator, gates ...func()) {
 // one execution path; a test that needs a different host calls
 // SetDispatchHost with its own.
 type runnerTransport struct {
-	mu     sync.Mutex
+	ended  map[string]bool
 	served []DispatchServerParams
-	// ended marks the sessions whose run has returned, the way the
-	// executor tracks its run (#398): a steer refused before then is
-	// refused as not ready, not as a finished run.
-	ended map[string]bool
+	mu     sync.Mutex
 }
 
 func (f *runnerTransport) StartDispatchServer(ctx context.Context, params DispatchServerParams) (string, any, func(), error) {
@@ -756,8 +753,8 @@ func TestDispatchPermissionFollowsParentSkipOffToggle(t *testing.T) {
 	env.permissions.SetSkipRequests(false)
 
 	type outcome struct {
-		granted bool
 		err     error
+		granted bool
 	}
 	resCh := make(chan outcome, 1)
 	go func() {
@@ -768,7 +765,7 @@ func TestDispatchPermissionFollowsParentSkipOffToggle(t *testing.T) {
 			Action:     "execute",
 			Path:       filepath.Join(workspace, "outside.txt"),
 		})
-		resCh <- outcome{granted, err}
+		resCh <- outcome{granted: granted, err: err}
 	}()
 
 	select {

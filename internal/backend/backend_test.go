@@ -577,21 +577,21 @@ func TestPathDedupe_ParallelCreates(t *testing.T) {
 	cidB := uuid.New().String()
 
 	type result struct {
+		err   error
 		ws    *Workspace
 		proto proto.Workspace
-		err   error
 	}
 	ch := make(chan result, 2)
 	start := make(chan struct{})
 	go func() {
 		<-start
 		ws, p, err := b.CreateWorkspace(protoWS(cwd, dataDir, cidA))
-		ch <- result{ws, p, err}
+		ch <- result{err: err, ws: ws, proto: p}
 	}()
 	go func() {
 		<-start
 		ws, p, err := b.CreateWorkspace(protoWS(cwd, dataDir, cidB))
-		ch <- result{ws, p, err}
+		ch <- result{err: err, ws: ws, proto: p}
 	}()
 	close(start)
 	r1 := <-ch

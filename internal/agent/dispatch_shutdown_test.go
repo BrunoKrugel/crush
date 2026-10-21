@@ -83,8 +83,8 @@ func (g *shutdownDispatchAgent) hasStarted() bool {
 type shutdownMainAgent struct {
 	SessionAgent
 	onCancelAll func()
-	model       Model
 	runs        []SessionAgentCall
+	model       Model
 	cancelAlls  int
 	mu          sync.Mutex
 }

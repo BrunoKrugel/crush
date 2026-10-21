@@ -40,16 +40,16 @@ func TestSessionScopedEventID(t *testing.T) {
 	}
 
 	unscoped := []struct {
-		name string
 		ev   any
+		name string
 	}{
-		{"session event", pubsub.Event[session.Session]{Payload: session.Session{ID: "s1"}}},
-		{"config changed", pubsub.Event[struct{}]{}},
-		{"string", "not an event"},
-		{"empty permission request", pubsub.Event[permission.PermissionRequest]{}},
-		{"empty permission notification", pubsub.Event[permission.PermissionNotification]{}},
-		{"empty question request", pubsub.Event[question.Request]{}},
-		{"empty question notification", pubsub.Event[question.Notification]{}},
+		{name: "session event", ev: pubsub.Event[session.Session]{Payload: session.Session{ID: "s1"}}},
+		{name: "config changed", ev: pubsub.Event[struct{}]{}},
+		{name: "string", ev: "not an event"},
+		{name: "empty permission request", ev: pubsub.Event[permission.PermissionRequest]{}},
+		{name: "empty permission notification", ev: pubsub.Event[permission.PermissionNotification]{}},
+		{name: "empty question request", ev: pubsub.Event[question.Request]{}},
+		{name: "empty question notification", ev: pubsub.Event[question.Notification]{}},
 	}
 	for _, tc := range unscoped {
 		t.Run("unscoped/"+tc.name, func(t *testing.T) {

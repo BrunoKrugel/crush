@@ -28,15 +28,15 @@ func TestPermissions_ActionKeysResolve(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		key    tea.KeyPressMsg
 		action PermissionAction
+		key    tea.KeyPressMsg
 	}{
-		{keyMsg('a'), PermissionAllow},
-		{keyMsg('A'), PermissionAllow},
-		{keyMsg('d'), PermissionDeny},
-		{keyMsg('D'), PermissionDeny},
-		{keyMsg('s'), PermissionAllowForSession},
-		{keyMsg('S'), PermissionAllowForSession},
+		{key: keyMsg('a'), action: PermissionAllow},
+		{key: keyMsg('A'), action: PermissionAllow},
+		{key: keyMsg('d'), action: PermissionDeny},
+		{key: keyMsg('D'), action: PermissionDeny},
+		{key: keyMsg('s'), action: PermissionAllowForSession},
+		{key: keyMsg('S'), action: PermissionAllowForSession},
 	}
 
 	for _, tc := range tests {

@@ -82,7 +82,7 @@ func isolateGlobalConfig() func() {
 }
 
 var modelPairs = []modelPair{
-	{"glm-5.1", hyperBuilder("glm-5.1"), hyperBuilder("gpt-oss-120b")},
+	{name: "glm-5.1", largeModel: hyperBuilder("glm-5.1"), smallModel: hyperBuilder("gpt-oss-120b")},
 }
 
 func getModels(t *testing.T, r *vcr.Recorder, pair modelPair) (fantasy.LanguageModel, fantasy.LanguageModel) {

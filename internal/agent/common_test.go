@@ -33,26 +33,23 @@ import (
 
 // fakeEnv is an environment for testing.
 type fakeEnv struct {
-	workingDir  string
 	sessions    session.Service
 	messages    message.Service
 	permissions permission.Service
 	history     history.Service
+	ledger      ledger.Service
 	filetracker *filetracker.Service
 	lspClients  *csync.Map[string, *lsp.Client]
-	// ledger is the session-memory sink tests install to exercise the
-	// observer; nil disables observation.
-	ledger ledger.Service
-	// cleanup is the owning test's t.Cleanup.
-	cleanup func(func())
+	cleanup     func(func())
+	workingDir  string
 }
 
 type builderFunc func(t *testing.T, r *vcr.Recorder) (fantasy.LanguageModel, error)
 
 type modelPair struct {
-	name       string
 	largeModel builderFunc
 	smallModel builderFunc
+	name       string
 }
 
 func hyperBuilder(model string) builderFunc {
@@ -116,15 +113,15 @@ func testEnvAtDir(t *testing.T, workingDir string) fakeEnv {
 	})
 
 	return fakeEnv{
-		workingDir,
-		sessions,
-		messages,
-		permissions,
-		history,
-		&filetrackerService,
-		lspClients,
-		ledger.NewService(q),
-		t.Cleanup,
+		sessions:    sessions,
+		messages:    messages,
+		permissions: permissions,
+		history:     history,
+		ledger:      ledger.NewService(q),
+		filetracker: &filetrackerService,
+		lspClients:  lspClients,
+		cleanup:     t.Cleanup,
+		workingDir:  workingDir,
 	}
 }
 

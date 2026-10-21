@@ -29,19 +29,19 @@ const (
 // It replaces the textarea temporarily, asking the user to switch to code
 // mode or request changes to the plan.
 type PlanHandoffInline struct {
-	editor           textarea.Model
+	compositor       *lipgloss.Compositor
 	com              *common.Common
 	OnRequestChanges func(string) tea.Cmd
 	OnConfirm        func(yolo bool) tea.Cmd
 	pendingCmd       tea.Cmd
-	compositor       *lipgloss.Compositor
+	keyClose         key.Binding
 	keyEnter         key.Binding
 	keyCoding        key.Binding
 	keyNewline       key.Binding
 	keyYolo          key.Binding
 	keyLeftRight     key.Binding
 	keyNo            key.Binding
-	keyClose         key.Binding
+	editor           textarea.Model
 	editorTextArea   image.Rectangle
 	selectionAnchor  planHandoffSelectionPoint
 	selectionHead    planHandoffSelectionPoint

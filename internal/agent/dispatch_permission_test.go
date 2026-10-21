@@ -53,13 +53,13 @@ func TestAnswerDispatchPermission(t *testing.T) {
 			requests := parent.Subscribe(t.Context())
 
 			type outcome struct {
-				allowed bool
 				err     error
+				allowed bool
 			}
 			done := make(chan outcome, 1)
 			go func() {
 				allowed, err := c.answerDispatchPermission(t.Context(), dispatchRun{sessionID: "dispatch-session", kill: &dispatchKill{}}, "tester", dispatchedPermission())
-				done <- outcome{allowed, err}
+				done <- outcome{allowed: allowed, err: err}
 			}()
 
 			ev := <-requests

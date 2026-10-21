@@ -287,8 +287,8 @@ type Styles struct {
 		}
 	}
 	Editor struct {
-		Textarea                  textarea.Styles
-		PromptNormalIconFocused   lipgloss.Style
+		PromptBangIconBlurred     lipgloss.Style
+		PromptBangDotsBlurred     lipgloss.Style
 		PromptNormalIconBlurred   lipgloss.Style
 		PromptNormalFocused       lipgloss.Style
 		PromptNormalBlurred       lipgloss.Style
@@ -301,11 +301,11 @@ type Styles struct {
 		PromptYoloDotsFocused     lipgloss.Style
 		PromptYoloDotsBlurred     lipgloss.Style
 		PromptBangIconFocused     lipgloss.Style
-		PromptBangIconBlurred     lipgloss.Style
-		PromptBangDotsFocused     lipgloss.Style
-		PromptBangDotsBlurred     lipgloss.Style
-		PromptQuestionIconFocused lipgloss.Style
+		PromptNormalIconFocused   lipgloss.Style
+		TokenSkill                lipgloss.Style
 		PromptQuestionIconBlurred lipgloss.Style
+		PromptQuestionIconFocused lipgloss.Style
+		PromptBangDotsFocused     lipgloss.Style
 		QuestionSelected          lipgloss.Style
 		QuestionUnselected        lipgloss.Style
 		QuestionBody              lipgloss.Style
@@ -317,7 +317,7 @@ type Styles struct {
 		QuestionCheckOn           lipgloss.Style
 		QuestionCheckOff          lipgloss.Style
 		TokenFile                 lipgloss.Style
-		TokenSkill                lipgloss.Style
+		Textarea                  textarea.Styles
 	}
 	Messages struct {
 		UserBlurred            lipgloss.Style

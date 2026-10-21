@@ -245,8 +245,6 @@ type (
 
 // UI represents the main user interface model.
 type UI struct {
-	textarea                textarea.Model
-	agentModel              workspace.AgentModel
 	lspCheckedAt            time.Time
 	mcpCheckedAt            time.Time
 	lastClickTime           time.Time
@@ -281,15 +279,11 @@ type UI struct {
 	bangCancel              context.CancelFunc
 	header                  *header
 	mcpStates               map[string]mcp.ClientInfo
-	pending                 pendingTurn
-	sessionBusyCache        ttlCache
 	promptHistory           struct {
 		messages []string
 		index    int
 		draft    string
 	}
-	yoloCache            ttlCache
-	agentBusyCache       ttlCache
 	pendingPromptTrigger struct {
 		start int
 		text  string
@@ -312,24 +306,30 @@ type UI struct {
 	themeKey                 string
 	turnOutcome              tea.ProgramState
 	keyMap                   KeyMap
-	caps                     common.Capabilities
+	pending                  pendingTurn
+	sessionBusyCache         ttlCache
+	yoloCache                ttlCache
+	agentBusyCache           ttlCache
+	skillStates              []*skills.SkillState
+	promptQueueItems         []string
 	inspectRing              []string
 	sessionFiles             []SessionFile
 	customCommands           []commands.CustomCommand
 	mcpPrompts               []commands.MCPPrompt
 	skillCatalog             []skills.CatalogEntry
-	promptQueueItems         []string
-	skillStates              []*skills.SkillState
-	sessionFileReads         []string
 	cronTasks                []scheduler.Task
+	sessionFileReads         []string
 	todoSpinner              spinner.Model
+	agentModel               workspace.AgentModel
+	caps                     common.Capabilities
+	textarea                 textarea.Model
 	layout                   uiLayout
 	inspectScroll            [2]int
 	completionsPositionStart image.Point
-	completionsStartIndex    int
-	inspectSeq               int
-	width                    int
 	height                   int
+	keyenh                   tea.KeyboardEnhancementsMsg
+	width                    int
+	completionsStartIndex    int
 	hoverX                   int
 	hoverY                   int
 	lastCompletionEnd        int
@@ -337,7 +337,7 @@ type UI struct {
 	promptAttachSeq          int
 	sidebarScroll            int
 	sessionsChildrenGen      uint64
-	keyenh                   tea.KeyboardEnhancementsMsg
+	inspectSeq               int
 	promptQueueGen           uint64
 	busyFetchGen             uint64
 	submissionGen            uint64

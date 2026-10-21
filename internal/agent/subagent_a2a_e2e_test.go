@@ -200,13 +200,13 @@ func TestSubAgentOverA2ACancelRecoversThroughProtocol(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	type outcome struct {
-		resp fantasy.ToolResponse
 		err  error
+		resp fantasy.ToolResponse
 	}
 	ch := make(chan outcome, 1)
 	go func() {
 		resp, err := agent.RunSubAgentOverA2A(co, ctx, fetchParams(parent.ID, mock))
-		ch <- outcome{resp, err}
+		ch <- outcome{resp: resp, err: err}
 	}()
 
 	<-entered

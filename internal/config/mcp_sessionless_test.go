@@ -16,8 +16,8 @@ func TestMCPConfig_IsSessionless(t *testing.T) {
 	boolPtr := func(b bool) *bool { return &b }
 
 	tests := []struct {
-		cfg  MCPConfig
 		name string
+		cfg  MCPConfig
 		want bool
 	}{
 		{

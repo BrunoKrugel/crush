@@ -39,8 +39,8 @@ type ActionSelectSession struct {
 // ActionSelectModel is a message indicating a model has been selected.
 type ActionSelectModel struct {
 	Provider       catwalk.Provider
-	Model          config.SelectedModel
 	ModelType      config.SelectedModelType
+	Model          config.SelectedModel
 	ReAuthenticate bool
 }
 
@@ -218,8 +218,8 @@ type (
 	// authenticate a provider that supports both OAuth and API keys.
 	ActionSelectAuthMethod struct {
 		Provider  catwalk.Provider
-		Model     config.SelectedModel
 		ModelType config.SelectedModelType
+		Model     config.SelectedModel
 		UseOAuth  bool
 	}
 )

@@ -701,8 +701,8 @@ func convertParts(parts []message.ContentPart) []sessionShowPart {
 }
 
 type sessionShowOutput struct {
-	Meta     sessionShowMeta      `json:"meta"`
 	Messages []sessionShowMessage `json:"messages"`
+	Meta     sessionShowMeta      `json:"meta"`
 }
 
 // writeJSONLine encodes v without HTML escaping and writes it as a single

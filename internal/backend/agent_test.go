@@ -24,12 +24,11 @@ import (
 // entered so tests can observe the dispatched goroutine. Every other
 // method returns a zero value.
 type blockingCoordinator struct {
-	entered  chan struct{}
-	release  chan struct{}
-	runCount atomic.Int32
-
 	setMainAgentErr  error
 	lastMainAgentSet atomic.Value
+	entered          chan struct{}
+	release          chan struct{}
+	runCount         atomic.Int32
 	busy             bool
 }
 

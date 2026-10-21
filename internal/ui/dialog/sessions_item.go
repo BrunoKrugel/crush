@@ -47,8 +47,8 @@ type SessionItem struct {
 	t                *styles.Styles
 	cache            map[int]string
 	updateTitleInput textinput.Model
+	m                fuzzy.Match
 	session.Session
-	m            fuzzy.Match
 	agentCount   int
 	sessionsMode sessionsMode
 	focused      bool

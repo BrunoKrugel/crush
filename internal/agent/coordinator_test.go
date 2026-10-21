@@ -30,8 +30,8 @@ import (
 type mockSessionAgent struct {
 	readyErr  error
 	runFunc   func(ctx context.Context, call SessionAgentCall) (*fantasy.AgentResult, error)
-	model     Model
 	cancelled []string
+	model     Model
 	cancelMu  sync.Mutex
 }
 
