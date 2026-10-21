@@ -1124,3 +1124,50 @@ func TestTodoNudge_MutatingWorkWithStaleListReArms(t *testing.T) {
 	assert.Contains(t, strings.Join(calls[4], "\n"), todoNudgeMessage,
 		"the threshold trip carries the nudge")
 }
+
+// TestTodoKill_CompliantRunIsNeverKilled pins the fix for the dispatched
+// agents' "ignored nudges" kills: a run that answers every nudge with a
+// todos call is compliant, and mutating work between todos refreshes must
+// not re-arm the immediate trip or accumulate toward the kill. The
+// wander-kill may only fire on nudges that were actually ignored.
+func TestTodoKill_CompliantRunIsNeverKilled(t *testing.T) {
+	t.Parallel()
+	env := testEnv(t)
+	var killReasons []string
+	var killMu sync.Mutex
+	model := &scriptedModel{steps: []scriptedStep{
+		// Step one mutates with no list: the immediate trip, nudge one.
+		{toolCalls: []scriptedToolCall{{name: "bash", input: "{}"}}},
+		// Step two answers the nudge with the tool it demands.
+		{toolCalls: []scriptedToolCall{{name: tools.TodosToolName, input: `{"todos":[{"content":"plan","status":"in_progress","active_form":"Working"}]}`}}},
+		// Steps three to five do real work without a refresh: the list
+		// goes stale, but only the threshold re-trips, not an immediate
+		// trip and never the kill.
+		{toolCalls: []scriptedToolCall{{name: "probe", input: "{}"}}},
+		{toolCalls: []scriptedToolCall{{name: "bash", input: "{}"}}},
+		{toolCalls: []scriptedToolCall{{name: "bash", input: "{}"}}},
+		// Step six answers the second nudge again.
+		{toolCalls: []scriptedToolCall{{name: tools.TodosToolName, input: `{"todos":[{"content":"plan","status":"in_progress","active_form":"Working"}]}`}}},
+		// Steps seven and eight mutate between refreshes once more.
+		{toolCalls: []scriptedToolCall{{name: "write", input: `{"path":"a"}`}}},
+		{toolCalls: []scriptedToolCall{{name: "write", input: `{"path":"b"}`}}},
+		// Step nine completes the run.
+		{text: "done"},
+	}}
+	sa := newTodoTestAgentOpts(t, env, model, config.TodoEnforcementSettings{
+		Enabled:         true,
+		NudgeThreshold:  2,
+		KillAfterNudges: 2,
+	}, []todoAgentOpt{withTodoKill(func(_, reason string) {
+		killMu.Lock()
+		defer killMu.Unlock()
+		killReasons = append(killReasons, reason)
+	})}, probeTool(), mutatingTool("bash"), mutatingTool("write"))
+
+	runWithScript(t, env, sa, model)
+
+	killMu.Lock()
+	defer killMu.Unlock()
+	require.Empty(t, killReasons,
+		"a run that calls todos after every nudge must never be wander-killed; got %v", killReasons)
+}

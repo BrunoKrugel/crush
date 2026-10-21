@@ -152,7 +152,12 @@ func newTodoEnforcement(settings config.TodoEnforcementSettings, sessions sessio
 
 // todoEnforcementRun is the ladder's state for one Run: tool calls since
 // the last nudge, whether todos activity has been seen, and how many
-// nudges the run has injected. It is written only from the run's
+// nudges the run has injected. hasTodos separates "a list exists at all"
+// from todosSatisfied's "the list is fresh": once a run has recorded a
+// list, mutating work only stales it (threshold-governed), it never
+// re-arms the no-list immediate trip, and each todos call resets the
+// ignored-nudge count so the kill rung counts nudges actually ignored.
+// It is written only from the run's
 // streaming callbacks (OnToolCall, PrepareStep), which the fantasy loop
 // executes sequentially, and read nowhere else; the mutex guards the
 // future where #316's kill path observes escalation from another
@@ -165,6 +170,7 @@ type todoEnforcementRun struct {
 	nudges         int
 	mu             sync.Mutex
 	todosSatisfied bool
+	hasTodos       bool
 	mutatingCall   bool
 	killed         bool
 }
@@ -181,6 +187,7 @@ func (e *todoEnforcement) newRun(sessionHasTodos bool, onKill func(reason string
 		enforcement:    e,
 		onKill:         onKill,
 		todosSatisfied: sessionHasTodos,
+		hasTodos:       sessionHasTodos,
 		tools:          toolByName,
 	}
 }
@@ -198,6 +205,11 @@ func (r *todoEnforcementRun) recordToolCall(toolName, input string) {
 	defer r.mu.Unlock()
 	if toolName == tools.TodosToolName {
 		r.todosSatisfied = true
+		r.hasTodos = true
+		// A todos call answers whatever nudge was outstanding: the kill
+		// rung counts nudges the run ignored, so compliance restarts the
+		// count.
+		r.nudges = 0
 		r.mutatingCall = false
 		return
 	}
@@ -208,11 +220,10 @@ func (r *todoEnforcementRun) recordToolCall(toolName, input string) {
 		// no longer trustworthy, and the count toward the next nudge keeps
 		// running until a todos call refreshes it. The threshold still
 		// governs the trip — a stale list must not nag on every mutating
-		// step. The immediate trip stays reserved for the no-list case
-		// below, where there is nothing to go stale.
-		if r.todosSatisfied {
-			r.mutatingCall = false
-		} else {
+		// step. The immediate trip stays reserved for the no-list case:
+		// only a run that has never recorded a list trips on its first
+		// mutating call.
+		if !r.hasTodos {
 			r.mutatingCall = true
 		}
 		r.todosSatisfied = false
