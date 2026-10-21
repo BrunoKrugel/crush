@@ -31,7 +31,13 @@ const config: Config = {
   title: 'Crush',
   tagline:
     'Your new coding bestie, now available in your favourite terminal. Your tools, your code, and your workflows, wired into your LLM of choice.',
-  favicon: 'img/favicon.svg',
+  favicon: 'img/favicon.ico',
+  headTags: [
+    {
+      tagName: 'link',
+      attributes: { rel: 'apple-touch-icon', href: 'img/touchicon_180.png' },
+    },
+  ],
 
   url: SITE_URL,
   baseUrl: BASE_URL,
