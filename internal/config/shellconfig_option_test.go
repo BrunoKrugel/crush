@@ -19,19 +19,6 @@ option auto-lsp false`)
 	require.False(t, *opts.AutoLSP, "auto-lsp should be off")
 }
 
-// Config phrases this field negatively (disable_metrics) but the command
-// exposes it positively. "metrics false" must land as disable_metrics = true.
-func TestShellConfigOptionPositiveMetricsFalse(t *testing.T) {
-	store := loadCrushSh(t, `option metrics false`)
-	require.True(t, store.Config().Options.DisableMetrics, "metrics off => disable_metrics true")
-}
-
-// The bare positive form defaults to true, which inverts to disable = false.
-func TestShellConfigOptionPositiveMetricsBare(t *testing.T) {
-	store := loadCrushSh(t, `option metrics`)
-	require.False(t, store.Config().Options.DisableMetrics, "metrics on => disable_metrics false")
-}
-
 func TestShellConfigOptionUI(t *testing.T) {
 	store := loadCrushSh(t, `option ui compact true
 option ui diff split

@@ -104,8 +104,7 @@ Note that the JSON names are not a mechanical transliteration of the builtin
 names: `permissions deny` writes `options.disabled_tools`, and several
 `option` booleans are inverted in JSON (`option auto-summarize false` is
 `options.disable_auto_summarize: true`, and the same pattern applies to
-`disable_metrics`, `disable_default_providers`, and
-`disable_provider_auto_update`). When in doubt, check the schema.
+`disable_default_providers` and `disable_provider_auto_update`). When in doubt, check the schema.
 
 The top-level `options` object also carries a few keys with no `crushrc`
 builtin yet: `allowed_commands`, `allow_all_commands` (see

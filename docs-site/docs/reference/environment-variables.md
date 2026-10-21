@@ -25,8 +25,6 @@ Run `crush dirs` to see what these actually resolved to.
 | --- | --- |
 | `CRUSH_ALLOW_COMMANDS` | Comma-separated commands to remove from the [bash blocklist](/configuration/permissions#blocked-commands). `--allow-commands` wins. |
 | `CRUSH_ALLOW_ALL_COMMANDS` | Remove **all** blocklist restrictions (dangerous). `--allow-all-commands` wins. |
-| `CRUSH_DISABLE_METRICS` | Opt out of [usage metrics](/configuration/environment#metrics) |
-| `DO_NOT_TRACK` | The [donottrack.sh](https://donottrack.sh) convention; same effect |
 | `CRUSH_DISABLE_PROVIDER_AUTO_UPDATE` | Stop checking Catwalk for provider updates |
 | `CRUSH_DISABLE_DEFAULT_PROVIDERS` | Don't include the built-in provider catalog |
 | `CRUSH_DISABLE_ANTHROPIC_CACHE` | Disable Anthropic prompt caching |

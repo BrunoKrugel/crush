@@ -1058,11 +1058,6 @@
           "description": "Enable debug logging",
           "default": false
         },
-        "disable_metrics": {
-          "type": "boolean",
-          "description": "Disable sending metrics",
-          "default": false
-        },
         "disable_auto_summarize": {
           "type": "boolean",
           "description": "Disable automatic conversation summarization",

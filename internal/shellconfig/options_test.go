@@ -33,7 +33,7 @@ func TestOption_BoolCaseInsensitive(t *testing.T) {
 	dir := t.TempDir()
 	script := `option debug TRUE
 option progress False
-option metrics YES`
+option provider-auto-update YES`
 	path := filepath.Join(dir, "crushrc")
 
 	jsonBytes, err := LoadShellConfig(t.Context(), path, []byte(script))
@@ -45,7 +45,7 @@ option metrics YES`
 	opts := result["options"].(map[string]any)
 	require.Equal(t, true, opts["debug"])
 	require.Equal(t, false, opts["progress"])
-	require.Equal(t, false, opts["disable_metrics"])
+	require.Equal(t, false, opts["disable_provider_auto_update"])
 }
 
 func TestOption_String(t *testing.T) {
@@ -229,7 +229,7 @@ func TestOption_BoolShorthand(t *testing.T) {
 
 	dir := t.TempDir()
 	script := `option debug
-option metrics`
+option provider-auto-update`
 	path := filepath.Join(dir, "crushrc")
 
 	jsonBytes, err := LoadShellConfig(t.Context(), path, []byte(script))
@@ -240,14 +240,14 @@ option metrics`
 
 	opts := result["options"].(map[string]any)
 	require.Equal(t, true, opts["debug"])
-	require.Equal(t, false, opts["disable_metrics"])
+	require.Equal(t, false, opts["disable_provider_auto_update"])
 }
 
 func TestOption_InvertedBool(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	script := `option metrics false`
+	script := `option provider-auto-update false`
 	path := filepath.Join(dir, "crushrc")
 
 	jsonBytes, err := LoadShellConfig(t.Context(), path, []byte(script))
@@ -257,7 +257,7 @@ func TestOption_InvertedBool(t *testing.T) {
 	require.NoError(t, sonic.Unmarshal(jsonBytes, &result))
 
 	opts := result["options"].(map[string]any)
-	require.Equal(t, true, opts["disable_metrics"])
+	require.Equal(t, true, opts["disable_provider_auto_update"])
 }
 
 func TestOption_UnknownKey(t *testing.T) {

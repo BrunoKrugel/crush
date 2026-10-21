@@ -25,7 +25,6 @@ import (
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/db"
 	"github.com/charmbracelet/crush/internal/dispatch"
-	"github.com/charmbracelet/crush/internal/event"
 	"github.com/charmbracelet/crush/internal/filetracker"
 	"github.com/charmbracelet/crush/internal/format"
 	"github.com/charmbracelet/crush/internal/herdr"
@@ -1107,7 +1106,6 @@ func (app *App) Shutdown() {
 
 	// Send exit event
 	wg.Go(func() {
-		event.AppExited()
 	})
 
 	// Kill all background shells.

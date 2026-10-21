@@ -464,7 +464,6 @@ as `option debug true`.
 | `debug-lsp` | Enable LSP debug logging |
 | `auto-lsp` | Automatically configure language servers |
 | `progress` | Show progress indicators |
-| `metrics` | Send anonymous usage metrics |
 | `auto-summarize` | Automatically summarise long conversations |
 | `provider-auto-update` | Update the provider catalog automatically |
 | `default-providers` | Include built-in providers |

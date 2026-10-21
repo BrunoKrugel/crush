@@ -76,25 +76,6 @@ option ui completions-max-depth 4
 option ui completions-max-items 200
 ```
 
-## Metrics
-
-Crush records pseudonymous usage metrics tied to a device-specific hash. The
-metrics are usage metadata only — **prompts and responses are never collected**.
-The exact fields are visible in the source, under
-[`internal/event`](https://github.com/charmbracelet/crush/tree/main/internal/event).
-
-Opt out either way:
-
-```bash
-export CRUSH_DISABLE_METRICS=1
-export DO_NOT_TRACK=1          # the donottrack.sh convention
-```
-
-or in config:
-
-```bash
-option metrics false
-```
 
 ## Debugging
 

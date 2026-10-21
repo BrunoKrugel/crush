@@ -1158,9 +1158,6 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 
 	history, files := a.preparePrompt(msgs, largeModel.CatwalkCfg.SupportsImages, call.Attachments...)
 
-	startTime := time.Now()
-	a.eventPromptSent(call.SessionID)
-
 	var stepMessages []fantasy.Message
 	var shouldSummarize bool
 	// The fantasy agent invokes the tool callbacks below from multiple
@@ -1486,7 +1483,6 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		},
 	})
 
-	a.eventPromptResponded(call.SessionID, time.Since(startTime).Truncate(time.Second))
 
 	// Final writes use a context detached from the run: workspace shutdown
 	// cancels ctx before agent goroutines finish, and the turn's ending
@@ -2117,7 +2113,6 @@ func (a *sessionAgent) runSummarize(ctx context.Context, sessionID, instructions
 	}
 
 	outcome = fmt.Sprintf("Compacted %d messages, kept %d verbatim", len(region), cut.Kept)
-	a.eventSessionCompacted(sessionID, len(region), cut.Kept)
 
 	// Memory decays when a checkpoint lands rather than on every turn: this is
 	// the moment that knows the window, and previewing must never mutate what
@@ -2820,7 +2815,6 @@ func (a *sessionAgent) updateSessionUsage(model Model, session *session.Session,
 		modelConfig.CostPer1MOut/1e6*float64(usage.OutputTokens)
 
 	if !estimated {
-		a.eventTokensUsed(session.ID, model, usage, cost)
 	}
 
 	if estimated {
@@ -3315,7 +3309,6 @@ func (a *sessionAgent) ConfirmSummarize(ctx context.Context, sessionID string, p
 		return fmt.Errorf("failed to save session: %w", err)
 	}
 
-	a.eventSessionCompacted(sessionID, preview.Replaced, preview.Kept)
 	slog.Info("Adopted a previewed checkpoint", "session_id", sessionID,
 		"replaced", preview.Replaced, "kept", preview.Kept)
 	return nil

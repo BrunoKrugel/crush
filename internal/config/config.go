@@ -370,7 +370,6 @@ type Options struct {
 	AllowAllCommands          bool                   `json:"allow_all_commands,omitempty" jsonschema:"description=Remove all command restrictions from the bash tool, including package-manager argument blocks (dangerous). Commands still require permission approval unless yolo mode is enabled.,default=false"`
 	DisableProviderAutoUpdate bool                   `json:"disable_provider_auto_update,omitempty" jsonschema:"description=Disable providers auto-update,default=false"`
 	Debug                     bool                   `json:"debug,omitempty" jsonschema:"description=Enable debug logging,default=false"`
-	DisableMetrics            bool                   `json:"disable_metrics,omitempty" jsonschema:"description=Disable sending metrics,default=false"`
 	DisableAutoSummarize      bool                   `json:"disable_auto_summarize,omitempty" jsonschema:"description=Disable automatic conversation summarization,default=false"`
 	DebugLSP                  bool                   `json:"debug_lsp,omitempty" jsonschema:"description=Enable debug logging for LSP servers,default=false"`
 	DisableDefaultProviders   bool                   `json:"disable_default_providers,omitempty" jsonschema:"description=Ignore all default/embedded providers. When enabled\\, providers must be fully specified in the config file with base_url\\, models\\, and api_key - no merging with defaults occurs,default=false"`
