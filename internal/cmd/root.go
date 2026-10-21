@@ -30,6 +30,7 @@ import (
 	"github.com/charmbracelet/crush/internal/client"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/db"
+	"github.com/charmbracelet/crush/internal/honcho"
 	"github.com/charmbracelet/crush/internal/lock"
 	crushlog "github.com/charmbracelet/crush/internal/log"
 	"github.com/charmbracelet/crush/internal/projects"
@@ -406,7 +407,6 @@ func setupLocalWorkspace(cmd *cobra.Command) (workspace.Workspace, func(), error
 		return nil, nil, err
 	}
 
-
 	ws := workspace.NewAppWorkspace(appInstance, store)
 	// The workspace's Shutdown stops its agent-index watcher (#421)
 	// before it shuts the app down.
@@ -428,10 +428,11 @@ func localSkillsDiscoveryConfig(store *config.ConfigStore) skills.DiscoveryConfi
 		resolver = r.ResolveValue
 	}
 	return skills.DiscoveryConfig{
-		SkillsPaths:    paths,
-		DisabledSkills: disabled,
-		WorkingDir:     store.WorkingDir(),
-		Resolver:       resolver,
+		SkillsPaths:       paths,
+		DisabledSkills:    disabled,
+		WorkingDir:        store.WorkingDir(),
+		Resolver:          resolver,
+		AvailableFeatures: honcho.Features(store.Config()),
 	}
 }
 
@@ -504,7 +505,6 @@ func connectToServer(cmd *cobra.Command) (*client.Client, *proto.Workspace, func
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
 
 	if ws.Config != nil {
 		logFile := filepath.Join(ws.Config.Options.DataDirectory, "logs", "crush.log")
@@ -982,7 +982,6 @@ func startDetachedServer(cmd *cobra.Command, hostURL *url.URL) error {
 
 	return nil
 }
-
 
 func MaybePrependStdin(prompt string) (string, error) {
 	if term.IsTerminal(os.Stdin.Fd()) {

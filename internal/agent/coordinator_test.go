@@ -48,6 +48,7 @@ func (m *mockSessionAgent) SetModels(large, small Model)        {}
 func (m *mockSessionAgent) SetTools(tools []fantasy.AgentTool)  {}
 func (m *mockSessionAgent) SetSystemPrompt(systemPrompt string) {}
 func (m *mockSessionAgent) WaitReady() error                    { return m.readyErr }
+func (m *mockSessionAgent) SetMemory(memory Memory)             {}
 func (m *mockSessionAgent) Cancel(sessionID string) {
 	m.cancelMu.Lock()
 	defer m.cancelMu.Unlock()

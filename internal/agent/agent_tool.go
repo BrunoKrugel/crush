@@ -27,7 +27,6 @@ func (c *coordinator) agentTool(ctx context.Context) (fantasy.AgentTool, error) 
 	if !ok {
 		return nil, errors.New("task agent not configured")
 	}
-
 	agent, err := c.buildAgent(ctx, agentCfg, true)
 	if err != nil {
 		return nil, err

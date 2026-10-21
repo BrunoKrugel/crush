@@ -32,8 +32,15 @@ func TestMain(m *testing.M) {
 		panic(fmt.Sprintf("hermetic git env: %v", err))
 	}
 	cleanup := isolateGlobalConfig()
+	// Keep the developer's own Honcho sign-in out of these tests.
+	// Memory being configured adds its skill to the system prompt,
+	// which changes the recorded request bytes and fails every
+	// replayed interaction — so without this, connecting memory
+	// breaks the suite on your machine and nowhere else.
+	honchoDir := isolateHonchoEnv()
 	code := m.Run()
 	cleanup()
+	os.RemoveAll(honchoDir)
 	gitRestore()
 	os.Exit(code)
 }
@@ -79,6 +86,32 @@ func isolateGlobalConfig() func() {
 		}
 	}
 	return func() { os.RemoveAll(root) }
+}
+
+// isolateHonchoEnv points Honcho at an empty config directory and
+// clears every environment variable Resolve consults, so memory
+// resolves to off regardless of the machine running the tests. It
+// returns the directory for the caller to clean up.
+func isolateHonchoEnv() string {
+	dir, err := os.MkdirTemp("", "crush-honcho-test")
+	if err != nil {
+		panic(err)
+	}
+	for k, v := range map[string]string{
+		"HONCHO_CONFIG_DIR":   dir,
+		"HONCHO_API_KEY":      "",
+		"HONCHO_URL":          "",
+		"HONCHO_BASE_URL":     "",
+		"HONCHO_WORKSPACE":    "",
+		"HONCHO_WORKSPACE_ID": "",
+		"HONCHO_PEER_NAME":    "",
+		"HONCHO_AI_PEER":      "",
+	} {
+		if err := os.Setenv(k, v); err != nil {
+			panic(err)
+		}
+	}
+	return dir
 }
 
 var modelPairs = []modelPair{
