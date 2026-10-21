@@ -541,7 +541,9 @@ func questionFromStatus(msg *a2aspec.Message) agent.QuestionRequest {
 // tasks/get bring the run home. Up to three attempts, the backoff
 // before each: SubscribeToTask replays the stored task snapshot and then
 // the live events; when the execution has already ended the server
-// answers ErrTaskNotFound and GetTask returns the stored task instead.
+// answers ErrTaskNotFound (run dropped) or ErrUnsupportedOperation
+// (a2a-go v2.6.0's terminal-task resubscribe answer) and GetTask
+// returns the stored task instead.
 // The caller's stream error stands only when every attempt is exhausted
 // — after that, the coordinator's cancel-before-teardown (#344) reaps
 // the run.
@@ -563,18 +565,21 @@ func (s *dispatchStream) resume(ctx context.Context) error {
 		switch {
 		case err == nil:
 			return nil
-		case !errors.Is(err, a2aspec.ErrTaskNotFound):
+		case !errors.Is(err, a2aspec.ErrTaskNotFound) && !errors.Is(err, a2aspec.ErrUnsupportedOperation):
 			// The resubscribe itself failed — the connection is
 			// still flapping, or the replay cut again. Try once
 			// more after the next backoff.
 			lastErr = err
 			continue
 		}
-		// The execution has ended server side: tasks/get returns the
-		// stored task with its status and artifacts. A terminal state
-		// folds and lands, and so does a question the task is parked on;
-		// any other state means the task is live without an execution —
-		// retry the subscription instead.
+		// ErrTaskNotFound says the execution has ended and the server
+		// dropped the run; ErrUnsupportedOperation is a2a-go v2.6.0's
+		// resubscribe answer for a task already in a terminal state.
+		// Both mean tasks/get has the stored task with its status and
+		// artifacts. A terminal state folds and lands, and so does a
+		// question the task is parked on; any other state means the
+		// task is live without an execution — retry the subscription
+		// instead.
 		task, gerr := s.client.GetTask(ctx, &a2aspec.GetTaskRequest{ID: s.taskID})
 		if gerr != nil {
 			lastErr = gerr

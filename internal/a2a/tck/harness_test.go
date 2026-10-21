@@ -81,8 +81,20 @@ func TestHarnessServesCardAndSendMessage(t *testing.T) {
 	var schemes map[string]map[string]json.RawMessage
 	require.NoError(t, sonic.Unmarshal(card.SecurityRequirements[0]["schemes"], &schemes))
 	for name, scopes := range schemes {
+		// The canonical StringList shape: {"list": [...]} when the scheme
+		// carries scopes, {} when it carries none (a2a-go v2.6.0 marshals
+		// zero scopes as the empty object). A bare scope array must not
+		// appear.
+		raw, ok := scopes["list"]
+		if !ok {
+			// No scopes: the only other canonical shape is the empty
+			// object.
+			require.Empty(t, scopes,
+				"scheme %q with no list must be the empty StringList object, got %s", name, scopes)
+			continue
+		}
 		var list []string
-		require.NoError(t, sonic.Unmarshal(scopes["list"], &list),
+		require.NoError(t, sonic.Unmarshal(raw, &list),
 			"scheme %q scopes must be a StringList object (a list field), got %s", name, scopes["list"])
 	}
 	for _, iface := range card.SupportedInterfaces {
