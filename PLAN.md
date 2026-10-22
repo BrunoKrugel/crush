@@ -155,3 +155,32 @@ Follow-ups: a per-message fork action in the chat view (the palette
 entry forks at the last prompt for now), a server endpoint so a remote
 client can fork, and the worktree reconcile that item #9 will settle
 together with the dispatch worktrees.
+
+## Planned: #5 goal mode (the /goal evaluator loop)
+
+An autonomous, turn-budgeted loop: after each turn a cheap small-model
+evaluator asks whether the stated goal is met; while it is unmet and the
+turn budget (default 25, hard-capped) is not exhausted, a fresh
+continuation directive is injected and another turn runs. Design
+reconciled with our nudge ladder (the fork's own enforcement machinery):
+
+- **One ladder, one new rung.** The watchdogs (hard_timeout,
+  inactivity_timeout, stall_window) stay authoritative and goal-agnostic.
+  Goal mode adds a *progress signal*, not a second enforcement layer.
+- **One injection channel.** The goal continuation supersedes the todo
+  nudge for the same turn, folding the nudge content in ("and refresh
+  your todo list"). A single per-turn decision: goal continuation, else
+  nudge, else nothing.
+- **Goal state rides on the session**: goal text, turn budget, evaluator
+  model hint (small), and state (active / met / exhausted) — the same
+  way the ladder already reads session state.
+- **kill_after_nudges maps directly**: a run that ends turns ignoring N
+  continuations (claiming done while the evaluator disagrees) trips the
+  same kill rung; for dispatched agents that is the existing re-dispatch
+  contract with the evaluator's verdict as the reason.
+- **Hook points are the ladder's own**: the fantasy loop's streaming
+  callbacks (OnToolCall, PrepareStep). No parallel loop in Run.
+- **Deliberate alternative**: goal-seeded dispatches (a /goal that starts
+  a worker) inherit A2A records, cards, inspect mode and every watchdog
+  for free, but move the work into a child session. Reconsidered when
+  #3 (swarm) lands; not this pass.
