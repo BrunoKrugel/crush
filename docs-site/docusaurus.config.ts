@@ -35,7 +35,10 @@ const config: Config = {
   headTags: [
     {
       tagName: 'link',
-      attributes: { rel: 'apple-touch-icon', href: 'img/touchicon_180.png' },
+      attributes: {
+        rel: 'apple-touch-icon',
+        href: `${BASE_URL}img/touchicon_180.png`,
+      },
     },
   ],
 
