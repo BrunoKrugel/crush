@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	charm.land/bubbles/v2 v2.2.1
 	charm.land/bubbletea/v2 v2.1.0
-	charm.land/catwalk v0.52.78
+	charm.land/catwalk v0.52.81
 	charm.land/fang/v2 v2.0.1
 	charm.land/fantasy v0.45.3
 	charm.land/glamour/v2 v2.0.1
