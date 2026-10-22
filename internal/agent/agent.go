@@ -206,25 +206,25 @@ type turnOutcome struct {
 }
 
 type sessionAgent struct {
-	ledger               ledger.Service
-	sessions             session.Service
-	runComplete          pubsub.Publisher[notify.RunComplete]
-	notify               pubsub.Publisher[notify.Notification]
-	messages             message.Service
-	dispatchMu           *csync.Map[string, *sync.Mutex]
-	largeModel           *csync.Value[Model]
-	tools                *csync.Slice[fantasy.AgentTool]
-	cfg                  *config.ConfigStore
-	ready                *readiness
-	loopStop             func(sessionID string)
-	systemPrompt         *csync.Value[string]
-	systemPromptPrefix   *csync.Value[string]
-	compactionHooks      func(event string) CompactionHookRunner
-	smallModel           *csync.Value[Model]
-	messageQueue         *csync.Map[string, []SessionAgentCall]
-	todoKill             func(sessionID string, reason string)
-	activeRequests       *csync.Map[string, *activeCancel]
-	todoEnforcement      *todoEnforcement
+	ledger             ledger.Service
+	sessions           session.Service
+	runComplete        pubsub.Publisher[notify.RunComplete]
+	notify             pubsub.Publisher[notify.Notification]
+	messages           message.Service
+	dispatchMu         *csync.Map[string, *sync.Mutex]
+	largeModel         *csync.Value[Model]
+	tools              *csync.Slice[fantasy.AgentTool]
+	cfg                *config.ConfigStore
+	ready              *readiness
+	loopStop           func(sessionID string)
+	systemPrompt       *csync.Value[string]
+	systemPromptPrefix *csync.Value[string]
+	compactionHooks    func(event string) CompactionHookRunner
+	smallModel         *csync.Value[Model]
+	messageQueue       *csync.Map[string, []SessionAgentCall]
+	todoKill           func(sessionID string, reason string)
+	activeRequests     *csync.Map[string, *activeCancel]
+	todoEnforcement    *todoEnforcement
 	// goal drives goal mode: the turn-budgeted loop that keeps working
 	// toward a goal until a cheap evaluator says it is met. Nil when
 	// the agent cannot judge goals.

@@ -360,9 +360,9 @@ func TestGoalLoop_KillAfterNudgesAbandonsTheGoal(t *testing.T) {
 	}
 	notifications := newGoalNotifications()
 	sa := newGoalTestAgent(t, env, model, notifications, config.TodoEnforcementSettings{
-		Enabled:           true,
-		NudgeThreshold:    2,
-		KillAfterNudges:   1,
+		Enabled:            true,
+		NudgeThreshold:     2,
+		KillAfterNudges:    1,
 		KillAfterNudgesSet: true,
 	})
 	sess := goalSession(t, env, "make the tests green", 25)
