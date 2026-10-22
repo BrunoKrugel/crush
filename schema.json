@@ -357,6 +357,10 @@
           "$ref": "#/$defs/EmbeddingsConfig",
           "description": "Embedding provider configuration for semantic search"
         },
+        "snapshots": {
+          "$ref": "#/$defs/SnapshotsConfig",
+          "description": "Git-backed filesystem snapshots captured at each user message"
+        },
         "options": {
           "$ref": "#/$defs/Options",
           "description": "General application options"
@@ -1357,6 +1361,27 @@
         "model",
         "provider"
       ]
+    },
+    "SnapshotsConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Capture a filesystem snapshot at each user message into the project's private snapshot store",
+          "default": true
+        },
+        "exclude": {
+          "items": {
+            "type": "string",
+            "examples": [
+              "node_modules"
+            ]
+          },
+          "type": "array",
+          "description": "Path patterns excluded from snapshots"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "TUIOptions": {
       "properties": {

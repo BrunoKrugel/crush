@@ -529,15 +529,15 @@ func (c *Config) ValidateAgentToolsets() error {
 // DefaultRequestTimeout bounds each LLM API request when the user has not
 // configured a timeout. Slow or unreachable providers fail after it instead
 // of blocking a session forever; streamed responses are only aborted after
-// this much inactivity, and users running slow local models can raise or
-// disable it via options.request_timeout.
+// this much inactivity between tokens, and users running slow local models
+// can raise or disable it via options.request_timeout.
 const DefaultRequestTimeout = 2 * time.Minute
 
 // GetRequestTimeout returns the per-request timeout for LLM API calls (a
 // hard deadline for non-streaming requests and an idle timeout for
-// streams), or zero when disabled. The nil receiver and the unset field
-// both mean DefaultRequestTimeout, so callers can ask without unwrapping
-// either.
+// streams, with a more generous budget for the first streamed token), or
+// zero when disabled. The nil receiver and the unset field both mean
+// DefaultRequestTimeout, so callers can ask without unwrapping either.
 func (o *Options) GetRequestTimeout() time.Duration {
 	if o == nil || o.RequestTimeout == nil {
 		return DefaultRequestTimeout
