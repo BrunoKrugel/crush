@@ -75,6 +75,14 @@ func (s *runCoordinator) BeginAccepted(sessionID string) *agent.AcceptedRun {
 	return nil
 }
 
+func (s *runCoordinator) StartGoal(ctx context.Context, sessionID, text string, budget int) error {
+	return nil
+}
+
+func (s *runCoordinator) CancelGoal(ctx context.Context, sessionID string) error {
+	return nil
+}
+
 func (s *runCoordinator) Cancel(string) {}
 
 func (s *runCoordinator) CancelAll() {}

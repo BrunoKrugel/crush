@@ -2458,6 +2458,34 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		m.dialog.CloseDialog(dialog.ForkID)
 		cmds = append(cmds, m.forkSession(msg.SessionID, msg.MessageID, msg.Title, msg.Worktree))
 
+	case dialog.ActionGoalMode:
+		// The palette entry collects the goal first: the goal text and
+		// the turn budget it may consume. The action handed back by the
+		// arguments dialog carries Args, so it runs straight through.
+		if len(msg.Arguments) > 0 && msg.Args == nil {
+			m.dialog.CloseFrontDialog()
+			m.dialog.OpenDialog(dialog.NewArguments(
+				m.com,
+				"Goal Mode",
+				"What should the agent achieve? It keeps working toward the goal — judged after every turn — until the goal is met, its turn budget runs out, or you stop it. Type \"off\" to stop a running goal.",
+				msg.Arguments,
+				msg,
+			))
+			break
+		}
+		// A goal needs a session to run on; the palette creates one the
+		// way the other session-bound commands do.
+		loadCmd, err := m.ensureSession()
+		if err != nil {
+			cmds = append(cmds, util.ReportError(err))
+			break
+		}
+		if loadCmd != nil {
+			cmds = append(cmds, loadCmd)
+		}
+		cmds = append(cmds, m.startGoal(m.currentSessionID(), msg.Args))
+		m.dialog.CloseFrontDialog()
+
 	case dialog.ActionOpenDialog:
 		m.dialog.CloseDialog(dialog.CommandsID)
 		if cmd := m.openDialog(msg.DialogID); cmd != nil {
@@ -7257,6 +7285,14 @@ func (m *UI) handleAgentNotification(n notify.Notification) tea.Cmd {
 		// Terminal edge like TypeAgentFinished; fall through to the
 		// busy/queue refresh below.
 		m.endPendingTurn(n.SessionID)
+	case notify.TypeGoal:
+		// The goal loop's outcome: met, out of budget, or abandoned.
+		// The message says which, so the user learns how the goal
+		// ended without a header badge.
+		if n.Message == "" {
+			return nil
+		}
+		return util.ReportInfo(n.Message)
 	case notify.TypeReAuthenticate:
 		return m.handleReAuthenticate(n.ProviderID)
 	case notify.TypeAWSSSOAuth:

@@ -12,6 +12,7 @@ import (
 type Querier interface {
 	AddSessionCost(ctx context.Context, arg AddSessionCostParams) error
 	AddSessionUsage(ctx context.Context, arg AddSessionUsageParams) error
+	ClearSessionGoal(ctx context.Context, id string) (Session, error)
 	CountA2ATasks(ctx context.Context, arg CountA2ATasksParams) (int64, error)
 	CountLedgerEntries(ctx context.Context, sessionID string) (int64, error)
 	CreateA2ATask(ctx context.Context, arg CreateA2ATaskParams) error
@@ -102,6 +103,10 @@ type Querier interface {
 	SetA2ADispatchTask(ctx context.Context, arg SetA2ADispatchTaskParams) error
 	SetSessionChannel(ctx context.Context, arg SetSessionChannelParams) (Session, error)
 	SetSessionForkOrigin(ctx context.Context, arg SetSessionForkOriginParams) error
+	// The goal mode's state travels in one JSON column, so the ladder can
+	// read it with the session and the goal loop can update it without
+	// touching the rest of the row.
+	SetSessionGoal(ctx context.Context, arg SetSessionGoalParams) (Session, error)
 	UpdateA2ATask(ctx context.Context, arg UpdateA2ATaskParams) (int64, error)
 	UpdateA2ATaskIfVersion(ctx context.Context, arg UpdateA2ATaskIfVersionParams) (int64, error)
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) error

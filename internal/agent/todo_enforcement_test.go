@@ -40,7 +40,11 @@ type scriptedStep struct {
 // need: the injected nudges must land in the recorded prompts at exactly
 // the scripted step.
 type scriptedModel struct {
-	steps   []scriptedStep
+	steps []scriptedStep
+	// verdict, when set, is served to the goal evaluator's calls
+	// instead of the script: the evaluator asks whether the goal is
+	// met, and the script drives the agent's own turns.
+	verdict string
 	prompts []fantasy.Call
 	pos     int
 	mu      sync.Mutex
@@ -70,14 +74,46 @@ const titlePromptMarker = "You will generate a short title"
 // goroutine's, by the same marker the scripted model serves canned
 // titles on.
 func isTitleCall(call fantasy.Call) bool {
+	return callContains(call, titlePromptMarker)
+}
+
+// goalEvalPromptMarker identifies the goal evaluator's model calls, so
+// the scripted model can serve them a verdict without consuming the
+// script or polluting the recorded prompts.
+const goalEvalPromptMarker = "Is the goal met?"
+
+// isGoalEvalCall reports whether a model call is the goal evaluator's.
+func isGoalEvalCall(call fantasy.Call) bool {
+	return callContains(call, goalEvalPromptMarker)
+}
+
+// callContains reports whether any message of the call carries text.
+func callContains(call fantasy.Call, needle string) bool {
 	for _, msg := range call.Prompt {
 		for _, part := range msg.Content {
-			if text, ok := part.(fantasy.TextPart); ok && strings.Contains(text.Text, titlePromptMarker) {
+			if text, ok := part.(fantasy.TextPart); ok && strings.Contains(text.Text, needle) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// textStreamResponse streams a single text message and finishes, for
+// the calls the scripted model answers outside the script.
+func textStreamResponse(text string) fantasy.StreamResponse {
+	return func(yield func(fantasy.StreamPart) bool) {
+		if !yield(fantasy.StreamPart{Type: fantasy.StreamPartTypeTextStart, ID: "1"}) {
+			return
+		}
+		if !yield(fantasy.StreamPart{Type: fantasy.StreamPartTypeTextDelta, ID: "1", Delta: text}) {
+			return
+		}
+		if !yield(fantasy.StreamPart{Type: fantasy.StreamPartTypeTextEnd, ID: "1"}) {
+			return
+		}
+		yield(fantasy.StreamPart{Type: fantasy.StreamPartTypeFinish, FinishReason: fantasy.FinishReasonStop})
+	}
 }
 
 func (m *scriptedModel) Stream(ctx context.Context, call fantasy.Call) (fantasy.StreamResponse, error) {
@@ -87,18 +123,13 @@ func (m *scriptedModel) Stream(ctx context.Context, call fantasy.Call) (fantasy.
 		return nil, err
 	}
 	if isTitleCall(call) {
-		return func(yield func(fantasy.StreamPart) bool) {
-			if !yield(fantasy.StreamPart{Type: fantasy.StreamPartTypeTextStart, ID: "1"}) {
-				return
-			}
-			if !yield(fantasy.StreamPart{Type: fantasy.StreamPartTypeTextDelta, ID: "1", Delta: "session"}) {
-				return
-			}
-			if !yield(fantasy.StreamPart{Type: fantasy.StreamPartTypeTextEnd, ID: "1"}) {
-				return
-			}
-			yield(fantasy.StreamPart{Type: fantasy.StreamPartTypeFinish, FinishReason: fantasy.FinishReasonStop})
-		}, nil
+		return textStreamResponse("session"), nil
+	}
+	if isGoalEvalCall(call) {
+		m.mu.Lock()
+		verdict := m.verdict
+		m.mu.Unlock()
+		return textStreamResponse(verdict), nil
 	}
 
 	m.mu.Lock()

@@ -225,6 +225,10 @@ type sessionAgent struct {
 	todoKill             func(sessionID string, reason string)
 	activeRequests       *csync.Map[string, *activeCancel]
 	todoEnforcement      *todoEnforcement
+	// goal drives goal mode: the turn-budgeted loop that keeps working
+	// toward a goal until a cheap evaluator says it is met. Nil when
+	// the agent cannot judge goals.
+	goal                 *goalRunner
 	cancelMark           *csync.Map[string, uint64]
 	acceptedRuns         *csync.Map[string, int]
 	titles               sync.WaitGroup
@@ -285,7 +289,7 @@ func NewSessionAgent(
 // handing the agent out; see coordinator.buildAgent.
 func newSessionAgent(opts SessionAgentOptions) *sessionAgent {
 	enforcement := newTodoEnforcement(opts.TodoEnforcement, opts.Sessions)
-	return &sessionAgent{
+	sa := &sessionAgent{
 		largeModel:           csync.NewValue(opts.LargeModel),
 		smallModel:           csync.NewValue(opts.SmallModel),
 		systemPromptPrefix:   csync.NewValue(opts.SystemPromptPrefix),
@@ -314,6 +318,11 @@ func newSessionAgent(opts SessionAgentOptions) *sessionAgent {
 		loopStop:             opts.LoopStop,
 		ready:                readyNow(),
 	}
+	// The agent judges its own goals: the evaluator is the agent's small
+	// model, read at call time so a model change mid-session is picked
+	// up.
+	sa.goal = newGoalRunner(opts.Sessions, opts.Notify, sa, opts.TodoEnforcement)
+	return sa
 }
 
 // AcceptedRun owns exactly one accept reservation taken by
@@ -1071,6 +1080,13 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		todoRun = a.todoEnforcement.newRun(len(currentSession.Todos) > 0, onKill, toolByName)
 	}
 
+	// The goal ladder's state for this run (#5): seeded with the goal
+	// the session carries, consulted by PrepareStep (which injects the
+	// continuation directive) and by the end-of-turn judge (which asks
+	// the evaluator whether the goal is met). Nil (goal mode off) makes
+	// every method a no-op.
+	goalRun := a.goal.newRun(currentSession.Goal)
+
 	msgs, err := a.getSessionMessages(ctx, currentSession)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session messages: %w", err)
@@ -1251,11 +1267,14 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 				queued.consume(true)
 			}
 
-			// The todo enforcement nudge (#315): after the queued
+			// The ladder's one injection (#315, #5): after the queued
 			// follow-ups, so it is the most recent thing the model
-			// reads. Persisted on the session, so the nudge is visible
-			// in the transcript and carries into later turns' history.
-			prepared.Messages = a.injectTodoNudge(callContext, call.SessionID, todoRun, prepared.Messages)
+			// reads. A goal continuation supersedes the todo nudge and
+			// folds the nudge's content in; otherwise the nudge goes
+			// out on its own. Persisted on the session, so the
+			// directive is visible in the transcript and carries into
+			// later turns' history.
+			prepared.Messages = a.injectLadderDirective(callContext, call.SessionID, goalRun, todoRun, prepared.Messages)
 
 			// An empty media payload would fail the whole request on some
 			// providers; drop it instead.
@@ -1628,6 +1647,13 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 			continuing = true
 			sessMu.Unlock()
 		}
+	}
+
+	// Goal mode (#5): the turn is over, so judge the goal. While it is
+	// unmet and the budget allows, the goal loop queues the
+	// continuation turn, which the run's own queue handoff picks up.
+	if !continuing {
+		a.goalAfterTurn(ctx, call, currentAssistant, goalRun)
 	}
 
 	// Route the finished turn's response back to the channel it came

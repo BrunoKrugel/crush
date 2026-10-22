@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/crush/internal/goal"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/stretchr/testify/require"
@@ -66,6 +67,14 @@ func (m *mockSessionService) Save(_ context.Context, s session.Session) (session
 
 func (m *mockSessionService) SetChannel(_ context.Context, sessionID, channel string) (session.Session, error) {
 	return session.Session{ID: sessionID, Channel: channel}, nil
+}
+
+func (m *mockSessionService) SetGoal(_ context.Context, sessionID string, g *goal.Goal) (session.Session, error) {
+	return session.Session{ID: sessionID, Goal: g}, nil
+}
+
+func (m *mockSessionService) ClearGoal(_ context.Context, sessionID string) (session.Session, error) {
+	return session.Session{ID: sessionID}, nil
 }
 
 func (m *mockSessionService) UpdateTitleAndUsage(context.Context, string, string, int64, int64, float64) error {

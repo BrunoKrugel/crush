@@ -39,6 +39,14 @@ func (c *errorCoordinator) RunAccepted(ctx context.Context, accept *agent.Accept
 	return nil, c.err
 }
 
+func (c *errorCoordinator) StartGoal(ctx context.Context, sessionID, text string, budget int) error {
+	return nil
+}
+
+func (c *errorCoordinator) CancelGoal(ctx context.Context, sessionID string) error {
+	return nil
+}
+
 func (c *errorCoordinator) BeginAccepted(sessionID string) *agent.AcceptedRun { return nil }
 func (c *errorCoordinator) Cancel(string)                                     {}
 func (c *errorCoordinator) CancelAll()                                        {}

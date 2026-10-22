@@ -382,6 +382,13 @@ func (a *sessionAgent) injectTodoNudge(ctx context.Context, sessionID string, ru
 	if nudge == "" {
 		return msgs
 	}
+	return a.appendTodoNudge(ctx, sessionID, nudge, msgs)
+}
+
+// appendTodoNudge persists the nudge as a user message on the session and
+// appends it to the step's input. The message stays visible in the
+// transcript, so the user can see the harness asking for a todo list.
+func (a *sessionAgent) appendTodoNudge(ctx context.Context, sessionID, nudge string, msgs []fantasy.Message) []fantasy.Message {
 	userMessage, err := a.createTodoNudgeMessage(ctx, sessionID, nudge)
 	if err != nil {
 		slog.Warn("Failed to persist todo nudge", "session_id", sessionID, "error", err)
