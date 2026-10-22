@@ -2,7 +2,7 @@
  * Docusaurus Configuration
  *
  * Builds the Crush documentation site for GitHub Pages on the
- * joestump-agent/crush fork. Docs are served from the site root
+ * brunokrugel/crush fork. Docs are served from the site root
  * (`routeBasePath: '/'`) with a hand-written React landing page at `/`, so
  * every docs URL is `/<section>/<page>` with no `/docs` prefix.
  *
@@ -17,7 +17,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 import type {Config} from '@docusaurus/types';
 import {themes as prismThemes} from 'prism-react-renderer';
 
-const ORG = 'joestump-agent';
+const ORG = 'brunokrugel';
 const REPO = 'crush';
 const GITHUB_URL = `https://github.com/${ORG}/${REPO}`;
 const UPSTREAM_URL = 'https://github.com/charmbracelet/crush';
@@ -76,7 +76,7 @@ const config: Config = {
           path: 'docs',
           routeBasePath: '/',
           sidebarPath: './sidebars.ts',
-          editUrl: `${GITHUB_URL}/edit/main/docs-site/`,
+          editUrl: `${GITHUB_URL}/edit/fork/docs-site/`,
           showLastUpdateTime: true,
         },
         blog: false,

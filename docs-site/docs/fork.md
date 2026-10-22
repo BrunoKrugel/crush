@@ -22,6 +22,21 @@ into the `fork` branch with two commands. When upstream eventually merges its
 own copy of these changes, the duplicate history drops out cleanly.
 :::
 
+## Credits
+
+The work in this fork is not the work of one person. It is pulled from
+upstream pull requests and from the other Crush forks, all landing on the
+same branch and improving each other there. Every row in the tables below
+names the source it came from; this is the summary.
+
+| Source | What it contributed |
+| --- | --- |
+| [`brunokrugel/crush`](https://github.com/brunokrugel/crush) | This fork. The integration work, the snapshots implementation, the Sonic JSON codec, and the merged upstream pull requests. |
+| [`joestump-agent/crush`](https://github.com/joestump-agent/crush) | Multi-agent dispatch, semantic search, channel reply routing, and most of the TUI polish — click-to-copy, clickable links, the highlighted composer, text attachments, and the Skills, MCP and Channels dialogs. |
+| [`taigrr/crush`](https://github.com/taigrr/crush) | Conversation forking, goal mode, and the original snapshot design this fork reimplemented. |
+| [`gurnben/crush`](https://github.com/gurnben/crush) | Context compaction with checkpoints, via its `feat/context-compaction` branch. |
+| [`charmbracelet/crush`](https://github.com/charmbracelet/crush) | Upstream. Everything the fork does not change, and the pull requests merged in ahead of upstream merging them itself. |
+
 ## Major features
 
 | Feature | What it is | Source |

@@ -92,8 +92,8 @@ function Fork(): ReactNode {
           <div>
             <p className="charmSection__lede">
               These docs cover the{' '}
-              <a href="https://github.com/joestump-agent/crush">
-                joestump-agent/crush
+              <a href="https://github.com/brunokrugel/crush">
+                brunokrugel/crush
               </a>{' '}
               fork, which tracks{' '}
               <a href="https://github.com/charmbracelet/crush">
@@ -106,13 +106,25 @@ function Fork(): ReactNode {
               actually upstream.
             </p>
             <p className="charmSection__lede">
+              None of it was written in isolation. The fork merges pull
+              requests that are still open upstream, and it carries feature
+              branches picked up from other Crush forks —{' '}
+              <a href="https://github.com/joestump-agent/crush">
+                joestump-agent/crush
+              </a>
+              , <a href="https://github.com/taigrr/crush">taigrr/crush</a>, and{' '}
+              <a href="https://github.com/gurnben/crush">gurnben/crush</a> —
+              alongside the work done here. Every addition is credited to
+              where it came from, so nothing is claimed as new that is not.
+            </p>
+            <p className="charmSection__lede">
               Crush itself is a{' '}
               <a href="https://charm.land">Charm</a> project, licensed{' '}
               <a href="https://github.com/charmbracelet/crush/raw/main/LICENSE.md">
                 FSL-1.1-MIT
               </a>
               . Bugs in upstream behaviour belong upstream; bugs in the additions
-              below belong here.
+              below belong to whoever wrote them.
             </p>
           </div>
           <div className="charmNote">
@@ -142,6 +154,31 @@ function Fork(): ReactNode {
                 <Link to="/fork">Everything else</Link> — click-to-copy,
                 clickable links, a highlighted composer, text attachments, and
                 the Skills, MCP and Channels dialogs
+              </li>
+            </ul>
+            <h3>Credits</h3>
+            <ul>
+              <li>
+                <a href="https://github.com/brunokrugel/crush">
+                  brunokrugel/crush
+                </a>{' '}
+                — this fork: the integration work, the snapshots, and the
+                upstream pull requests merged in
+              </li>
+              <li>
+                <a href="https://github.com/joestump-agent/crush">
+                  joestump-agent/crush
+                </a>{' '}
+                — multi-agent dispatch, semantic search, channel routing, and
+                most of the TUI polish
+              </li>
+              <li>
+                <a href="https://github.com/taigrr/crush">taigrr/crush</a> —
+                conversation forking and goal mode
+              </li>
+              <li>
+                <a href="https://github.com/gurnben/crush">gurnben/crush</a> —
+                context compaction with checkpoints
               </li>
             </ul>
           </div>
