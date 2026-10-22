@@ -127,6 +127,10 @@ function Fork(): ReactNode {
                 cron-driven prompts
               </li>
               <li>
+                <Link to="/features/memory">Cross-session memory</Link> — Honcho
+                recall against a self-hosted instance
+              </li>
+              <li>
                 <Link to="/features/semantic-search">Semantic search</Link> — a
                 local vector index over the repo
               </li>

@@ -155,6 +155,19 @@ const TILES: Tile[] = [
     href: '/features/server-and-workspaces',
     more: 'Server & workspaces',
   },
+  {
+    icon: '◐',
+    title: 'Cross-session memory',
+    body: (
+      <>
+        Crush writes each turn to a self-hosted Honcho instance and hands later
+        sessions a picture of how you work — the conventions you settled on, the
+        gotchas you already paid for.
+      </>
+    ),
+    href: '/features/memory',
+    more: 'Memory',
+  },
 ];
 
 export default function FeatureTiles(): ReactNode {
