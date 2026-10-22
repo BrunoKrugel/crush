@@ -233,6 +233,14 @@ func (c *Client) registerHandlers() {
 	})
 }
 
+// resetDiagnosticsState drops all cached diagnostics and the count
+// cache. Called when the server instance changes (Restart).
+func (c *Client) resetDiagnosticsState() {
+	c.diagnostics = csync.NewVersionedMap[protocol.DocumentURI, []protocol.Diagnostic]()
+	c.diagCountsCache = DiagnosticCounts{}
+	c.diagCountsVersion = 0
+}
+
 // Restart closes the current LSP client and creates a new one with the same configuration.
 func (c *Client) Restart() error {
 	var openFiles []string
@@ -254,8 +262,11 @@ func (c *Client) Restart() error {
 
 	c.SetServerState(StateStopped)
 
-	c.diagCountsCache = DiagnosticCounts{}
-	c.diagCountsVersion = 0
+	// The old server instance is gone; its diagnostics are invalid and the
+	// new one only republishes for the files it is told about. Keep the
+	// count cache in sync with the map or the sidebar freezes at the last
+	// count of the dead instance.
+	c.resetDiagnosticsState()
 
 	if err := c.createPowernapClient(); err != nil {
 		return err
