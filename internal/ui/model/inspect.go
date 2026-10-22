@@ -293,9 +293,15 @@ func (m *UI) handleInspectDrill() tea.Cmd {
 	if len(liveRefs) == 0 {
 		return util.ReportInfo("No live sub-agents to inspect")
 	}
+	// Enter BEFORE highlighting the block: enterInspect captures the
+	// parent's scroll and follow state, and scrolling the selection to a
+	// mid-transcript block would clear follow and shift the position the
+	// capture must record. The highlight is applied after the capture so
+	// the user still sees which block they drilled into.
+	cmd := m.enterInspect(liveRefs[0])
 	m.chat.SetSelected(liveRefs[0].index)
 	m.chat.ScrollToSelected()
-	return m.enterInspect(liveRefs[0])
+	return cmd
 }
 
 // enterInspect captures the parent's scroll position and live-agent ring

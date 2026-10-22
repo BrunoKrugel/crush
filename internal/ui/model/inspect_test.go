@@ -402,6 +402,52 @@ func TestInspectBackRestoresParentAndScroll(t *testing.T) {
 		"the parent transcript is back in the chat")
 }
 
+// TestInspectDrillFromBottomRestoresBottom pins the reported bug: ctrl+]
+// with no focused block scrolls the parent to the dispatch block before
+// entering inspect mode, and that scroll must not poison the state
+// captured on entry. A parent following the stream at the bottom must
+// come back to the bottom, still following, even though the entry scroll
+// landed mid-transcript on the dispatch block.
+func TestInspectDrillFromBottomRestoresBottom(t *testing.T) {
+	ws := newInspectWorkspace()
+	m := newInspectUI(t, ws)
+	addChild(ws, inspectChildID, inspectParentID, "Dispatched Agent", inspectChildMessages()...)
+	m.chat.SetSize(80, 6)
+	// Content-bearing messages so the transcript is several viewports
+	// tall and the dispatch block is genuinely off-screen from the bottom.
+	for i := range 30 {
+		msg := message.Message{
+			ID:        fmt.Sprintf("big-%d", i),
+			SessionID: inspectParentID,
+			Role:      message.User,
+			Parts:     []message.ContentPart{message.TextContent{Text: strings.Repeat("lorem ipsum dolor sit amet ", 20)}},
+		}
+		ws.messages[inspectParentID] = append(ws.messages[inspectParentID], msg)
+		m.Update(pubsub.Event[message.Message]{Type: pubsub.CreatedEvent, Payload: msg})
+	}
+	m.chat.ScrollToBottom()
+	require.True(t, m.chat.Follow(), "the test parent must start following")
+
+	addAgentBlock(t, m, inspectMessageID, inspectCallID)
+	// The parent keeps talking after the dispatch, so the live block sits
+	// mid-transcript: scrolling to it leaves the bottom, which is exactly
+	// the state that must not poison the capture.
+	addParentTranscript(t, m, ws, 10)
+
+	runInspectCmds(m, m.handleInspectDrill())
+	require.True(t, m.isInspecting())
+
+	handled, backCmd := m.handleInspectKeys(tea.KeyPressMsg{Code: '[', Mod: tea.ModCtrl})
+	require.True(t, handled)
+	runInspectCmds(m, backCmd)
+
+	require.False(t, m.isInspecting())
+	require.True(t, m.chat.AtBottom(),
+		"the parent must come back to the bottom it was at on entry")
+	require.True(t, m.chat.Follow(),
+		"the parent must come back still following the stream")
+}
+
 // TestInspectCyclesLiveAgents pins repeated ctrl+]: while inspecting,
 // it cycles the live agents captured on entry, staying in inspect mode.
 func TestInspectCyclesLiveAgents(t *testing.T) {
