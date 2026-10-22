@@ -20,6 +20,10 @@
  * @joestump-agent 10/09/2026 - Added the "Team" page after configuration:
  * what a team can do with A2A today, the TLS listener and its certificate
  * recipe, and how to read a teammate's definition cards.
+ *
+ * @joestump-agent 10/15/2026 - Added the "Memory" page after "Sessions",
+ * grouping the Honcho cross-session memory feature with the other
+ * session-related pages.
  */
 
 import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
@@ -65,6 +69,7 @@ const sidebars: SidebarsConfig = {
         'features/scheduled-tasks',
         'features/semantic-search',
         'features/sessions',
+        'features/memory',
         'features/server-and-workspaces',
         'features/notifications',
       ],

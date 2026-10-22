@@ -1796,7 +1796,7 @@ func missingSkills(store *config.ConfigStore, requested []string) []string {
 	if len(requested) == 0 {
 		return nil
 	}
-	all, _ := discoverSkills(store)
+	all, _ := discoverSkills(store, nil)
 	known := make(map[string]struct{}, len(all))
 	for _, s := range all {
 		known[s.Name] = struct{}{}

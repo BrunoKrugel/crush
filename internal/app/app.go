@@ -29,6 +29,7 @@ import (
 	"github.com/charmbracelet/crush/internal/format"
 	"github.com/charmbracelet/crush/internal/herdr"
 	"github.com/charmbracelet/crush/internal/history"
+	"github.com/charmbracelet/crush/internal/honcho"
 	"github.com/charmbracelet/crush/internal/log"
 	"github.com/charmbracelet/crush/internal/lsp"
 	"github.com/charmbracelet/crush/internal/message"
@@ -80,6 +81,12 @@ type App struct {
 	a2aHostReady       chan struct{}
 	cleanupFuncs       []func(context.Context) error
 	a2aHostMu          sync.Mutex
+	// memoryMu guards memory, which the agent rebuild path starts or
+	// stops when the user connects or disconnects a backend.
+	memoryMu sync.Mutex
+	// memory supplies cross-session recall via Honcho. Nil when the
+	// integration is not configured, which is the default.
+	memory *honcho.Service
 }
 
 // New initializes a new application instance. skillsMgr carries the
@@ -129,6 +136,10 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 	if err := clipboard.Init(); err != nil {
 		slog.Warn("Clipboard initialization failed", "error", err)
 	}
+
+	// Start Honcho memory when it is configured. Nil means the
+	// integration is off, which is the default and costs nothing.
+	app.memory = newMemory(ctx, app.config.Config(), store.WorkingDir())
 
 	// Check for updates in the background.
 	go app.checkForUpdates(ctx)
@@ -984,6 +995,7 @@ func (app *App) initCoderAgent(ctx context.Context, interactive bool) error {
 	if buildCoordinator == nil {
 		buildCoordinator = agent.NewCoordinator
 	}
+	coordinatorOpts.Memory = app.memoryProvider(ctx)
 	app.AgentCoordinator, err = buildCoordinator(app.globalCtx, coordinatorOpts)
 	if err != nil {
 		slog.Error("Failed to create coder agent", "err", err)
@@ -1129,6 +1141,12 @@ func (app *App) Shutdown() {
 
 	// Close herdr client to stop its background writer.
 	app.herdrClient.Close()
+
+	// Flush pending memory writes before exiting, so the turn that
+	// just finished is not lost on a short-lived run.
+	wg.Go(func() {
+		app.currentMemory().Close(shutdownCtx)
+	})
 
 	// Shutdown all LSP clients.
 	wg.Go(func() {

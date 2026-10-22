@@ -689,7 +689,7 @@ func resolvedSkills(store *config.ConfigStore, requested []string) []*skills.Ski
 	if store == nil {
 		return nil
 	}
-	all, _ := discoverSkills(store)
+	all, _ := discoverSkills(store, nil)
 	if len(requested) == 0 {
 		return all
 	}
