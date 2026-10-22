@@ -15,7 +15,7 @@ everything touching `workspace`/`server`/TUI is a rewrite.
 | # | Feature | Effort | Status |
 | --- | --- | --- | --- |
 | 1 | Git-backed filesystem snapshots | L | **Done** (2026-10-21) |
-| 2 | Conversation forking (depends on #1) | M | Not started |
+| 2 | Conversation forking (depends on #1) | M | Planned — design below |
 | 3 | Swarm — cross-session messaging | M | Not started |
 | 4 | Slash commands + `/export` | S | Not started |
 | 5 | Goal mode (`/goal` evaluator loop) | M | Not started |
@@ -61,3 +61,62 @@ Implemented 2026-10-21, reimplemented from the taigrr design (their
 
 Follow-ups: TUI/CLI surface (list/restore/diff dialog or commands), ref
 pruning policy, snapshot-on-restore-before-restore safety capture.
+
+## Planned: #2 conversation forking
+
+Yes, we can do it: the dependency (#1 snapshots) is done, and our snapshot
+engine makes the taigrr flow simpler here. Design, reconciled with our
+fork's own surface:
+
+**What forking does.** Fork a conversation from any message: a new session
+is created that shares the history up to that point, with a filesystem
+state restored from the snapshot captured at (or created for) that message,
+optionally in a fresh worktree. The original session is untouched.
+
+**Differences from taigrr's design that fall out of our base.**
+
+- Their design keys the fork on a snapshot id and a `worktrees` table.
+  We do not need their worktrees table: the multi-agent dispatch
+  infrastructure already owns managed worktrees, and item #9 will
+  reconcile user-facing worktrees with it. For #2 the worktree toggle
+  creates a plain `git worktree add` at the current HEAD, then runs our
+  snapshot restore into it, so the fork's file state matches the fork
+  point without importing their schema.
+- Our snapshot store is private (`.crush/git`, never touches the user's
+  `.git`), so a worktree cannot check out our snapshot commit directly.
+  The restore-into-fresh-worktree approach above is the workaround.
+- Compaction checkpoints and steer/hidden messages: fork copies only
+  user+assistant messages up to the fork point and marks `steer` and
+  hidden messages out, so the new session never replays harness
+  scaffolding.
+
+**Steps.**
+
+1. **DB** — migration adding `forked_from_snapshot_id` and
+   `forked_from_message_id` (both nullable, FK to snapshots/messages)
+   to `sessions`; new queries (`Fork` reads: source session with
+   messages up to a message id, create target with copied messages).
+2. **`internal/fork/`** — small package: `Fork(ctx, source sessionID,
+   messageID, opts)` doing: ensure a snapshot exists for the message
+   (capture on demand through `internal/snapshot`), create the session
+   via `session.Service` with the fork pointers, copy messages, and
+   optionally restore files (current dir or a fresh worktree). Returns
+   the new session.
+3. **Session service** — expose `CopyMessagesUpTo` (or accept it inside
+   `internal/fork`) reusing existing message CRUD.
+4. **UI** — fork action in the chat view's per-message menu (user
+   messages), a `fork.go` dialog (new session name + worktree toggle),
+   switch to the new session after forking, and a fork indicator in the
+   header. Reuse the compaction-checkpoint dialog styling.
+5. **Server/API (optional phase)** — `POST /sessions/{sid}/fork` for
+   remote clients, mirroring the A2A session surface.
+6. **Tests** — fork round-trip (messages copied, none lost, order kept),
+   snapshot on demand, restore behavior, steer/hidden exclusion, DB
+   migration. Follow repo TDD rules (RED first under `internal/`).
+7. **Docs** — `docs-site/docs/features/forking.md`, fork.md row,
+   sidebars entry.
+
+**Estimated effort**: M, roughly 1–1.5 days with dispatched agents
+(DB+package in one worktree, UI in another; docs parallel). Reuses
+#1's snapshot capture and restore paths so no new git plumbing is
+needed.
