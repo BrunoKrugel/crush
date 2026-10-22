@@ -889,6 +889,10 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				toggles.SetItems(m.skillsTogglesList())
 			}
 		}
+	case forkSessionMsg:
+		if cmd := m.applyForkSession(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	case loadSessionMsg:
 		m.turnOutcome = ""
 		if m.forceCompactMode {
@@ -2445,6 +2449,15 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		cmds = append(cmds, m.handleSelectSession(msg.Session))
 
 	// Open dialog message.
+	case dialog.ActionForkSession:
+		m.dialog.CloseDialog(dialog.CommandsID)
+		if cmd := m.openForkDialog(msg.SessionID); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	case dialog.ActionFork:
+		m.dialog.CloseDialog(dialog.ForkID)
+		cmds = append(cmds, m.forkSession(msg.SessionID, msg.MessageID, msg.Title, msg.Worktree))
+
 	case dialog.ActionOpenDialog:
 		m.dialog.CloseDialog(dialog.CommandsID)
 		if cmd := m.openDialog(msg.DialogID); cmd != nil {

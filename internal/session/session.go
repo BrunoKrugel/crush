@@ -48,20 +48,23 @@ func HasIncompleteTodos(todos []Todo) bool {
 }
 
 type Session struct {
-	SummaryMessageID    string
-	ParentSessionID     string
-	Title               string
-	Channel             string
-	ID                  string
-	SummaryCutMessageID string
-	Todos               []Todo
-	Cost                float64
-	CompletionTokens    int64
-	PromptTokens        int64
-	MessageCount        int64
-	CreatedAt           int64
-	UpdatedAt           int64
-	EstimatedUsage      bool
+	SummaryMessageID     string
+	ParentSessionID      string
+	ForkedFromSessionID  string
+	ForkedFromSnapshotID string
+	ForkedFromMessageID  string
+	Title                string
+	Channel              string
+	ID                   string
+	SummaryCutMessageID  string
+	Todos                []Todo
+	Cost                 float64
+	CompletionTokens     int64
+	PromptTokens         int64
+	MessageCount         int64
+	CreatedAt            int64
+	UpdatedAt            int64
+	EstimatedUsage       bool
 }
 
 type Service interface {
@@ -469,13 +472,16 @@ func (s *service) fromDBItem(item db.Session) Session {
 		slog.Error("Failed to unmarshal todos", "session_id", item.ID, "error", err)
 	}
 	return Session{
-		ID:               item.ID,
-		ParentSessionID:  item.ParentSessionID.String,
-		Title:            item.Title,
-		MessageCount:     item.MessageCount,
-		PromptTokens:     item.PromptTokens,
-		CompletionTokens: item.CompletionTokens,
-		SummaryMessageID: item.SummaryMessageID.String,
+		ID:                   item.ID,
+		ParentSessionID:      item.ParentSessionID.String,
+		ForkedFromSessionID:  item.ForkedFromSessionID.String,
+		ForkedFromSnapshotID: item.ForkedFromSnapshotID.String,
+		ForkedFromMessageID:  item.ForkedFromMessageID.String,
+		Title:                item.Title,
+		MessageCount:         item.MessageCount,
+		PromptTokens:         item.PromptTokens,
+		CompletionTokens:     item.CompletionTokens,
+		SummaryMessageID:     item.SummaryMessageID.String,
 		// Deliberately not the column name: keep the domain field adjacent to
 		// the checkpoint it belongs to.
 		SummaryCutMessageID: item.SummaryCutMessageID.String,

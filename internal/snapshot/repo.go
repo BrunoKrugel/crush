@@ -171,6 +171,15 @@ func (r *Repo) List(sessionID string) ([]SnapshotInfo, error) {
 // Restore writes the snapshot's tracked files back into the worktree.
 // Files that were never part of the snapshot are left untouched.
 func (r *Repo) Restore(commitHash string) error {
+	return r.RestoreTo(commitHash, r.projectRoot)
+}
+
+// RestoreTo writes the snapshot's tracked files into targetRoot, which
+// need not be the project directory the store belongs to. A forked
+// conversation that runs in a fresh worktree uses this to materialize
+// the fork point's files there; the snapshot objects still come from
+// this repo's private store.
+func (r *Repo) RestoreTo(commitHash, targetRoot string) error {
 	commit, err := object.GetCommit(r.storer, plumbing.NewHash(commitHash))
 	if err != nil {
 		return fmt.Errorf("failed to read snapshot commit: %w", err)
@@ -180,7 +189,7 @@ func (r *Repo) Restore(commitHash string) error {
 		return fmt.Errorf("failed to read snapshot tree: %w", err)
 	}
 	return tree.Files().ForEach(func(f *object.File) error {
-		target := filepath.Join(r.projectRoot, f.Name)
+		target := filepath.Join(targetRoot, f.Name)
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
 		}

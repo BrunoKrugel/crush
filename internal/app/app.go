@@ -26,6 +26,7 @@ import (
 	"github.com/charmbracelet/crush/internal/db"
 	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/filetracker"
+	"github.com/charmbracelet/crush/internal/fork"
 	"github.com/charmbracelet/crush/internal/format"
 	"github.com/charmbracelet/crush/internal/herdr"
 	"github.com/charmbracelet/crush/internal/history"
@@ -87,6 +88,12 @@ type App struct {
 	// memory supplies cross-session recall via Honcho. Nil when the
 	// integration is not configured, which is the default.
 	memory *honcho.Service
+	// Forks branches conversations. Nil when the app has no database,
+	// which is the only case where forking is impossible.
+	Forks *fork.Service
+	// snapshots captures the working tree at each user message. Nil
+	// when snapshots are disabled or unsupported for the project.
+	snapshots *snapshot.Service
 }
 
 // New initializes a new application instance. skillsMgr carries the
@@ -136,6 +143,11 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 	if err := clipboard.Init(); err != nil {
 		slog.Warn("Clipboard initialization failed", "error", err)
 	}
+
+	// Filesystem snapshots and forking share the snapshot store: a fork
+	// restores the files captured at its fork point. Both are optional.
+	app.snapshots = newSnapshotService(conn, store)
+	app.Forks = fork.New(sessions, messages, q, app.snapshots, store.WorkingDir())
 
 	// Start Honcho memory when it is configured. Nil means the
 	// integration is off, which is the default and costs nothing.
@@ -929,18 +941,9 @@ func (app *App) initCoderAgent(ctx context.Context, interactive bool) error {
 	if app.conn != nil {
 		dispatchRecords = dispatch.NewSQLiteRecordStore(app.conn, hostID)
 	}
-	var snapshots *snapshot.Service
-	if app.conn != nil && app.config.Config().SnapshotsEnabled() && snapshot.IsSupported(app.config.WorkingDir()) {
-		if svc, err := snapshot.New(snapshot.Options{
-			ProjectRoot: app.config.WorkingDir(),
-			Exclude:     app.config.Config().SnapshotExclusions(),
-		}); err == nil {
-			svc.Store = snapshot.NewDBStore(db.New(app.conn))
-			snapshots = svc
-		} else {
-			slog.Warn("Filesystem snapshots disabled", "error", err)
-		}
-	}
+	// The snapshot service is shared with the fork service, so both see
+	// the same store.
+	snapshots := app.snapshots
 	coordinatorOpts := agent.CoordinatorOptions{
 		Config:      app.config,
 		Sessions:    app.Sessions,

@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/crush/internal/commands"
 	"github.com/charmbracelet/crush/internal/compaction"
 	"github.com/charmbracelet/crush/internal/config"
+	"github.com/charmbracelet/crush/internal/fork"
 	"github.com/charmbracelet/crush/internal/gitutil"
 	"github.com/charmbracelet/crush/internal/history"
 	"github.com/charmbracelet/crush/internal/lsp"
@@ -110,6 +111,22 @@ func (w *AppWorkspace) SetSessionChannel(ctx context.Context, sessionID, channel
 
 func (w *AppWorkspace) DeleteSession(ctx context.Context, sessionID string) error {
 	return w.app.DeleteSession(ctx, sessionID)
+}
+
+// ForkSession branches a conversation from a message: the new session
+// continues the old one up to that point.
+func (w *AppWorkspace) ForkSession(ctx context.Context, sourceSessionID, messageID, title string, worktree bool) (session.Session, error) {
+	if w.app.Forks == nil {
+		return session.Session{}, errors.New("forking is unavailable without a session database")
+	}
+	result, err := w.app.Forks.Fork(ctx, sourceSessionID, messageID, fork.ForkOptions{
+		Title:    title,
+		Worktree: worktree,
+	})
+	if err != nil {
+		return session.Session{}, err
+	}
+	return result.Session, nil
 }
 
 func (w *AppWorkspace) CreateAgentToolSessionID(messageID, toolCallID string) string {

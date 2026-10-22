@@ -17,6 +17,10 @@
  * overview and tutorial through configuration to the architecture, protocol,
  * troubleshooting and design-decision pages.
  *
+ * @joestump-agent 10/21/2026 - Added the "Forking" page after "Memory",
+ * so the conversation-branching feature sits next to the other
+ * session-related pages.
+ *
  * @joestump-agent 10/09/2026 - Added the "Team" page after configuration:
  * what a team can do with A2A today, the TLS listener and its certificate
  * recipe, and how to read a teammate's definition cards.
@@ -70,6 +74,7 @@ const sidebars: SidebarsConfig = {
         'features/semantic-search',
         'features/sessions',
         'features/memory',
+        'features/forking',
         'features/server-and-workspaces',
         'features/notifications',
       ],
