@@ -219,7 +219,9 @@ For more control — rewriting input, injecting context — exit 0 and print JSO
 ```
 
 **`decision: "allow"` is affirmative.** It pre-approves the call and bypasses
-the permission prompt. Silence — no `decision`, or `null` — means "no opinion",
+the permission prompt. This holds for every tool that asks for permission —
+`bash`, `edit`, `multiedit`, `write`, `download`, the LSP edit tools, MCP tool
+calls, and the rest. Silence — no `decision`, or `null` — means "no opinion",
 and the call goes through the normal permission flow. Omit it when you only want
 to inject context or rewrite input without also vouching for the call.
 
