@@ -53,6 +53,14 @@ func (c *blockingCoordinator) RunAccepted(ctx context.Context, accept *agent.Acc
 	return nil, nil
 }
 
+func (c *blockingCoordinator) StartGoal(ctx context.Context, sessionID, text string, budget int) error {
+	return nil
+}
+
+func (c *blockingCoordinator) CancelGoal(ctx context.Context, sessionID string) error {
+	return nil
+}
+
 func (c *blockingCoordinator) BeginAccepted(sessionID string) *agent.AcceptedRun { return nil }
 func (c *blockingCoordinator) Cancel(string)                                     {}
 func (c *blockingCoordinator) CancelAll()                                        {}

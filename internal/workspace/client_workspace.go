@@ -309,6 +309,19 @@ func (w *ClientWorkspace) AgentRunShellCommand(ctx context.Context, sessionID, c
 	return w.client.RunShellCommand(ctx, w.workspaceID(), sessionID, command, termWidth)
 }
 
+// AgentStartGoal is not available to a client attached to a remote
+// server: the goal loop lives in the server's agent, and the client
+// cannot drive it. Start the goal from the server's own TUI instead.
+func (w *ClientWorkspace) AgentStartGoal(ctx context.Context, sessionID, text string, budget int) error {
+	return errors.New("goal mode is not available for a client attached to a remote server")
+}
+
+// AgentCancelGoal is not available to a client attached to a remote
+// server, for the same reason AgentStartGoal is not.
+func (w *ClientWorkspace) AgentCancelGoal(ctx context.Context, sessionID string) error {
+	return errors.New("goal mode is not available for a client attached to a remote server")
+}
+
 func (w *ClientWorkspace) AgentCancel(sessionID string) {
 	_ = w.client.CancelAgentSession(context.Background(), w.workspaceID(), sessionID)
 }

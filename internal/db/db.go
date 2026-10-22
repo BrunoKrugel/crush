@@ -30,6 +30,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.addSessionUsageStmt, err = db.PrepareContext(ctx, addSessionUsage); err != nil {
 		return nil, fmt.Errorf("error preparing query AddSessionUsage: %w", err)
 	}
+	if q.clearSessionGoalStmt, err = db.PrepareContext(ctx, clearSessionGoal); err != nil {
+		return nil, fmt.Errorf("error preparing query ClearSessionGoal: %w", err)
+	}
 	if q.countA2ATasksStmt, err = db.PrepareContext(ctx, countA2ATasks); err != nil {
 		return nil, fmt.Errorf("error preparing query CountA2ATasks: %w", err)
 	}
@@ -264,6 +267,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.setSessionForkOriginStmt, err = db.PrepareContext(ctx, setSessionForkOrigin); err != nil {
 		return nil, fmt.Errorf("error preparing query SetSessionForkOrigin: %w", err)
 	}
+	if q.setSessionGoalStmt, err = db.PrepareContext(ctx, setSessionGoal); err != nil {
+		return nil, fmt.Errorf("error preparing query SetSessionGoal: %w", err)
+	}
 	if q.updateA2ATaskStmt, err = db.PrepareContext(ctx, updateA2ATask); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateA2ATask: %w", err)
 	}
@@ -295,6 +301,11 @@ func (q *Queries) Close() error {
 	if q.addSessionUsageStmt != nil {
 		if cerr := q.addSessionUsageStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing addSessionUsageStmt: %w", cerr)
+		}
+	}
+	if q.clearSessionGoalStmt != nil {
+		if cerr := q.clearSessionGoalStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing clearSessionGoalStmt: %w", cerr)
 		}
 	}
 	if q.countA2ATasksStmt != nil {
@@ -687,6 +698,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing setSessionForkOriginStmt: %w", cerr)
 		}
 	}
+	if q.setSessionGoalStmt != nil {
+		if cerr := q.setSessionGoalStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing setSessionGoalStmt: %w", cerr)
+		}
+	}
 	if q.updateA2ATaskStmt != nil {
 		if cerr := q.updateA2ATaskStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateA2ATaskStmt: %w", cerr)
@@ -758,6 +774,7 @@ type Queries struct {
 	tx                                   *sql.Tx
 	addSessionCostStmt                   *sql.Stmt
 	addSessionUsageStmt                  *sql.Stmt
+	clearSessionGoalStmt                 *sql.Stmt
 	countA2ATasksStmt                    *sql.Stmt
 	countLedgerEntriesStmt               *sql.Stmt
 	createA2ATaskStmt                    *sql.Stmt
@@ -836,6 +853,7 @@ type Queries struct {
 	setA2ADispatchTaskStmt               *sql.Stmt
 	setSessionChannelStmt                *sql.Stmt
 	setSessionForkOriginStmt             *sql.Stmt
+	setSessionGoalStmt                   *sql.Stmt
 	updateA2ATaskStmt                    *sql.Stmt
 	updateA2ATaskIfVersionStmt           *sql.Stmt
 	updateMessageStmt                    *sql.Stmt
@@ -850,6 +868,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		tx:                                   tx,
 		addSessionCostStmt:                   q.addSessionCostStmt,
 		addSessionUsageStmt:                  q.addSessionUsageStmt,
+		clearSessionGoalStmt:                 q.clearSessionGoalStmt,
 		countA2ATasksStmt:                    q.countA2ATasksStmt,
 		countLedgerEntriesStmt:               q.countLedgerEntriesStmt,
 		createA2ATaskStmt:                    q.createA2ATaskStmt,
@@ -928,6 +947,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		setA2ADispatchTaskStmt:               q.setA2ADispatchTaskStmt,
 		setSessionChannelStmt:                q.setSessionChannelStmt,
 		setSessionForkOriginStmt:             q.setSessionForkOriginStmt,
+		setSessionGoalStmt:                   q.setSessionGoalStmt,
 		updateA2ATaskStmt:                    q.updateA2ATaskStmt,
 		updateA2ATaskIfVersionStmt:           q.updateA2ATaskIfVersionStmt,
 		updateMessageStmt:                    q.updateMessageStmt,

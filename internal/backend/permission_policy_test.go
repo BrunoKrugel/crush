@@ -24,6 +24,14 @@ func (c *policyRecordingCoordinator) RunAccepted(ctx context.Context, _ *agent.A
 	return nil, nil
 }
 
+func (c *policyRecordingCoordinator) StartGoal(ctx context.Context, sessionID, text string, budget int) error {
+	return nil
+}
+
+func (c *policyRecordingCoordinator) CancelGoal(ctx context.Context, sessionID string) error {
+	return nil
+}
+
 func TestSendMessagePolicyOverridesWorkspaceContext(t *testing.T) {
 	t.Parallel()
 	b, _ := newTestBackend(t)

@@ -674,6 +674,12 @@ type TodoEnforcementSettings struct {
 	InactivityTimeout time.Duration
 	Enabled           bool
 	HardGate          bool
+	// KillAfterNudgesSet reports whether the kill threshold was
+	// configured explicitly, as opposed to carrying the default. Goal
+	// mode reads it: an explicit threshold says how many ignored
+	// continuations to put up with, while the default says nothing and
+	// leaves the goal's own turn budget in charge.
+	KillAfterNudgesSet bool
 }
 
 const (
@@ -730,6 +736,7 @@ func ResolveTodoEnforcement(global, over *TodoEnforcementConfig) TodoEnforcement
 	}
 	if merged.KillAfterNudges != nil {
 		settings.KillAfterNudges = int(*merged.KillAfterNudges)
+		settings.KillAfterNudgesSet = true
 	}
 	if merged.StallWindow != nil {
 		settings.StallWindow = time.Duration(*merged.StallWindow)

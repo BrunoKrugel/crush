@@ -552,6 +552,10 @@ func (c *Commands) defaultCommands() []*CommandItem {
 	if c.hasSession {
 		commands = append(commands, NewCommandItem(c.com.Styles, "summarize", "Summarize Session", "/compact", ActionSummarize{SessionID: c.sessionID}))
 		commands = append(commands, NewCommandItem(c.com.Styles, "fork_session", "Fork Conversation", "", ActionForkSession{SessionID: c.sessionID}).WithAliases("fork"))
+		commands = append(commands, NewCommandItem(c.com.Styles, "goal_mode", "Goal Mode", "/goal", ActionGoalMode{
+			SessionID: c.sessionID,
+			Arguments: goalArguments(),
+		}).WithAliases("goal"))
 	}
 
 	// Add reasoning toggle for models that support it
@@ -724,4 +728,22 @@ func compactArguments() []commands.Argument {
 		Title:       "Instructions",
 		Description: `e.g. "focus on the failing tests"`,
 	}}
+}
+
+// goalArguments are the fields the goal mode dialog collects: the goal
+// itself, and the number of turns it may consume.
+func goalArguments() []commands.Argument {
+	return []commands.Argument{
+		{
+			ID:          GoalTextArg,
+			Title:       "Goal",
+			Description: `e.g. "make the failing tests pass"`,
+			Required:    true,
+		},
+		{
+			ID:          GoalBudgetArg,
+			Title:       "Turn budget",
+			Description: "how many turns the goal may use (default 25)",
+		},
+	}
 }

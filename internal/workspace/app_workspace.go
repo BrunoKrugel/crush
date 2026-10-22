@@ -188,6 +188,24 @@ func (w *AppWorkspace) AgentRunChannel(ctx context.Context, channel, sessionID, 
 	return err
 }
 
+// AgentStartGoal starts goal mode on a session: the goal is recorded on
+// the session, and the first turn runs with the goal text as its
+// prompt. The loop's continuation turns follow it.
+func (w *AppWorkspace) AgentStartGoal(ctx context.Context, sessionID, text string, budget int) error {
+	if w.app.AgentCoordinator == nil {
+		return errors.New("agent coordinator not initialized")
+	}
+	return w.app.AgentCoordinator.StartGoal(ctx, sessionID, text, budget)
+}
+
+// AgentCancelGoal stops goal mode on a session.
+func (w *AppWorkspace) AgentCancelGoal(ctx context.Context, sessionID string) error {
+	if w.app.AgentCoordinator == nil {
+		return errors.New("agent coordinator not initialized")
+	}
+	return w.app.AgentCoordinator.CancelGoal(ctx, sessionID)
+}
+
 func (w *AppWorkspace) AgentRunShellCommand(ctx context.Context, sessionID, command string, termWidth int, onProgress func(string), isFirstMessage bool) (proto.ShellCommandResponse, error) {
 	var persist shell.PersistFunc
 	if sessionID != "" {

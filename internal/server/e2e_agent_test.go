@@ -166,6 +166,14 @@ func (c *scriptedCoordinator) RunAccepted(ctx context.Context, accept *agent.Acc
 	return c.Run(ctx, sessionID, prompt, attachments...)
 }
 
+func (c *scriptedCoordinator) StartGoal(ctx context.Context, sessionID, text string, budget int) error {
+	return nil
+}
+
+func (c *scriptedCoordinator) CancelGoal(ctx context.Context, sessionID string) error {
+	return nil
+}
+
 func (c *scriptedCoordinator) BeginAccepted(string) *agent.AcceptedRun { return nil }
 
 func (c *scriptedCoordinator) Cancel(sessionID string) {

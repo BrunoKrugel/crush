@@ -162,6 +162,14 @@ type Workspace interface {
 	AgentRun(ctx context.Context, sessionID, prompt string, attachments ...message.Attachment) error
 	AgentRunChannel(ctx context.Context, channel, sessionID, prompt string, attachments ...message.Attachment) error
 	AgentRunShellCommand(ctx context.Context, sessionID, command string, termWidth int, onProgress func(string), isFirstMessage bool) (proto.ShellCommandResponse, error)
+	// AgentStartGoal starts goal mode on a session: the goal text
+	// becomes the session's goal, and the agent keeps working toward it
+	// — judged after every turn — until the goal is met, its turn
+	// budget runs out, or the goal is stopped. A budget of zero means
+	// the goal mode's default.
+	AgentStartGoal(ctx context.Context, sessionID, text string, budget int) error
+	// AgentCancelGoal stops goal mode on a session.
+	AgentCancelGoal(ctx context.Context, sessionID string) error
 	AgentCancel(sessionID string)
 	AgentIsBusy() bool
 	AgentIsSessionBusy(sessionID string) bool

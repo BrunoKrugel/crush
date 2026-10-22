@@ -42,6 +42,14 @@ func (s *stubCoordinator) BeginAccepted(sessionID string) *agent.AcceptedRun {
 	return nil
 }
 
+func (s *stubCoordinator) StartGoal(ctx context.Context, sessionID, text string, budget int) error {
+	return nil
+}
+
+func (s *stubCoordinator) CancelGoal(ctx context.Context, sessionID string) error {
+	return nil
+}
+
 func (s *stubCoordinator) Cancel(string) {}
 
 func (s *stubCoordinator) CancelAll() {}
