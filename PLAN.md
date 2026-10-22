@@ -18,7 +18,7 @@ everything touching `workspace`/`server`/TUI is a rewrite.
 | 2 | Conversation forking (depends on #1) | M | **Done** (2026-10-21) |
 | 3 | Swarm — cross-session messaging | M | Not started |
 | 4 | Slash commands + `/export` | S | Not started |
-| 5 | Goal mode (`/goal` evaluator loop) | M | Not started |
+| 5 | Goal mode (`/goal` evaluator loop) | M | **Done** (2026-10-22) |
 | 6 | New tools: `multi_view`, LSP tools, `context7` | S–M | Not started |
 | 7 | Procedures (then milestones) | S–M | Not started |
 | 8 | Dynamic 1M context modes | S | Not started |
@@ -184,3 +184,34 @@ reconciled with our nudge ladder (the fork's own enforcement machinery):
   a worker) inherit A2A records, cards, inspect mode and every watchdog
   for free, but move the work into a child session. Reconsidered when
   #3 (swarm) lands; not this pass.
+
+## Done: #5 goal mode
+
+Implemented 2026-10-22, per the design above.
+
+- **`internal/goal/`** — the Goal model (text, state: active / met /
+  exhausted / cancelled, turn budget, pending flag) and the evaluator
+  contract: one cheap small-model call per ended turn, verdict JSON,
+  unparseable verdict treated as unmet.
+- **DB** — goal state on the sessions row (migration
+  `20261023000000_add_sessions_goal.sql`), set and read through the
+  session service.
+- **Ladder integration (`internal/agent/goal.go`)** — `goalRun` rides
+  the same PrepareStep hook as the todo nudge: the continuation
+  directive supersedes the nudge and folds its content in (one
+  injection per turn, no channel conflict). Continuations are recorded
+  hidden, so forks leave them behind. After a turn ends
+  (`FinishReasonEndTurn`), the judge queues the continuation turn
+  through the run's own queue handoff — no parallel loop in Run.
+- **Kill mapping** — the `kill_after_nudges` rung counts ignored
+  continuations the way it counts ignored nudges; only dispatched runs
+  can be killed, and the verdict is the kill reason.
+- **Coordinator** — `StartGoal` (records the goal, runs the first turn
+  synchronously) and `CancelGoal` (marks cancelled, notifies).
+- **UI** — a **Goal Mode** palette entry with an arguments dialog for
+  goal text + budget, `/goal off` to cancel, and info messages on
+  met/exhausted/cancelled outcomes.
+- **Tests** — internal/goal (evaluator parsing, budget), internal/agent
+  (goalRun injection, judge, budget accounting), internal/session
+  (goal persistence), internal/ui/model (dialog wiring).
+- Follow-ups: goal-mode header badge, goal-seeded dispatches with #3.
