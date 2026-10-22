@@ -28,6 +28,9 @@
  * @joestump-agent 10/15/2026 - Added the "Memory" page after "Sessions",
  * grouping the Honcho cross-session memory feature with the other
  * session-related pages.
+ *
+ * @joestump-agent 10/22/2026 - Added the "Goal mode" page after "Forking",
+ * so the /goal evaluator loop sits with the other session-scoped features.
  */
 
 import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
@@ -75,6 +78,7 @@ const sidebars: SidebarsConfig = {
         'features/sessions',
         'features/memory',
         'features/forking',
+        'features/goal-mode',
         'features/server-and-workspaces',
         'features/notifications',
       ],
