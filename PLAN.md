@@ -15,7 +15,7 @@ everything touching `workspace`/`server`/TUI is a rewrite.
 | # | Feature | Effort | Status |
 | --- | --- | --- | --- |
 | 1 | Git-backed filesystem snapshots | L | **Done** (2026-10-21) |
-| 2 | Conversation forking (depends on #1) | M | Planned — design below |
+| 2 | Conversation forking (depends on #1) | M | **Done** (2026-10-21) |
 | 3 | Swarm — cross-session messaging | M | Not started |
 | 4 | Slash commands + `/export` | S | Not started |
 | 5 | Goal mode (`/goal` evaluator loop) | M | Not started |
@@ -120,3 +120,38 @@ optionally in a fresh worktree. The original session is untouched.
 (DB+package in one worktree, UI in another; docs parallel). Reuses
 #1's snapshot capture and restore paths so no new git plumbing is
 needed.
+
+## Done: #2 conversation forking
+
+Implemented 2026-10-21, reimplemented from the taigrr design (their
+`docs/specs/WORKTREES_AND_SNAPSHOTS.md` §7).
+
+- **DB** — migration adding `forked_from_session_id`,
+  `forked_from_snapshot_id` and `forked_from_message_id` to `sessions`;
+  `internal/db/sql/fork.sql` with the message copy and the origin
+  update. A copied message gets a fresh id: `messages.id` is the table's
+  primary key, and the source session keeps its own copy.
+- **`internal/fork/`** — the service: resolve the fork point, copy the
+  history up to it, record the origin, and (with snapshots on) capture
+  the fork point on demand and restore it — in place, or into a fresh
+  detached worktree under `.crush/forks`.
+- **`internal/snapshot`** — `RestoreTo` writes a snapshot into a target
+  root, which is how a fork materializes its files in a worktree.
+- **Session model** — the fork lineage is carried on the session.
+- **UI** — a **Fork Conversation** palette entry, a dialog to name the
+  fork and ask for a worktree, and a switch to the new session when the
+  fork succeeds. The fork point defaults to the last prompt.
+- **Wiring** — the snapshot service is now built once and shared by the
+  agent and the fork service; `Workspace.ForkSession` serves the local
+  workspace and reports honestly that a remote client cannot fork.
+- **Tests** — `internal/fork` (copy boundary, message from another
+  session, hidden/steer exclusion, origin, missing snapshot service,
+  derived title) and `internal/ui/model` (fork point selection, fork
+  request arguments).
+- **Docs** — `docs-site/docs/features/forking.md`, fork.md entry,
+  sidebar entry.
+
+Follow-ups: a per-message fork action in the chat view (the palette
+entry forks at the last prompt for now), a server endpoint so a remote
+client can fork, and the worktree reconcile that item #9 will settle
+together with the dispatch worktrees.
