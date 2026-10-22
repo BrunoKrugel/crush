@@ -76,6 +76,19 @@ type (
 		// Worktree asks for a fresh git worktree for the fork.
 		Worktree bool
 	}
+	// ActionGoalMode starts goal mode on a session: the agent keeps
+	// working toward the goal — judged after every turn — until the
+	// goal is met, its turn budget runs out, or the goal is stopped.
+	// The palette entry collects the goal first; Args carries what the
+	// arguments dialog collected.
+	ActionGoalMode struct {
+		// Args holds the collected goal text and turn budget.
+		Args map[string]string
+		// SessionID is the session the goal runs on.
+		SessionID string
+		// Arguments describes the fields the arguments dialog collects.
+		Arguments []commands.Argument
+	}
 	ActionSwitchTheme struct {
 		Theme string
 	}
@@ -200,6 +213,15 @@ type (
 // CompactInstructionsArg is the palette instructions argument ID used by
 // the compact and preview commands.
 const CompactInstructionsArg = "instructions"
+
+// The goal mode's argument IDs: the goal itself, and the optional turn
+// budget it may consume.
+const (
+	// GoalTextArg is the goal the agent works toward.
+	GoalTextArg = "goal"
+	// GoalBudgetArg is the number of turns the goal may consume.
+	GoalBudgetArg = "budget"
+)
 
 // Messages for OAuth2 device flow dialog.
 type (

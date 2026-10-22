@@ -118,6 +118,7 @@ type Session struct {
 	ForkedFromSessionID  sql.NullString `json:"forked_from_session_id"`
 	ForkedFromSnapshotID sql.NullString `json:"forked_from_snapshot_id"`
 	ForkedFromMessageID  sql.NullString `json:"forked_from_message_id"`
+	Goal                 sql.NullString `json:"goal"`
 }
 
 type SkillsDisabledServer struct {

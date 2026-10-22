@@ -40,6 +40,10 @@ const (
 	// with Done set when the session resumes, whether the compaction
 	// succeeded, failed, or was canceled.
 	TypeSummarizing Type = "summarize"
+	// TypeGoal reports a goal-mode outcome: the goal was met, its turn
+	// budget ran out, or it was abandoned. Message carries the
+	// human-readable outcome.
+	TypeGoal Type = "goal"
 )
 
 // Notification represents a domain event published by the agent.

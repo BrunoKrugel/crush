@@ -73,6 +73,21 @@ SET channel = ?
 WHERE id = ?
 RETURNING *;
 
+-- name: SetSessionGoal :one
+-- The goal mode's state travels in one JSON column, so the ladder can
+-- read it with the session and the goal loop can update it without
+-- touching the rest of the row.
+UPDATE sessions
+SET goal = ?
+WHERE id = ?
+RETURNING *;
+
+-- name: ClearSessionGoal :one
+UPDATE sessions
+SET goal = NULL
+WHERE id = ?
+RETURNING *;
+
 -- name: UpdateSessionTitleAndUsage :exec
 UPDATE sessions
 SET

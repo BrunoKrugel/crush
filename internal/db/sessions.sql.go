@@ -53,6 +53,38 @@ func (q *Queries) AddSessionUsage(ctx context.Context, arg AddSessionUsageParams
 	return err
 }
 
+const clearSessionGoal = `-- name: ClearSessionGoal :one
+UPDATE sessions
+SET goal = NULL
+WHERE id = ?
+RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id, goal
+`
+
+func (q *Queries) ClearSessionGoal(ctx context.Context, id string) (Session, error) {
+	row := q.queryRow(ctx, q.clearSessionGoalStmt, clearSessionGoal, id)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.ParentSessionID,
+		&i.Title,
+		&i.MessageCount,
+		&i.PromptTokens,
+		&i.CompletionTokens,
+		&i.Cost,
+		&i.UpdatedAt,
+		&i.CreatedAt,
+		&i.SummaryMessageID,
+		&i.Todos,
+		&i.Channel,
+		&i.SummaryCutMessageID,
+		&i.ForkedFromSessionID,
+		&i.ForkedFromSnapshotID,
+		&i.ForkedFromMessageID,
+		&i.Goal,
+	)
+	return i, err
+}
+
 const createSession = `-- name: CreateSession :one
 INSERT INTO sessions (
     id,
@@ -76,7 +108,7 @@ INSERT INTO sessions (
     null,
     strftime('%s', 'now'),
     strftime('%s', 'now')
-) RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id
+) RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id, goal
 `
 
 type CreateSessionParams struct {
@@ -117,6 +149,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.ForkedFromSessionID,
 		&i.ForkedFromSnapshotID,
 		&i.ForkedFromMessageID,
+		&i.Goal,
 	)
 	return i, err
 }
@@ -132,7 +165,7 @@ func (q *Queries) DeleteSession(ctx context.Context, id string) error {
 }
 
 const getLastSession = `-- name: GetLastSession :one
-SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id
+SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id, goal
 FROM sessions
 WHERE parent_session_id IS NULL
 ORDER BY updated_at DESC
@@ -159,12 +192,13 @@ func (q *Queries) GetLastSession(ctx context.Context) (Session, error) {
 		&i.ForkedFromSessionID,
 		&i.ForkedFromSnapshotID,
 		&i.ForkedFromMessageID,
+		&i.Goal,
 	)
 	return i, err
 }
 
 const getSessionByID = `-- name: GetSessionByID :one
-SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id
+SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id, goal
 FROM sessions
 WHERE id = ? LIMIT 1
 `
@@ -189,12 +223,13 @@ func (q *Queries) GetSessionByID(ctx context.Context, id string) (Session, error
 		&i.ForkedFromSessionID,
 		&i.ForkedFromSnapshotID,
 		&i.ForkedFromMessageID,
+		&i.Goal,
 	)
 	return i, err
 }
 
 const listAllChildSessions = `-- name: ListAllChildSessions :many
-SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id
+SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id, goal
 FROM sessions
 WHERE parent_session_id IS NOT NULL
 ORDER BY parent_session_id, created_at, rowid
@@ -226,6 +261,7 @@ func (q *Queries) ListAllChildSessions(ctx context.Context) ([]Session, error) {
 			&i.ForkedFromSessionID,
 			&i.ForkedFromSnapshotID,
 			&i.ForkedFromMessageID,
+			&i.Goal,
 		); err != nil {
 			return nil, err
 		}
@@ -241,7 +277,7 @@ func (q *Queries) ListAllChildSessions(ctx context.Context) ([]Session, error) {
 }
 
 const listChildSessions = `-- name: ListChildSessions :many
-SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id
+SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id, goal
 FROM sessions
 WHERE parent_session_id = ?
 ORDER BY created_at ASC, rowid ASC
@@ -273,6 +309,7 @@ func (q *Queries) ListChildSessions(ctx context.Context, parentSessionID sql.Nul
 			&i.ForkedFromSessionID,
 			&i.ForkedFromSnapshotID,
 			&i.ForkedFromMessageID,
+			&i.Goal,
 		); err != nil {
 			return nil, err
 		}
@@ -288,7 +325,7 @@ func (q *Queries) ListChildSessions(ctx context.Context, parentSessionID sql.Nul
 }
 
 const listSessions = `-- name: ListSessions :many
-SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id
+SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id, goal
 FROM sessions
 WHERE parent_session_id is NULL
 ORDER BY updated_at DESC
@@ -320,6 +357,7 @@ func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
 			&i.ForkedFromSessionID,
 			&i.ForkedFromSnapshotID,
 			&i.ForkedFromMessageID,
+			&i.Goal,
 		); err != nil {
 			return nil, err
 		}
@@ -355,7 +393,7 @@ const setSessionChannel = `-- name: SetSessionChannel :one
 UPDATE sessions
 SET channel = ?
 WHERE id = ?
-RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id
+RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id, goal
 `
 
 type SetSessionChannelParams struct {
@@ -383,6 +421,47 @@ func (q *Queries) SetSessionChannel(ctx context.Context, arg SetSessionChannelPa
 		&i.ForkedFromSessionID,
 		&i.ForkedFromSnapshotID,
 		&i.ForkedFromMessageID,
+		&i.Goal,
+	)
+	return i, err
+}
+
+const setSessionGoal = `-- name: SetSessionGoal :one
+UPDATE sessions
+SET goal = ?
+WHERE id = ?
+RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id, goal
+`
+
+type SetSessionGoalParams struct {
+	Goal sql.NullString `json:"goal"`
+	ID   string         `json:"id"`
+}
+
+// The goal mode's state travels in one JSON column, so the ladder can
+// read it with the session and the goal loop can update it without
+// touching the rest of the row.
+func (q *Queries) SetSessionGoal(ctx context.Context, arg SetSessionGoalParams) (Session, error) {
+	row := q.queryRow(ctx, q.setSessionGoalStmt, setSessionGoal, arg.Goal, arg.ID)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.ParentSessionID,
+		&i.Title,
+		&i.MessageCount,
+		&i.PromptTokens,
+		&i.CompletionTokens,
+		&i.Cost,
+		&i.UpdatedAt,
+		&i.CreatedAt,
+		&i.SummaryMessageID,
+		&i.Todos,
+		&i.Channel,
+		&i.SummaryCutMessageID,
+		&i.ForkedFromSessionID,
+		&i.ForkedFromSnapshotID,
+		&i.ForkedFromMessageID,
+		&i.Goal,
 	)
 	return i, err
 }
@@ -399,7 +478,7 @@ SET
     todos = ?,
     channel = ?
 WHERE id = ?
-RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id
+RETURNING id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id, todos, channel, summary_cut_message_id, forked_from_session_id, forked_from_snapshot_id, forked_from_message_id, goal
 `
 
 type UpdateSessionParams struct {
@@ -444,6 +523,7 @@ func (q *Queries) UpdateSession(ctx context.Context, arg UpdateSessionParams) (S
 		&i.ForkedFromSessionID,
 		&i.ForkedFromSnapshotID,
 		&i.ForkedFromMessageID,
+		&i.Goal,
 	)
 	return i, err
 }

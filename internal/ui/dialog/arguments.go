@@ -215,6 +215,9 @@ func (a *Arguments) HandleMsg(msg tea.Msg) Action {
 					action.Args = args
 					action.Instructions = args[CompactInstructionsArg]
 					return action
+				case ActionGoalMode:
+					action.Args = args
+					return action
 				}
 			}
 			a.focusInput(a.focused + 1)

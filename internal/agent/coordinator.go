@@ -31,7 +31,8 @@ import (
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/discover"
 	"github.com/charmbracelet/crush/internal/dispatch"
-	"github.com/charmbracelet/crush/internal/filetracker"
+		"github.com/charmbracelet/crush/internal/filetracker"
+	"github.com/charmbracelet/crush/internal/goal"
 	"github.com/charmbracelet/crush/internal/history"
 	"github.com/charmbracelet/crush/internal/honcho"
 	"github.com/charmbracelet/crush/internal/hooks"
@@ -131,6 +132,15 @@ type Coordinator interface {
 	// Same-mode calls are a no-op; the last attach decides the mode.
 	SetInteractive(ctx context.Context, interactive bool) error
 	Run(ctx context.Context, sessionID, prompt string, attachments ...message.Attachment) (*fantasy.AgentResult, error)
+	// StartGoal starts goal mode on a session: the goal is recorded on
+	// the session, and the first turn runs with the goal text as its
+	// prompt. The loop's continuation turns follow it, judged by the
+	// evaluator after every turn. The call returns when the goal loop
+	// ends.
+	StartGoal(ctx context.Context, sessionID, text string, budget int) error
+	// CancelGoal stops goal mode on a session: the goal stops asking
+	// for turns.
+	CancelGoal(ctx context.Context, sessionID string) error
 	// RunAccepted runs a call that was already accepted via
 	// BeginAccepted on the fire-and-forget dispatch path. The handle is
 	// the only carrier of accept-state across the backend.runAgent /
@@ -490,6 +500,55 @@ func (c *coordinator) fireScheduledTask(ctx context.Context, task scheduler.Task
 // Run implements Coordinator.
 func (c *coordinator) Run(ctx context.Context, sessionID string, prompt string, attachments ...message.Attachment) (*fantasy.AgentResult, error) {
 	return c.run(ctx, nil, sessionID, prompt, attachments...)
+}
+
+// StartGoal starts goal mode on a session: the goal is recorded on the
+// session, and the first turn runs with the goal text as its prompt.
+// The loop's continuation turns follow it, judged by the evaluator
+// after every turn.
+//
+// The call returns when the goal loop ends: the goal was met, its turn
+// budget ran out, or the run was canceled.
+func (c *coordinator) StartGoal(ctx context.Context, sessionID, text string, budget int) error {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return errors.New("the goal cannot be empty")
+	}
+	if _, err := c.sessions.SetGoal(ctx, sessionID, &goal.Goal{
+		Text:       text,
+		State:      goal.StateActive,
+		TurnBudget: goal.NormalizeBudget(budget),
+	}); err != nil {
+		return fmt.Errorf("failed to record the goal: %w", err)
+	}
+	_, err := c.run(ctx, nil, sessionID, text)
+	return err
+}
+
+// CancelGoal stops goal mode on a session: the goal stops asking for
+// turns, and the session says the goal was cancelled.
+func (c *coordinator) CancelGoal(ctx context.Context, sessionID string) error {
+	sess, err := c.sessions.Get(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if sess.Goal == nil {
+		return nil
+	}
+	g := *sess.Goal
+	g.State = goal.StateCancelled
+	g.Pending = false
+	if _, err := c.sessions.SetGoal(ctx, sessionID, &g); err != nil {
+		return err
+	}
+	if c.notify != nil {
+		c.notify.Publish(pubsub.CreatedEvent, notify.Notification{
+			SessionID: sessionID,
+			Type:      notify.TypeGoal,
+			Message:   fmt.Sprintf("Goal cancelled: %s", g.Text),
+		})
+	}
+	return nil
 }
 
 // RunAccepted implements Coordinator.

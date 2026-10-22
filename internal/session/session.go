@@ -12,6 +12,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/db"
+	"github.com/charmbracelet/crush/internal/goal"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/zeebo/xxh3"
 )
@@ -57,14 +58,18 @@ type Session struct {
 	Channel              string
 	ID                   string
 	SummaryCutMessageID  string
-	Todos                []Todo
-	Cost                 float64
-	CompletionTokens     int64
-	PromptTokens         int64
-	MessageCount         int64
-	CreatedAt            int64
-	UpdatedAt            int64
-	EstimatedUsage       bool
+	// Goal is the goal-mode state: the goal the session works toward,
+	// its turn budget, and where that budget stands. Nil when the
+	// session runs no goal.
+	Goal                *goal.Goal
+	Todos               []Todo
+	Cost                float64
+	CompletionTokens    int64
+	PromptTokens        int64
+	MessageCount        int64
+	CreatedAt           int64
+	UpdatedAt           int64
+	EstimatedUsage      bool
 }
 
 type Service interface {
@@ -87,6 +92,12 @@ type Service interface {
 	ListAllChildren(ctx context.Context) ([]Session, error)
 	Save(ctx context.Context, session Session) (Session, error)
 	SetChannel(ctx context.Context, sessionID, channel string) (Session, error)
+	// SetGoal records the goal-mode state on a session. The goal has
+	// its own writer, so a full-row save of the rest of the session
+	// cannot clobber it.
+	SetGoal(ctx context.Context, sessionID string, g *goal.Goal) (Session, error)
+	// ClearGoal removes the goal-mode state from a session.
+	ClearGoal(ctx context.Context, sessionID string) (Session, error)
 	UpdateTitleAndUsage(ctx context.Context, sessionID, title string, promptTokens, completionTokens int64, cost float64) error
 	// AddCost atomically adds delta to the session's cost without writing
 	// any other column, so concurrent full-row saves cannot clobber it.
@@ -329,6 +340,42 @@ func (s *service) SetChannel(ctx context.Context, sessionID, channel string) (Se
 	return session, nil
 }
 
+// SetGoal records the goal-mode state on a session. The goal has its
+// own column and its own writer, so a full-row save of the rest of the
+// session cannot clobber it.
+func (s *service) SetGoal(ctx context.Context, sessionID string, g *goal.Goal) (Session, error) {
+	goalJSON, err := marshalGoal(g)
+	if err != nil {
+		return Session{}, err
+	}
+	dbSession, err := s.q.SetSessionGoal(ctx, db.SetSessionGoalParams{
+		ID: sessionID,
+		Goal: sql.NullString{
+			String: goalJSON,
+			Valid:  goalJSON != "",
+		},
+	})
+	if err != nil {
+		return Session{}, err
+	}
+	session := s.fromDBItem(dbSession)
+	s.applyEstimatedUsageState(&session)
+	s.Publish(pubsub.UpdatedEvent, session)
+	return session, nil
+}
+
+// ClearGoal removes the goal-mode state from a session.
+func (s *service) ClearGoal(ctx context.Context, sessionID string) (Session, error) {
+	dbSession, err := s.q.ClearSessionGoal(ctx, sessionID)
+	if err != nil {
+		return Session{}, err
+	}
+	session := s.fromDBItem(dbSession)
+	s.applyEstimatedUsageState(&session)
+	s.Publish(pubsub.UpdatedEvent, session)
+	return session, nil
+}
+
 // UpdateTitleAndUsage updates only the title and usage fields atomically.
 // This is safer than fetching, modifying, and saving the entire session.
 func (s *service) UpdateTitleAndUsage(ctx context.Context, sessionID, title string, promptTokens, completionTokens int64, cost float64) error {
@@ -471,6 +518,10 @@ func (s *service) fromDBItem(item db.Session) Session {
 	if err != nil {
 		slog.Error("Failed to unmarshal todos", "session_id", item.ID, "error", err)
 	}
+	sessionGoal, err := unmarshalGoal(item.Goal.String)
+	if err != nil {
+		slog.Error("Failed to unmarshal goal", "session_id", item.ID, "error", err)
+	}
 	return Session{
 		ID:                   item.ID,
 		ParentSessionID:      item.ParentSessionID.String,
@@ -487,6 +538,7 @@ func (s *service) fromDBItem(item db.Session) Session {
 		SummaryCutMessageID: item.SummaryCutMessageID.String,
 		Cost:                item.Cost,
 		Todos:               todos,
+		Goal:                sessionGoal,
 		Channel:             item.Channel.String,
 		CreatedAt:           item.CreatedAt,
 		UpdatedAt:           item.UpdatedAt,
@@ -513,6 +565,33 @@ func unmarshalTodos(data string) ([]Todo, error) {
 		return []Todo{}, err
 	}
 	return todos, nil
+}
+
+// marshalGoal encodes the goal-mode state for the session's goal
+// column. A nil goal encodes to an empty string, which the column
+// stores as NULL.
+func marshalGoal(g *goal.Goal) (string, error) {
+	if g == nil {
+		return "", nil
+	}
+	data, err := sonic.Marshal(g)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// unmarshalGoal decodes the goal-mode state from the session's goal
+// column. An empty column means the session runs no goal.
+func unmarshalGoal(data string) (*goal.Goal, error) {
+	if data == "" {
+		return nil, nil
+	}
+	var g goal.Goal
+	if err := sonic.Unmarshal([]byte(data), &g); err != nil {
+		return nil, err
+	}
+	return &g, nil
 }
 
 // MCPDisabledServers returns the MCP servers disabled for this

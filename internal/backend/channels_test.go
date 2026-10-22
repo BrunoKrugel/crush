@@ -160,6 +160,14 @@ func (c *recordingCoordinator) RunAccepted(ctx context.Context, _ *agent.Accepte
 	return nil, nil
 }
 
+func (c *recordingCoordinator) StartGoal(ctx context.Context, sessionID, text string, budget int) error {
+	return nil
+}
+
+func (c *recordingCoordinator) CancelGoal(ctx context.Context, sessionID string) error {
+	return nil
+}
+
 func (c *recordingCoordinator) BeginAccepted(string) *agent.AcceptedRun         { return nil }
 func (c *recordingCoordinator) Cancel(string)                                   {}
 func (c *recordingCoordinator) CancelAll()                                      {}
