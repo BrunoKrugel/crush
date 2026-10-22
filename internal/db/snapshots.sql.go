@@ -49,6 +49,34 @@ func (q *Queries) CreateSnapshot(ctx context.Context, arg CreateSnapshotParams) 
 	return i, err
 }
 
+const deleteSnapshotsBySession = `-- name: DeleteSnapshotsBySession :exec
+DELETE FROM snapshots WHERE session_id = ?
+`
+
+func (q *Queries) DeleteSnapshotsBySession(ctx context.Context, sessionID string) error {
+	_, err := q.exec(ctx, q.deleteSnapshotsBySessionStmt, deleteSnapshotsBySession, sessionID)
+	return err
+}
+
+const getLatestSnapshotBySession = `-- name: GetLatestSnapshotBySession :one
+SELECT id, session_id, message_id, parent_snapshot_id, git_commit_hash, description, created_at FROM snapshots WHERE session_id = ? ORDER BY created_at DESC LIMIT 1
+`
+
+func (q *Queries) GetLatestSnapshotBySession(ctx context.Context, sessionID string) (Snapshot, error) {
+	row := q.queryRow(ctx, q.getLatestSnapshotBySessionStmt, getLatestSnapshotBySession, sessionID)
+	var i Snapshot
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.MessageID,
+		&i.ParentSnapshotID,
+		&i.GitCommitHash,
+		&i.Description,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getSnapshot = `-- name: GetSnapshot :one
 SELECT id, session_id, message_id, parent_snapshot_id, git_commit_hash, description, created_at FROM snapshots WHERE id = ?
 `
@@ -78,10 +106,7 @@ type GetSnapshotByMessageIDParams struct {
 }
 
 func (q *Queries) GetSnapshotByMessageID(ctx context.Context, arg GetSnapshotByMessageIDParams) (Snapshot, error) {
-	row := q.queryRow(ctx, q.getSnapshotByMessageIDStmt, getSnapshotByMessageID,
-		arg.SessionID,
-		arg.MessageID,
-	)
+	row := q.queryRow(ctx, q.getSnapshotByMessageIDStmt, getSnapshotByMessageID, arg.SessionID, arg.MessageID)
 	var i Snapshot
 	err := row.Scan(
 		&i.ID,
@@ -128,32 +153,4 @@ func (q *Queries) ListSnapshotsBySession(ctx context.Context, sessionID string) 
 		return nil, err
 	}
 	return items, nil
-}
-
-const getLatestSnapshotBySession = `-- name: GetLatestSnapshotBySession :one
-SELECT id, session_id, message_id, parent_snapshot_id, git_commit_hash, description, created_at FROM snapshots WHERE session_id = ? ORDER BY created_at DESC LIMIT 1
-`
-
-func (q *Queries) GetLatestSnapshotBySession(ctx context.Context, sessionID string) (Snapshot, error) {
-	row := q.queryRow(ctx, q.getLatestSnapshotBySessionStmt, getLatestSnapshotBySession, sessionID)
-	var i Snapshot
-	err := row.Scan(
-		&i.ID,
-		&i.SessionID,
-		&i.MessageID,
-		&i.ParentSnapshotID,
-		&i.GitCommitHash,
-		&i.Description,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const deleteSnapshotsBySession = `-- name: DeleteSnapshotsBySession :exec
-DELETE FROM snapshots WHERE session_id = ?
-`
-
-func (q *Queries) DeleteSnapshotsBySession(ctx context.Context, sessionID string) error {
-	_, err := q.exec(ctx, q.deleteSnapshotsBySessionStmt, deleteSnapshotsBySession, sessionID)
-	return err
 }
