@@ -18,7 +18,6 @@
 - **Session-Based:** maintain multiple work sessions and contexts per project
 - **LSP-Enhanced:** Crush uses LSPs for additional context, just like you do
 - **Extensible:** add capabilities via MCPs (`http`, `stdio`, and `sse`)
-- **UI-Fluent:** models can speak [A2UI](https://a2ui.org) via [a2tea](https://github.com/charmbracelet/a2tea) and Crush will draw it — cards, lists, buttons, and dashboards rendered right in the chat
 - **Channel-Ready:** MCP servers can push real-time events into your session via [Claude Channels](https://code.claude.com/docs/en/channels-reference) — CI failures, webhooks, and more, acting on them without you typing a thing
 - **Multi-Agent:** dispatch background agents into their own git worktrees, steer them with `@handles`, and review their diffs when they finish — see the [multi-agent docs](https://joestump-agent.github.io/crush/agents/overview)
 - **Works Everywhere:** first-class support in every terminal on macOS, Linux, Windows (PowerShell and WSL), Android, FreeBSD, OpenBSD, and NetBSD
@@ -35,7 +34,7 @@ brew install charmbracelet/tap/crush
 # NPM
 npm install -g @charmland/crush
 
-# Arch Linux (btw)
+# Arch Linux
 yay -S crush-bin
 
 # Nix
@@ -176,11 +175,6 @@ not among them and no longer builds.
 
 [modernc]: https://pkg.go.dev/modernc.org/sqlite
 
-> [!WARNING]
-> Productivity may increase when using Crush and you may find yourself nerd
-> sniped when first using the application. If the symptoms persist, join the
-> [Slack][slack] or [Discord][discord] and nerd snipe the rest of us.
-
 ## Getting Started
 
 The quickest way to get started is to choose a [Hyper][hyper] model from model
@@ -236,47 +230,6 @@ That said, you can also set environment variables for preferred providers:
 Also note that Crush can support nearly any provider, including
 [Local Models](#local-models). For more info see
 [Custom Providers](#custom-providers) below.
-
-### By the Way
-
-Is there a provider you’d like to see in Crush? Is there an existing model that needs an update?
-
-Crush’s default model listing is managed in [Catwalk](https://github.com/charmbracelet/catwalk), a community-supported, open source repository of Crush-compatible models, and you’re welcome to contribute.
-
-<a href="https://github.com/charmbracelet/catwalk"><img width="174" height="174" alt="Catwalk Badge" src="https://github.com/user-attachments/assets/95b49515-fe82-4409-b10d-5beb0873787d" /></a>
-
-## A2UI
-
-Sometimes prose isn’t the best answer. When an assistant reply contains an
-[A2UI](https://a2ui.org) message — structured JSON describing UI, wrapped in
-`<a2ui-json>` tags — Crush renders it as an actual element in the chat instead
-of dumping raw JSON:
-
-```text
-<a2ui-json>{"version":"v0.9","updateComponents":{...}}</a2ui-json>
-
-        …becomes…
-
-╭──────────────────────────────╮
-│ Build passed                 │
-│ 142 tests, 0 failures.       │
-│ ──────────────────────────── │
-│ [ Details ]  [ Re-run ]      │
-╰──────────────────────────────╯
-```
-
-Parsing and rendering are handled by
-[a2tea](https://github.com/joestump-agent/a2tea), which speaks the real A2UI
-v0.9 protocol. The core catalog draws with proper styling: text with heading
-variants, bordered cards, columns, rows, lists, dividers, and buttons, plus
-read-only visuals for input components. Chrome is monochrome on purpose, so
-your theme stays yours.
-
-> [!NOTE]
-> Prose around a surface still renders as Markdown, and a block that fails to
-> parse shows an alert rather than silently disappearing. Interactivity
-> (clicking those buttons and sending the result back to the model) is on the
-> roadmap — today surfaces are display-only in the chat.
 
 ## Configuration
 
@@ -1286,23 +1239,7 @@ crush update-providers --help
 
 ## Metrics
 
-Crush records pseudonymous usage metrics (tied to a device-specific hash),
-which maintainers rely on to inform development and support priorities. The
-metrics include solely usage metadata; prompts and responses are NEVER
-collected.
-
-Details on exactly what’s collected are in the source code ([here](https://github.com/charmbracelet/crush/tree/main/internal/event)
-and [here](https://github.com/charmbracelet/crush/blob/main/internal/llm/agent/event.go)).
-
-You can opt out of metrics collection at any time by setting the environment
-variable by setting the following in your environment:
-
-```bash
-export CRUSH_DISABLE_METRICS=1
-```
-
-Crush also respects the [`DO_NOT_TRACK`](https://donottrack.sh/) convention
-which can be enabled via `export DO_NOT_TRACK=1`.
+This fork does not collect any metrics, all related code has been removed.
 
 ## Q&A
 
@@ -1317,23 +1254,6 @@ Installing an extra tool might be needed on Unix-like environments.
 | Linux/BSD + Wayland | `wl-copy` and `wl-paste` |
 | Linux/BSD + X11     | `xclip` or `xsel`        |
 
-## Contributing
-
-See the [contributing guide](https://github.com/charmbracelet/crush?tab=contributing-ov-file#contributing).
-
-## Whatcha think?
-
-We’d love to hear your thoughts on this project. Need help? We gotchu. You can find us on:
-
-- [Twitter](https://twitter.com/charmcli)
-- [Slack][slack]
-- [Discord][discord]
-- [The Fediverse](https://mastodon.social/@charmcli)
-- [Bluesky](https://bsky.app/profile/charm.land)
-
-[slack]: https://charm.land/slack
-[discord]: https://charm.land/discord
-
 ## License
 
 [FSL-1.1-MIT](https://github.com/charmbracelet/crush/raw/main/LICENSE.md)
@@ -1345,4 +1265,4 @@ Part of [Charm](https://charm.land).
 <a href="https://charm.land/"><img alt="The Charm logo" width="400" src="https://stuff.charm.sh/charm-banner-softy.jpg" /></a>
 
 <!--prettier-ignore-->
-Charm热爱开源 • Charm loves open source
+Charm • Charm loves open source
