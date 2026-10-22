@@ -478,10 +478,10 @@ func (s *service) fromDBItem(item db.Session) Session {
 		ForkedFromSnapshotID: item.ForkedFromSnapshotID.String,
 		ForkedFromMessageID:  item.ForkedFromMessageID.String,
 		Title:                item.Title,
-		MessageCount:     item.MessageCount,
-		PromptTokens:     item.PromptTokens,
-		CompletionTokens: item.CompletionTokens,
-		SummaryMessageID: item.SummaryMessageID.String,
+		MessageCount:         item.MessageCount,
+		PromptTokens:         item.PromptTokens,
+		CompletionTokens:     item.CompletionTokens,
+		SummaryMessageID:     item.SummaryMessageID.String,
 		// Deliberately not the column name: keep the domain field adjacent to
 		// the checkpoint it belongs to.
 		SummaryCutMessageID: item.SummaryCutMessageID.String,
