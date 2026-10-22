@@ -129,6 +129,12 @@ type Workspace interface {
 	SaveSession(ctx context.Context, sess session.Session) (session.Session, error)
 	SetSessionChannel(ctx context.Context, sessionID, channel string) (session.Session, error)
 	DeleteSession(ctx context.Context, sessionID string) error
+	// ForkSession branches a conversation: it creates a new session that
+	// continues sourceSessionID up to messageID, and returns it. The
+	// source session is left untouched. A workspace that cannot fork
+	// (a client attached to a remote server, for instance) returns an
+	// error explaining why.
+	ForkSession(ctx context.Context, sourceSessionID, messageID, title string, worktree bool) (session.Session, error)
 	CreateAgentToolSessionID(messageID, toolCallID string) string
 	ParseAgentToolSessionID(sessionID string) (messageID string, toolCallID string, ok bool)
 	// SetCurrentSession reports the session this client is currently

@@ -224,6 +224,13 @@ func (w *ClientWorkspace) DeleteSession(ctx context.Context, sessionID string) e
 	return w.client.DeleteSession(ctx, w.workspaceID(), sessionID)
 }
 
+// ForkSession is not available to a client attached to a remote server:
+// the fork needs the server's snapshot store, and the session it would
+// create lives on the server. Fork from the server's own TUI instead.
+func (w *ClientWorkspace) ForkSession(ctx context.Context, sourceSessionID, messageID, title string, worktree bool) (session.Session, error) {
+	return session.Session{}, errors.New("forking is not available for a client attached to a remote server")
+}
+
 func (w *ClientWorkspace) CreateAgentToolSessionID(messageID, toolCallID string) string {
 	return fmt.Sprintf("%s$$%s", messageID, toolCallID)
 }

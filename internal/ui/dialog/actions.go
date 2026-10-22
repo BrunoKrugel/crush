@@ -59,7 +59,24 @@ type (
 	}
 	ActionToggleTransparentBackground struct{}
 	ActionToggleMouseSupport          struct{}
-	ActionSwitchTheme                 struct {
+	// ActionFork asks the workspace to branch a conversation from a
+	// message: the new session continues the old one up to that point.
+	// ActionForkSession asks the UI to open the fork dialog for the
+	// current session, forking at its last user message.
+	ActionForkSession struct {
+		SessionID string
+	}
+	ActionFork struct {
+		// SessionID is the session to fork from.
+		SessionID string
+		// MessageID is the fork point: the last message the fork keeps.
+		MessageID string
+		// Title names the forked session; empty derives one.
+		Title string
+		// Worktree asks for a fresh git worktree for the fork.
+		Worktree bool
+	}
+	ActionSwitchTheme struct {
 		Theme string
 	}
 	ActionPreviewTheme struct {
