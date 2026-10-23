@@ -939,6 +939,10 @@ func (f *fakeMainAgent) Run(_ context.Context, call SessionAgentCall) (*fantasy.
 
 func (f *fakeMainAgent) IsSessionBusy(sessionID string) bool { return f.busy.Load() }
 
+// SetMemory matches the promoted interface method: without it every
+// updateAgentModels call panics on the nil embedded SessionAgent.
+func (f *fakeMainAgent) SetMemory(memory Memory) {}
+
 func (f *fakeMainAgent) Cancel(sessionID string) { f.cancels.Add(1) }
 
 func (f *fakeMainAgent) ClearQueue(sessionID string) { f.clears.Add(1) }

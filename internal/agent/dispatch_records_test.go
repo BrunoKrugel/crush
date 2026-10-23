@@ -25,6 +25,8 @@ type fakeRecordStore struct {
 	undelivered  []dispatch.UndeliveredDispatch
 	delivered    []string
 	deliveredSet map[string]bool
+	abandoned    []string
+	abandonedSet map[string]bool
 	mu           sync.Mutex
 }
 
@@ -49,6 +51,23 @@ func (f *fakeRecordStore) Delivered(dispatchID string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.deliveredSet[dispatchID], nil
+}
+
+func (f *fakeRecordStore) RecordAbandoned(dispatchID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.abandoned = append(f.abandoned, dispatchID)
+	if f.abandonedSet == nil {
+		f.abandonedSet = make(map[string]bool)
+	}
+	f.abandonedSet[dispatchID] = true
+	return nil
+}
+
+func (f *fakeRecordStore) Abandoned(dispatchID string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.abandonedSet[dispatchID], nil
 }
 
 func (f *fakeRecordStore) UndeliveredTerminal() ([]dispatch.UndeliveredDispatch, error) {
@@ -385,4 +404,62 @@ func TestDispatchDeliveredStampDeduplicatesDelivery(t *testing.T) {
 		3*time.Second, 100*time.Millisecond,
 		"a dispatch whose record is stamped delivered must never be delivered again")
 	require.Equal(t, 1, main.runCount())
+}
+
+// TestDeliveryRetriesBounded pins the runaway-delivery-loop fix: a
+// delivery turn that fails over and over (an out-of-credits provider)
+// re-pends only a bounded number of times, then abandons the payload.
+// Without the bound the retry chain loops forever inside the process,
+// and the same payload loops again after every restart's reconcile.
+func TestDeliveryRetriesBounded(t *testing.T) {
+	c, main, parentID := newDeliveryEnv(t)
+	records := newAgentRecordStore(t)
+	c.dispatchRecords = records
+	seedTerminalRecord(t, records, parentID, "d-loop")
+	main.failures.Store(100)
+
+	c.deliverDispatchResult(t.Context(), parentID, terminalFor(t, records, parentID, "d-loop"))
+	require.Eventually(t, func() bool {
+		return main.runCount() == maxDeliveryRetries+1
+	}, 20*time.Second, 50*time.Millisecond,
+		"exactly one initial turn plus maxDeliveryRetries retries")
+
+	// No further retries: the payload is abandoned, its durable record
+	// stamped abandoned so the next startup's reconcile skips it — the
+	// record leaves the redelivery list without being delivered.
+	require.Never(t, func() bool { return main.runCount() > maxDeliveryRetries+1 },
+		4*time.Second, 100*time.Millisecond,
+		"the retry chain must stop after maxDeliveryRetries failures")
+	require.Empty(t, undeliveredIDs(t, records),
+		"an abandoned record must leave the redelivery list without delivery")
+	require.Eventually(t, func() bool {
+		done, err := records.Abandoned("d-loop")
+		return err == nil && done
+	}, 10*time.Second, 50*time.Millisecond,
+		"the give-up must stamp the durable record abandoned")
+}
+
+// TestReconcileSkipsAbandonedRecords pins the persisted give-up: a
+// terminal record stamped abandoned by a past process's exhausted
+// delivery chain is never re-delivered, so an out-of-credits provider
+// does not loop again on every restart.
+func TestReconcileSkipsAbandonedRecords(t *testing.T) {
+	c, main, parentID := newDeliveryEnv(t)
+	records := newAgentRecordStore(t)
+	c.dispatchRecords = records
+	seedTerminalRecord(t, records, parentID, "d-givenup")
+	require.NoError(t, records.RecordAbandoned("d-givenup"))
+
+	c.ReconcileDispatchDeliveries(t.Context())
+	require.Zero(t, main.runCount(), "an abandoned record must not be re-delivered")
+	require.Empty(t, undeliveredIDs(t, records),
+		"an abandoned record must not appear in the redelivery list")
+}
+
+// terminalFor mirrors seedTerminalRecord's completed shape for a record
+// already seeded under the same dispatch ID.
+func terminalFor(t *testing.T, records dispatch.DispatchRecords, parentID, dispatchID string) dispatch.DispatchResult {
+	t.Helper()
+	terminal := seedTerminalRecord(t, records, parentID, dispatchID)
+	return terminal
 }

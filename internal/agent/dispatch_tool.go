@@ -33,6 +33,14 @@ const DispatchAgentToolName = "dispatch_agent"
 // deterministic failure would otherwise loop back-to-back.
 const dispatchRetryBackoff = 2 * time.Second
 
+// maxDeliveryRetries caps the dispatch-delivery retry chain (#388): a
+// persistently failing delivery (an out-of-credits provider, a dead
+// model) stops re-pending after this many consecutive failures per
+// parent session. The durable records stay undelivered, so the next
+// startup's reconcile can try again; within one process the loop stops
+// instead of spinning an Error turn forever.
+const maxDeliveryRetries = 5
+
 // dispatchResultPersistWindow bounds how long the run waits for the
 // parent turn to persist the dispatch_agent tool result before stamping
 // the terminal result onto it (#410): the run is launched before the
@@ -1558,18 +1566,44 @@ func (c *coordinator) flushPendingResults(parentSessionID string) {
 			// Delivered: stamp the durable records (#355) so a restart
 			// never re-delivers a payload the parent has already seen.
 			stampDelivered()
+			c.dispatchMu.Lock()
+			delete(c.deliveryFailures, parentSessionID)
+			c.dispatchMu.Unlock()
 		case err == nil && result == nil:
 			// The turn was queued behind a busy session; the queued
 			// system-delivery call owns the delivery now, and its
 			// OnConsumed verdict owns the stamp.
 		default:
-			slog.Error("Dispatch result delivery failed; pended for retry", "parent_session", parentSessionID, "error", err)
+			giveUp := false
 			c.dispatchMu.Lock()
-			if c.pendingResults == nil {
-				c.pendingResults = make(map[string][]dispatch.DispatchResult)
+			if c.deliveryFailures == nil {
+				c.deliveryFailures = make(map[string]int)
 			}
-			c.pendingResults[parentSessionID] = append(c.pendingResults[parentSessionID], pending...)
+			c.deliveryFailures[parentSessionID]++
+			failures := c.deliveryFailures[parentSessionID]
+			if failures <= maxDeliveryRetries {
+				if c.pendingResults == nil {
+					c.pendingResults = make(map[string][]dispatch.DispatchResult)
+				}
+				c.pendingResults[parentSessionID] = append(c.pendingResults[parentSessionID], pending...)
+			} else {
+				// Stamp the durable records abandoned so the next
+				// startup's reconcile never picks this payload up
+				// again: a restart retrying it would loop the same
+				// way against the same failing parent. The stamp
+				// runs after the unlock below — recordAbandoned
+				// takes dispatchMu itself.
+				giveUp = true
+				slog.Error("Dispatch result delivery abandoned after repeated failures; restart reconcile will not retry it", "parent_session", parentSessionID, "results", len(pending), "failures", failures)
+			}
 			c.dispatchMu.Unlock()
+			if giveUp {
+				c.recordAbandoned(pending)
+				// Give up: no re-pend, no re-armed flush, so a
+				// persistently failing parent (out-of-credits provider)
+				// stops looping for the rest of this process.
+				return
+			}
 			// The run-end hook that fires inside c.run raced this
 			// re-pend; arm the flush again so the retry is not lost
 			// until the next unrelated run end. A busy parent no-ops.
@@ -1599,6 +1633,25 @@ func (c *coordinator) recordDelivered(delivered []dispatch.DispatchResult) {
 	for _, terminal := range delivered {
 		if err := records.RecordDelivered(terminal.DispatchID); err != nil {
 			slog.Warn("Failed to stamp dispatch result delivered", "dispatch_id", terminal.DispatchID, "error", err)
+		}
+	}
+}
+
+// recordAbandoned stamps the durable record of every result in
+// abandoned (#388 follow-up), so the next startup's reconcile skips
+// the payload instead of restarting a delivery loop against the same
+// failing parent. A no-op without records wired; a failed stamp is
+// logged and leaves that record for the next startup's reconcile.
+func (c *coordinator) recordAbandoned(abandoned []dispatch.DispatchResult) {
+	c.dispatchMu.Lock()
+	records := c.dispatchRecords
+	c.dispatchMu.Unlock()
+	if records == nil {
+		return
+	}
+	for _, terminal := range abandoned {
+		if err := records.RecordAbandoned(terminal.DispatchID); err != nil {
+			slog.Warn("Failed to stamp dispatch result abandoned", "dispatch_id", terminal.DispatchID, "error", err)
 		}
 	}
 }

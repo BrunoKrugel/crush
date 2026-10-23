@@ -117,3 +117,34 @@ func TestRecordStoreDeliveredStampVisibleInRecord(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, undelivered)
 }
+
+func TestRecordStoreAbandonedExcludedFromRedelivery(t *testing.T) {
+	store := newTestRecordStore(t, "host|1|abc")
+
+	started := DispatchResult{
+		DispatchID: "dispatch-1",
+		Handle:     "tester",
+		Branch:     "crush-dispatch-dispatch-1",
+		SessionID:  "agent$$session-1",
+		Status:     StatusRunning,
+	}
+	require.NoError(t, store.RecordStarted(started, "parent-1"))
+	terminal := started
+	terminal.Status = StatusCompleted
+	require.NoError(t, store.RecordTerminal(terminal))
+
+	require.NoError(t, store.RecordAbandoned("dispatch-1"))
+	abandoned, err := store.Abandoned("dispatch-1")
+	require.NoError(t, err)
+	require.True(t, abandoned, "the abandoned stamp must be readable")
+
+	undelivered, err := store.UndeliveredTerminal()
+	require.NoError(t, err)
+	require.Empty(t, undelivered, "an abandoned record must leave the redelivery list")
+
+	// Abandoned is sticky: a second stamp cannot clear it.
+	require.NoError(t, store.RecordAbandoned("dispatch-1"))
+	abandoned, err = store.Abandoned("dispatch-1")
+	require.NoError(t, err)
+	require.True(t, abandoned)
+}

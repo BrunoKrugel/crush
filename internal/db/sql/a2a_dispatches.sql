@@ -70,6 +70,17 @@ SELECT delivered_at FROM a2a_dispatches
 WHERE dispatch_id = @dispatch_id
 LIMIT 1;
 
+-- name: MarkA2ADispatchAbandoned :exec
+UPDATE a2a_dispatches SET
+    abandoned_at = @abandoned_at,
+    updated_at = @abandoned_at
+WHERE dispatch_id = @dispatch_id AND abandoned_at = 0;
+
+-- name: GetA2ADispatchAbandonedAt :one
+SELECT abandoned_at FROM a2a_dispatches
+WHERE dispatch_id = @dispatch_id
+LIMIT 1;
+
 -- name: GetA2ADispatch :one
 SELECT * FROM a2a_dispatches
 WHERE dispatch_id = @dispatch_id
@@ -89,6 +100,7 @@ ORDER BY updated_at;
 SELECT * FROM a2a_dispatches
 WHERE status IN ('completed', 'failed', 'killed')
   AND delivered_at = 0
+  AND abandoned_at = 0
 ORDER BY updated_at;
 
 -- name: ListNonTerminalA2ATasks :many

@@ -43,8 +43,17 @@ type DispatchRecords interface {
 	// already stamped delivered: the dedupe key for every path that
 	// might present the payload to the parent again.
 	Delivered(dispatchID string) (bool, error)
+	// RecordAbandoned stamps the delivery give-up (#388 follow-up):
+	// the retry chain failed the payload maxDeliveryRetries times in
+	// one process, so restart reconcile must not pick it up again —
+	// an out-of-credits provider would loop the same way every start.
+	RecordAbandoned(dispatchID string) error
+	// Abandoned reports whether the dispatch's delivery was stamped
+	// abandoned.
+	Abandoned(dispatchID string) (bool, error)
 	// UndeliveredTerminal returns every terminal record whose payload
 	// was never delivered to its parent — the restart redelivery list.
+	// Abandoned records are excluded.
 	UndeliveredTerminal() ([]UndeliveredDispatch, error)
 }
 
@@ -136,6 +145,28 @@ func (s *SQLiteRecordStore) RecordDelivered(dispatchID string) error {
 func (s *SQLiteRecordStore) Delivered(dispatchID string) (bool, error) {
 	ctx := context.WithoutCancel(context.Background())
 	at, err := s.q.GetA2ADispatchDeliveredAt(ctx, dispatchID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return at != 0, nil
+}
+
+// RecordAbandoned implements [DispatchRecords].
+func (s *SQLiteRecordStore) RecordAbandoned(dispatchID string) error {
+	ctx := context.WithoutCancel(context.Background())
+	return s.q.MarkA2ADispatchAbandoned(ctx, db.MarkA2ADispatchAbandonedParams{
+		DispatchID:  dispatchID,
+		AbandonedAt: time.Now().UnixNano(),
+	})
+}
+
+// Abandoned implements [DispatchRecords].
+func (s *SQLiteRecordStore) Abandoned(dispatchID string) (bool, error) {
+	ctx := context.WithoutCancel(context.Background())
+	at, err := s.q.GetA2ADispatchAbandonedAt(ctx, dispatchID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil

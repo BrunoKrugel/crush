@@ -99,6 +99,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getA2ADispatchStmt, err = db.PrepareContext(ctx, getA2ADispatch); err != nil {
 		return nil, fmt.Errorf("error preparing query GetA2ADispatch: %w", err)
 	}
+	if q.getA2ADispatchAbandonedAtStmt, err = db.PrepareContext(ctx, getA2ADispatchAbandonedAt); err != nil {
+		return nil, fmt.Errorf("error preparing query GetA2ADispatchAbandonedAt: %w", err)
+	}
 	if q.getA2ADispatchBySessionStmt, err = db.PrepareContext(ctx, getA2ADispatchBySession); err != nil {
 		return nil, fmt.Errorf("error preparing query GetA2ADispatchBySession: %w", err)
 	}
@@ -245,6 +248,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.listUserMessagesBySessionStmt, err = db.PrepareContext(ctx, listUserMessagesBySession); err != nil {
 		return nil, fmt.Errorf("error preparing query ListUserMessagesBySession: %w", err)
+	}
+	if q.markA2ADispatchAbandonedStmt, err = db.PrepareContext(ctx, markA2ADispatchAbandoned); err != nil {
+		return nil, fmt.Errorf("error preparing query MarkA2ADispatchAbandoned: %w", err)
 	}
 	if q.markA2ADispatchDeliveredStmt, err = db.PrepareContext(ctx, markA2ADispatchDelivered); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkA2ADispatchDelivered: %w", err)
@@ -416,6 +422,11 @@ func (q *Queries) Close() error {
 	if q.getA2ADispatchStmt != nil {
 		if cerr := q.getA2ADispatchStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getA2ADispatchStmt: %w", cerr)
+		}
+	}
+	if q.getA2ADispatchAbandonedAtStmt != nil {
+		if cerr := q.getA2ADispatchAbandonedAtStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getA2ADispatchAbandonedAtStmt: %w", cerr)
 		}
 	}
 	if q.getA2ADispatchBySessionStmt != nil {
@@ -663,6 +674,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listUserMessagesBySessionStmt: %w", cerr)
 		}
 	}
+	if q.markA2ADispatchAbandonedStmt != nil {
+		if cerr := q.markA2ADispatchAbandonedStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing markA2ADispatchAbandonedStmt: %w", cerr)
+		}
+	}
 	if q.markA2ADispatchDeliveredStmt != nil {
 		if cerr := q.markA2ADispatchDeliveredStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing markA2ADispatchDeliveredStmt: %w", cerr)
@@ -797,6 +813,7 @@ type Queries struct {
 	finishA2ADispatchStmt                *sql.Stmt
 	forkMessageStmt                      *sql.Stmt
 	getA2ADispatchStmt                   *sql.Stmt
+	getA2ADispatchAbandonedAtStmt        *sql.Stmt
 	getA2ADispatchBySessionStmt          *sql.Stmt
 	getA2ADispatchDeliveredAtStmt        *sql.Stmt
 	getA2ATaskStmt                       *sql.Stmt
@@ -846,6 +863,7 @@ type Queries struct {
 	listSnapshotsBySessionStmt           *sql.Stmt
 	listUndeliveredA2ADispatchesStmt     *sql.Stmt
 	listUserMessagesBySessionStmt        *sql.Stmt
+	markA2ADispatchAbandonedStmt         *sql.Stmt
 	markA2ADispatchDeliveredStmt         *sql.Stmt
 	maxLedgerSeqStmt                     *sql.Stmt
 	recordFileReadStmt                   *sql.Stmt
@@ -891,6 +909,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		finishA2ADispatchStmt:                q.finishA2ADispatchStmt,
 		forkMessageStmt:                      q.forkMessageStmt,
 		getA2ADispatchStmt:                   q.getA2ADispatchStmt,
+		getA2ADispatchAbandonedAtStmt:        q.getA2ADispatchAbandonedAtStmt,
 		getA2ADispatchBySessionStmt:          q.getA2ADispatchBySessionStmt,
 		getA2ADispatchDeliveredAtStmt:        q.getA2ADispatchDeliveredAtStmt,
 		getA2ATaskStmt:                       q.getA2ATaskStmt,
@@ -940,6 +959,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listSnapshotsBySessionStmt:           q.listSnapshotsBySessionStmt,
 		listUndeliveredA2ADispatchesStmt:     q.listUndeliveredA2ADispatchesStmt,
 		listUserMessagesBySessionStmt:        q.listUserMessagesBySessionStmt,
+		markA2ADispatchAbandonedStmt:         q.markA2ADispatchAbandonedStmt,
 		markA2ADispatchDeliveredStmt:         q.markA2ADispatchDeliveredStmt,
 		maxLedgerSeqStmt:                     q.maxLedgerSeqStmt,
 		recordFileReadStmt:                   q.recordFileReadStmt,

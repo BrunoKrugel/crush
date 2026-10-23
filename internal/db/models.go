@@ -21,6 +21,7 @@ type A2aDispatch struct {
 	DeliveredAt     int64  `json:"delivered_at"`
 	HostID          string `json:"host_id"`
 	UpdatedAt       int64  `json:"updated_at"`
+	AbandonedAt     int64  `json:"abandoned_at"`
 }
 
 type A2aTask struct {

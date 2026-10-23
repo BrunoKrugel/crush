@@ -39,6 +39,7 @@ type Querier interface {
 	// messages.id is the table's primary key and the source keeps its copy.
 	ForkMessage(ctx context.Context, arg ForkMessageParams) error
 	GetA2ADispatch(ctx context.Context, dispatchID string) (A2aDispatch, error)
+	GetA2ADispatchAbandonedAt(ctx context.Context, dispatchID string) (int64, error)
 	GetA2ADispatchBySession(ctx context.Context, sessionID string) (A2aDispatch, error)
 	GetA2ADispatchDeliveredAt(ctx context.Context, dispatchID string) (int64, error)
 	GetA2ATask(ctx context.Context, id string) (A2aTask, error)
@@ -96,6 +97,7 @@ type Querier interface {
 	ListUndeliveredA2ADispatches(ctx context.Context) ([]A2aDispatch, error)
 	// Backs prompt history, which steps back one entry at a time.
 	ListUserMessagesBySession(ctx context.Context, sessionID string) ([]Message, error)
+	MarkA2ADispatchAbandoned(ctx context.Context, arg MarkA2ADispatchAbandonedParams) error
 	MarkA2ADispatchDelivered(ctx context.Context, arg MarkA2ADispatchDeliveredParams) error
 	MaxLedgerSeq(ctx context.Context, sessionID string) (int64, error)
 	RecordFileRead(ctx context.Context, arg RecordFileReadParams) error

@@ -60,7 +60,7 @@ func (q *Queries) FinishA2ADispatch(ctx context.Context, arg FinishA2ADispatchPa
 }
 
 const getA2ADispatch = `-- name: GetA2ADispatch :one
-SELECT dispatch_id, task_id, session_id, parent_session_id, handle, branch, workspace_path, status, result_json, delivered_at, host_id, updated_at FROM a2a_dispatches
+SELECT dispatch_id, task_id, session_id, parent_session_id, handle, branch, workspace_path, status, result_json, delivered_at, host_id, updated_at, abandoned_at FROM a2a_dispatches
 WHERE dispatch_id = ?1
 LIMIT 1
 `
@@ -81,12 +81,26 @@ func (q *Queries) GetA2ADispatch(ctx context.Context, dispatchID string) (A2aDis
 		&i.DeliveredAt,
 		&i.HostID,
 		&i.UpdatedAt,
+		&i.AbandonedAt,
 	)
 	return i, err
 }
 
+const getA2ADispatchAbandonedAt = `-- name: GetA2ADispatchAbandonedAt :one
+SELECT abandoned_at FROM a2a_dispatches
+WHERE dispatch_id = ?1
+LIMIT 1
+`
+
+func (q *Queries) GetA2ADispatchAbandonedAt(ctx context.Context, dispatchID string) (int64, error) {
+	row := q.queryRow(ctx, q.getA2ADispatchAbandonedAtStmt, getA2ADispatchAbandonedAt, dispatchID)
+	var abandoned_at int64
+	err := row.Scan(&abandoned_at)
+	return abandoned_at, err
+}
+
 const getA2ADispatchBySession = `-- name: GetA2ADispatchBySession :one
-SELECT dispatch_id, task_id, session_id, parent_session_id, handle, branch, workspace_path, status, result_json, delivered_at, host_id, updated_at FROM a2a_dispatches
+SELECT dispatch_id, task_id, session_id, parent_session_id, handle, branch, workspace_path, status, result_json, delivered_at, host_id, updated_at, abandoned_at FROM a2a_dispatches
 WHERE session_id = ?1
 LIMIT 1
 `
@@ -107,6 +121,7 @@ func (q *Queries) GetA2ADispatchBySession(ctx context.Context, sessionID string)
 		&i.DeliveredAt,
 		&i.HostID,
 		&i.UpdatedAt,
+		&i.AbandonedAt,
 	)
 	return i, err
 }
@@ -125,7 +140,7 @@ func (q *Queries) GetA2ADispatchDeliveredAt(ctx context.Context, dispatchID stri
 }
 
 const listNonTerminalA2ADispatches = `-- name: ListNonTerminalA2ADispatches :many
-SELECT dispatch_id, task_id, session_id, parent_session_id, handle, branch, workspace_path, status, result_json, delivered_at, host_id, updated_at FROM a2a_dispatches
+SELECT dispatch_id, task_id, session_id, parent_session_id, handle, branch, workspace_path, status, result_json, delivered_at, host_id, updated_at, abandoned_at FROM a2a_dispatches
 WHERE status = 'running'
 ORDER BY updated_at
 `
@@ -152,6 +167,7 @@ func (q *Queries) ListNonTerminalA2ADispatches(ctx context.Context) ([]A2aDispat
 			&i.DeliveredAt,
 			&i.HostID,
 			&i.UpdatedAt,
+			&i.AbandonedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -206,9 +222,10 @@ func (q *Queries) ListNonTerminalA2ATasks(ctx context.Context) ([]A2aTask, error
 }
 
 const listUndeliveredA2ADispatches = `-- name: ListUndeliveredA2ADispatches :many
-SELECT dispatch_id, task_id, session_id, parent_session_id, handle, branch, workspace_path, status, result_json, delivered_at, host_id, updated_at FROM a2a_dispatches
+SELECT dispatch_id, task_id, session_id, parent_session_id, handle, branch, workspace_path, status, result_json, delivered_at, host_id, updated_at, abandoned_at FROM a2a_dispatches
 WHERE status IN ('completed', 'failed', 'killed')
   AND delivered_at = 0
+  AND abandoned_at = 0
 ORDER BY updated_at
 `
 
@@ -234,6 +251,7 @@ func (q *Queries) ListUndeliveredA2ADispatches(ctx context.Context) ([]A2aDispat
 			&i.DeliveredAt,
 			&i.HostID,
 			&i.UpdatedAt,
+			&i.AbandonedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -246,6 +264,23 @@ func (q *Queries) ListUndeliveredA2ADispatches(ctx context.Context) ([]A2aDispat
 		return nil, err
 	}
 	return items, nil
+}
+
+const markA2ADispatchAbandoned = `-- name: MarkA2ADispatchAbandoned :exec
+UPDATE a2a_dispatches SET
+    abandoned_at = ?1,
+    updated_at = ?1
+WHERE dispatch_id = ?2 AND abandoned_at = 0
+`
+
+type MarkA2ADispatchAbandonedParams struct {
+	AbandonedAt int64  `json:"abandoned_at"`
+	DispatchID  string `json:"dispatch_id"`
+}
+
+func (q *Queries) MarkA2ADispatchAbandoned(ctx context.Context, arg MarkA2ADispatchAbandonedParams) error {
+	_, err := q.exec(ctx, q.markA2ADispatchAbandonedStmt, markA2ADispatchAbandoned, arg.AbandonedAt, arg.DispatchID)
+	return err
 }
 
 const markA2ADispatchDelivered = `-- name: MarkA2ADispatchDelivered :exec

@@ -234,6 +234,7 @@ type coordinator struct {
 	dispatchAgentBuilder func(context.Context, dispatchAgentOptions) (*dispatchedAgent, error)
 	spawnDispatch        func(func())
 	pendingResults       map[string][]dispatch.DispatchResult
+	deliveryFailures     map[string]int
 	dispatchCollector    *dispatch.TodoCollector
 	liveDispatches       map[string]*liveDispatch
 	semanticStore        *semantic.Store
