@@ -155,7 +155,12 @@ type permissionService struct {
 	prePermissionRunner *hooks.Runner
 	// transcript builds the reasoning-blind transcript a permission
 	// hook payload carries. Nil together with the runner.
-	transcriptFn          func(ctx context.Context, sessionID string) (string, error)
+	transcriptFn func(ctx context.Context, sessionID string) (string, error)
+	// permissionHooks is the central list of PermissionHooks (auto
+	// mode, and any other policy hook). Iterated by Request before the
+	// prompt. The shell runner above is also adapted into this list
+	// when SetPrePermission is used, so the two paths compose.
+	permissionHooks       []PermissionHooks
 	autoApproveSessionsMu sync.RWMutex
 	activeRequestMu       sync.Mutex
 	requestMu             sync.Mutex
@@ -239,7 +244,13 @@ func (s *permissionService) GrantPersistent(permission PermissionRequest) bool {
 }
 
 func (s *permissionService) Grant(permission PermissionRequest) bool {
-	return s.resolve(permission, true, false, nil)
+	return s.resolve(permission, true, false, func() {
+		for _, h := range s.permissionHooks {
+			if obs, ok := h.(AutoModeGrantObserver); ok {
+				obs.OnAutoModeGrant(permission.SessionID)
+			}
+		}
+	})
 }
 
 func (s *permissionService) Deny(permission PermissionRequest) bool {
@@ -316,6 +327,47 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 				})
 				return false, nil
 			}
+		}
+	}
+
+	// Central policy hooks (auto mode, and any other PermissionHooks).
+	// Each runs only when a request is about to prompt; allow or deny
+	// short-circuits the prompt entirely, silence falls through.
+	for _, h := range s.permissionHooks {
+		res := h.PrePermission(ctx, PermissionRequest{
+			ToolName: opts.ToolName,
+			Action:   opts.Action,
+			Path:     opts.Path,
+			Params:   opts.Params,
+		})
+		switch res.Decision {
+		case HookDecisionAllow:
+			s.notificationBroker.Publish(pubsub.CreatedEvent, PermissionNotification{
+				SessionID:  opts.SessionID,
+				ToolCallID: opts.ToolCallID,
+				Granted:    true,
+			})
+			return true, nil
+		case HookDecisionDeny:
+			transcript, _ := s.transcriptFn(ctx, opts.SessionID)
+			s.firePermissionDenied(ctx, hooks.PermissionDetail{
+				ToolName:    opts.ToolName,
+				Action:      opts.Action,
+				Path:        opts.Path,
+				Description: opts.Description,
+			}, opts, transcript)
+			s.notificationBroker.Publish(pubsub.CreatedEvent, PermissionNotification{
+				SessionID:  opts.SessionID,
+				ToolCallID: opts.ToolCallID,
+				Denied:     true,
+			})
+			h.PermissionDenied(ctx, PermissionRequest{
+				ToolName: opts.ToolName,
+				Action:   opts.Action,
+				Path:     opts.Path,
+				Params:   opts.Params,
+			})
+			return false, nil
 		}
 	}
 
@@ -441,6 +493,16 @@ func (s *permissionService) firePermissionDenied(ctx context.Context, detail hoo
 func (s *permissionService) SetPrePermission(runner *hooks.Runner, transcript func(ctx context.Context, sessionID string) (string, error)) {
 	s.prePermissionRunner = runner
 	s.transcriptFn = transcript
+	if runner != nil {
+		s.permissionHooks = append(s.permissionHooks, NewShellPermissionHooks(runner, transcript))
+	}
+}
+
+// SetPermissionHooks replaces the central list of policy hooks. The
+// shell PrePermission runner is additive: SetPrePermission must be
+// called first if it is wanted.
+func (s *permissionService) SetPermissionHooks(hooks ...PermissionHooks) {
+	s.permissionHooks = hooks
 }
 
 func (s *permissionService) SkipRequests() bool {
