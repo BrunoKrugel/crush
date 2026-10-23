@@ -121,6 +121,7 @@ type Service interface {
 	SetSkipRequests(skip bool)
 	SkipRequests() bool
 	SubscribeNotifications(ctx context.Context) <-chan pubsub.Event[PermissionNotification]
+	SetPermissionHooks(hooks ...PermissionHooks)
 	// SetPrePermission wires the permission hook events: PrePermission
 	// runs before the prompt (allow or deny short-circuits it, silence
 	// falls through) and PermissionDenied after a denial
@@ -505,6 +506,10 @@ func (s *permissionService) SetPermissionHooks(hooks ...PermissionHooks) {
 	s.permissionHooks = hooks
 }
 
+// SetPermissionHooks is also exposed on the Service interface so the
+// app layer can wire policy hooks without reaching the concrete type.
+// (Declared on Service in permission.go; implemented here.)
+
 func (s *permissionService) SkipRequests() bool {
 	return s.skip.Load()
 }
@@ -538,6 +543,10 @@ type scopedPermissionService struct {
 
 func (s *scopedPermissionService) SkipRequests() bool {
 	return s.parent.SkipRequests()
+}
+
+func (s *scopedPermissionService) SetPermissionHooks(hooks ...PermissionHooks) {
+	s.parent.SetPermissionHooks(hooks...)
 }
 
 func (s *scopedPermissionService) SetSkipRequests(skip bool) {

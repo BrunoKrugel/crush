@@ -21,6 +21,7 @@ import (
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
+	"github.com/charmbracelet/crush/internal/automode"
 	"github.com/charmbracelet/crush/internal/clipboard"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/db"
@@ -42,6 +43,7 @@ import (
 	"github.com/charmbracelet/crush/internal/shell"
 	"github.com/charmbracelet/crush/internal/skills"
 	"github.com/charmbracelet/crush/internal/snapshot"
+	"github.com/charmbracelet/crush/internal/transcript"
 	"github.com/charmbracelet/crush/internal/ui/anim"
 	"github.com/charmbracelet/crush/internal/ui/styles"
 	"github.com/charmbracelet/crush/internal/update"
@@ -148,6 +150,38 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 	// restores the files captured at its fork point. Both are optional.
 	app.snapshots = newSnapshotService(conn, store)
 	app.Forks = fork.New(sessions, messages, q, app.snapshots, store.WorkingDir())
+
+	// Native auto mode is opt-in. When configured, it is wired into the
+	// permission service as a policy hook ahead of the normal prompt.
+	if amCfg, ok := cfg.ResolvedAutoMode(); ok && amCfg.Enabled {
+		am := automode.New(automode.Options{
+			ModelResolver: func(ctx context.Context) (fantasy.LanguageModel, error) {
+				sel, ok := cfg.AutoModeClassifierModel()
+				if !ok {
+					return nil, fmt.Errorf("auto mode classifier model is not configured")
+				}
+				if sel.Provider == "" || sel.Model == "" {
+					return nil, fmt.Errorf("auto mode classifier model is not configured")
+				}
+				// The coordinator already owns provider resolution; this
+				// resolver is a placeholder that reports the selection so
+				// a later wiring pass can build the model. Until then
+				// the classifier runs rules-only.
+				return nil, fmt.Errorf("auto mode classifier wiring pending: %s/%s", sel.Provider, sel.Model)
+			},
+			Transcript: func(ctx context.Context, sessionID string) string {
+				msgs, err := messages.List(ctx, sessionID)
+				if err != nil {
+					return ""
+				}
+				return transcript.Blind(msgs)
+			},
+			FailOpen:    amCfg.FailOpen,
+			Environment: []string{store.WorkingDir()},
+		})
+		app.Permissions.SetPermissionHooks(am)
+		_ = amCfg
+	}
 
 	// Start Honcho memory when it is configured. Nil means the
 	// integration is off, which is the default and costs nothing.

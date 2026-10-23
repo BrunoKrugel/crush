@@ -34,6 +34,7 @@ func (m *mockBashPermissionService) GrantPersistent(req permission.PermissionReq
 }
 
 func (m *mockBashPermissionService) SetSkipRequests(skip bool) {}
+func (m *mockBashPermissionService) SetPermissionHooks(...permission.PermissionHooks) {}
 
 func (m *mockBashPermissionService) SkipRequests() bool {
 	return false
@@ -116,6 +117,7 @@ func (m *recordingPermissionService) GrantPersistent(req permission.PermissionRe
 }
 
 func (m *recordingPermissionService) SetSkipRequests(skip bool) {}
+func (m *recordingPermissionService) SetPermissionHooks(...permission.PermissionHooks) {}
 func (m *recordingPermissionService) SetPrePermission(*hooks.Runner, func(context.Context, string) (string, error)) {
 }
 
