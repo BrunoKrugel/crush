@@ -45,7 +45,7 @@ func Load(ctx context.Context, workingDir, dataDir string, debug bool) (*ConfigS
 
 	configPaths := lookupConfigs(workingDir)
 
-	cfg, loadedPaths, err := loadFromConfigPaths(ctx, configPaths)
+	cfg, loadedPaths, err := loadFromConfigPaths(ctx, configPaths, userLevelConfigPathCount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config from paths %v: %w", configPaths, err)
 	}
@@ -98,6 +98,15 @@ func Load(ctx context.Context, workingDir, dataDir string, debug bool) (*ConfigS
 	// that names its path (#390).
 	if err := cfg.Options.Dispatch.Validate("options.dispatch"); err != nil {
 		return nil, fmt.Errorf("invalid dispatch configuration: %w", err)
+	}
+
+	// Validate the auto-mode knobs with the same rule: 0 keeps the
+	// documented default, a positive value configures it, and a
+	// negative value is a load error that names its path.
+	if cfg.AutoMode != nil {
+		if err := cfg.AutoMode.Validate("auto_mode"); err != nil {
+			return nil, fmt.Errorf("invalid auto mode configuration: %w", err)
+		}
 	}
 
 	// Validate the A2A TCP listener (#358): a listen address without
@@ -1004,6 +1013,14 @@ func resolveSelectedModels(cfg *Config, knownProviders []catwalk.Provider) (reso
 	return result, nil
 }
 
+// userLevelConfigPathCount is the number of leading entries lookupConfigs
+// prepends from user-controlled locations: the system config, the global
+// user config, its crushrc sibling, and the machine-owned data config.
+// Everything after these entries comes from the project tree. The split
+// matters where scope is a security property: auto mode is user-level
+// only, so a repository must not be able to grant itself auto mode.
+const userLevelConfigPathCount = 4
+
 // lookupConfigs searches config files starting at cwd and walking up
 // through the current project. The upward walk stops at the git
 // working tree root when one can be detected, otherwise at cwd itself,
@@ -1045,7 +1062,7 @@ func lookupConfigs(cwd string) []string {
 	return append(configPaths, foundConfigs...)
 }
 
-func loadFromConfigPaths(ctx context.Context, configPaths []string) (*Config, []string, error) {
+func loadFromConfigPaths(ctx context.Context, configPaths []string, userLevelCount int) (*Config, []string, error) {
 	var configs [][]byte
 	var loaded []string
 
@@ -1055,7 +1072,8 @@ func loadFromConfigPaths(ctx context.Context, configPaths []string) (*Config, []
 	jsonDirKeys := make(map[string]map[string]bool)
 	shDirKeys := make(map[string]map[string]bool)
 
-	for _, path := range configPaths {
+	for i, path := range configPaths {
+		isUserLevel := i < userLevelCount
 		if path == "" {
 			continue
 		}
@@ -1080,6 +1098,7 @@ func loadFromConfigPaths(ctx context.Context, configPaths []string) (*Config, []
 				if !json.Valid(jsonBytes) {
 					return nil, nil, fmt.Errorf("shell config %s produced invalid JSON", path)
 				}
+				jsonBytes = stripProjectAutoMode(path, jsonBytes, isUserLevel)
 				addTopLevelKeys(shDirKeys, dir, jsonBytes)
 				configs = append(configs, jsonBytes)
 				loaded = append(loaded, path)
@@ -1088,6 +1107,7 @@ func loadFromConfigPaths(ctx context.Context, configPaths []string) (*Config, []
 			if !json.Valid(data) {
 				return nil, nil, fmt.Errorf("invalid JSON in config file %s", path)
 			}
+			data = stripProjectAutoMode(path, data, isUserLevel)
 			addTopLevelKeys(jsonDirKeys, dir, data)
 			configs = append(configs, data)
 			loaded = append(loaded, path)
@@ -1120,6 +1140,25 @@ func loadFromConfigPaths(ctx context.Context, configPaths []string) (*Config, []
 		return nil, nil, err
 	}
 	return cfg, loaded, nil
+}
+
+// stripProjectAutoMode removes a top-level auto_mode section from a
+// project-level config layer. Auto mode is user-level only: a repository
+// must not be able to grant itself auto mode. The warning names the file
+// so users who moved an auto_mode block into a repo are not surprised
+// when it silently stops applying.
+func stripProjectAutoMode(path string, data []byte, isUserLevel bool) []byte {
+	if isUserLevel || !gjson.GetBytes(data, "auto_mode").Exists() {
+		return data
+	}
+	slog.Warn("Ignoring project-level auto_mode config",
+		"path", path,
+		"reason", "auto mode is user-level only; a repository must not be able to grant itself auto mode")
+	stripped, err := sjson.DeleteBytes(data, "auto_mode")
+	if err != nil {
+		return data
+	}
+	return stripped
 }
 
 // addTopLevelKeys records the top-level JSON keys present in data into the
