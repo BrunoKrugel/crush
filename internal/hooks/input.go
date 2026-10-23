@@ -27,6 +27,10 @@ type Payload struct {
 	CWD       string          `json:"cwd"`
 	ToolName  string          `json:"tool_name"`
 	ToolInput json.RawMessage `json:"tool_input"`
+	// Transcript carries the reasoning-blind transcript for the
+	// permission events: user prompts and tool calls, with assistant
+	// prose and tool outputs stripped. Empty for every other event.
+	Transcript json.RawMessage `json:"transcript,omitempty"`
 }
 
 // CompactionDetail is the `tool_input` handed to a PreCompact or PostCompact
@@ -44,6 +48,51 @@ type CompactionDetail struct {
 // stdin.
 func BuildCompactionPayload(detail CompactionDetail) string {
 	data, err := sonic.Marshal(detail)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
+}
+
+// PermissionDetail is the tool_input handed to a PrePermission or
+// PermissionDenied hook: the action the permission service was about to
+// ask about.
+type PermissionDetail struct {
+	ToolName    string `json:"tool_name"`
+	Action      string `json:"action"`
+	Path        string `json:"path,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// BuildPermissionPayload renders the detail plus the reasoning-blind
+// transcript as the JSON a permission hook reads on stdin. The transcript
+// carries user prompts and tool calls only — assistant prose and tool
+// outputs are stripped before the payload is built, so a hook can judge
+// intent without reading tool outputs.
+func BuildPermissionPayload(eventName string, detail PermissionDetail, transcriptJSON string) string {
+	toolInput := map[string]any{
+		"tool_name": detail.ToolName,
+		"action":    detail.Action,
+	}
+	if detail.Path != "" {
+		toolInput["path"] = detail.Path
+	}
+	if detail.Description != "" {
+		toolInput["description"] = detail.Description
+	}
+	input, err := sonic.Marshal(toolInput)
+	if err != nil {
+		input = []byte("{}")
+	}
+	p := Payload{
+		Event:     eventName,
+		ToolName:  detail.ToolName,
+		ToolInput: input,
+	}
+	if json.Valid([]byte(transcriptJSON)) {
+		p.Transcript = json.RawMessage(transcriptJSON)
+	}
+	data, err := sonic.Marshal(p)
 	if err != nil {
 		return "{}"
 	}

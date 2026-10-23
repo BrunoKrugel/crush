@@ -2,14 +2,17 @@ package permission
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
 	"sync"
 	"sync/atomic"
+	"time"
 	"uuid"
 
 	"github.com/charmbracelet/crush/internal/csync"
+	"github.com/charmbracelet/crush/internal/hooks"
 	"github.com/charmbracelet/crush/internal/pubsub"
 )
 
@@ -118,6 +121,12 @@ type Service interface {
 	SetSkipRequests(skip bool)
 	SkipRequests() bool
 	SubscribeNotifications(ctx context.Context) <-chan pubsub.Event[PermissionNotification]
+	// SetPrePermission wires the permission hook events: PrePermission
+	// runs before the prompt (allow or deny short-circuits it, silence
+	// falls through) and PermissionDenied after a denial
+	// (fire-and-forget). A nil runner disables them again; the default
+	// service has none, so its behavior is unchanged.
+	SetPrePermission(runner *hooks.Runner, transcript func(ctx context.Context, sessionID string) (string, error))
 }
 
 // PermissionKey is a composite key for session permission lookups.
@@ -137,9 +146,16 @@ type permissionService struct {
 	requestSlot         chan struct{}
 	autoApproveSessions map[string]bool
 	*pubsub.Broker[PermissionRequest]
-	skipFn                func() bool
-	workingDir            string
-	allowedTools          []string
+	skipFn       func() bool
+	workingDir   string
+	allowedTools []string
+	// prePermissionRunner runs the PrePermission and PermissionDenied
+	// hooks. Nil (the default) keeps the service's behavior unchanged:
+	// every call costs one nil check.
+	prePermissionRunner *hooks.Runner
+	// transcript builds the reasoning-blind transcript a permission
+	// hook payload carries. Nil together with the runner.
+	transcriptFn          func(ctx context.Context, sessionID string) (string, error)
 	autoApproveSessionsMu sync.RWMutex
 	activeRequestMu       sync.Mutex
 	requestMu             sync.Mutex
@@ -170,6 +186,21 @@ func (s *permissionService) resolve(permission PermissionRequest, granted, denie
 
 	if onResolve != nil {
 		onResolve()
+	}
+
+	// A user denial also fires the PermissionDenied hooks
+	// fire-and-forget. The detail mirrors the request the prompt
+	// carried.
+	if denied && s.prePermissionRunner != nil {
+		s.firePermissionDenied(context.Background(), hooks.PermissionDetail{
+			ToolName:    permission.ToolName,
+			Action:      permission.Action,
+			Path:        permission.Path,
+			Description: permission.Description,
+		}, CreatePermissionRequest{
+			SessionID:  permission.SessionID,
+			ToolCallID: permission.ToolCallID,
+		}, "")
 	}
 
 	s.notificationBroker.Publish(pubsub.CreatedEvent, PermissionNotification{
@@ -245,6 +276,47 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 			Granted:    true,
 		})
 		return true, nil
+	}
+
+	// The PrePermission hook runs as the last pre-prompt check: hooks
+	// that pre-approve (PreToolUse allow) and allowlisted calls never
+	// reach it, so its allow and deny are the only opinions left before
+	// a human is asked. Silence and errors fall through to the prompt;
+	// the hook layer fails open here because the auto-mode layer
+	// (plan-auto.md step 4) makes its own fail-closed call.
+	if s.prePermissionRunner != nil && s.transcriptFn != nil {
+		detail := hooks.PermissionDetail{
+			ToolName:    opts.ToolName,
+			Action:      opts.Action,
+			Path:        opts.Path,
+			Description: opts.Description,
+		}
+		transcript, terr := s.transcriptFn(ctx, opts.SessionID)
+		if terr != nil {
+			slog.Warn("Failed to build the PrePermission transcript", "error", terr)
+		}
+		agg, herr := s.prePermissionRunner.RunPermission(ctx, hooks.EventPrePermission, opts.SessionID, detail, transcript)
+		if herr != nil {
+			slog.Warn("PrePermission hooks failed", "error", herr)
+		} else {
+			switch agg.Decision {
+			case hooks.DecisionAllow:
+				s.notificationBroker.Publish(pubsub.CreatedEvent, PermissionNotification{
+					SessionID:  opts.SessionID,
+					ToolCallID: opts.ToolCallID,
+					Granted:    true,
+				})
+				return true, nil
+			case hooks.DecisionDeny:
+				s.firePermissionDenied(ctx, detail, opts, transcript)
+				s.notificationBroker.Publish(pubsub.CreatedEvent, PermissionNotification{
+					SessionID:  opts.SessionID,
+					ToolCallID: opts.ToolCallID,
+					Denied:     true,
+				})
+				return false, nil
+			}
+		}
 	}
 
 	s.requestMu.Lock()
@@ -343,6 +415,32 @@ func (s *permissionService) SubscribeNotifications(ctx context.Context) <-chan p
 
 func (s *permissionService) SetSkipRequests(skip bool) {
 	s.skip.Store(skip)
+}
+
+// SetPrePermission wires the permission hook events. The runner
+// executes PrePermission before the prompt (an allow or deny
+// short-circuits it; silence falls through) and PermissionDenied after
+// a denial (fire-and-forget). Either function may be nil together with
+// an empty runner; passing nil disables the events again.
+// firePermissionDenied runs the PermissionDenied hooks fire-and-forget:
+// the denial already happened, so a slow or failing hook never blocks
+// or changes it.
+func (s *permissionService) firePermissionDenied(ctx context.Context, detail hooks.PermissionDetail, opts CreatePermissionRequest, transcript string) {
+	if s.prePermissionRunner == nil {
+		return
+	}
+	go func() {
+		fireCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		if _, err := s.prePermissionRunner.RunPermission(fireCtx, hooks.EventPermissionDenied, opts.SessionID, detail, transcript); err != nil {
+			slog.Warn("PermissionDenied hooks failed", "error", err)
+		}
+	}()
+}
+
+func (s *permissionService) SetPrePermission(runner *hooks.Runner, transcript func(ctx context.Context, sessionID string) (string, error)) {
+	s.prePermissionRunner = runner
+	s.transcriptFn = transcript
 }
 
 func (s *permissionService) SkipRequests() bool {

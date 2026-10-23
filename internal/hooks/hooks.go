@@ -21,6 +21,13 @@ const (
 	// session saved. Its decision is recorded, not enforced: the compaction
 	// has already happened.
 	EventPostCompact = "PostCompact"
+	// EventPrePermission fires right before the permission service is
+	// about to prompt the user. An allow or deny short-circuits the
+	// prompt; silence falls through to it.
+	EventPrePermission = "PrePermission"
+	// EventPermissionDenied fires after a permission request has been
+	// denied. Fire-and-forget: it does not block the denial.
+	EventPermissionDenied = "PermissionDenied"
 )
 
 // HaltExitCode is the exit code that halts the whole turn. 2 blocks the

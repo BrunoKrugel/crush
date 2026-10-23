@@ -99,6 +99,19 @@ func (r *Runner) RunCompaction(ctx context.Context, eventName, sessionID string,
 	return r.run(ctx, eventName, sessionID, "", BuildCompactionPayload(detail))
 }
 
+// RunPermission executes the hooks registered for a permission event
+// (PrePermission or PermissionDenied). The matcher still applies, against
+// the tool whose permission is in question. The transcript is the
+// reasoning-blind transcript: user prompts and tool calls, assistant prose
+// and tool outputs stripped.
+//
+// For PrePermission the aggregate's decision is enforced by the caller:
+// allow or deny short-circuits the prompt, silence falls through to it.
+// For PermissionDenied the decision is recorded, never enforced.
+func (r *Runner) RunPermission(ctx context.Context, eventName, sessionID string, detail PermissionDetail, transcriptJSON string) (AggregateResult, error) {
+	return r.run(ctx, eventName, sessionID, detail.ToolName, BuildPermissionPayload(eventName, detail, transcriptJSON))
+}
+
 func (r *Runner) run(ctx context.Context, eventName, sessionID, toolName, toolInputJSON string) (AggregateResult, error) {
 	matching := r.matchingHooks(toolName)
 	if len(matching) == 0 {
