@@ -153,9 +153,6 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 
 	// Native auto mode is opt-in. When configured, it is wired into the
 	// permission service as a policy hook ahead of the normal prompt.
-	if false {
-		_ = cfg
-	}
 	if amCfg, ok := cfg.ResolvedAutoMode(); ok && amCfg.Enabled {
 		am := automode.New(automode.Options{
 			ModelResolver: func(ctx context.Context) (fantasy.LanguageModel, error) {
