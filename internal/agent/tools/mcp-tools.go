@@ -80,7 +80,9 @@ func (m *Tool) Info() fantasy.ToolInfo {
 
 	if input, ok := m.tool.InputSchema.(map[string]any); ok {
 		if props, ok := input["properties"].(map[string]any); ok {
-			parameters = props
+			for name, raw := range props {
+				parameters[name] = describeMCPProperty(name, raw)
+			}
 		}
 		if req, ok := input["required"].([]any); ok {
 			// Convert []any -> []string when elements are strings
@@ -163,4 +165,24 @@ func (m *Tool) Run(ctx context.Context, params fantasy.ToolCall) (fantasy.ToolRe
 	default:
 		return fantasy.NewTextResponse(content), nil
 	}
+}
+
+// describeMCPProperty guarantees a description on a property taken from an MCP
+// tool's inputSchema. MCP servers are free to publish bare property schemas,
+// and strict OpenAI-compatible providers reject the whole request when one
+// arrives without a description.
+func describeMCPProperty(name string, raw any) any {
+	prop, ok := raw.(map[string]any)
+	if !ok {
+		return raw
+	}
+
+	described := make(map[string]any, len(prop)+1)
+	for k, v := range prop {
+		described[k] = v
+	}
+	if desc, ok := described["description"].(string); !ok || desc == "" {
+		described["description"] = name
+	}
+	return described
 }
