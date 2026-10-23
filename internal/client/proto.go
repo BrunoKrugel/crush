@@ -828,6 +828,36 @@ func (c *Client) GetPermissionsSkipRequests(ctx context.Context, id string) (boo
 	return skip.Skip, nil
 }
 
+// SetPermissionsAutoMode enables or disables native auto mode for a workspace.
+func (c *Client) SetPermissionsAutoMode(ctx context.Context, id string, enabled bool) error {
+	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/permissions/auto", id), nil, jsonBody(proto.PermissionAutoRequest{Enabled: enabled}), http.Header{"Content-Type": []string{"application/json"}})
+	if err != nil {
+		return fmt.Errorf("failed to set permissions auto mode: %w", err)
+	}
+	defer rsp.Body.Close()
+	if rsp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to set permissions auto mode: status code %d", rsp.StatusCode)
+	}
+	return nil
+}
+
+// GetPermissionsAutoMode retrieves whether native auto mode is enabled.
+func (c *Client) GetPermissionsAutoMode(ctx context.Context, id string) (bool, error) {
+	rsp, err := c.get(ctx, fmt.Sprintf("/workspaces/%s/permissions/auto", id), nil, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to get permissions auto mode: %w", err)
+	}
+	defer rsp.Body.Close()
+	if rsp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("failed to get permissions auto mode: status code %d", rsp.StatusCode)
+	}
+	var auto proto.PermissionAutoRequest
+	if err := json.NewDecoder(rsp.Body).Decode(&auto); err != nil {
+		return false, fmt.Errorf("failed to decode permissions auto mode: %w", err)
+	}
+	return auto.Enabled, nil
+}
+
 // GetConfig retrieves the workspace-specific configuration.
 func (c *Client) GetConfig(ctx context.Context, id string) (*config.Config, error) {
 	rsp, err := c.get(ctx, fmt.Sprintf("/workspaces/%s/config", id), nil, nil)

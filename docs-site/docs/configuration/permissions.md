@@ -106,6 +106,15 @@ Two things that trip people up:
    filter in front of the normal permission flow; an allowed command still gets
    the usual permission prompt unless you also enable yolo mode.
 
+## Auto mode
+
+[Auto mode](/features/auto-mode) classifies the calls that would otherwise
+prompt. It grants the safe ones, denies the rest with a reason, and escalates
+anything it cannot decide. It is not yolo: a classifier failure still asks
+you, unless you set `fail-open`.
+
+A repository cannot enable it. The setting is user-level only.
+
 ## Yolo mode
 
 ```bash

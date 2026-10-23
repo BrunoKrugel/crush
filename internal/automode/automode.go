@@ -102,6 +102,19 @@ func (a *AutoMode) SetAutoModeEnabled(enabled bool) {
 	a.enabled.Store(enabled)
 }
 
+// AutoModeEnabled reports whether runtime classification is on.
+func (a *AutoMode) AutoModeEnabled() bool {
+	return a.enabled.Load()
+}
+
+// SetModelResolver attaches the classifier model after construction.
+// The app builds auto mode before the coordinator exists, and the
+// coordinator is what knows how to build a provider model. A nil
+// resolver keeps classification rules-only.
+func (a *AutoMode) SetModelResolver(resolver LanguageModelResolver) {
+	a.opts.ModelResolver = resolver
+}
+
 // generateFor builds the GenerateFunc for this evaluation, returning nil
 // when no model is configured (rules-only mode).
 func (a *AutoMode) generateFor(ctx context.Context) GenerateFunc {

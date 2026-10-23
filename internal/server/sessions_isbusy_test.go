@@ -79,10 +79,13 @@ func (s *stubCoordinator) DiscardSummarize(context.Context, string, string) erro
 
 func (s *stubCoordinator) RestoreSummarize(context.Context, string) error { return nil }
 func (s *stubCoordinator) Model() agent.Model                             { return agent.Model{} }
-func (s *stubCoordinator) UpdateModels(context.Context) error             { return nil }
-func (s *stubCoordinator) SetInteractive(context.Context, bool) error     { return nil }
-func (s *stubCoordinator) SetMainAgent(string) error                      { return nil }
-func (s *stubCoordinator) GenerateTitle(context.Context, string, string)  {}
+func (s *stubCoordinator) ClassifierModel(context.Context) (fantasy.LanguageModel, bool, error) {
+	return nil, false, nil
+}
+func (s *stubCoordinator) UpdateModels(context.Context) error            { return nil }
+func (s *stubCoordinator) SetInteractive(context.Context, bool) error    { return nil }
+func (s *stubCoordinator) SetMainAgent(string) error                     { return nil }
+func (s *stubCoordinator) GenerateTitle(context.Context, string, string) {}
 
 // stubSessions is a minimal session.Service that returns a fixed list
 // (and supports Get by ID). All other methods return zero values; the

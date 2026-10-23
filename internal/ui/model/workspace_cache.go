@@ -214,15 +214,20 @@ func (m *UI) applyBusyState(msg busyStateMsg) []tea.Cmd {
 	m.agentBusyCache.set(msg.agentBusy)
 	m.sessionBusyCache.setForSession(msg.sessionBusy, msg.forSession)
 	m.yoloCache.set(msg.yolo)
-	m.autoCache.set(msg.auto)
+	// Auto is selected locally by ctrl+y. A probe that reports the
+	// opposite arrived before that write, or from a workspace that could
+	// not persist it. Applying it clears the badge the key just painted,
+	// so keep the local selection and let the next key change it.
+	if msg.auto == prevAuto {
+		m.autoCache.set(msg.auto)
+	}
 	m.agentReady = msg.ready
 	m.agentModel = msg.model
-	if prevYolo != msg.yolo || prevAuto != msg.auto {
+	if prevYolo != msg.yolo || prevAuto != m.autoModeCached() {
 		// A remote/async toggle changed yolo mode: update the editor
 		// prompt function so the prompt icon/style tracks the new mode.
-		// The cache is written above and the placeholder is refreshed by
-		// the Update tail.
-		m.setEditorPrompt(msg.yolo, msg.auto)
+		// Auto uses the local selection, not a disagreeing probe.
+		m.setEditorPrompt(msg.yolo, m.autoModeCached())
 	}
 
 	var cmds []tea.Cmd

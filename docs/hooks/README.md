@@ -177,7 +177,7 @@ wins when rewriting input, but first deny wins when blocking.
 
 ## Events
 
-Here are the events you can hook into (spoiler: there's currently just one):
+Here are the events you can hook into:
 
 ### PreToolUse
 
@@ -200,6 +200,21 @@ agent spawn sub-agents" still works.
 
 Hooks are keyed by event name. Only `command` is required, and you can omit
 `matcher` to match all tools.
+
+### PrePermission
+
+Fires right before Crush would prompt for a permission. Allow skips the
+prompt. Deny blocks the call and carries the reason back to the model.
+Silence is not an opinion: the normal prompt still runs, and so does
+auto mode when it is enabled.
+
+Matched against the tool name. Same envelope as `PreToolUse`.
+
+### PermissionDenied
+
+Fires after a permission request has been denied. Fire-and-forget: the
+denial already happened, so a hook here cannot undo it and a slow hook
+does not delay it. Use it to log.
 
 ### PreCompact and PostCompact
 

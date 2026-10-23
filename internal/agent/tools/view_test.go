@@ -231,7 +231,8 @@ func (m *mockViewPermissionService) GrantPersistent(req permission.PermissionReq
 	return true
 }
 
-func (m *mockViewPermissionService) SetSkipRequests(skip bool) {}
+func (m *mockViewPermissionService) SetSkipRequests(skip bool)  {}
+func (m *mockViewPermissionService) DenialReason(string) string { return "" }
 
 func (m *mockViewPermissionService) SkipRequests() bool {
 	return false

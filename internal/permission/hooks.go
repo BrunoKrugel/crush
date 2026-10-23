@@ -46,6 +46,7 @@ type PermissionHooks interface {
 // AutoModeToggler is implemented by hooks that can be enabled and
 // disabled at runtime (the native auto mode).
 type AutoModeToggler interface {
+	AutoModeEnabled() bool
 	SetAutoModeEnabled(enabled bool)
 }
 

@@ -108,6 +108,22 @@ hook payload carries the dispatched session's ID. Unlike `agent` and
 `agentic_fetch` they have `bash`, `edit`, `multiedit`, and `write`, so a policy
 that blocks `git push -f` or `rm -rf` stops them too.
 
+### `PrePermission`
+
+Fires when a tool call is about to prompt. An allow skips the prompt. A deny
+blocks the call and the reason is what the model sees. Silence falls through
+to the normal prompt, and to [auto mode](/features/auto-mode) when that is on.
+
+Matched against the tool name, same as `PreToolUse`. This is the slot for a
+policy that should decide only the calls a human would otherwise approve,
+not every call.
+
+### `PermissionDenied`
+
+Fires after a permission request has been denied. It does not block and it
+cannot undo the denial. Use it to log or to notify. A slow hook here does
+not delay the denial.
+
 ## Execution model
 
 Hooks run through Crush's embedded POSIX shell

@@ -149,6 +149,19 @@ delete. Booleans accept `true/false/1/0/yes/no/on/off` in any case.
 Every flag for every one of them is in the
 **[config command reference](/configuration/command-reference)**.
 
+## Auto mode
+
+`auto_mode` configures the [permission classifier](/features/auto-mode). It
+belongs in the user `crushrc`. A project file that sets it is ignored, so a
+repository cannot grant itself auto mode.
+
+```bash
+auto_mode on
+auto_mode model local-llama/gemma4-e4b
+auto_mode timeout 60
+auto_mode fail-open false
+```
+
 ## Todo enforcement and dispatch
 
 `option` also sets the [multi-agent todo ladder](/agents/todo-enforcement) —

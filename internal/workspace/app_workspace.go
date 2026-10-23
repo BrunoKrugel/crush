@@ -401,6 +401,14 @@ func (w *AppWorkspace) PermissionSetSkipRequests(skip bool) {
 	w.app.Permissions.SetSkipRequests(skip)
 }
 
+func (w *AppWorkspace) PermissionAutoMode() bool {
+	return w.app.Permissions.AutoModeEnabled()
+}
+
+func (w *AppWorkspace) PermissionSetAutoMode(enabled bool) {
+	w.app.Permissions.SetAutoModeEnabled(enabled)
+}
+
 // -- Questions --
 
 func (w *AppWorkspace) QuestionAnswer(responses []question.Answer) bool {

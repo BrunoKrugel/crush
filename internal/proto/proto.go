@@ -282,6 +282,12 @@ type PermissionSkipRequest struct {
 	Skip bool `json:"skip"`
 }
 
+// PermissionAutoRequest represents a request to enable or disable native
+// auto mode. Auto mode and skip (yolo) are independent.
+type PermissionAutoRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
 // LSPEventType represents the type of LSP event.
 type LSPEventType string
 

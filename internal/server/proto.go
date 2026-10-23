@@ -868,6 +868,35 @@ func (c *controllerV1) handleGetWorkspacePermissionsSkip(w http.ResponseWriter, 
 	jsonEncode(w, proto.PermissionSkipRequest{Skip: skip})
 }
 
+// handlePostWorkspacePermissionsAuto enables or disables native auto mode.
+func (c *controllerV1) handlePostWorkspacePermissionsAuto(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	var req proto.PermissionAutoRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		c.server.logError(r, "Failed to decode request", "error", err)
+		jsonError(w, http.StatusBadRequest, "failed to decode request")
+		return
+	}
+
+	if err := c.backend.SetPermissionsAuto(id, req.Enabled); err != nil {
+		c.handleError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// handleGetWorkspacePermissionsAuto returns whether native auto mode is enabled.
+func (c *controllerV1) handleGetWorkspacePermissionsAuto(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	enabled, err := c.backend.GetPermissionsAuto(id)
+	if err != nil {
+		c.handleError(w, r, err)
+		return
+	}
+	jsonEncode(w, proto.PermissionAutoRequest{Enabled: enabled})
+}
+
 // handleError maps backend errors to HTTP status codes and writes the
 // JSON error response.
 //

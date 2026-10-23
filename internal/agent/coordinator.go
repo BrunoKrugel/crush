@@ -123,6 +123,10 @@ func isOpenCodeResponsesModel(modelID string) bool {
 
 type Coordinator interface {
 	SetMainAgent(agentName string) error
+	// ClassifierModel builds the auto-mode classifier model from the
+	// current config. ok is false when no model is selected, which is
+	// rules-only mode, not an error.
+	ClassifierModel(ctx context.Context) (fantasy.LanguageModel, bool, error)
 	// SetInteractive flips the coordinator between the interactive and
 	// non-interactive tool palettes in place (#420): the question,
 	// dispatch, message_agent and cancel tools follow the flag in
@@ -1578,6 +1582,21 @@ func (c *coordinator) buildAgentModels(ctx context.Context, isSubAgent bool) (Mo
 // buildModelFromSelected builds one Model from a selected model: the
 // provider is constructed, the model resolved against the provider's
 // catalog, and the request-timeout and Hyper-credits wrappers applied.
+// ClassifierModel builds the auto-mode classifier from the current
+// config. A missing selection is rules-only mode, reported as ok=false
+// rather than an error.
+func (c *coordinator) ClassifierModel(ctx context.Context) (fantasy.LanguageModel, bool, error) {
+	sel, ok := c.cfg.Config().AutoModeClassifierModel()
+	if !ok || sel.Provider == "" || sel.Model == "" {
+		return nil, false, nil
+	}
+	built, err := c.buildModelFromSelected(ctx, sel, true)
+	if err != nil {
+		return nil, false, err
+	}
+	return built.Model, true, nil
+}
+
 func (c *coordinator) buildModelFromSelected(ctx context.Context, selected config.SelectedModel, isSubAgent bool) (Model, error) {
 	providerCfg, ok := c.cfg.Config().Providers.Get(selected.Provider)
 	if !ok {

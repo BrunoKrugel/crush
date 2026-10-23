@@ -31,6 +31,9 @@
  *
  * @joestump-agent 10/22/2026 - Added the "Goal mode" page after "Forking",
  * so the /goal evaluator loop sits with the other session-scoped features.
+ *
+ * @joestump-agent 10/23/2026 - Added the "Auto mode" page after "Hooks",
+ * so the permission classifier sits next to the other permission policy.
  */
 
 import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
@@ -73,6 +76,7 @@ const sidebars: SidebarsConfig = {
         'features/channels',
         'features/skills',
         'features/hooks',
+        'features/auto-mode',
         'features/scheduled-tasks',
         'features/semantic-search',
         'features/sessions',

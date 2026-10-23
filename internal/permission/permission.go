@@ -120,8 +120,21 @@ type Service interface {
 	AutoApproveSession(sessionID string)
 	SetSkipRequests(skip bool)
 	SkipRequests() bool
+	// AutoModeEnabled reports the selected auto-mode state. The selection
+	// is independent of whether a classifier hook is installed.
+	AutoModeEnabled() bool
+	// SetAutoModeEnabled stores the selected auto-mode state and forwards
+	// it to every installed AutoModeToggler. Hooks that do not implement
+	// the interface are left alone. It does not change the yolo (skip)
+	// flag.
+	SetAutoModeEnabled(enabled bool)
 	SubscribeNotifications(ctx context.Context) <-chan pubsub.Event[PermissionNotification]
 	SetPermissionHooks(hooks ...PermissionHooks)
+	// DenialReason returns the categorized reason for the most recent
+	// policy-hook denial of the given tool call, or "" when the denial
+	// was not produced by a policy hook. Tools use it to tell the model
+	// why the call was blocked.
+	DenialReason(toolCallID string) string
 	// SetPrePermission wires the permission hook events: PrePermission
 	// runs before the prompt (allow or deny short-circuits it, silence
 	// falls through) and PermissionDenied after a denial
@@ -161,11 +174,17 @@ type permissionService struct {
 	// mode, and any other policy hook). Iterated by Request before the
 	// prompt. The shell runner above is also adapted into this list
 	// when SetPrePermission is used, so the two paths compose.
-	permissionHooks       []PermissionHooks
+	permissionHooks []PermissionHooks
+	// denialReasons stores the categorized reason of a policy-hook
+	// denial, keyed by tool call ID, so the tool can surface it to
+	// the model. A human denial has no entry.
+	denialReasons         map[string]string
+	denialReasonsMu       sync.Mutex
 	autoApproveSessionsMu sync.RWMutex
 	activeRequestMu       sync.Mutex
 	requestMu             sync.Mutex
 	skip                  atomic.Bool
+	auto                  atomic.Bool
 }
 
 // resolve atomically removes the pending request entry for the given
@@ -335,12 +354,16 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 	// Each runs only when a request is about to prompt; allow or deny
 	// short-circuits the prompt entirely, silence falls through.
 	for _, h := range s.permissionHooks {
-		res := h.PrePermission(ctx, PermissionRequest{
-			ToolName: opts.ToolName,
-			Action:   opts.Action,
-			Path:     opts.Path,
-			Params:   opts.Params,
-		})
+		req := PermissionRequest{
+			SessionID:   opts.SessionID,
+			ToolCallID:  opts.ToolCallID,
+			ToolName:    opts.ToolName,
+			Description: opts.Description,
+			Action:      opts.Action,
+			Params:      opts.Params,
+			Path:        opts.Path,
+		}
+		res := h.PrePermission(ctx, req)
 		switch res.Decision {
 		case HookDecisionAllow:
 			s.notificationBroker.Publish(pubsub.CreatedEvent, PermissionNotification{
@@ -350,7 +373,15 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 			})
 			return true, nil
 		case HookDecisionDeny:
-			transcript, _ := s.transcriptFn(ctx, opts.SessionID)
+			reason := res.Reason
+			if reason == "" {
+				reason = "denied by policy"
+			}
+			s.rememberDenial(opts.ToolCallID, reason)
+			var transcript string
+			if s.transcriptFn != nil {
+				transcript, _ = s.transcriptFn(ctx, opts.SessionID)
+			}
 			s.firePermissionDenied(ctx, hooks.PermissionDetail{
 				ToolName:    opts.ToolName,
 				Action:      opts.Action,
@@ -362,12 +393,7 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 				ToolCallID: opts.ToolCallID,
 				Denied:     true,
 			})
-			h.PermissionDenied(ctx, PermissionRequest{
-				ToolName: opts.ToolName,
-				Action:   opts.Action,
-				Path:     opts.Path,
-				Params:   opts.Params,
-			})
+			h.PermissionDenied(ctx, req)
 			return false, nil
 		}
 	}
@@ -470,6 +496,19 @@ func (s *permissionService) SetSkipRequests(skip bool) {
 	s.skip.Store(skip)
 }
 
+func (s *permissionService) AutoModeEnabled() bool {
+	return s.auto.Load()
+}
+
+func (s *permissionService) SetAutoModeEnabled(enabled bool) {
+	s.auto.Store(enabled)
+	for _, h := range s.permissionHooks {
+		if toggler, ok := h.(AutoModeToggler); ok {
+			toggler.SetAutoModeEnabled(enabled)
+		}
+	}
+}
+
 // SetPrePermission wires the permission hook events. The runner
 // executes PrePermission before the prompt (an allow or deny
 // short-circuits it; silence falls through) and PermissionDenied after
@@ -494,21 +533,53 @@ func (s *permissionService) firePermissionDenied(ctx context.Context, detail hoo
 func (s *permissionService) SetPrePermission(runner *hooks.Runner, transcript func(ctx context.Context, sessionID string) (string, error)) {
 	s.prePermissionRunner = runner
 	s.transcriptFn = transcript
-	if runner != nil {
-		s.permissionHooks = append(s.permissionHooks, NewShellPermissionHooks(runner, transcript))
-	}
+	s.permissionHooks = append(withoutShellHooks(s.permissionHooks), NewShellPermissionHooks(runner, transcript))
 }
 
-// SetPermissionHooks replaces the central list of policy hooks. The
-// shell PrePermission runner is additive: SetPrePermission must be
-// called first if it is wanted.
+// SetPermissionHooks replaces the policy hooks without dropping the
+// shell PrePermission adapter. The two setters compose in either order.
 func (s *permissionService) SetPermissionHooks(hooks ...PermissionHooks) {
-	s.permissionHooks = hooks
+	shell := shellHooksOf(s.permissionHooks)
+	s.permissionHooks = append(append([]PermissionHooks{}, hooks...), shell...)
 }
 
-// SetPermissionHooks is also exposed on the Service interface so the
-// app layer can wire policy hooks without reaching the concrete type.
-// (Declared on Service in permission.go; implemented here.)
+func shellHooksOf(hooks []PermissionHooks) []PermissionHooks {
+	var shell []PermissionHooks
+	for _, h := range hooks {
+		if _, ok := h.(*shellPermissionHooks); ok {
+			shell = append(shell, h)
+		}
+	}
+	return shell
+}
+
+func withoutShellHooks(hooks []PermissionHooks) []PermissionHooks {
+	kept := make([]PermissionHooks, 0, len(hooks))
+	for _, h := range hooks {
+		if _, ok := h.(*shellPermissionHooks); ok {
+			continue
+		}
+		kept = append(kept, h)
+	}
+	return kept
+}
+
+// DenialReason returns the categorized reason for the most recent
+// policy-hook denial of the given tool call.
+func (s *permissionService) DenialReason(toolCallID string) string {
+	s.denialReasonsMu.Lock()
+	defer s.denialReasonsMu.Unlock()
+	return s.denialReasons[toolCallID]
+}
+
+func (s *permissionService) rememberDenial(toolCallID, reason string) {
+	s.denialReasonsMu.Lock()
+	defer s.denialReasonsMu.Unlock()
+	if s.denialReasons == nil {
+		s.denialReasons = make(map[string]string)
+	}
+	s.denialReasons[toolCallID] = reason
+}
 
 func (s *permissionService) SkipRequests() bool {
 	return s.skip.Load()
@@ -549,8 +620,20 @@ func (s *scopedPermissionService) SetPermissionHooks(hooks ...PermissionHooks) {
 	s.parent.SetPermissionHooks(hooks...)
 }
 
+func (s *scopedPermissionService) DenialReason(toolCallID string) string {
+	return s.parent.DenialReason(toolCallID)
+}
+
 func (s *scopedPermissionService) SetSkipRequests(skip bool) {
 	s.parent.SetSkipRequests(skip)
+}
+
+func (s *scopedPermissionService) AutoModeEnabled() bool {
+	return s.parent.AutoModeEnabled()
+}
+
+func (s *scopedPermissionService) SetAutoModeEnabled(enabled bool) {
+	s.parent.SetAutoModeEnabled(enabled)
 }
 
 // NewScopedPermissionService returns a service whose Request checks

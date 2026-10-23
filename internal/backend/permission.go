@@ -58,3 +58,25 @@ func (b *Backend) GetPermissionsSkip(workspaceID string) (bool, error) {
 
 	return ws.Permissions.SkipRequests(), nil
 }
+
+// SetPermissionsAuto enables or disables native auto mode. It does not
+// change the skip (yolo) flag.
+func (b *Backend) SetPermissionsAuto(workspaceID string, enabled bool) error {
+	ws, err := b.GetWorkspace(workspaceID)
+	if err != nil {
+		return err
+	}
+
+	ws.Permissions.SetAutoModeEnabled(enabled)
+	return nil
+}
+
+// GetPermissionsAuto returns whether native auto mode is enabled.
+func (b *Backend) GetPermissionsAuto(workspaceID string) (bool, error) {
+	ws, err := b.GetWorkspace(workspaceID)
+	if err != nil {
+		return false, err
+	}
+
+	return ws.Permissions.AutoModeEnabled(), nil
+}

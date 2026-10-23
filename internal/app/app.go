@@ -96,6 +96,10 @@ type App struct {
 	// snapshots captures the working tree at each user message. Nil
 	// when snapshots are disabled or unsupported for the project.
 	snapshots *snapshot.Service
+	// autoMode is the native auto-mode policy hook. Nil unless auto
+	// mode is enabled in user config. The classifier model is attached
+	// after the coordinator exists.
+	autoMode *automode.AutoMode
 }
 
 // New initializes a new application instance. skillsMgr carries the
@@ -153,22 +157,10 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 
 	// Native auto mode is opt-in. When configured, it is wired into the
 	// permission service as a policy hook ahead of the normal prompt.
+	// The classifier model is built later, once the coordinator exists;
+	// until SetModelResolver runs, classification is rules-only.
 	if amCfg, ok := cfg.ResolvedAutoMode(); ok && amCfg.Enabled {
-		am := automode.New(automode.Options{
-			ModelResolver: func(ctx context.Context) (fantasy.LanguageModel, error) {
-				sel, ok := cfg.AutoModeClassifierModel()
-				if !ok {
-					return nil, fmt.Errorf("auto mode classifier model is not configured")
-				}
-				if sel.Provider == "" || sel.Model == "" {
-					return nil, fmt.Errorf("auto mode classifier model is not configured")
-				}
-				// The coordinator already owns provider resolution; this
-				// resolver is a placeholder that reports the selection so
-				// a later wiring pass can build the model. Until then
-				// the classifier runs rules-only.
-				return nil, fmt.Errorf("auto mode classifier wiring pending: %s/%s", sel.Provider, sel.Model)
-			},
+		app.autoMode = automode.New(automode.Options{
 			Transcript: func(ctx context.Context, sessionID string) string {
 				msgs, err := messages.List(ctx, sessionID)
 				if err != nil {
@@ -176,13 +168,17 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 				}
 				return transcript.Blind(msgs)
 			},
-			FailOpen:    amCfg.FailOpen,
-			MaxTokens:   int64(amCfg.MaxTokens),
-			Timeout:     time.Duration(amCfg.TimeoutSeconds) * time.Second,
-			Environment: []string{store.WorkingDir()},
+			FailOpen:              amCfg.FailOpen,
+			MaxTokens:             int64(amCfg.MaxTokens),
+			Timeout:               time.Duration(amCfg.TimeoutSeconds) * time.Second,
+			Environment:           amCfg.Environment,
+			PromptStage1File:      amCfg.PromptStage1File,
+			PromptStage2File:      amCfg.PromptStage2File,
+			TranscriptMaxChars:    amCfg.TranscriptMaxChars,
+			MaxConsecutiveDenials: amCfg.MaxConsecutiveDenials,
+			MaxTotalDenials:       amCfg.MaxTotalDenials,
 		})
-		app.Permissions.SetPermissionHooks(am)
-		_ = amCfg
+		app.Permissions.SetPermissionHooks(app.autoMode)
 	}
 
 	// Start Honcho memory when it is configured. Nil means the
@@ -270,6 +266,31 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 // refreshDiscoveredModels updates custom provider models that startup took
 // from the discovery cache. The coordinator is passed in rather than read
 // from app so this goroutine never races a later InitCoderAgent.
+// attachAutoModeClassifier points auto mode at the coordinator's model
+// builder. A coordinator that does not build models leaves auto mode
+// rules-only, which is the tested fallback.
+func (app *App) attachAutoModeClassifier() {
+	if app.autoMode == nil || app.AgentCoordinator == nil {
+		return
+	}
+	builder, ok := app.AgentCoordinator.(interface {
+		ClassifierModel(ctx context.Context) (fantasy.LanguageModel, bool, error)
+	})
+	if !ok {
+		return
+	}
+	app.autoMode.SetModelResolver(func(ctx context.Context) (fantasy.LanguageModel, error) {
+		model, ok, err := builder.ClassifierModel(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, nil
+		}
+		return model, nil
+	})
+}
+
 func (app *App) refreshDiscoveredModels(ctx context.Context, coordinator agent.Coordinator) {
 	defer log.RecoverPanic("app.refreshDiscoveredModels", nil)
 	reloaded, err := app.config.RefreshDiscoveredModels(ctx)
@@ -1040,6 +1061,7 @@ func (app *App) initCoderAgent(ctx context.Context, interactive bool) error {
 		slog.Error("Failed to create coder agent", "err", err)
 		return err
 	}
+	app.attachAutoModeClassifier()
 	// Only the host a working coordinator dispatches through is the one
 	// a UI should watch (#421): a failed build is retried with a new one.
 	app.setA2AHost(a2aFactory)

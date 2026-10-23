@@ -112,9 +112,12 @@ func (s *runCoordinator) DiscardSummarize(context.Context, string, string) error
 
 func (s *runCoordinator) RestoreSummarize(context.Context, string) error { return nil }
 func (s *runCoordinator) Model() agent.Model                             { return agent.Model{} }
-func (s *runCoordinator) UpdateModels(context.Context) error             { return nil }
-func (s *runCoordinator) SetInteractive(context.Context, bool) error     { return nil }
-func (s *runCoordinator) GenerateTitle(context.Context, string, string)  {}
+func (s *runCoordinator) ClassifierModel(context.Context) (fantasy.LanguageModel, bool, error) {
+	return nil, false, nil
+}
+func (s *runCoordinator) UpdateModels(context.Context) error            { return nil }
+func (s *runCoordinator) SetInteractive(context.Context, bool) error    { return nil }
+func (s *runCoordinator) GenerateTitle(context.Context, string, string) {}
 
 func (s *runCoordinator) SetMainAgent(agentName string) error {
 	s.lastMainAgentSet.Store(agentName)
