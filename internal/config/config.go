@@ -56,6 +56,9 @@ func (s SelectedModelType) String() string {
 const (
 	SelectedModelTypeLarge SelectedModelType = "large"
 	SelectedModelTypeSmall SelectedModelType = "small"
+	// SelectedModelTypeAutoMode selects the auto-mode classifier model.
+	// It is stored under auto_mode.classifier, not the models map.
+	SelectedModelTypeAutoMode SelectedModelType = "auto_mode"
 )
 
 const (
@@ -321,6 +324,141 @@ const (
 
 type Permissions struct {
 	AllowedTools []string `json:"allowed_tools,omitempty" jsonschema:"description=List of tools that don't require permission prompts,example=bash,example=view"`
+}
+
+// AutoModeConfig configures Crush's native auto mode: a safety
+// classifier that runs in-process before permission prompts and grants,
+// denies, or defers to the prompt based on static rules and an LLM
+// classifier (see internal/automode). All fields are optional; unset
+// fields use the tested defaults.
+//
+// User-level only: the loader ignores an auto_mode section in a
+// project-level config. A repository must not be able to grant itself
+// auto mode.
+type AutoModeConfig struct {
+	Enabled bool `json:"enabled,omitempty" jsonschema:"description=Enable native auto mode. Intended to be set in user-level config only: a repository should not be able to grant itself auto mode,default=false"`
+	// Classifier selects the LLM used for classification. When
+	// Provider and Model are set they reference an existing provider
+	// and model in this config (e.g. local-llama/gemma4-e4b).
+	// Alternatively, an OpenAI-compatible classifier endpoint can be
+	// pointed at directly with BaseURL (and optionally APIKey)
+	// without a provider entry. Without any classifier selection auto
+	// mode runs rules-only: static allow/deny, ambiguities escalate
+	// to the prompt.
+	Classifier *AutoModeClassifier `json:"classifier,omitempty" jsonschema:"description=Classifier model selection"`
+	// MaxTokens caps the classifier completion length. Reasoning models
+	// need a generous budget. Default 1024.
+	MaxTokens int `json:"max_tokens,omitempty" jsonschema:"description=Max completion tokens for the classifier,default=1024"`
+	// TimeoutSeconds bounds each classification (both LLM stages).
+	// Default 60.
+	TimeoutSeconds int `json:"timeout_seconds,omitempty" jsonschema:"description=Per-evaluation timeout in seconds,default=60"`
+	// FailOpen allows on classifier failure instead of escalating to
+	// the prompt. Default false.
+	FailOpen bool `json:"fail_open,omitempty" jsonschema:"description=Allow on classifier failure instead of escalating,default=false"`
+	// MaxConsecutiveDenials / MaxTotalDenials pause classification when
+	// exceeded, escalating to the prompt. Defaults 3 / 20.
+	MaxConsecutiveDenials int `json:"max_consecutive_denials,omitempty" jsonschema:"description=Consecutive denials before auto mode pauses,default=3"`
+	MaxTotalDenials       int `json:"max_total_denials,omitempty" jsonschema:"description=Total denials before auto mode pauses,default=20"`
+	// Environment is prose describing trusted repos, domains, buckets,
+	// and services, injected into the classifier prompts.
+	Environment []string `json:"environment,omitempty" jsonschema:"description=Prose describing the trusted environment, injected into classifier prompts"`
+	// PromptStage1File / PromptStage2File override the built-in
+	// classifier prompts with template files. Placeholders: {{cwd}},
+	// {{tool}}, {{params}}, {{environment}}, {{transcript}}.
+	PromptStage1File string `json:"prompt_stage1_file,omitempty" jsonschema:"description=Optional stage 1 (fast filter) prompt template file"`
+	PromptStage2File string `json:"prompt_stage2_file,omitempty" jsonschema:"description=Optional stage 2 (chain of thought) prompt template file"`
+	// TranscriptMaxChars caps the reasoning-blind transcript excerpt
+	// passed to the classifier. Default 24000.
+	TranscriptMaxChars int `json:"transcript_max_chars,omitempty" jsonschema:"description=Max characters of transcript passed to the classifier,default=24000"`
+}
+
+// Validate checks the auto-mode knobs: 0 keeps a documented default, a
+// positive value configures it, and a negative value is a load error
+// that names its path. The same rule as the todo enforcement and
+// dispatch knobs.
+func (a *AutoModeConfig) Validate(path string) error {
+	for _, knob := range []struct {
+		field string
+		value int
+	}{
+		{"max_tokens", a.MaxTokens},
+		{"timeout_seconds", a.TimeoutSeconds},
+		{"transcript_max_chars", a.TranscriptMaxChars},
+		{"max_consecutive_denials", a.MaxConsecutiveDenials},
+		{"max_total_denials", a.MaxTotalDenials},
+	} {
+		if knob.value < 0 {
+			return fmt.Errorf("%s.%s must not be negative (got %d)", path, knob.field, knob.value)
+		}
+	}
+	return nil
+}
+
+// ResolvedAutoMode returns the effective auto-mode configuration with
+// defaults applied, and whether auto mode is enabled at all. The second
+// return value is false when no auto_mode block is configured.
+func (c *Config) ResolvedAutoMode() (AutoModeConfig, bool) {
+	if c.AutoMode == nil {
+		return AutoModeConfig{
+			Enabled:               false,
+			FailOpen:              false,
+			MaxTokens:             1024,
+			TimeoutSeconds:        60,
+			MaxConsecutiveDenials: 3,
+			MaxTotalDenials:       20,
+			TranscriptMaxChars:    24000,
+		}, false
+	}
+	e := *c.AutoMode
+	if e.MaxTokens <= 0 {
+		e.MaxTokens = 1024
+	}
+	if e.TimeoutSeconds <= 0 {
+		e.TimeoutSeconds = 60
+	}
+	if e.MaxConsecutiveDenials <= 0 {
+		e.MaxConsecutiveDenials = 3
+	}
+	if e.MaxTotalDenials <= 0 {
+		e.MaxTotalDenials = 20
+	}
+	if e.TranscriptMaxChars <= 0 {
+		e.TranscriptMaxChars = 24000
+	}
+	return e, e.Enabled
+}
+
+// AutoModeClassifierModel resolves the classifier's model selection: the
+// explicit auto_mode.classifier provider/model pair when set, then the
+// small slot, then the large slot — the same fallback order upstream PR
+// #3874 documents. When it reports false, classification runs
+// rules-only. A classifier configured only with a standalone BaseURL
+// (no provider entry) is not resolved here; the agent layer builds that
+// model directly from the endpoint fields.
+func (c *Config) AutoModeClassifierModel() (SelectedModel, bool) {
+	if c.AutoMode != nil && c.AutoMode.Classifier != nil {
+		cl := *c.AutoMode.Classifier
+		if cl.Provider != "" && cl.Model != "" {
+			return SelectedModel{Provider: cl.Provider, Model: cl.Model}, true
+		}
+	}
+	if sel, ok := c.Models[SelectedModelTypeSmall]; ok {
+		return sel, true
+	}
+	if sel, ok := c.Models[SelectedModelTypeLarge]; ok {
+		return sel, true
+	}
+	return SelectedModel{}, false
+}
+
+// AutoModeClassifier selects the classifier model: either by referencing
+// a provider and model id already declared in the providers config, or
+// by pointing at a standalone OpenAI-compatible endpoint with BaseURL.
+type AutoModeClassifier struct {
+	Provider string `json:"provider,omitempty" jsonschema:"description=Provider id from the providers config,example=local-llama"`
+	Model    string `json:"model,omitempty" jsonschema:"description=Model id on that provider,example=gemma4-e4b"`
+	BaseURL  string `json:"base_url,omitempty" jsonschema:"description=Standalone OpenAI-compatible classifier endpoint, bypassing the providers config"`
+	APIKey   string `json:"api_key,omitempty" jsonschema:"description=API key for the standalone classifier endpoint. Supports shell expansion of $VAR and $(command)."`
 }
 
 type TrailerStyle string
@@ -1114,6 +1252,7 @@ type Config struct {
 	Permissions      *Permissions                          `json:"permissions,omitempty" jsonschema:"description=Permission settings for tool usage"`
 	Models           map[SelectedModelType]SelectedModel   `json:"models,omitempty" jsonschema:"description=Model configurations for different model types,example={\"large\":{\"model\":\"gpt-4o\",\"provider\":\"openai\"}}"`
 	Hooks            map[string][]HookConfig               `json:"hooks,omitempty" jsonschema:"description=User-defined shell commands that fire on hook events (e.g. PreToolUse)"`
+	AutoMode         *AutoModeConfig                       `json:"auto_mode,omitempty" jsonschema:"description=Native auto mode: an in-process safety classifier that runs before permission prompts. User-level only: a repository cannot grant itself auto mode"`
 	Honcho           *Honcho                               `json:"honcho,omitempty" jsonschema:"description=Honcho memory integration; gives Crush recall across sessions"`
 	Env              map[string]string                     `json:"env,omitempty" jsonschema:"description=Environment variables to set on startup"`
 	AgentDefinitions map[string]AgentDefinition            `json:"agents,omitempty" jsonschema:"description=Agent definitions: override a built-in agent field by field, or add dispatch agents"`
@@ -1195,6 +1334,14 @@ func (c *Config) cloneForWrite() *Config {
 	nc.Models = maps.Clone(c.Models)
 	nc.RecentModels = maps.Clone(c.RecentModels)
 	nc.MCP = maps.Clone(c.MCP)
+	if c.AutoMode != nil {
+		autoMode := *c.AutoMode
+		if c.AutoMode.Classifier != nil {
+			classifier := *c.AutoMode.Classifier
+			autoMode.Classifier = &classifier
+		}
+		nc.AutoMode = &autoMode
+	}
 	if c.Providers != nil {
 		providers := csync.NewMap[string, ProviderConfig]()
 		for pc := range c.Providers.Seq() {
