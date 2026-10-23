@@ -1344,10 +1344,14 @@ func (c *Config) cloneForWrite() *Config {
 	}
 	if c.Providers != nil {
 		providers := csync.NewMap[string, ProviderConfig]()
-		for pc := range c.Providers.Seq() {
+		for id, pc := range c.Providers.Seq2() {
 			pc.Models = slices.Clone(pc.Models)
 			pc.ChatGPTModels = slices.Clone(pc.ChatGPTModels)
-			providers.Set(pc.ID, pc)
+			// Key by the map key, not pc.ID: providers straight from
+			// the config merge (crushrc custom providers especially)
+			// have an empty ID until configureProviders fills it in,
+			// and keying by it would collapse them all into one "".
+			providers.Set(id, pc)
 		}
 		nc.Providers = providers
 	}

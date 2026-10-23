@@ -267,22 +267,19 @@ func (m *Models) nextModelType() ModelType {
 }
 
 // modelTypeRadioView returns the radio view for model type selection.
-// The auto-mode slot uses the info token so it stays distinct from the
-// large/small radios without a color literal.
 func (m *Models) modelTypeRadioView() string {
 	t := m.com.Styles
 	textStyle := t.Radio.Label
-	autoTextStyle := t.Radio.Label.Foreground(t.Status.ModeBadgeAuto.GetForeground())
 	largeRadioStyle := t.Radio.Off
 	smallRadioStyle := t.Radio.Off
-	autoRadioStyle := t.Radio.Off.Foreground(t.Status.ModeBadgeAuto.GetBackground())
+	autoRadioStyle := t.Radio.Off
 	switch m.modelType {
 	case ModelTypeLarge:
 		largeRadioStyle = t.Radio.On
 	case ModelTypeSmall:
 		smallRadioStyle = t.Radio.On
 	default:
-		autoRadioStyle = t.Radio.On.Foreground(t.Status.ModeBadgeAuto.GetBackground())
+		autoRadioStyle = t.Radio.On
 	}
 
 	largeRadio := largeRadioStyle.Padding(0, 1).Render()
@@ -292,7 +289,7 @@ func (m *Models) modelTypeRadioView() string {
 	return fmt.Sprintf("%s%s  %s%s  %s%s",
 		largeRadio, textStyle.Render(ModelTypeLarge.String()),
 		smallRadio, textStyle.Render(ModelTypeSmall.String()),
-		autoRadio, autoTextStyle.Render(ModelTypeAutoMode.String()))
+		autoRadio, textStyle.Render(ModelTypeAutoMode.String()))
 }
 
 // Draw implements [Dialog].
