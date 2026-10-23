@@ -60,6 +60,7 @@ type countingWorkspace struct {
 	ready             bool
 	sessionBusy       bool
 	yolo              bool
+	auto              bool
 }
 
 func (w *countingWorkspace) AgentIsReady() bool { w.readyCalls++; return w.ready }
@@ -97,6 +98,10 @@ func (w *countingWorkspace) PermissionSetSkipRequests(skip bool) {
 	w.permSetCalls++
 	w.yolo = skip
 }
+
+func (w *countingWorkspace) PermissionAutoMode() bool { return w.auto }
+
+func (w *countingWorkspace) PermissionSetAutoMode(enabled bool) { w.auto = enabled }
 
 func (w *countingWorkspace) AgentClearQueue(string) { w.clearQueueCalls++; w.queued = nil }
 func (w *countingWorkspace) AgentCancel(string)     { w.cancelCalls++ }
@@ -906,7 +911,7 @@ func TestRemoteYoloToggleUpdatesEditorPrompt(t *testing.T) {
 	m.textarea.Focus()
 	m.textarea.SetWidth(40)
 	m.yoloCache.set(false)
-	m.setEditorPrompt(false)
+	m.setEditorPrompt(false, false)
 	normalPrompt := ansi.Strip(m.textarea.View())
 
 	// A remote toggle flips yolo on; delivered via an off-thread refresh.

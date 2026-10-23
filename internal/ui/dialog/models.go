@@ -23,6 +23,9 @@ type ModelType int
 const (
 	ModelTypeLarge ModelType = iota
 	ModelTypeSmall
+	// ModelTypeAutoMode selects the auto-mode classifier. It is stored
+	// on Config.AutoMode.Classifier, not in the large/small models map.
+	ModelTypeAutoMode
 )
 
 // String returns the string representation of the [ModelType].
@@ -32,6 +35,8 @@ func (mt ModelType) String() string {
 		return "Large Task"
 	case ModelTypeSmall:
 		return "Small Task"
+	case ModelTypeAutoMode:
+		return "Auto Mode"
 	default:
 		return "Unknown"
 	}
@@ -44,6 +49,8 @@ func (mt ModelType) Config() config.SelectedModelType {
 		return config.SelectedModelTypeLarge
 	case ModelTypeSmall:
 		return config.SelectedModelTypeSmall
+	case ModelTypeAutoMode:
+		return config.SelectedModelTypeAutoMode
 	default:
 		return ""
 	}
@@ -56,6 +63,8 @@ func (mt ModelType) Placeholder() string {
 		return largeModelInputPlaceholder
 	case ModelTypeSmall:
 		return smallModelInputPlaceholder
+	case ModelTypeAutoMode:
+		return autoModeModelInputPlaceholder
 	default:
 		return ""
 	}
@@ -65,6 +74,7 @@ const (
 	onboardingModelInputPlaceholder = "Find your fave"
 	largeModelInputPlaceholder      = "Choose a model for large, complex tasks"
 	smallModelInputPlaceholder      = "Choose a model for small, simple tasks"
+	autoModeModelInputPlaceholder   = "Choose a model for the auto-mode classifier"
 )
 
 // ModelsID is the identifier for the model selection dialog.
@@ -217,11 +227,7 @@ func (m *Models) HandleMsg(msg tea.Msg) Action {
 			if m.isOnboarding {
 				break
 			}
-			if m.modelType == ModelTypeLarge {
-				m.modelType = ModelTypeSmall
-			} else {
-				m.modelType = ModelTypeLarge
-			}
+			m.modelType = m.nextModelType()
 			if err := m.setProviderItems(); err != nil {
 				return util.ReportError(err)
 			}
@@ -247,24 +253,46 @@ func (m *Models) Cursor() *tea.Cursor {
 	return InputCursor(m.com.Styles, m.input.Cursor())
 }
 
+// nextModelType cycles large -> small -> auto mode -> large. Onboarding
+// never reaches here; it has no type radio.
+func (m *Models) nextModelType() ModelType {
+	switch m.modelType {
+	case ModelTypeLarge:
+		return ModelTypeSmall
+	case ModelTypeSmall:
+		return ModelTypeAutoMode
+	default:
+		return ModelTypeLarge
+	}
+}
+
 // modelTypeRadioView returns the radio view for model type selection.
+// The auto-mode slot uses the info token so it stays distinct from the
+// large/small radios without a color literal.
 func (m *Models) modelTypeRadioView() string {
 	t := m.com.Styles
 	textStyle := t.Radio.Label
+	autoTextStyle := t.Radio.Label.Foreground(t.Status.ModeBadgeAuto.GetForeground())
 	largeRadioStyle := t.Radio.Off
 	smallRadioStyle := t.Radio.Off
-	if m.modelType == ModelTypeLarge {
+	autoRadioStyle := t.Radio.Off.Foreground(t.Status.ModeBadgeAuto.GetBackground())
+	switch m.modelType {
+	case ModelTypeLarge:
 		largeRadioStyle = t.Radio.On
-	} else {
+	case ModelTypeSmall:
 		smallRadioStyle = t.Radio.On
+	default:
+		autoRadioStyle = t.Radio.On.Foreground(t.Status.ModeBadgeAuto.GetBackground())
 	}
 
 	largeRadio := largeRadioStyle.Padding(0, 1).Render()
 	smallRadio := smallRadioStyle.Padding(0, 1).Render()
+	autoRadio := autoRadioStyle.Padding(0, 1).Render()
 
-	return fmt.Sprintf("%s%s  %s%s",
+	return fmt.Sprintf("%s%s  %s%s  %s%s",
 		largeRadio, textStyle.Render(ModelTypeLarge.String()),
-		smallRadio, textStyle.Render(ModelTypeSmall.String()))
+		smallRadio, textStyle.Render(ModelTypeSmall.String()),
+		autoRadio, autoTextStyle.Render(ModelTypeAutoMode.String()))
 }
 
 // Draw implements [Dialog].
@@ -350,6 +378,20 @@ func (m *Models) isSelectedConfigured() bool {
 	return isConfigured
 }
 
+// currentModelForType reports the model currently stored for the slot.
+// Large and small live in the models map. Auto mode lives on
+// Config.AutoMode.Classifier and must not be read from that map.
+func currentModelForType(cfg *config.Config, typ ModelType) config.SelectedModel {
+	if typ != ModelTypeAutoMode {
+		return cfg.Models[typ.Config()]
+	}
+	if cfg.AutoMode == nil || cfg.AutoMode.Classifier == nil {
+		return config.SelectedModel{}
+	}
+	cl := cfg.AutoMode.Classifier
+	return config.SelectedModel{Provider: cl.Provider, Model: cl.Model}
+}
+
 // setProviderItems sets the provider items in the list.
 func (m *Models) setProviderItems() error {
 	t := m.com.Styles
@@ -357,7 +399,7 @@ func (m *Models) setProviderItems() error {
 
 	var selectedItemID string
 	selectedType := m.modelType.Config()
-	currentModel := cfg.Models[selectedType]
+	currentModel := currentModelForType(cfg, m.modelType)
 	recentItems := cfg.RecentModels[selectedType]
 
 	// Track providers already added to avoid duplicates

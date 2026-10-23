@@ -93,6 +93,7 @@ type busyStateMsg struct {
 	ready       bool
 	agentBusy   bool
 	yolo        bool
+	auto        bool
 	sessionBusy bool
 }
 
@@ -138,6 +139,7 @@ func (m *UI) invalidateBusyCaches() {
 	m.agentBusyCache.invalidate()
 	m.sessionBusyCache.invalidate()
 	m.yoloCache.invalidate()
+	m.autoCache.invalidate()
 	m.busyFetchGen++
 }
 
@@ -175,6 +177,7 @@ func (m *UI) dispatchBusyRefresh() tea.Cmd {
 			}
 		}
 		st.yolo = ws.PermissionSkipRequests()
+		st.auto = ws.PermissionAutoMode()
 		return st
 	}
 }
@@ -207,17 +210,19 @@ func (m *UI) applyBusyState(msg busyStateMsg) []tea.Cmd {
 	}
 	prevBusy := m.isCurrentSessionBusy()
 	prevYolo := m.yoloModeCached()
+	prevAuto := m.autoModeCached()
 	m.agentBusyCache.set(msg.agentBusy)
 	m.sessionBusyCache.setForSession(msg.sessionBusy, msg.forSession)
 	m.yoloCache.set(msg.yolo)
+	m.autoCache.set(msg.auto)
 	m.agentReady = msg.ready
 	m.agentModel = msg.model
-	if prevYolo != msg.yolo {
+	if prevYolo != msg.yolo || prevAuto != msg.auto {
 		// A remote/async toggle changed yolo mode: update the editor
 		// prompt function so the prompt icon/style tracks the new mode.
 		// The cache is written above and the placeholder is refreshed by
 		// the Update tail.
-		m.setEditorPrompt(msg.yolo)
+		m.setEditorPrompt(msg.yolo, msg.auto)
 	}
 
 	var cmds []tea.Cmd
@@ -321,6 +326,7 @@ func (m *UI) staleWorkspaceRefreshCmds() []tea.Cmd {
 	var cmds []tea.Cmd
 	busyStale := !m.agentBusyCache.fresh(busyCacheTTL) ||
 		!m.yoloCache.fresh(busyCacheTTL) ||
+		!m.autoCache.fresh(busyCacheTTL) ||
 		(m.hasSession() && !m.sessionBusyCache.freshFor(busyCacheTTL, m.session.ID))
 	if busyStale {
 		if cmd := m.dispatchBusyRefresh(); cmd != nil {
@@ -345,25 +351,60 @@ func (m *UI) staleWorkspaceRefreshCmds() []tea.Cmd {
 	return cmds
 }
 
+// permissionMode is one step of the ctrl+y cycle. Auto and yolo are
+// independent: enabling one always disables the other.
+type permissionMode int
+
+const (
+	permissionModeNormal permissionMode = iota
+	permissionModeAuto
+	permissionModeYolo
+)
+
 // toggleYoloMode flips permission auto-approval and writes the new value
 // through the yolo cache (no re-probe needed) and the editor prompt. Shared
-// by the direct keybinding and the commands-dialog action so both stay
-// write-through. Returns the new mode.
+// by Shift+Tab so that cycle stays a yolo toggle. Returns the new mode.
+// Enabling yolo clears auto mode; disabling yolo leaves auto mode alone.
 func (m *UI) toggleYoloMode() bool {
-	yolo := !m.com.Workspace.PermissionSkipRequests()
+	yolo := !m.yoloModeCached()
+	m.writePermissionMode(yolo, m.autoModeCached() && !yolo)
+	return yolo
+}
+
+// cyclePermissionMode advances normal -> auto -> yolo -> normal. Both flags
+// are written through their caches so the key handler does not probe the
+// workspace. Auto never enables yolo, and yolo never enables auto.
+func (m *UI) cyclePermissionMode() permissionMode {
+	var next permissionMode
+	switch {
+	case !m.autoModeCached() && !m.yoloModeCached():
+		next = permissionModeAuto
+	case m.autoModeCached():
+		next = permissionModeYolo
+	default:
+		next = permissionModeNormal
+	}
+	m.writePermissionMode(next == permissionModeYolo, next == permissionModeAuto)
+	return next
+}
+
+// writePermissionMode sets skip and auto independently and writes both
+// values through their caches. Callers must not probe the workspace.
+func (m *UI) writePermissionMode(yolo, auto bool) {
 	m.com.Workspace.PermissionSetSkipRequests(yolo)
+	m.com.Workspace.PermissionSetAutoMode(auto)
 	m.yoloCache.set(yolo)
-	// Supersede any in-flight busy/yolo probe: its result carries the old
-	// generation and would otherwise overwrite the value we just wrote.
+	m.autoCache.set(auto)
+	// Supersede any in-flight busy/permission probe: its result carries the
+	// old generation and would otherwise overwrite the values we just wrote.
 	// Bump the generation (rather than invalidateBusyCaches, which would
-	// clear the fresh value) so applyBusyState's guard discards and
+	// clear the fresh values) so applyBusyState's guard discards and
 	// re-dispatches the stale probe.
 	m.busyFetchGen++
-	m.setEditorPrompt(yolo)
+	m.setEditorPrompt(yolo, auto)
 	// Any explicit toggle hands YOLO ownership back to the user; the
 	// Shift+Tab cycle re-claims it right after its own call.
 	m.cycleYolo = false
-	return yolo
 }
 
 // yoloModeCached reports the memoized permission-skip ("yolo") mode. Toggles
@@ -371,6 +412,13 @@ func (m *UI) toggleYoloMode() bool {
 // otherwise.
 func (m *UI) yoloModeCached() bool {
 	return m.yoloCache.val
+}
+
+// autoModeCached reports the memoized native auto-mode flag. The ctrl+y
+// cycle writes through the cache; the Update-tail backstop keeps it
+// bounded-stale otherwise.
+func (m *UI) autoModeCached() bool {
+	return m.autoCache.val
 }
 
 func (m *UI) activityFor(sessionID string) *sessionActivity {

@@ -54,6 +54,10 @@ func (w *slashCommandWorkspace) AgentSummarize(_ context.Context, sessionID, _ s
 
 func (w *slashCommandWorkspace) PermissionSkipRequests() bool { return false }
 
+func (w *slashCommandWorkspace) PermissionAutoMode() bool { return false }
+
+func (w *slashCommandWorkspace) PermissionSetAutoMode(bool) {}
+
 func (w *slashCommandWorkspace) CreateSession(context.Context, string) (session.Session, error) {
 	return session.Session{}, nil
 }
