@@ -177,6 +177,8 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 				return transcript.Blind(msgs)
 			},
 			FailOpen:    amCfg.FailOpen,
+			MaxTokens:   int64(amCfg.MaxTokens),
+			Timeout:     time.Duration(amCfg.TimeoutSeconds) * time.Second,
 			Environment: []string{store.WorkingDir()},
 		})
 		app.Permissions.SetPermissionHooks(am)
