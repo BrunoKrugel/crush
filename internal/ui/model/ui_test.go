@@ -139,6 +139,7 @@ type testWorkspace struct {
 	updateCalls       int
 	agentBusy         bool
 	yolo              bool
+	auto              bool
 	agentReady        bool
 }
 
@@ -163,6 +164,10 @@ func (w *testWorkspace) UpdateAgentModel(context.Context) error {
 func (w *testWorkspace) PermissionSkipRequests() bool { return w.yolo }
 
 func (w *testWorkspace) PermissionSetSkipRequests(skip bool) { w.yolo = skip }
+
+func (w *testWorkspace) PermissionAutoMode() bool { return w.auto }
+
+func (w *testWorkspace) PermissionSetAutoMode(enabled bool) { w.auto = enabled }
 
 func (w *testWorkspace) AgentIsReady() bool {
 	return w.agentReady
@@ -747,7 +752,7 @@ func TestPlanPromptIgnoresYOLO(t *testing.T) {
 	u, _ := newPlanUI(t, "sess-1")
 	u.textarea.SetWidth(40)
 	u.textarea.Focus()
-	u.setEditorPrompt(true)
+	u.setEditorPrompt(true, false)
 	require.Contains(t, u.textarea.View(), "⏸")
 	require.NotContains(t, u.textarea.View(), " ! ")
 }

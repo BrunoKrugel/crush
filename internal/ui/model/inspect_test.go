@@ -136,6 +136,8 @@ func (w *inspectWorkspace) AgentIsBusy() bool                                { r
 func (w *inspectWorkspace) AgentIsSessionBusy(string) bool                   { return false }
 func (w *inspectWorkspace) AgentReadyErr() error                             { return nil }
 func (w *inspectWorkspace) PermissionSkipRequests() bool                     { return false }
+func (w *inspectWorkspace) PermissionAutoMode() bool                         { return false }
+func (w *inspectWorkspace) PermissionSetAutoMode(bool)                       {}
 func (w *inspectWorkspace) AgentModel() workspace.AgentModel                 { return workspace.AgentModel{} }
 func (w *inspectWorkspace) AgentQueuedPrompts(string) int                    { return 0 }
 func (w *inspectWorkspace) AgentQueuedPromptsList(string) []string           { return nil }

@@ -214,6 +214,13 @@ type Workspace interface {
 	PermissionDeny(perm permission.PermissionRequest) bool
 	PermissionSkipRequests() bool
 	PermissionSetSkipRequests(skip bool)
+	// PermissionAutoMode reports whether native auto mode is enabled.
+	// Auto mode and yolo are independent: enabling one must not enable
+	// the other.
+	PermissionAutoMode() bool
+	// PermissionSetAutoMode enables or disables native auto mode. It
+	// does not change the yolo (skip) flag.
+	PermissionSetAutoMode(enabled bool)
 
 	// Questions
 	//

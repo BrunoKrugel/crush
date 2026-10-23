@@ -309,6 +309,7 @@ type UI struct {
 	pending                  pendingTurn
 	sessionBusyCache         ttlCache
 	yoloCache                ttlCache
+	autoCache                ttlCache
 	agentBusyCache           ttlCache
 	skillStates              []*skills.SkillState
 	promptQueueItems         []string
@@ -474,7 +475,9 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 	// fresh by write-through toggles and off-thread refreshes so Update
 	// and View never probe the workspace synchronously.
 	yolo := com.Workspace.PermissionSkipRequests()
+	auto := com.Workspace.PermissionAutoMode()
 	ui.yoloCache.set(yolo)
+	ui.autoCache.set(auto)
 
 	// Seed the memoized agent ready/model state the same way so the first
 	// frame renders the model info; the busy probe keeps it fresh
@@ -484,7 +487,7 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 		ui.agentModel = com.Workspace.AgentModel()
 	}
 	ui.mode = uiInputModeCode
-	ui.setEditorPrompt(yolo)
+	ui.setEditorPrompt(yolo, auto)
 	ui.randomizePlaceholders()
 	ui.textarea.Placeholder = ui.readyPlaceholder
 	ui.status = status
@@ -2500,8 +2503,8 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 			if cmd := m.switchPlanToYolo(); cmd != nil {
 				cmds = append(cmds, cmd)
 			}
-		} else {
-			m.toggleYoloMode()
+		} else if cmd := m.permissionModeStatusCmd(m.cyclePermissionMode()); cmd != nil {
+			cmds = append(cmds, cmd)
 		}
 		m.dialog.CloseDialog(dialog.CommandsID)
 	case dialog.ActionDisconnectMemory:
@@ -3297,7 +3300,13 @@ func (m *UI) handleSelectModel(msg dialog.ActionSelectModel) tea.Cmd {
 		}
 	}
 
-	if err := m.com.Workspace.UpdatePreferredModel(config.ScopeGlobal, msg.ModelType, msg.Model); err != nil {
+	if msg.ModelType == config.SelectedModelTypeAutoMode {
+		// The classifier is not a preferred-model slot. Persist it on
+		// auto_mode.classifier and leave the large/small map alone.
+		if err := m.saveAutoModeClassifier(msg.Model); err != nil {
+			cmds = append(cmds, util.ReportError(err))
+		}
+	} else if err := m.com.Workspace.UpdatePreferredModel(config.ScopeGlobal, msg.ModelType, msg.Model); err != nil {
 		cmds = append(cmds, util.ReportError(err))
 	} else {
 		if msg.ModelType == config.SelectedModelTypeLarge {
@@ -3355,6 +3364,25 @@ func (m *UI) handleSelectModel(msg dialog.ActionSelectModel) tea.Cmd {
 	}
 
 	return tea.Batch(cmds...)
+}
+
+// saveAutoModeClassifier writes the picker selection onto
+// Config.AutoMode.Classifier. The write is a command-side effect; the
+// dialog's Update only returns the selection message.
+func (m *UI) saveAutoModeClassifier(model config.SelectedModel) error {
+	cfg := m.com.Config()
+	auto := config.AutoModeConfig{}
+	if cfg != nil && cfg.AutoMode != nil {
+		auto = *cfg.AutoMode
+	}
+	cl := config.AutoModeClassifier{}
+	if auto.Classifier != nil {
+		cl = *auto.Classifier
+	}
+	cl.Provider = model.Provider
+	cl.Model = model.Model
+	auto.Classifier = &cl
+	return m.com.Workspace.SetConfigField(config.ScopeGlobal, "auto_mode", auto)
 }
 
 func (m *UI) openAuthenticationDialog(provider catwalk.Provider, model config.SelectedModel, modelType config.SelectedModelType) tea.Cmd {
@@ -3516,11 +3544,8 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 				}
 				return true
 			}
-			yolo := m.toggleYoloMode()
-			if yolo {
-				cmds = append(cmds, util.CmdHandler(util.InfoMsg{Type: util.InfoTypeYolo, Msg: yoloModeBannerMsg}))
-			} else {
-				cmds = append(cmds, util.ReportInfo("Yolo mode disabled"))
+			if cmd := m.permissionModeStatusCmd(m.cyclePermissionMode()); cmd != nil {
+				cmds = append(cmds, cmd)
 			}
 			return true
 		}
@@ -3709,7 +3734,7 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 				// the shell, not be hijacked as a slash command.
 				if m.bangMode && value != "" {
 					m.bangMode = false
-					m.setEditorPrompt(m.yoloModeCached())
+					m.setEditorPrompt(m.yoloModeCached(), m.autoModeCached())
 					m.randomizePlaceholders()
 					m.historyReset()
 					return tea.Batch(m.runShellCommand(value))
@@ -3824,7 +3849,7 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 				if m.bangMode && m.bangWasEmpty && msg.Code == tea.KeyBackspace {
 					m.bangMode = false
 					m.bangWasEmpty = false
-					m.setEditorPrompt(m.yoloModeCached())
+					m.setEditorPrompt(m.yoloModeCached(), m.autoModeCached())
 					break
 				}
 
@@ -3987,7 +4012,7 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					m.textarea.SetValue(stripped)
 					m.textarea.SetCursorColumn(max(0, col-(len(newVal)-len(stripped))))
 					_ = line // cursor line doesn't change; prefix removed
-					m.setEditorPrompt(m.yoloModeCached())
+					m.setEditorPrompt(m.yoloModeCached(), m.autoModeCached())
 				} else if m.bangMode && newVal == "" && curValue != "" {
 					// Just cleared last character; mark empty, stay in bang mode.
 					m.bangWasEmpty = true
@@ -4270,7 +4295,7 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 
 	// Add status and help layer
 	m.status.SetHideHelp(isOnboarding)
-	m.status.SetMode(m.mode, m.yoloModeCached())
+	m.status.SetMode(m.mode, m.yoloModeCached(), m.autoModeCached())
 	m.status.Draw(scr, layout.status)
 
 	// Draw completions popup if open
@@ -5213,8 +5238,9 @@ func editorFileMsg(path string) tea.Msg {
 }
 
 // setEditorPrompt configures the textarea prompt function based on whether
-// plan, yolo, or bang mode is enabled.
-func (m *UI) setEditorPrompt(yolo bool) {
+// plan, yolo, auto, or bang mode is enabled. Yolo wins over auto so the
+// warning icon tracks the more permissive flag.
+func (m *UI) setEditorPrompt(yolo, auto bool) {
 	if m.bangMode {
 		m.textarea.SetPromptFunc(4, m.bangPromptFunc)
 		return
@@ -5225,6 +5251,10 @@ func (m *UI) setEditorPrompt(yolo bool) {
 	}
 	if yolo {
 		m.textarea.SetPromptFunc(4, m.yoloPromptFunc)
+		return
+	}
+	if auto {
+		m.textarea.SetPromptFunc(4, m.autoPromptFunc)
 		return
 	}
 	m.textarea.SetPromptFunc(4, m.normalPromptFunc)
@@ -5276,6 +5306,34 @@ func (m *UI) yoloPromptFunc(info textarea.PromptInfo) string {
 		return t.Editor.PromptYoloDotsFocused.Render()
 	}
 	return t.Editor.PromptYoloDotsBlurred.Render()
+}
+
+// autoPromptFunc returns the auto mode editor prompt style. The badge uses
+// the info token so it stays distinct from the yolo warning icon.
+func (m *UI) autoPromptFunc(info textarea.PromptInfo) string {
+	t := m.com.Styles
+	if info.LineNumber == 0 {
+		if info.Focused {
+			return t.Editor.PromptAutoIconFocused.Render()
+		}
+		return t.Editor.PromptAutoIconBlurred.Render()
+	}
+	if info.Focused {
+		return t.Editor.PromptAutoDotsFocused.Render()
+	}
+	return t.Editor.PromptAutoDotsBlurred.Render()
+}
+
+// permissionModeStatusCmd reports the mode the ctrl+y cycle just landed on.
+func (m *UI) permissionModeStatusCmd(mode permissionMode) tea.Cmd {
+	switch mode {
+	case permissionModeAuto:
+		return util.CmdHandler(util.InfoMsg{Type: util.InfoTypeAuto, Msg: autoModeBannerMsg})
+	case permissionModeYolo:
+		return util.CmdHandler(util.InfoMsg{Type: util.InfoTypeYolo, Msg: yoloModeBannerMsg})
+	default:
+		return util.ReportInfo("Permission mode: normal")
+	}
 }
 
 // bangPromptFunc returns the bang mode editor prompt style with Turtle-colored
@@ -5338,6 +5396,7 @@ func (m *UI) switchPlanToYolo() tea.Cmd {
 const (
 	planModeBannerMsg = "Plan with Crush before generating any code."
 	yoloModeBannerMsg = "System level commands stay blocked. The rest run unprompted."
+	autoModeBannerMsg = "A classifier decides each tool permission. Denials still ask you."
 )
 
 func (m *UI) setInputMode(target uiInputMode) tea.Cmd {
@@ -5377,7 +5436,7 @@ func (m *UI) applyModeSwitch(msg modeSwitchedMsg) []tea.Cmd {
 		return []tea.Cmd{util.ReportError(msg.err)}
 	}
 	m.mode = msg.mode
-	m.setEditorPrompt(m.yoloModeCached())
+	m.setEditorPrompt(m.yoloModeCached(), m.autoModeCached())
 	var cmds []tea.Cmd
 	if msg.continueSessionID != "" && m.session != nil && m.session.ID == msg.continueSessionID {
 		cmds = append(cmds, m.sendMessageInternal("Implement the plan.", true))
@@ -7486,7 +7545,7 @@ func (m *UI) checkBangModeAfterPaste() {
 	m.textarea.SetValue(stripped)
 	col := m.textarea.Column()
 	m.textarea.SetCursorColumn(max(0, col-(len(val)-len(stripped))))
-	m.setEditorPrompt(m.yoloModeCached())
+	m.setEditorPrompt(m.yoloModeCached(), m.autoModeCached())
 }
 
 // handlePasteMsg handles a paste message.

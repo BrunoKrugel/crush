@@ -300,6 +300,10 @@ type Styles struct {
 		PromptYoloIconBlurred     lipgloss.Style
 		PromptYoloDotsFocused     lipgloss.Style
 		PromptYoloDotsBlurred     lipgloss.Style
+		PromptAutoIconFocused     lipgloss.Style
+		PromptAutoIconBlurred     lipgloss.Style
+		PromptAutoDotsFocused     lipgloss.Style
+		PromptAutoDotsBlurred     lipgloss.Style
 		PromptBangIconFocused     lipgloss.Style
 		PromptNormalIconFocused   lipgloss.Style
 		TokenSkill                lipgloss.Style
@@ -366,10 +370,13 @@ type Styles struct {
 		Help                lipgloss.Style
 		ModeBadgePlan       lipgloss.Style
 		ModeBadgeYolo       lipgloss.Style
+		ModeBadgeAuto       lipgloss.Style
 		ModeBannerPlan      lipgloss.Style
 		ModeBannerPlanBadge lipgloss.Style
 		ModeBannerYolo      lipgloss.Style
 		ModeBannerYoloBadge lipgloss.Style
+		ModeBannerAuto      lipgloss.Style
+		ModeBannerAutoBadge lipgloss.Style
 		ErrorIndicator      lipgloss.Style
 		WarnIndicator       lipgloss.Style
 		InfoIndicator       lipgloss.Style
