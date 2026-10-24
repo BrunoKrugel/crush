@@ -95,6 +95,53 @@ document.getElementById("avg-tokens").innerHTML =
 document.getElementById("avg-response").innerHTML =
   '<span title="Average">x̅</span> ' + formatTime(stats.avg_response_time_ms);
 
+// Fork-feature counters: hidden entirely when the databases carry none, so
+// an upstream database renders exactly as before.
+if (stats.fork) {
+  const fork = stats.fork;
+  const forkCounters = [
+    ["fork-sessions", fork.forked_sessions],
+    ["goal-sessions", fork.goal_sessions],
+    ["snapshots", fork.snapshots],
+    ["dispatches", fork.dispatched_agents],
+    ["dispatches-done", fork.completed_dispatches],
+    ["compacted-sessions", fork.compacted_sessions],
+  ];
+  const hasAny = forkCounters.some(([, v]) => v > 0) || (fork.tool_calls?.length > 0);
+  if (hasAny) {
+    document.getElementById("fork-grid").style.display = "";
+    for (const [id, value] of forkCounters) {
+      document.getElementById(id).textContent = formatNumber(value);
+    }
+  }
+  if (fork.tool_calls?.length > 0) {
+    document.getElementById("fork-tools-card").style.display = "";
+    const forkTools = getTopItemsWithOthers(fork.tool_calls, "call_count", "tool_name");
+    const forkMax = Math.max(...forkTools.map((t) => t.call_count));
+    new Chart(document.getElementById("forkToolChart"), {
+      type: "bar",
+      data: {
+        labels: forkTools.map((t) => t.tool_name),
+        datasets: [
+          {
+            label: "Calls",
+            data: forkTools.map((t) => t.call_count),
+            backgroundColor: (ctx) => interpolateColor(ctx.raw / forkMax),
+            borderRadius: 4,
+          },
+        ],
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: easeDuration, easing: easeType },
+        plugins: { legend: { display: false } },
+      },
+    });
+  }
+}
+
 // Chart defaults
 Chart.defaults.color = colors.squid;
 Chart.defaults.borderColor = colors.squid;

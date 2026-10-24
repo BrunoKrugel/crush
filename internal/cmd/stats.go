@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"database/sql"
 	_ "embed"
@@ -69,6 +70,7 @@ type Stats struct {
 	HourDayHeatmap    []HourDayHeatmapPt `json:"hour_day_heatmap"`
 	Total             TotalStats         `json:"total"`
 	AvgResponseTimeMs float64            `json:"avg_response_time_ms"`
+	Fork              *ForkStats         `json:"fork,omitempty"`
 }
 
 type TotalStats struct {
@@ -126,6 +128,41 @@ type HourDayHeatmapPt struct {
 	DayOfWeek    int   `json:"day_of_week"`
 	Hour         int   `json:"hour"`
 	SessionCount int64 `json:"session_count"`
+}
+
+// ForkStats holds the counts the fork's own features produce: conversation
+// forks, goal-mode sessions, background dispatches, snapshots, and the
+// compaction ledger. Every counter is best effort: a database from before a
+// migration simply reports zero.
+type ForkStats struct {
+	ForkedSessions    int64       `json:"forked_sessions"`
+	GoalSessions      int64       `json:"goal_sessions"`
+	Snapshots         int64       `json:"snapshots"`
+	DispatchedAgents  int64       `json:"dispatched_agents"`
+	CompletedDispatch int64       `json:"completed_dispatches"`
+	CompactedSessions int64       `json:"compacted_sessions"`
+	CompactionEntries int64       `json:"compaction_entries"`
+	ToolCalls         []ToolUsage `json:"tool_calls,omitempty"`
+}
+
+// forkToolNames are the tools the fork added on top of upstream, matched
+// case-insensitively against the recorded tool names.
+var forkToolNames = map[string]bool{
+	"dispatch_agent":   true,
+	"message_agent":    true,
+	"cancel_dispatch":  true,
+	"apply_dispatch":   true,
+	"dismiss_dispatch": true,
+	"channel_reply":    true,
+	"croncreate":       true,
+	"cronlist":         true,
+	"crondelete":       true,
+	"semantic_search":  true,
+	"semantic_index":   true,
+	"honcho_search":    true,
+	"honcho_chat":      true,
+	"honcho_remember":  true,
+	"honcho_status":    true,
 }
 
 // ProjectStats associates stats with a project path.
@@ -487,6 +524,43 @@ func mergeStats(projectStats []ProjectStats) *Stats {
 		}
 	}
 
+	// Aggregate fork-feature counters.
+	for _, ps := range projectStats {
+		f := ps.Stats.Fork
+		if f == nil {
+			continue
+		}
+		if merged.Fork == nil {
+			merged.Fork = &ForkStats{}
+		}
+		merged.Fork.ForkedSessions += f.ForkedSessions
+		merged.Fork.GoalSessions += f.GoalSessions
+		merged.Fork.Snapshots += f.Snapshots
+		merged.Fork.DispatchedAgents += f.DispatchedAgents
+		merged.Fork.CompletedDispatch += f.CompletedDispatch
+		merged.Fork.CompactedSessions += f.CompactedSessions
+		merged.Fork.CompactionEntries += f.CompactionEntries
+		// Tool names are lowercased above, so plain append-merge matches.
+		forkToolMap := make(map[string]ToolUsage)
+		for _, t := range merged.Fork.ToolCalls {
+			forkToolMap[strings.ToLower(t.ToolName)] = t
+		}
+		for _, t := range f.ToolCalls {
+			key := strings.ToLower(t.ToolName)
+			existing := forkToolMap[key]
+			existing.ToolName = cmp.Or(existing.ToolName, t.ToolName)
+			existing.CallCount += t.CallCount
+			forkToolMap[key] = existing
+		}
+		merged.Fork.ToolCalls = merged.Fork.ToolCalls[:0]
+		for _, t := range forkToolMap {
+			merged.Fork.ToolCalls = append(merged.Fork.ToolCalls, t)
+		}
+		sort.Slice(merged.Fork.ToolCalls, func(i, j int) bool {
+			return merged.Fork.ToolCalls[i].CallCount > merged.Fork.ToolCalls[j].CallCount
+		})
+	}
+
 	// Calculate averages.
 	if merged.Total.TotalSessions > 0 {
 		merged.Total.AvgTokensPerSession = float64(merged.Total.TotalTokens) / float64(merged.Total.TotalSessions)
@@ -660,7 +734,38 @@ func gatherStats(ctx context.Context, conn *sql.DB) (*Stats, error) {
 		})
 	}
 
+	// Fork-feature counters. Best effort: a database without one of the
+	// fork's tables still yields the rest.
+	stats.Fork = gatherForkStats(ctx, conn)
+	for _, t := range stats.ToolUsage {
+		if forkToolNames[strings.ToLower(t.ToolName)] {
+			stats.Fork.ToolCalls = append(stats.Fork.ToolCalls, t)
+		}
+	}
+
 	return stats, nil
+}
+
+// gatherForkStats counts the rows the fork's features write. Each counter
+// runs on its own so a missing table (a database last touched by a build
+// without that feature) only zeroes its own number.
+func gatherForkStats(ctx context.Context, conn *sql.DB) *ForkStats {
+	fork := &ForkStats{}
+	count := func(query string) int64 {
+		var n int64
+		if err := conn.QueryRowContext(ctx, query).Scan(&n); err != nil {
+			return 0
+		}
+		return n
+	}
+	fork.ForkedSessions = count(`SELECT COUNT(*) FROM sessions WHERE forked_from_session_id IS NOT NULL`)
+	fork.GoalSessions = count(`SELECT COUNT(*) FROM sessions WHERE goal IS NOT NULL`)
+	fork.Snapshots = count(`SELECT COUNT(*) FROM snapshots`)
+	fork.DispatchedAgents = count(`SELECT COUNT(*) FROM a2a_dispatches`)
+	fork.CompletedDispatch = count(`SELECT COUNT(*) FROM a2a_dispatches WHERE status = 'completed'`)
+	fork.CompactedSessions = count(`SELECT COUNT(DISTINCT session_id) FROM compaction_ledger`)
+	fork.CompactionEntries = count(`SELECT COUNT(*) FROM compaction_ledger`)
+	return fork
 }
 
 func toInt64(v any) int64 {

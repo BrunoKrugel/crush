@@ -59,7 +59,41 @@
         </div>
       </div>
 
+      <div class="stats-grid" id="fork-grid" style="display: none">
+        <div class="stat-card">
+          <h3>Forked Sessions</h3>
+          <div class="value" id="fork-sessions"></div>
+        </div>
+        <div class="stat-card">
+          <h3>Goal Sessions</h3>
+          <div class="value" id="goal-sessions"></div>
+        </div>
+        <div class="stat-card">
+          <h3>Snapshots</h3>
+          <div class="value" id="snapshots"></div>
+        </div>
+        <div class="stat-card">
+          <h3>Dispatched Agents</h3>
+          <div class="value" id="dispatches"></div>
+        </div>
+        <div class="stat-card">
+          <h3>Completed Dispatches</h3>
+          <div class="value" id="dispatches-done"></div>
+        </div>
+        <div class="stat-card">
+          <h3>Compacted Sessions</h3>
+          <div class="value" id="compacted-sessions"></div>
+        </div>
+      </div>
+
       <div class="charts-grid">
+        <div class="chart-card full-width" id="fork-tools-card" style="display: none">
+          <h2>Fork Tool Usage</h2>
+          <div class="chart-container tall">
+            <canvas id="forkToolChart"></canvas>
+          </div>
+        </div>
+
         <div class="chart-card full-width">
           <h2>Activity Heatmap</h2>
           <div class="chart-container tall">
