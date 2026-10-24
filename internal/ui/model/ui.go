@@ -6447,6 +6447,7 @@ func (m *UI) attachSkill(skillID, name string) tea.Cmd {
 			FilePath: fileName,
 			FileName: fileName,
 			MimeType: "text/markdown",
+			Kind:     message.AttachmentKindSkill,
 			Content:  content,
 		}
 	}

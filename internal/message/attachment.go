@@ -25,6 +25,10 @@ const (
 	// AttachmentKindMCPPrompt is a resolved MCP prompt, attached by the
 	// inline "/server:prompt" completion.
 	AttachmentKindMCPPrompt AttachmentKind = "mcp_prompt"
+	// AttachmentKindSkill is a skill's content attached by the composer or
+	// the palette, so skill usage can be told apart from plain file
+	// attachments.
+	AttachmentKindSkill AttachmentKind = "skill"
 	// AttachmentKindAgentCard is a dispatched-agent card attached by a
 	// mid-sentence @handle mention (#313): the agent's status, current
 	// todo, and session pointer — or, for a finished agent, its read-only

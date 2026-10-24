@@ -135,14 +135,22 @@ type HourDayHeatmapPt struct {
 // compaction ledger. Every counter is best effort: a database from before a
 // migration simply reports zero.
 type ForkStats struct {
-	ForkedSessions    int64       `json:"forked_sessions"`
-	GoalSessions      int64       `json:"goal_sessions"`
-	Snapshots         int64       `json:"snapshots"`
-	DispatchedAgents  int64       `json:"dispatched_agents"`
-	CompletedDispatch int64       `json:"completed_dispatches"`
-	CompactedSessions int64       `json:"compacted_sessions"`
-	CompactionEntries int64       `json:"compaction_entries"`
-	ToolCalls         []ToolUsage `json:"tool_calls,omitempty"`
+	ForkedSessions    int64        `json:"forked_sessions"`
+	GoalSessions      int64        `json:"goal_sessions"`
+	Snapshots         int64        `json:"snapshots"`
+	DispatchedAgents  int64        `json:"dispatched_agents"`
+	CompletedDispatch int64        `json:"completed_dispatches"`
+	CompactedSessions int64        `json:"compacted_sessions"`
+	CompactionEntries int64        `json:"compaction_entries"`
+	ToolCalls         []ToolUsage  `json:"tool_calls,omitempty"`
+	SkillSessions     int64        `json:"skill_sessions"`
+	SkillUses         []SkillUsage `json:"skill_uses,omitempty"`
+}
+
+// SkillUsage counts how many times a skill was attached to a prompt.
+type SkillUsage struct {
+	Skill string `json:"skill"`
+	Uses  int64  `json:"uses"`
 }
 
 // forkToolNames are the tools the fork added on top of upstream, matched
@@ -559,6 +567,25 @@ func mergeStats(projectStats []ProjectStats) *Stats {
 		sort.Slice(merged.Fork.ToolCalls, func(i, j int) bool {
 			return merged.Fork.ToolCalls[i].CallCount > merged.Fork.ToolCalls[j].CallCount
 		})
+
+		// Skills merge by name; per-project session counts do not add up
+		// to anything meaningful across projects, so the merged value
+		// keeps the largest.
+		skillMap := make(map[string]int64)
+		for _, su := range merged.Fork.SkillUses {
+			skillMap[su.Skill] = su.Uses
+		}
+		for _, su := range f.SkillUses {
+			skillMap[su.Skill] += su.Uses
+		}
+		merged.Fork.SkillUses = merged.Fork.SkillUses[:0]
+		for skill, uses := range skillMap {
+			merged.Fork.SkillUses = append(merged.Fork.SkillUses, SkillUsage{Skill: skill, Uses: uses})
+		}
+		sort.Slice(merged.Fork.SkillUses, func(i, j int) bool {
+			return merged.Fork.SkillUses[i].Uses > merged.Fork.SkillUses[j].Uses
+		})
+		merged.Fork.SkillSessions = max(merged.Fork.SkillSessions, f.SkillSessions)
 	}
 
 	// Calculate averages.
@@ -765,6 +792,33 @@ func gatherForkStats(ctx context.Context, conn *sql.DB) *ForkStats {
 	fork.CompletedDispatch = count(`SELECT COUNT(*) FROM a2a_dispatches WHERE status = 'completed'`)
 	fork.CompactedSessions = count(`SELECT COUNT(DISTINCT session_id) FROM compaction_ledger`)
 	fork.CompactionEntries = count(`SELECT COUNT(*) FROM compaction_ledger`)
+
+	// Skill usage: skill attachments carry a Kind tag, so they can be told
+	// apart from the user's own markdown attachments. Best effort like the
+	// counters: a database without the json1 extension or without any
+	// skill-tagged rows just yields nothing.
+	rows, err := conn.QueryContext(ctx, `
+		SELECT json_extract(j.value, '$.data.FileName') AS skill,
+		       COUNT(*)                                 AS uses,
+		       COUNT(DISTINCT m.session_id)             AS sessions
+		FROM messages m, json_each(m.parts) j
+		WHERE json_extract(j.value, '$.type') = 'binary'
+		  AND json_extract(j.value, '$.data.Kind') = 'skill'
+		  AND json_extract(j.value, '$.data.FileName') IS NOT NULL
+		GROUP BY skill
+		ORDER BY uses DESC`)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var skill string
+			var uses, sessions int64
+			if err := rows.Scan(&skill, &uses, &sessions); err != nil {
+				continue
+			}
+			fork.SkillUses = append(fork.SkillUses, SkillUsage{Skill: skill, Uses: uses})
+			fork.SkillSessions = max(fork.SkillSessions, sessions)
+		}
+	}
 	return fork
 }
 

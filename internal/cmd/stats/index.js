@@ -106,6 +106,7 @@ if (stats.fork) {
     ["dispatches", fork.dispatched_agents],
     ["dispatches-done", fork.completed_dispatches],
     ["compacted-sessions", fork.compacted_sessions],
+    ["skill-count", fork.skill_uses?.length || 0],
   ];
   const hasAny = forkCounters.some(([, v]) => v > 0) || (fork.tool_calls?.length > 0);
   if (hasAny) {
@@ -113,6 +114,32 @@ if (stats.fork) {
     for (const [id, value] of forkCounters) {
       document.getElementById(id).textContent = formatNumber(value);
     }
+  }
+  if (fork.skill_uses?.length > 0) {
+    document.getElementById("skills-card").style.display = "";
+    const skills = getTopItemsWithOthers(fork.skill_uses, "uses", "skill");
+    const skillMax = Math.max(...skills.map((s) => s.uses));
+    new Chart(document.getElementById("skillChart"), {
+      type: "bar",
+      data: {
+        labels: skills.map((s) => s.skill),
+        datasets: [
+          {
+            label: "Uses",
+            data: skills.map((s) => s.uses),
+            backgroundColor: (ctx) => interpolateColor(ctx.raw / skillMax),
+            borderRadius: 4,
+          },
+        ],
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: easeDuration, easing: easeType },
+        plugins: { legend: { display: false } },
+      },
+    });
   }
   if (fork.tool_calls?.length > 0) {
     document.getElementById("fork-tools-card").style.display = "";
