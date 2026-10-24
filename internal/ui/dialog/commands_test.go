@@ -130,7 +130,7 @@ func TestCommands_FilterScopedToCurrentLevel(t *testing.T) {
 	// Type a filter that matches a child but not the parent.
 	c.HandleMsg(keyMsg('a'))
 
-	filtered := c.list.FilteredItems()
+	filtered := c.list.VisibleItems()
 	// Should have at least one item (Child A matches "a").
 	require.NotEmpty(t, filtered)
 
@@ -188,9 +188,7 @@ func TestCommands_LeafEnterFiresActionAndCloses(t *testing.T) {
 
 	// Add a leaf item to the system commands.
 	leaf := NewCommandItem(c.com.Styles, "leaf", "Leaf Item", "", ActionNewSession{})
-	items := make([]list.FilterableItem, 1)
-	items[0] = leaf
-	c.list.SetItems(items...)
+	c.list.SetItems(leaf)
 	c.list.SetSelected(0)
 
 	action := c.HandleMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -218,13 +216,12 @@ func TestCommands_PopRestoresFullParentList(t *testing.T) {
 	parent := NewCommandItem(c.com.Styles, "parent", "Alpha", "", nil).WithChildren(leaf)
 	sibling := NewCommandItem(c.com.Styles, "sibling", "Zulu", "", ActionNewSession{})
 
-	items := []list.FilterableItem{parent, sibling}
-	c.list.SetItems(items...)
+	c.list.SetItems(parent, sibling)
 	c.list.SetSelected(0)
 
 	// Filter so only the parent ("Alpha") matches, leaving the sibling hidden.
 	c.HandleMsg(keyMsg('a'))
-	require.Len(t, c.list.FilteredItems(), 1, "filter should narrow to the parent")
+	require.Len(t, c.list.VisibleItems(), 1, "filter should narrow to the parent")
 
 	// Enter the parent's sub-menu, then pop back to the top level.
 	c.HandleMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -235,7 +232,7 @@ func TestCommands_PopRestoresFullParentList(t *testing.T) {
 	// Both top-level items must be restored — not just the previously-filtered
 	// subset. Regression guard for pushMenu snapshotting FilteredItems() while a
 	// filter was active.
-	require.Len(t, c.list.FilteredItems(), 2, "popping should restore the full parent list")
+	require.Len(t, c.list.VisibleItems(), 2, "popping should restore the full parent list")
 }
 
 func TestCommands_BackspaceEditsTopLevelFilter(t *testing.T) {
@@ -276,8 +273,7 @@ func TestCommands_ResizeInSubMenuResetsToTopLevel(t *testing.T) {
 	// and enter its sub-menu.
 	leaf := NewCommandItem(c.com.Styles, "leaf", "Leaf", "", ActionNewSession{})
 	parent := NewCommandItem(c.com.Styles, "parent", "Parent", "", nil).WithChildren(leaf)
-	items := []list.FilterableItem{parent}
-	c.list.SetItems(items...)
+	c.list.SetItems(parent)
 	c.list.SetSelected(0)
 	c.HandleMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.True(t, c.inSubMenu())
@@ -297,7 +293,7 @@ func TestCommands_ResizeInSubMenuResetsToTopLevel(t *testing.T) {
 
 	// And the visible items are top-level commands again, not the sub-menu's
 	// children.
-	for _, item := range c.list.FilteredItems() {
+	for _, item := range c.list.VisibleItems() {
 		if ci, ok := item.(*CommandItem); ok {
 			require.NotEqual(t, "leaf", ci.id, "sub-menu children must not remain in the list")
 		}
@@ -348,9 +344,7 @@ func setupMenuHierarchy(t *testing.T) *Commands {
 	leaf2 := NewCommandItem(c.com.Styles, "child_b", "Child B", "", ActionNewSession{})
 	parent := NewCommandItem(c.com.Styles, "parent", "Parent", "", nil).WithChildren(nestedParent, leaf2)
 
-	items := make([]list.FilterableItem, 1)
-	items[0] = parent
-	c.list.SetItems(items...)
+	c.list.SetItems(parent)
 	c.list.SetSelected(0)
 	return c
 }
@@ -379,4 +373,41 @@ func TestCommandsDialogSlashFiltersOnceFilterIsNonEmpty(t *testing.T) {
 
 	_, closed := action.(ActionClose)
 	require.False(t, closed, "'/' after a filter character must not close the dialog")
+}
+
+func TestCommandsTallestTabHeightIsMemoized(t *testing.T) {
+	t.Parallel()
+
+	sty := styles.CharmtonePantera()
+	short := NewCommandItem(&sty, "short", "Short", "", ActionNewSession{})
+	long := NewCommandItem(&sty, "long", "Long", "", ActionNewSession{}).
+		WithDescription("A description that takes a row of its own.")
+
+	c := &Commands{userItems: []*CommandItem{short}}
+	height := c.tallestTabHeight(40)
+	require.Equal(t, 1, height)
+
+	// Replacing the items without a rebuild leaves the cached height in
+	// place; only an invalidation (as setCommandItems performs) drops it.
+	c.userItems = []*CommandItem{long}
+	require.Equal(t, height, c.tallestTabHeight(40))
+
+	c.tabHeightsOK = false
+	require.Equal(t, 2, c.tallestTabHeight(40))
+}
+
+func TestCommandsTallestTabHeightIsMemoizedPerWidth(t *testing.T) {
+	t.Parallel()
+
+	sty := styles.CharmtonePantera()
+	c := &Commands{
+		userItems: []*CommandItem{
+			NewCommandItem(&sty, "one", "One", "", ActionNewSession{}),
+		},
+	}
+
+	wide := c.tallestTabHeight(80)
+	narrow := c.tallestTabHeight(40)
+	require.Equal(t, wide, c.tallestTabHeight(80))
+	require.Equal(t, narrow, c.tallestTabHeight(40))
 }
