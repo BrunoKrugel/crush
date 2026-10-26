@@ -880,6 +880,12 @@ type Queries struct {
 	upsertA2ADispatchStmt                *sql.Stmt
 }
 
+// DB returns the underlying database handle, for callers that need a
+// query the generated set does not cover.
+func (q *Queries) DB() DBTX {
+	return q.db
+}
+
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
 		db:                                   tx,

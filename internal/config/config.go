@@ -1846,11 +1846,23 @@ type SnapshotsConfig struct {
 	Enabled *bool `json:"enabled,omitempty" jsonschema:"description=Capture a filesystem snapshot at each user message into the project's private snapshot store,default=true"`
 	// Exclude holds glob or prefix patterns skipped during the snapshot walk.
 	Exclude []string `json:"exclude,omitempty" jsonschema:"description=Path patterns excluded from snapshots,example=node_modules"`
+	// Keep bounds how many snapshots a session retains: the oldest beyond
+	// the newest keep are pruned after each capture. Zero keeps everything.
+	Keep int `json:"keep,omitempty" jsonschema:"description=Snapshots kept per session; the oldest beyond this are pruned after each capture. Zero keeps everything,default=0"`
 }
 
 // SnapshotsEnabled reports whether snapshots are on; they are on by default.
 func (c *Config) SnapshotsEnabled() bool {
 	return c.Snapshots == nil || c.Snapshots.Enabled == nil || *c.Snapshots.Enabled
+}
+
+// SnapshotsKeep returns how many snapshots a session retains; zero keeps
+// everything.
+func (c *Config) SnapshotsKeep() int {
+	if c.Snapshots == nil {
+		return 0
+	}
+	return max(0, c.Snapshots.Keep)
 }
 
 // SnapshotExclusions returns the configured exclusions or the defaults.

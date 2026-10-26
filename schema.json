@@ -1470,6 +1470,11 @@
           },
           "type": "array",
           "description": "Path patterns excluded from snapshots"
+        },
+        "keep": {
+          "type": "integer",
+          "description": "Snapshots kept per session; the oldest beyond this are pruned after each capture. Zero keeps everything",
+          "default": 0
         }
       },
       "additionalProperties": false,

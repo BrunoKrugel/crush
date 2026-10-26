@@ -237,11 +237,15 @@ The JSON form keeps them under the top-level `snapshots` block.
 option snapshots-enabled false
 option snapshots-exclude dist
 option snapshots-exclude target
+option snapshots-keep 50
 ```
 
 `snapshots-enabled` takes a boolean (default `true`); each
 `snapshots-exclude` call appends one glob or prefix pattern to the exclusion
-list, which defaults to `node_modules`, `vendor`, `dist`, and `build`.
+list, which defaults to `node_modules`, `vendor`, `dist`, and `build`;
+`snapshots-keep` bounds how many snapshots a session retains (default `0`,
+unlimited) — the oldest beyond the newest `keep` are pruned after each
+capture.
 
 ## Security
 

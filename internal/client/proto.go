@@ -686,6 +686,24 @@ func (c *Client) CreateSession(ctx context.Context, id string, title string) (*p
 	return &sess, nil
 }
 
+// ForkSession branches a conversation from a message as a proto type.
+func (c *Client) ForkSession(ctx context.Context, id, sourceSessionID, messageID, title string, worktree bool) (*proto.Session, error) {
+	body := proto.ForkRequest{MessageID: messageID, Title: title, Worktree: worktree}
+	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/sessions/%s/fork", id, sourceSessionID), nil, jsonBody(body), http.Header{"Content-Type": []string{"application/json"}})
+	if err != nil {
+		return nil, fmt.Errorf("failed to fork session: %w", err)
+	}
+	defer rsp.Body.Close()
+	if rsp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fork session: status code %d", rsp.StatusCode)
+	}
+	var sess proto.Session
+	if err := json.NewDecoder(rsp.Body).Decode(&sess); err != nil {
+		return nil, fmt.Errorf("failed to decode session: %w", err)
+	}
+	return &sess, nil
+}
+
 // ListSessions lists all sessions in a workspace as proto types.
 func (c *Client) ListSessions(ctx context.Context, id string) ([]proto.Session, error) {
 	rsp, err := c.get(ctx, fmt.Sprintf("/workspaces/%s/sessions", id), nil, nil)

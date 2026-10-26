@@ -290,6 +290,12 @@ func handleSnapshotsOption(b *ConfigBuilder, key, val string, stderr io.Writer) 
 			return usage(stderr, fmt.Sprintf("option snapshots-enabled expects true/false, got %q", val))
 		}
 		snapshots["enabled"] = parsed
+	case "snapshots-keep":
+		keep, err := strconv.Atoi(val)
+		if err != nil || keep < 0 {
+			return usage(stderr, "usage: option snapshots-keep <count>")
+		}
+		snapshots["keep"] = keep
 	case "snapshots-exclude":
 		if val == "" {
 			return usage(stderr, "usage: option snapshots-exclude <pattern>")

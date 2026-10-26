@@ -89,3 +89,13 @@ func snapshotInfoFromRow(row db.Snapshot) SnapshotInfo {
 func nullString(s string) sql.NullString {
 	return sql.NullString{String: s, Valid: s != ""}
 }
+
+// DeleteSnapshot removes one snapshot's metadata row.
+func (s *DBStore) DeleteSnapshot(sessionID, messageID string) error {
+	_, err := s.q.DB().ExecContext(
+		context.Background(),
+		"DELETE FROM snapshots WHERE session_id = ? AND message_id = ?",
+		sessionID, messageID,
+	)
+	return err
+}

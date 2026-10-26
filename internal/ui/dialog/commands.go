@@ -804,6 +804,10 @@ func (c *Commands) defaultCommandGroups() []CommandGroup {
 	// Add Channels command — opens the channels management dialog.
 	settings = append(settings, NewCommandItem(t, "channels", "Channels", "", ActionOpenDialog{DialogID: ChannelsID}))
 
+	// Add Snapshots command — browse, restore, and diff the session's
+	// filesystem snapshots.
+	settings = append(settings, NewCommandItem(t, "snapshots", "Snapshots", "", ActionOpenDialog{DialogID: SnapshotsID}))
+
 	// Add Skills management command — opens the repository-scoped skill
 	// toggles dialog.
 	settings = append(settings, NewCommandItem(t, "skills", "Toggle Skills", "", ActionOpenDialog{DialogID: SkillsTogglesID}))

@@ -96,6 +96,9 @@ type App struct {
 	// snapshots captures the working tree at each user message. Nil
 	// when snapshots are disabled or unsupported for the project.
 	snapshots *snapshot.Service
+
+	// Snapshots returns the snapshot service, or nil when snapshots are
+	// disabled or unsupported for the project.
 	// autoMode is the native auto-mode policy hook. Nil unless auto
 	// mode is enabled in user config. The classifier model is attached
 	// after the coordinator exists.
@@ -266,6 +269,12 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 // refreshDiscoveredModels updates custom provider models that startup took
 // from the discovery cache. The coordinator is passed in rather than read
 // from app so this goroutine never races a later InitCoderAgent.
+// Snapshots returns the snapshot service. Nil when snapshots are disabled
+// or unsupported for the project.
+func (app *App) Snapshots() *snapshot.Service {
+	return app.snapshots
+}
+
 // attachAutoModeClassifier points auto mode at the coordinator's model
 // builder. A coordinator that does not build models leaves auto mode
 // rules-only, which is the tested fallback.

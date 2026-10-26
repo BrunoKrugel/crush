@@ -2,9 +2,11 @@ package backend
 
 import (
 	"context"
+	"errors"
 
 	mcptools "github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/config"
+	"github.com/charmbracelet/crush/internal/fork"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/session"
@@ -286,4 +288,25 @@ func (b *Backend) ListAllUserMessages(ctx context.Context, workspaceID string) (
 	}
 
 	return ws.Messages.ListAllUserMessages(ctx)
+}
+
+// ForkSession branches a conversation: a new session continues the source
+// session up to the given message, with the filesystem state restored from
+// the snapshot at that point.
+func (b *Backend) ForkSession(ctx context.Context, workspaceID, sourceSessionID, messageID, title string, worktree bool) (session.Session, error) {
+	ws, err := b.GetWorkspace(workspaceID)
+	if err != nil {
+		return session.Session{}, err
+	}
+	if ws.Forks == nil {
+		return session.Session{}, errors.New("forking is unavailable without a session database")
+	}
+	result, err := ws.Forks.Fork(ctx, sourceSessionID, messageID, fork.ForkOptions{
+		Title:    title,
+		Worktree: worktree,
+	})
+	if err != nil {
+		return session.Session{}, err
+	}
+	return result.Session, nil
 }

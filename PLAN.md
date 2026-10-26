@@ -59,8 +59,10 @@ Implemented 2026-10-21, reimplemented from the taigrr design (their
 - **Docs** — `docs-site/docs/features/snapshots.md`, fork.md entry,
   crushrc.md configuration section.
 
-Follow-ups: TUI/CLI surface (list/restore/diff dialog or commands), ref
-pruning policy, snapshot-on-restore-before-restore safety capture.
+Follow-ups: ~~TUI/CLI surface~~ (**done** — the **Snapshots** palette entry
+lists, restores with a pre-restore safety capture, and copies diffs),
+~~ref pruning policy~~ (**done** — `snapshots.keep`, applied after each
+capture), remote snapshot endpoints for client/server mode (open).
 
 ## Planned: #2 conversation forking
 
@@ -151,10 +153,11 @@ Implemented 2026-10-21, reimplemented from the taigrr design (their
 - **Docs** — `docs-site/docs/features/forking.md`, fork.md entry,
   sidebar entry.
 
-Follow-ups: a per-message fork action in the chat view (the palette
-entry forks at the last prompt for now), a server endpoint so a remote
-client can fork, and the worktree reconcile that item #9 will settle
-together with the dispatch worktrees.
+Follow-ups: ~~a per-message fork action in the chat view~~ (**done** —
+press <kbd>f</kbd> on a focused user message), ~~a server endpoint so a
+remote client can fork~~ (**done** — `POST /v1/workspaces/{id}/sessions/{sid}/fork`),
+and the worktree reconcile that item #9 will settle together with the
+dispatch worktrees.
 
 ## Planned: #5 goal mode (the /goal evaluator loop)
 
@@ -214,4 +217,5 @@ Implemented 2026-10-22, per the design above.
 - **Tests** — internal/goal (evaluator parsing, budget), internal/agent
   (goalRun injection, judge, budget accounting), internal/session
   (goal persistence), internal/ui/model (dialog wiring).
-- Follow-ups: goal-mode header badge, goal-seeded dispatches with #3.
+- Follow-ups: ~~goal-mode header badge~~ (**done** — a `GOAL` badge with
+  the turn budget in the header), goal-seeded dispatches with #3.

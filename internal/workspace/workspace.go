@@ -9,6 +9,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/charmbracelet/crush/internal/snapshot"
+
 	tea "charm.land/bubbletea/v2"
 	"charm.land/catwalk/pkg/catwalk"
 	mcptools "github.com/charmbracelet/crush/internal/agent/tools/mcp"
@@ -135,6 +137,14 @@ type Workspace interface {
 	// (a client attached to a remote server, for instance) returns an
 	// error explaining why.
 	ForkSession(ctx context.Context, sourceSessionID, messageID, title string, worktree bool) (session.Session, error)
+	// ListSnapshots returns the session's filesystem snapshots newest
+	// first. RestoreSnapshot writes one back into the working tree,
+	// capturing the current state first so the restore can be undone.
+	// DiffSnapshot returns the patch between a snapshot and the most
+	// recent earlier snapshot with a different tree.
+	ListSnapshots(ctx context.Context, sessionID string) ([]snapshot.SnapshotInfo, error)
+	RestoreSnapshot(ctx context.Context, sessionID, commitHash string) error
+	DiffSnapshot(ctx context.Context, sessionID, commitHash string) (string, error)
 	CreateAgentToolSessionID(messageID, toolCallID string) string
 	ParseAgentToolSessionID(sessionID string) (messageID string, toolCallID string, ok bool)
 	// SetCurrentSession reports the session this client is currently

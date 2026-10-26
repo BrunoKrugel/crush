@@ -138,6 +138,20 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Fails(404, 500).
 			Handle(c.handleGetWorkspaceSession),
 
+		apigen.Post("/v1/workspaces/{id}/sessions/{sid}/fork").
+			Summary("Fork session").
+			Description("Branches a conversation from a message: a new session "+
+				"continues the source session up to the given message, with the "+
+				"filesystem state restored from the snapshot at that point. "+
+				"The source session is left untouched.").
+			Tags("sessions").
+			PathParam("id", "Workspace ID").
+			PathParam("sid", "Session ID").
+			Accepts(proto.ForkRequest{}).
+			Responds(proto.Session{}).
+			Fails(400, 404, 500).
+			Handle(c.handlePostWorkspaceSessionFork),
+
 		apigen.Get("/v1/workspaces/{id}/sessions/{sid}/children").
 			Summary("List child sessions").
 			Description("Lists the sessions whose parent is the given session, "+

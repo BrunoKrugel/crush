@@ -13,6 +13,8 @@ type Store interface {
 	GetSnapshotByMessageID(sessionID, messageID string) (SnapshotInfo, error)
 	GetLatestSnapshotBySession(sessionID string) (SnapshotInfo, error)
 	ListSnapshotsBySession(sessionID string) ([]SnapshotInfo, error)
+	// DeleteSnapshot removes one snapshot's metadata row.
+	DeleteSnapshot(sessionID, messageID string) error
 }
 
 // Service ties the git object store to snapshot metadata storage.
@@ -59,6 +61,28 @@ func (s *Service) Restore(commitHash string) error {
 	return s.Repo.Restore(commitHash)
 }
 
+// Prune keeps only the newest keep snapshots of a session: the git refs
+// and the metadata rows of older snapshots go, while content-addressed
+// objects stay until the store reclaims them.
+func (s *Service) Prune(sessionID string, keep int) error {
+	if keep <= 0 {
+		return nil
+	}
+	if err := s.Repo.PruneKeep(sessionID, keep); err != nil {
+		return err
+	}
+	infos, err := s.Store.ListSnapshotsBySession(sessionID)
+	if err != nil {
+		return err
+	}
+	for i := keep; i < len(infos); i++ {
+		if err := s.Store.DeleteSnapshot(sessionID, infos[i].MessageID); err != nil {
+			return fmt.Errorf("failed to delete snapshot metadata: %w", err)
+		}
+	}
+	return nil
+}
+
 // DiffForMessage returns the patch of a snapshot's message compared to the
 // most recent earlier snapshot with a different commit.
 func (s *Service) DiffForMessage(info SnapshotInfo) (string, error) {
@@ -83,6 +107,21 @@ type MemoryStore struct {
 // NewMemoryStore returns an empty in-memory store.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{}
+}
+
+// DeleteSnapshot removes one snapshot's metadata record.
+func (m *MemoryStore) DeleteSnapshot(sessionID, messageID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	kept := m.snapshots[:0]
+	for _, s := range m.snapshots {
+		if s.SessionID == sessionID && s.MessageID == messageID {
+			continue
+		}
+		kept = append(kept, s)
+	}
+	m.snapshots = kept
+	return nil
 }
 
 // CreateSnapshot appends a snapshot record.

@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/charmbracelet/crush/internal/snapshot"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/crush/internal/a2a"
 	"github.com/charmbracelet/crush/internal/agent/notify"
@@ -224,11 +226,33 @@ func (w *ClientWorkspace) DeleteSession(ctx context.Context, sessionID string) e
 	return w.client.DeleteSession(ctx, w.workspaceID(), sessionID)
 }
 
-// ForkSession is not available to a client attached to a remote server:
-// the fork needs the server's snapshot store, and the session it would
-// create lives on the server. Fork from the server's own TUI instead.
+// ListSnapshots is not available to a client attached to a remote server
+// this pass: the snapshot store lives on the server and the snapshot
+// surface has no endpoints yet. Restore from the server's own TUI.
+func (w *ClientWorkspace) ListSnapshots(ctx context.Context, sessionID string) ([]snapshot.SnapshotInfo, error) {
+	return nil, errors.New("snapshots are not available for a client attached to a remote server")
+}
+
+// RestoreSnapshot is not available to a client attached to a remote
+// server; see ListSnapshots.
+func (w *ClientWorkspace) RestoreSnapshot(ctx context.Context, sessionID, commitHash string) error {
+	return errors.New("snapshots are not available for a client attached to a remote server")
+}
+
+// DiffSnapshot is not available to a client attached to a remote server;
+// see ListSnapshots.
+func (w *ClientWorkspace) DiffSnapshot(ctx context.Context, sessionID, commitHash string) (string, error) {
+	return "", errors.New("snapshots are not available for a client attached to a remote server")
+}
+
+// ForkSession branches a conversation through the server: the fork needs
+// the server's snapshot store, and the session it creates lives there.
 func (w *ClientWorkspace) ForkSession(ctx context.Context, sourceSessionID, messageID, title string, worktree bool) (session.Session, error) {
-	return session.Session{}, errors.New("forking is not available for a client attached to a remote server")
+	sess, err := w.client.ForkSession(ctx, w.workspaceID(), sourceSessionID, messageID, title, worktree)
+	if err != nil {
+		return session.Session{}, err
+	}
+	return protoToSession(*sess), nil
 }
 
 func (w *ClientWorkspace) CreateAgentToolSessionID(messageID, toolCallID string) string {

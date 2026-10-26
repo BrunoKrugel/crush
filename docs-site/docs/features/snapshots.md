@@ -40,9 +40,16 @@ checkpoints preserve the *conversation*, snapshots preserve the *files*.
   explicitly excluded) and only for top-level sessions — sub-agents and
   steering messages never trigger one.
 
-## Restoring
+## Browsing and restoring
 
-Restoring a snapshot writes its tracked files back into the working tree.
+The **Snapshots** palette entry lists the session's snapshots newest
+first. <kbd>enter</kbd> restores the selected snapshot: the current tree
+is captured first — as a snapshot named "Before restore of …" — so a
+restore can itself be undone by restoring that capture.
+<kbd>d</kbd> copies the snapshot's diff against the previous one to the
+clipboard.
+
+Restoring writes the snapshot's tracked files back into the working tree.
 Files that were never part of the snapshot are left untouched, so untracked
 work always survives a restore.
 
@@ -52,7 +59,8 @@ work always survives a restore.
 {
   "snapshots": {
     "enabled": true,
-    "exclude": ["node_modules", "vendor", "dist", "build"]
+    "exclude": ["node_modules", "vendor", "dist", "build"],
+    "keep": 0
   }
 }
 ```
@@ -61,6 +69,7 @@ work always survives a restore.
 | --- | --- | --- |
 | `enabled` | `true` | Capture a snapshot at each user message. `false` disables the feature entirely. |
 | `exclude` | `node_modules`, `vendor`, `dist`, `build` | Glob or prefix patterns skipped during the snapshot walk (on top of `.gitignore` and `.crush`). |
+| `keep` | `0` (unlimited) | How many snapshots a session retains: the oldest beyond the newest `keep` are pruned after each capture. |
 
 Or from a `crushrc` file:
 
@@ -68,6 +77,7 @@ Or from a `crushrc` file:
 option snapshots-enabled true
 option snapshots-exclude dist
 option snapshots-exclude target
+option snapshots-keep 50
 ```
 
 ## Storage

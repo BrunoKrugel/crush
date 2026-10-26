@@ -29,6 +29,7 @@ import (
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/shell"
 	"github.com/charmbracelet/crush/internal/skills"
+	"github.com/charmbracelet/crush/internal/snapshot"
 )
 
 // AppWorkspace implements the Workspace interface by delegating
@@ -820,3 +821,57 @@ func (w *AppWorkspace) Store() *config.ConfigStore {
 
 // Compile-time check that AppWorkspace implements Workspace.
 var _ Workspace = (*AppWorkspace)(nil)
+
+// ListSnapshots returns the session's snapshots newest first.
+func (w *AppWorkspace) ListSnapshots(ctx context.Context, sessionID string) ([]snapshot.SnapshotInfo, error) {
+	svc := w.app.Snapshots()
+	if svc == nil {
+		return nil, errors.New("snapshots are unavailable")
+	}
+	return svc.ListForSession(sessionID)
+}
+
+// RestoreSnapshot writes a snapshot's files back into the working tree.
+// The current tree is captured first, so a restore can itself be undone
+// by restoring the safety snapshot.
+func (w *AppWorkspace) RestoreSnapshot(ctx context.Context, sessionID, commitHash string) error {
+	svc := w.app.Snapshots()
+	if svc == nil {
+		return errors.New("snapshots are unavailable")
+	}
+	if _, err := svc.SnapshotForMessage(
+		sessionID,
+		fmt.Sprintf("pre-restore-%d", time.Now().UnixNano()),
+		"Before restore of "+shortHash(commitHash),
+	); err != nil {
+		return fmt.Errorf("failed to capture the pre-restore snapshot: %w", err)
+	}
+	return svc.Restore(commitHash)
+}
+
+// DiffSnapshot returns the patch between a snapshot and the most recent
+// earlier snapshot with a different tree.
+func (w *AppWorkspace) DiffSnapshot(ctx context.Context, sessionID, commitHash string) (string, error) {
+	svc := w.app.Snapshots()
+	if svc == nil {
+		return "", errors.New("snapshots are unavailable")
+	}
+	list, err := svc.ListForSession(sessionID)
+	if err != nil {
+		return "", err
+	}
+	for _, info := range list {
+		if info.CommitHash != commitHash {
+			return svc.Repo.Diff(commitHash, info.CommitHash)
+		}
+	}
+	return "", nil
+}
+
+// shortHash shortens a commit hash for display.
+func shortHash(hash string) string {
+	if len(hash) > 8 {
+		return hash[:8]
+	}
+	return hash
+}

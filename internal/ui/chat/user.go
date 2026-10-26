@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/list"
 	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/charmbracelet/crush/internal/ui/util"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -31,6 +32,14 @@ type channelMessage struct {
 	SenderName string   `xml:"sender_name,attr"`
 	Time       string   `xml:"time,attr"`
 	Content    string   `xml:",chardata"`
+}
+
+// ForkFromMessageMsg asks the UI to open the fork dialog with the fork
+// point pinned to a specific message, raised by pressing "f" on a
+// focused user message.
+type ForkFromMessageMsg struct {
+	SessionID string
+	MessageID string
 }
 
 // UserMessageItem represents a user message in the chat UI.
@@ -316,9 +325,17 @@ func (m *UserMessageItem) HandleMouseClickCmd(btn ansi.MouseButton, x, y int) (b
 
 // HandleKeyEvent implements KeyEventHandler.
 func (m *UserMessageItem) HandleKeyEvent(key tea.KeyMsg) (bool, tea.Cmd) {
-	if k := key.String(); k == "c" || k == "y" {
+	switch key.String() {
+	case "c", "y":
 		text := m.message.Content().Text
 		return true, common.CopyToClipboard(text, "Message copied to clipboard")
+	case "f":
+		// Fork the conversation at this message: hands the fork point to
+		// the UI, which opens the fork dialog pinned to it.
+		return true, util.CmdHandler(ForkFromMessageMsg{
+			SessionID: m.message.SessionID,
+			MessageID: m.message.ID,
+		})
 	}
 	return false, nil
 }

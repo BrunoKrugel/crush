@@ -38,6 +38,18 @@ func (m *UI) openForkDialog(sessionID string) tea.Cmd {
 	return nil
 }
 
+// openForkDialogAt opens the fork dialog with the fork point pinned to a
+// specific message, as asked by the per-message fork action in the chat
+// view ("f" on a focused user message).
+func (m *UI) openForkDialogAt(sessionID, messageID string) tea.Cmd {
+	if m.dialog.ContainsDialog(dialog.ForkID) {
+		m.dialog.BringToFront(dialog.ForkID)
+		return nil
+	}
+	m.dialog.OpenDialogWithGrace(dialog.NewFork(m.com, sessionID, messageID))
+	return nil
+}
+
 // lastUserMessageID returns the id of the session's last user message.
 func (m *UI) lastUserMessageID(sessionID string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

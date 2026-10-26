@@ -13,6 +13,15 @@ package proto
 // currentSessionID equals this session's ID and which have at least one
 // live SSE stream. Hold-only clients (streams == 0) do not contribute.
 // Like IsBusy, it is computed on read by REST handlers.
+// ForkRequest is the body of the fork-session endpoint: the message to
+// branch from, the new session's title, and whether to materialize the
+// fork point in a fresh worktree.
+type ForkRequest struct {
+	MessageID string `json:"message_id"`
+	Title     string `json:"title,omitempty"`
+	Worktree  bool   `json:"worktree,omitempty"`
+}
+
 type Session struct {
 	Channel          string  `json:"channel,omitempty"`
 	Title            string  `json:"title"`

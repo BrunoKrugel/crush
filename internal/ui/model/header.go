@@ -13,6 +13,7 @@ import (
 	"charm.land/x/nerdfont"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/fsext"
+	"github.com/charmbracelet/crush/internal/goal"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/styles"
@@ -210,6 +211,16 @@ func renderHeaderDetails(
 	t := com.Styles
 
 	var parts []string
+
+	// Goal-mode badge: shows while a goal is active on this session, with
+	// the turn budget as the counter.
+	if session.Goal != nil && session.Goal.State == goal.StateActive {
+		label := "GOAL"
+		if session.Goal.TurnBudget > 0 {
+			label = fmt.Sprintf("GOAL %d", session.Goal.TurnBudget)
+		}
+		parts = append(parts, t.Status.ModeBadgeAuto.Render(label))
+	}
 
 	if lspErrorCount > 0 {
 		parts = append(parts, t.LSP.ErrorDiagnostic.Render(fmt.Sprintf("%s%d", nerdfont.Glyph(styles.LSPErrorIcon, "E"), lspErrorCount)))

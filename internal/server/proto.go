@@ -971,3 +971,32 @@ func jsonError(w http.ResponseWriter, status int, message string) {
 		_, _ = w.Write(data)
 	}
 }
+
+// handlePostWorkspaceSessionFork branches a conversation: the new session
+// continues the source session up to the given message.
+func (c *controllerV1) handlePostWorkspaceSessionFork(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	sid := r.PathValue("sid")
+
+	var args struct {
+		MessageID string `json:"message_id"`
+		Title     string `json:"title"`
+		Worktree  bool   `json:"worktree"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
+		c.server.logError(r, "Failed to decode request", "error", err)
+		jsonError(w, http.StatusBadRequest, "failed to decode request")
+		return
+	}
+
+	sess, err := c.backend.ForkSession(r.Context(), id, sid, args.MessageID, args.Title, args.Worktree)
+	if err != nil {
+		c.handleError(w, r, err)
+		return
+	}
+	ws, _ := c.backend.GetWorkspace(id)
+	out := sessionToProto(sess)
+	out.IsBusy = isSessionBusy(ws, sess.ID)
+	out.AttachedClients = attachedClients(ws, sess.ID)
+	jsonEncode(w, out)
+}

@@ -2343,6 +2343,15 @@ func sessionHeaders(sessionID string) map[string]string {
 	}
 }
 
+// snapshotKeep returns the configured per-session snapshot bound; zero
+// keeps everything.
+func (a *sessionAgent) snapshotKeep() int {
+	if a.cfg == nil {
+		return 0
+	}
+	return a.cfg.Config().SnapshotsKeep()
+}
+
 // snapshotForMessage captures the working tree in the background after a
 // top-level user message. Failures are logged and never block the run.
 func (a *sessionAgent) snapshotForMessage(call SessionAgentCall, msg message.Message) {
@@ -2356,6 +2365,12 @@ func (a *sessionAgent) snapshotForMessage(call SessionAgentCall, msg message.Mes
 	go func() {
 		if _, err := a.snapshots.SnapshotForMessage(call.SessionID, msg.ID, description); err != nil {
 			slog.Warn("Failed to capture filesystem snapshot", "error", err)
+			return
+		}
+		if keep := a.snapshotKeep(); keep > 0 {
+			if err := a.snapshots.Prune(call.SessionID, keep); err != nil {
+				slog.Warn("Failed to prune filesystem snapshots", "error", err)
+			}
 		}
 	}()
 }

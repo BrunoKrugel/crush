@@ -896,6 +896,14 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cmd := m.applyForkSession(msg); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+	case snapshotRestoredMsg:
+		if cmd := m.applySnapshotRestored(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	case snapshotDiffMsg:
+		if cmd := m.applySnapshotDiff(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	case loadSessionMsg:
 		m.turnOutcome = ""
 		if m.forceCompactMode {
@@ -2450,6 +2458,19 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	case dialog.ActionSelectSession:
 		m.dialog.CloseDialog(dialog.SessionsID)
 		cmds = append(cmds, m.handleSelectSession(msg.Session))
+
+	// Per-message fork request from the chat view ("f" on a user message).
+	case chat.ForkFromMessageMsg:
+		if cmd := m.openForkDialogAt(msg.SessionID, msg.MessageID); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
+	// Snapshot dialog messages.
+	case dialog.ActionRestoreSnapshot:
+		m.dialog.CloseDialog(dialog.SnapshotsID)
+		cmds = append(cmds, m.restoreSnapshot(msg.SessionID, msg.CommitHash))
+	case dialog.ActionDiffSnapshot:
+		cmds = append(cmds, m.showSnapshotDiff(msg.SessionID, msg.CommitHash))
 
 	// Open dialog message.
 	case dialog.ActionForkSession:
@@ -6847,6 +6868,10 @@ func (m *UI) openDialog(id string) tea.Cmd {
 		}
 	case dialog.FilePickerID:
 		if cmd := m.openFilesDialog(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	case dialog.SnapshotsID:
+		if cmd := m.openSnapshotsDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	case dialog.ChannelsID:
