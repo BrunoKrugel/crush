@@ -148,7 +148,13 @@ crush --continue
 		)
 		go ws.Subscribe(program)
 
-		if _, err := program.Run(); err != nil {
+		restoreStderr, err := detachStderr()
+		if err != nil {
+			slog.Warn("Failed to detach stderr from the terminal", "error", err)
+		}
+		_, err = program.Run()
+		restoreStderr()
+		if err != nil {
 			slog.Error("TUI run error", "error", err)
 			return errors.New("Crush crashed. Please copy the stacktrace above and open an issue at https://github.com/charmbracelet/crush/issues/new?template=bug.yml") //nolint:staticcheck
 		}

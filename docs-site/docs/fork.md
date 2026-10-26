@@ -129,6 +129,7 @@ separately.
 
 | Fix | Symptom it removes |
 | --- | --- |
+| Forked child output tears the TUI | On macOS under memory pressure, the malloc stack logger prints into the fork-to-exec window of every forked child, corrupting the TUI. fd 2 is detached to `/dev/null` while the TUI runs; Go's stderr and crash reports keep the terminal. | upstream PR #4140 |
 | Quitting abandons work in flight | Closing the terminal window or stopping the server through a service manager killed the process outright: active runs never wound down, and the next visit to the session showed a step that still looked like it was running. External stop signals now go through the ordinary workspace shutdown, so runs record their terminal state, and a shutdown while work is genuinely still running says so in the log. | upstream branch `fix/shutdown-records-work` |
 | Cancelled turn streams keep running | Cancelling a turn left the provider stream running to its natural end whenever the request timeout was off, and a turn whose stream only ever sent keepalives ran until the (disabled) timeout. Cancelling now stops the stream immediately even with the timeout off, a keepalive-only stream ends at the stall budget, and a cancelled turn finishes cleanly. | upstream branch `fix/cancel-stops-stream` |
 | Oversized images rejected by the provider | A screenshot past the provider's per-image limits failed the whole request. Oversized images are now rescaled into the limits instead. | upstream branch `fix/oversized-images` |
