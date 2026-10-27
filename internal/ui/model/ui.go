@@ -7194,6 +7194,23 @@ func (m *UI) handlePermissionNotification(notification permission.PermissionNoti
 		}
 	}
 
+	// A cancelled notification (the turn was cancelled while the prompt
+	// was open) is a final resolution too: the prompt is gone and the
+	// tool call is dead with it.
+	if notification.Cancelled {
+		if toolItem := m.chat.MessageItem(notification.ToolCallID); toolItem != nil {
+			if permItem, ok := toolItem.(chat.ToolMessageItem); ok {
+				permItem.SetStatus(chat.ToolStatusError)
+			}
+		}
+		if d := m.dialog.Dialog(dialog.PermissionsID); d != nil {
+			if perm, ok := d.(*dialog.Permissions); ok && perm.ToolCallID() == notification.ToolCallID {
+				m.dialog.CloseDialog(dialog.PermissionsID)
+			}
+		}
+		return
+	}
+
 	// If this notification reflects a final resolution (granted or denied),
 	// dismiss any open permissions dialog whose tool call ID matches. This
 	// covers the case where another client resolved the request remotely.

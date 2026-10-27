@@ -2,6 +2,8 @@ package permission
 
 import (
 	"context"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,4 +98,61 @@ func TestUserDenialFiresPermissionDeniedHooks(t *testing.T) {
 		Action:     "run",
 	})
 	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+// TestCancelledRequestNotifiesAndFiresResult verifies the abandoned-prompt
+// path: a turn cancelled while the prompt was open publishes a cancelled
+// notification, fires a PermissionResult hook with the cancelled outcome,
+// and the request can no longer be granted.
+func TestCancelledRequestNotifiesAndFiresResult(t *testing.T) {
+	t.Parallel()
+
+	hookFile := t.TempDir() + "/hook.log"
+	svc := NewPermissionService(t.TempDir(), false, nil)
+	svc.SetPrePermission(hooks.NewRunner(hooks.Static(map[string][]config.HookConfig{
+		hooks.EventPermissionRequest: {},
+		hooks.EventPermissionResult:  {{Command: `cat >> ` + hookFile + `; echo done >> ` + hookFile}},
+	}), t.TempDir(), t.TempDir()), blindTranscript)
+
+	notifications := svc.SubscribeNotifications(t.Context())
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() {
+		_, err := svc.Request(ctx, CreatePermissionRequest{
+			SessionID:  "cancel-session",
+			ToolCallID: "cancel-call",
+			ToolName:   "bash",
+			Action:     "run",
+		})
+		done <- err
+	}()
+
+	// Wait for the prompt to be raised, then abandon it.
+	require.Eventually(t, func() bool {
+		_, active := svc.ActiveRequest()
+		return active
+	}, 5*time.Second, 10*time.Millisecond)
+	cancel()
+	require.ErrorIs(t, <-done, context.Canceled)
+
+	var cancelled bool
+	timeout := time.After(5 * time.Second)
+	for !cancelled {
+		select {
+		case ev := <-notifications:
+			if ev.Payload.Cancelled {
+				cancelled = true
+			}
+		case <-timeout:
+			t.Fatal("cancelled notification was never published")
+		}
+	}
+	require.True(t, cancelled)
+
+	// The PermissionResult hook observed the cancellation: the payload
+	// it received carries the decision.
+	require.Eventually(t, func() bool {
+		data, err := os.ReadFile(hookFile)
+		return err == nil && strings.Contains(string(data), `"decision":"cancelled"`)
+	}, 5*time.Second, 10*time.Millisecond)
 }

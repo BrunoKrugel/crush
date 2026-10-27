@@ -78,11 +78,47 @@ type CreatePermissionRequest struct {
 	Path        string `json:"path"`
 }
 
+// ToPermissionRequest renders the creation options as the
+// PermissionRequest the prompt would carry. Used where a hook fires
+// before any prompt exists.
+func (opts CreatePermissionRequest) ToPermissionRequest() PermissionRequest {
+	return PermissionRequest{
+		ID:          opts.ToolCallID,
+		SessionID:   opts.SessionID,
+		ToolCallID:  opts.ToolCallID,
+		ToolName:    opts.ToolName,
+		Description: opts.Description,
+		Action:      opts.Action,
+		Params:      opts.Params,
+		Path:        opts.Path,
+	}
+}
+
 type PermissionNotification struct {
 	SessionID  string `json:"session_id"`
 	ToolCallID string `json:"tool_call_id"`
 	Granted    bool   `json:"granted"`
 	Denied     bool   `json:"denied"`
+	// Cancelled is set when the request was abandoned before a decision
+	// (the turn was cancelled while the prompt was open).
+	Cancelled bool `json:"cancelled,omitempty"`
+}
+
+// Outcome is how a permission prompt the user saw was resolved.
+type Outcome string
+
+const (
+	OutcomeGranted   Outcome = "granted"
+	OutcomeDenied    Outcome = "denied"
+	OutcomeCancelled Outcome = "cancelled"
+)
+
+// outcomeOf maps a prompt's boolean answer onto its outcome.
+func outcomeOf(granted bool) Outcome {
+	if granted {
+		return OutcomeGranted
+	}
+	return OutcomeDenied
 }
 
 type PermissionRequest struct {
@@ -213,19 +249,11 @@ func (s *permissionService) resolve(permission PermissionRequest, granted, denie
 		onResolve()
 	}
 
-	// A user denial also fires the PermissionDenied hooks
-	// fire-and-forget. The detail mirrors the request the prompt
-	// carried.
-	if denied && s.prePermissionRunner != nil {
-		s.firePermissionDenied(context.Background(), hooks.PermissionDetail{
-			ToolName:    permission.ToolName,
-			Action:      permission.Action,
-			Path:        permission.Path,
-			Description: permission.Description,
-		}, CreatePermissionRequest{
-			SessionID:  permission.SessionID,
-			ToolCallID: permission.ToolCallID,
-		}, "")
+	// Every resolution fires a PermissionResult hook, fire-and-forget:
+	// granted, denied, and (from Request's cancel path) cancelled. The
+	// detail mirrors the request the prompt carried.
+	if s.prePermissionRunner != nil {
+		s.firePermissionResult(context.Background(), permission, outcomeOf(granted))
 	}
 
 	s.notificationBroker.Publish(pubsub.CreatedEvent, PermissionNotification{
@@ -339,7 +367,9 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 				})
 				return true, nil
 			case hooks.DecisionDeny:
-				s.firePermissionDenied(ctx, detail, opts, transcript)
+				if s.prePermissionRunner != nil {
+					s.firePermissionResult(ctx, opts.ToPermissionRequest(), OutcomeDenied)
+				}
 				s.notificationBroker.Publish(pubsub.CreatedEvent, PermissionNotification{
 					SessionID:  opts.SessionID,
 					ToolCallID: opts.ToolCallID,
@@ -378,16 +408,9 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 				reason = "denied by policy"
 			}
 			s.rememberDenial(opts.ToolCallID, reason)
-			var transcript string
-			if s.transcriptFn != nil {
-				transcript, _ = s.transcriptFn(ctx, opts.SessionID)
+			if s.prePermissionRunner != nil {
+				s.firePermissionResult(ctx, opts.ToPermissionRequest(), OutcomeDenied)
 			}
-			s.firePermissionDenied(ctx, hooks.PermissionDetail{
-				ToolName:    opts.ToolName,
-				Action:      opts.Action,
-				Path:        opts.Path,
-				Description: opts.Description,
-			}, opts, transcript)
 			s.notificationBroker.Publish(pubsub.CreatedEvent, PermissionNotification{
 				SessionID:  opts.SessionID,
 				ToolCallID: opts.ToolCallID,
@@ -458,6 +481,20 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 
 	select {
 	case <-ctx.Done():
+		// The caller gave up (turn cancelled while the prompt was open).
+		// Winning the Take race matters: a decision arriving now is a
+		// resolution, not a cancellation. A cancelled request cannot be
+		// granted later.
+		if _, ok := s.pendingRequests.Take(permission.ID); ok {
+			s.notificationBroker.Publish(pubsub.CreatedEvent, PermissionNotification{
+				SessionID:  opts.SessionID,
+				ToolCallID: opts.ToolCallID,
+				Cancelled:  true,
+			})
+			if s.prePermissionRunner != nil {
+				s.firePermissionResult(context.Background(), permission, OutcomeCancelled)
+			}
+		}
 		return false, ctx.Err()
 	case granted := <-respCh:
 		return granted, nil
@@ -514,9 +551,32 @@ func (s *permissionService) SetAutoModeEnabled(enabled bool) {
 // short-circuits it; silence falls through) and PermissionDenied after
 // a denial (fire-and-forget). Either function may be nil together with
 // an empty runner; passing nil disables the events again.
-// firePermissionDenied runs the PermissionDenied hooks fire-and-forget:
-// the denial already happened, so a slow or failing hook never blocks
-// or changes it.
+func (s *permissionService) firePermissionResult(ctx context.Context, permission PermissionRequest, outcome Outcome) {
+	detail := hooks.PermissionDetail{
+		ToolName:    permission.ToolName,
+		Action:      permission.Action,
+		Path:        permission.Path,
+		Description: permission.Description,
+	}
+	var transcript string
+	if s.transcriptFn != nil {
+		var err error
+		transcript, err = s.transcriptFn(ctx, permission.SessionID)
+		if err != nil {
+			slog.Warn("Failed to build the PermissionResult transcript", "error", err)
+		}
+	}
+	go func() {
+		fireCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		ev := hooks.PermissionEvent(
+			hooks.EventPermissionResult, permission.SessionID, detail, transcript,
+		)
+		ev.Decision = string(outcome)
+		s.prePermissionRunner.Run(fireCtx, ev)
+	}()
+}
+
 func (s *permissionService) firePermissionDenied(ctx context.Context, detail hooks.PermissionDetail, opts CreatePermissionRequest, transcript string) {
 	if s.prePermissionRunner == nil {
 		return
