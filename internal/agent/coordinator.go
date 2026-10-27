@@ -225,6 +225,7 @@ type coordinator struct {
 	semanticClient       *semantic.Client
 	skillTracker         *skills.Tracker
 	builds               map[*readiness]struct{}
+	hookRunner           *hooks.Runner
 	promptBuildHook      func()
 	cronStore            *scheduler.Store
 	semanticSymbols      *symbols.Extractor
@@ -289,6 +290,11 @@ type CoordinatorOptions struct {
 	// provider returning nil, disables it. Use StaticMemory for a
 	// value that never changes.
 	Memory MemoryProvider
+
+	// HookRunner runs user hooks for every event. Nil runs nothing. The
+	// app owns the single runner and reads hook config through its
+	// Source on each event, so reloads need no extra wiring (#3146).
+	HookRunner *hooks.Runner
 }
 
 func NewCoordinator(ctx context.Context, opts CoordinatorOptions) (Coordinator, error) {
@@ -312,6 +318,7 @@ func NewCoordinator(ctx context.Context, opts CoordinatorOptions) (Coordinator, 
 
 	c := &coordinator{
 		cfg:             opts.Config,
+		hookRunner:      opts.HookRunner,
 		sessions:        opts.Sessions,
 		messages:        opts.Messages,
 		permissions:     opts.Permissions,
@@ -1357,11 +1364,9 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 	allowedCommands := append(append([]string{}, bashOpts.AllowedCommands...), bashOverrides.AllowedCommands...)
 	allowAllCommands := bashOpts.AllowAllCommands || bashOverrides.AllowAllCommands
 
-	// Build hook runner if PreToolUse hooks are configured.
-	var hookRunner *hooks.Runner
-	if preToolHooks := c.cfg.Config().Hooks[hooks.EventPreToolUse]; len(preToolHooks) > 0 {
-		hookRunner = hooks.NewRunner(hooks.Static(c.cfg.Config().Hooks), c.cfg.WorkingDir(), c.cfg.WorkingDir())
-	}
+	// Tool hooks run through the app-owned runner; it yields an empty
+	// result when no hooks are configured, so wrapping is unconditional.
+	hookRunner := c.hookRunner
 
 	allTools = append(
 		allTools,
@@ -2788,11 +2793,7 @@ func (c *coordinator) compactionHooks(isSubAgent bool) func(string) CompactionHo
 		return nil
 	}
 	return func(event string) CompactionHookRunner {
-		configured := c.cfg.Config().Hooks
-		if len(configured[event]) == 0 {
-			return nil
-		}
-		return hooks.NewRunner(hooks.Static(configured), c.cfg.WorkingDir(), c.cfg.WorkingDir())
+		return c.hookRunner
 	}
 }
 

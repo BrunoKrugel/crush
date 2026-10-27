@@ -32,6 +32,7 @@ import (
 	"github.com/charmbracelet/crush/internal/herdr"
 	"github.com/charmbracelet/crush/internal/history"
 	"github.com/charmbracelet/crush/internal/honcho"
+	"github.com/charmbracelet/crush/internal/hooks"
 	"github.com/charmbracelet/crush/internal/log"
 	"github.com/charmbracelet/crush/internal/lsp"
 	"github.com/charmbracelet/crush/internal/message"
@@ -103,6 +104,10 @@ type App struct {
 	// mode is enabled in user config. The classifier model is attached
 	// after the coordinator exists.
 	autoMode *automode.AutoMode
+
+	// hookRunner runs user hooks for every event; it reads the config
+	// store on each event so reloads need no extra wiring (#3146).
+	hookRunner *hooks.Runner
 }
 
 // New initializes a new application instance. skillsMgr carries the
@@ -157,6 +162,24 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 	// restores the files captured at its fork point. Both are optional.
 	app.snapshots = newSnapshotService(conn, store)
 	app.Forks = fork.New(sessions, messages, q, app.snapshots, store.WorkingDir())
+
+	// The hook runner is the single runner for every event; its Source
+	// re-reads the config store on each event, so hook config reloads
+	// apply without restart (#3146). It also drives the permission hook
+	// events: PermissionRequest ahead of the prompt, PermissionResult
+	// after a denial, with the reasoning-blind transcript attached.
+	app.hookRunner = hooks.NewRunner(func() map[string][]hooks.HookConfig {
+		return store.Config().Hooks
+	}, store.WorkingDir(), store.WorkingDir())
+	if len(cfg.Hooks) > 0 {
+		app.Permissions.SetPrePermission(app.hookRunner, func(ctx context.Context, sessionID string) (string, error) {
+			msgs, err := messages.List(ctx, sessionID)
+			if err != nil {
+				return "", err
+			}
+			return transcript.Blind(msgs), nil
+		})
+	}
 
 	// Native auto mode is opt-in. When configured, it is wired into the
 	// permission service as a policy hook ahead of the normal prompt.
@@ -1012,6 +1035,7 @@ func (app *App) initCoderAgent(ctx context.Context, interactive bool) error {
 	snapshots := app.snapshots
 	coordinatorOpts := agent.CoordinatorOptions{
 		Config:      app.config,
+		HookRunner:  app.hookRunner,
 		Sessions:    app.Sessions,
 		Messages:    app.Messages,
 		Permissions: app.Permissions,
