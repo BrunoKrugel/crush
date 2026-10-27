@@ -12,6 +12,7 @@ import (
 	"charm.land/fantasy"
 	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/filetracker"
+	"github.com/charmbracelet/crush/internal/hooks"
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/stretchr/testify/require"
@@ -359,4 +360,13 @@ func TestSniffImageMimeType(t *testing.T) {
 			require.Equal(t, tc.want, sniffImageMimeType(tc.data, tc.fallback))
 		})
 	}
+}
+
+func (m *mockViewPermissionService) AutoModeEnabled() bool { return false }
+
+func (m *mockViewPermissionService) SetAutoModeEnabled(enabled bool) {}
+
+func (m *mockViewPermissionService) SetPermissionHooks(...permission.PermissionHooks) {}
+
+func (m *mockViewPermissionService) SetPrePermission(*hooks.Runner, func(context.Context, string) (string, error)) {
 }

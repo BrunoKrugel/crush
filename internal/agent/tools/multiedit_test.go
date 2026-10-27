@@ -10,6 +10,7 @@ import (
 	"charm.land/fantasy"
 	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/history"
+	"github.com/charmbracelet/crush/internal/hooks"
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/stretchr/testify/require"
@@ -326,4 +327,13 @@ func TestProcessMultiEditWithCreationPartialFailure(t *testing.T) {
 	require.Equal(t, 3, meta.EditsFailed[0].Index)
 	require.Equal(t, "", meta.OldContent)
 	require.Equal(t, "one\nTWO\nthree\n", meta.NewContent)
+}
+
+func (m *mockPermissionService) AutoModeEnabled() bool { return false }
+
+func (m *mockPermissionService) SetAutoModeEnabled(enabled bool) {}
+
+func (m *mockPermissionService) SetPermissionHooks(...permission.PermissionHooks) {}
+
+func (m *mockPermissionService) SetPrePermission(*hooks.Runner, func(context.Context, string) (string, error)) {
 }

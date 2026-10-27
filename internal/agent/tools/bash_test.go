@@ -9,6 +9,7 @@ import (
 	"charm.land/fantasy"
 	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
+	"github.com/charmbracelet/crush/internal/hooks"
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/shell"
@@ -357,3 +358,11 @@ func TestBlockFuncs_AllowedCommandNotBlocked(t *testing.T) {
 	// allowAllCommands drops every blocker, including argument-level ones.
 	require.Empty(t, blockFuncs(nil, true))
 }
+
+func (m *mockBashPermissionService) AutoModeEnabled() bool { return false }
+
+func (m *mockBashPermissionService) SetAutoModeEnabled(enabled bool) {}
+
+func (m *recordingPermissionService) AutoModeEnabled() bool { return false }
+
+func (m *recordingPermissionService) SetAutoModeEnabled(enabled bool) {}
