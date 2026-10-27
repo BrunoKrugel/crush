@@ -326,7 +326,7 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 		if terr != nil {
 			slog.Warn("Failed to build the PrePermission transcript", "error", terr)
 		}
-		agg, herr := s.prePermissionRunner.RunPermission(ctx, hooks.EventPrePermission, opts.SessionID, detail, transcript)
+		agg, herr := s.prePermissionRunner.RunPermission(ctx, hooks.EventPermissionRequest, opts.SessionID, detail, transcript)
 		if herr != nil {
 			slog.Warn("PrePermission hooks failed", "error", herr)
 		} else {
@@ -524,7 +524,7 @@ func (s *permissionService) firePermissionDenied(ctx context.Context, detail hoo
 	go func() {
 		fireCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
-		if _, err := s.prePermissionRunner.RunPermission(fireCtx, hooks.EventPermissionDenied, opts.SessionID, detail, transcript); err != nil {
+		if _, err := s.prePermissionRunner.RunPermission(fireCtx, hooks.EventPermissionResult, opts.SessionID, detail, transcript); err != nil {
 			slog.Warn("PermissionDenied hooks failed", "error", err)
 		}
 	}()

@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	"charm.land/fantasy"
 	"github.com/bytedance/sonic"
@@ -55,11 +54,11 @@ func (h *hookedTool) SetProviderOptions(opts fantasy.ProviderOptions) {
 
 func (h *hookedTool) Run(ctx context.Context, call fantasy.ToolCall) (fantasy.ToolResponse, error) {
 	sessionID := tools.GetSessionFromContext(ctx)
-	result, err := h.runner.Run(ctx, hooks.EventPreToolUse, sessionID, call.Name, call.Input)
-	if err != nil {
-		slog.Warn("Hook execution error, proceeding with tool call",
-			"tool", call.Name, "error", err)
-	}
+	result := h.runner.Run(ctx, hooks.Event{
+		Name:      hooks.EventPreToolUse,
+		SessionID: sessionID,
+		Tool:      &hooks.ToolCall{ID: call.ID, Name: call.Name, Input: call.Input},
+	})
 
 	if result.Decision == hooks.DecisionDeny || result.Halt {
 		reason := fmt.Sprintf("Tool call blocked by hook. Reason: %s", result.Reason)

@@ -347,7 +347,7 @@ func (c *coordinator) buildDispatchTools(workerCfg config.Agent, t *DispatchTool
 	// session's ID, which is what the hook sees.
 	var hookRunner *hooks.Runner
 	if preToolHooks := c.cfg.Config().Hooks[hooks.EventPreToolUse]; len(preToolHooks) > 0 {
-		hookRunner = hooks.NewRunner(preToolHooks, c.cfg.WorkingDir(), c.cfg.WorkingDir())
+		hookRunner = hooks.NewRunner(hooks.Static(c.cfg.Config().Hooks), c.cfg.WorkingDir(), c.cfg.WorkingDir())
 	}
 
 	// Every dispatched tool call carries the workspace root on its

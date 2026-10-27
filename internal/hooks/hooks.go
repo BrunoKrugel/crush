@@ -7,27 +7,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/bytedance/sonic"
 	"github.com/tidwall/sjson"
-)
-
-// Hook event name constants.
-const (
-	EventPreToolUse = "PreToolUse"
-	// EventPreCompact fires before a session is compacted, with the region a
-	// checkpoint is about to replace. Denying it skips the compaction.
-	EventPreCompact = "PreCompact"
-	// EventPostCompact fires once a checkpoint has been written and the
-	// session saved. Its decision is recorded, not enforced: the compaction
-	// has already happened.
-	EventPostCompact = "PostCompact"
-	// EventPrePermission fires right before the permission service is
-	// about to prompt the user. An allow or deny short-circuits the
-	// prompt; silence falls through to it.
-	EventPrePermission = "PrePermission"
-	// EventPermissionDenied fires after a permission request has been
-	// denied. Fire-and-forget: it does not block the denial.
-	EventPermissionDenied = "PermissionDenied"
 )
 
 // HaltExitCode is the exit code that halts the whole turn. 2 blocks the
@@ -39,22 +19,25 @@ const HaltExitCode = 49
 // HookMetadata is embedded in tool response metadata so the UI can
 // display a hook indicator.
 type HookMetadata struct {
-	Decision     string     `json:"decision"`
-	Reason       string     `json:"reason,omitempty"`
-	Hooks        []HookInfo `json:"hooks,omitempty"`
-	HookCount    int        `json:"hook_count"`
-	Halt         bool       `json:"halt,omitempty"`
-	InputRewrite bool       `json:"input_rewrite,omitempty"`
+	HookCount     int        `json:"hook_count"`
+	Decision      string     `json:"decision"`
+	Halt          bool       `json:"halt,omitempty"`
+	Reason        string     `json:"reason,omitempty"`
+	InputRewrite  bool       `json:"input_rewrite,omitempty"`
+	OutputRewrite bool       `json:"output_rewrite,omitempty"`
+	Hooks         []HookInfo `json:"hooks,omitempty"`
 }
 
 // HookInfo identifies a single hook that ran and its individual result.
 type HookInfo struct {
-	Name         string `json:"name"`
-	Matcher      string `json:"matcher,omitempty"`
-	Decision     string `json:"decision"`
-	Reason       string `json:"reason,omitempty"`
-	Halt         bool   `json:"halt,omitempty"`
-	InputRewrite bool   `json:"input_rewrite,omitempty"`
+	Name          string `json:"name"`
+	Event         string `json:"event,omitempty"`
+	Matcher       string `json:"matcher,omitempty"`
+	Decision      string `json:"decision"`
+	Halt          bool   `json:"halt,omitempty"`
+	Reason        string `json:"reason,omitempty"`
+	InputRewrite  bool   `json:"input_rewrite,omitempty"`
+	OutputRewrite bool   `json:"output_rewrite,omitempty"`
 }
 
 // Decision represents the outcome of a single hook execution.
@@ -82,30 +65,37 @@ func (d Decision) String() string {
 
 // HookResult holds the parsed output of a single hook execution.
 type HookResult struct {
-	Reason       string
-	Context      string
-	UpdatedInput string
-	Decision     Decision
-	Halt         bool
+	Decision      Decision
+	Halt          bool   // If true, halt the whole turn.
+	Reason        string // Deny or halt reason (same field, different audience).
+	Context       string
+	UpdatedInput  string // Shallow-merge patch against tool_input (opaque JSON).
+	UpdatedOutput string // Replacement for the tool's output (PostToolUse).
 }
 
 // AggregateResult holds the combined outcome of all hooks for an event.
 type AggregateResult struct {
-	Reason       string
-	Context      string
-	UpdatedInput string
-	Hooks        []HookInfo
-	Decision     Decision
-	HookCount    int
-	Halt         bool
+	Decision      Decision
+	Halt          bool       // Any hook requested halt.
+	HookCount     int        // Number of hooks that ran.
+	Hooks         []HookInfo // Info about each hook that ran (config order).
+	Reason        string     // Concatenated deny/halt reasons (newline-separated).
+	Context       string     // Concatenated context from all hooks.
+	UpdatedInput  string     // Merged tool_input JSON (empty if no patches).
+	UpdatedOutput string     // Replacement tool output; the last hook to set it wins.
+}
+
+// Blocked reports whether any hook denied the action or halted the turn.
+func (a AggregateResult) Blocked() bool {
+	return a.Decision == DecisionDeny || a.Halt
 }
 
 // aggregate merges multiple HookResults into a single AggregateResult.
 // Results are processed in config order (the order of the slice). Deny
 // wins over allow, allow wins over none. Halt is sticky. Reasons and
 // context concatenate in order. updated_input patches shallow-merge in
-// order against the original tool input; later patches override earlier
-// ones on colliding keys.
+// order against the original tool input; updated_output is a whole
+// replacement, so the last hook to set it wins.
 func aggregate(results []HookResult, origToolInput string) AggregateResult {
 	var (
 		decision Decision
@@ -114,6 +104,7 @@ func aggregate(results []HookResult, origToolInput string) AggregateResult {
 		contexts []string
 		merged   = origToolInput
 		anyPatch = false
+		output   string
 	)
 	for _, r := range results {
 		switch r.Decision {
@@ -140,6 +131,9 @@ func aggregate(results []HookResult, origToolInput string) AggregateResult {
 		if r.Context != "" {
 			contexts = append(contexts, r.Context)
 		}
+		if r.UpdatedOutput != "" {
+			output = r.UpdatedOutput
+		}
 		if r.UpdatedInput != "" {
 			next, err := shallowMerge(merged, r.UpdatedInput)
 			if err != nil {
@@ -156,9 +150,10 @@ func aggregate(results []HookResult, origToolInput string) AggregateResult {
 	}
 
 	agg := AggregateResult{
-		Decision:  decision,
-		Halt:      halt,
-		HookCount: len(results),
+		Decision:      decision,
+		Halt:          halt,
+		HookCount:     len(results),
+		UpdatedOutput: output,
 	}
 	if anyPatch {
 		agg.UpdatedInput = merged
@@ -182,14 +177,14 @@ func shallowMerge(base, patch string) (string, error) {
 	}
 	// Ensure base is an object so sjson has somewhere to write.
 	var baseAny any
-	if err := sonic.Unmarshal([]byte(base), &baseAny); err != nil {
+	if err := json.Unmarshal([]byte(base), &baseAny); err != nil {
 		return "", err
 	}
 	if _, ok := baseAny.(map[string]any); !ok {
 		return "", errNotObject("tool_input")
 	}
 	var patchMap map[string]json.RawMessage
-	if err := sonic.Unmarshal([]byte(patch), &patchMap); err != nil {
+	if err := json.Unmarshal([]byte(patch), &patchMap); err != nil {
 		return "", errNotObject("updated_input")
 	}
 	out := base

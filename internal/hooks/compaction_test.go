@@ -1,25 +1,28 @@
 package hooks
 
 import (
+	"encoding/json"
 	"testing"
 
-	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildCompactionPayload(t *testing.T) {
+func TestCompactionEventCarriesDetail(t *testing.T) {
 	t.Parallel()
 
-	data := BuildCompactionPayload(CompactionDetail{
+	ev := CompactionEvent(EventPreCompact, "s-1", CompactionDetail{
 		Trigger:      "auto",
 		Instructions: "keep the failing test names",
 		Messages:     12,
 		Tokens:       40_000,
 	})
+	require.Equal(t, EventPreCompact, ev.Name)
+	require.Equal(t, "auto", ev.Trigger)
+	require.NotNil(t, ev.Tool)
 
 	var got map[string]any
-	require.NoError(t, sonic.Unmarshal([]byte(data), &got))
+	require.NoError(t, json.Unmarshal([]byte(ev.Tool.Input), &got))
 	assert.Equal(t, "auto", got["trigger"])
 	assert.Equal(t, "keep the failing test names", got["instructions"])
 	assert.Equal(t, float64(12), got["messages"])

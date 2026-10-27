@@ -39,7 +39,7 @@ func (h *shellPermissionHooks) PrePermission(ctx context.Context, req Permission
 			transcriptJSON = t
 		}
 	}
-	agg, err := h.runner.RunPermission(ctx, hooks.EventPrePermission, req.SessionID, detail, transcriptJSON)
+	agg, err := h.runner.RunPermission(ctx, hooks.EventPermissionRequest, req.SessionID, detail, transcriptJSON)
 	if err != nil {
 		slog.Warn("PrePermission hooks failed", "error", err)
 		return PreHookResult{Decision: HookDecisionNone}
@@ -74,7 +74,7 @@ func (h *shellPermissionHooks) PermissionDenied(ctx context.Context, req Permiss
 	go func() {
 		fireCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
-		if _, err := h.runner.RunPermission(fireCtx, hooks.EventPermissionDenied, req.SessionID, detail, transcriptJSON); err != nil {
+		if _, err := h.runner.RunPermission(fireCtx, hooks.EventPermissionResult, req.SessionID, detail, transcriptJSON); err != nil {
 			slog.Warn("PermissionDenied hooks failed", "error", err)
 		}
 	}()

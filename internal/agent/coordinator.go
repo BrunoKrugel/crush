@@ -1360,7 +1360,7 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 	// Build hook runner if PreToolUse hooks are configured.
 	var hookRunner *hooks.Runner
 	if preToolHooks := c.cfg.Config().Hooks[hooks.EventPreToolUse]; len(preToolHooks) > 0 {
-		hookRunner = hooks.NewRunner(preToolHooks, c.cfg.WorkingDir(), c.cfg.WorkingDir())
+		hookRunner = hooks.NewRunner(hooks.Static(c.cfg.Config().Hooks), c.cfg.WorkingDir(), c.cfg.WorkingDir())
 	}
 
 	allTools = append(
@@ -2788,11 +2788,11 @@ func (c *coordinator) compactionHooks(isSubAgent bool) func(string) CompactionHo
 		return nil
 	}
 	return func(event string) CompactionHookRunner {
-		configured := c.cfg.Config().Hooks[event]
-		if len(configured) == 0 {
+		configured := c.cfg.Config().Hooks
+		if len(configured[event]) == 0 {
 			return nil
 		}
-		return hooks.NewRunner(configured, c.cfg.WorkingDir(), c.cfg.WorkingDir())
+		return hooks.NewRunner(hooks.Static(configured), c.cfg.WorkingDir(), c.cfg.WorkingDir())
 	}
 }
 

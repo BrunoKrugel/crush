@@ -20,9 +20,9 @@ func TestPrePermissionAllowSkipsThePrompt(t *testing.T) {
 	t.Parallel()
 
 	svc := NewPermissionService(t.TempDir(), false, nil)
-	svc.SetPrePermission(hooks.NewRunner([]config.HookConfig{
-		{Command: `echo '{"decision":"allow"}'`},
-	}, t.TempDir(), t.TempDir()), blindTranscript)
+	svc.SetPrePermission(hooks.NewRunner(hooks.Static(map[string][]config.HookConfig{
+		hooks.EventPermissionRequest: {{Command: `echo '{"decision":"allow"}'`}},
+	}), t.TempDir(), t.TempDir()), blindTranscript)
 
 	granted, err := svc.Request(t.Context(), CreatePermissionRequest{
 		SessionID:  "sess",
@@ -38,9 +38,9 @@ func TestPrePermissionDenyBlocksThePrompt(t *testing.T) {
 	t.Parallel()
 
 	svc := NewPermissionService(t.TempDir(), false, nil)
-	svc.SetPrePermission(hooks.NewRunner([]config.HookConfig{
-		{Command: `echo '{"decision":"deny","reason":"nope"}'`},
-	}, t.TempDir(), t.TempDir()), blindTranscript)
+	svc.SetPrePermission(hooks.NewRunner(hooks.Static(map[string][]config.HookConfig{
+		hooks.EventPermissionRequest: {{Command: `echo '{"decision":"deny","reason":"nope"}'`}},
+	}), t.TempDir(), t.TempDir()), blindTranscript)
 
 	granted, err := svc.Request(t.Context(), CreatePermissionRequest{
 		SessionID:  "sess",
@@ -57,9 +57,9 @@ func TestPrePermissionSilenceFallsThroughToThePrompt(t *testing.T) {
 	defer cancel()
 
 	svc := NewPermissionService(t.TempDir(), false, nil)
-	svc.SetPrePermission(hooks.NewRunner([]config.HookConfig{
-		{Command: `echo ok`},
-	}, t.TempDir(), t.TempDir()), blindTranscript)
+	svc.SetPrePermission(hooks.NewRunner(hooks.Static(map[string][]config.HookConfig{
+		hooks.EventPermissionRequest: {{Command: `echo ok`}},
+	}), t.TempDir(), t.TempDir()), blindTranscript)
 
 	// The prompt is the fall-through: nobody answers it, so the request
 	// stays pending until the context ends.
@@ -85,9 +85,9 @@ func TestUserDenialFiresPermissionDeniedHooks(t *testing.T) {
 	defer cancel()
 
 	svc := NewPermissionService(t.TempDir(), false, nil)
-	svc.SetPrePermission(hooks.NewRunner([]config.HookConfig{
-		{Command: `echo ok`},
-	}, t.TempDir(), t.TempDir()), blindTranscript)
+	svc.SetPrePermission(hooks.NewRunner(hooks.Static(map[string][]config.HookConfig{
+		hooks.EventPermissionRequest: {{Command: `echo ok`}},
+	}), t.TempDir(), t.TempDir()), blindTranscript)
 
 	_, err := svc.Request(ctx, CreatePermissionRequest{
 		SessionID:  "sess",

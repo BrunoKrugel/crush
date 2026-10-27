@@ -43,7 +43,7 @@ func newRunner(t *testing.T, cmd string) *hooks.Runner {
 		},
 	}
 	require.NoError(t, cfg.ValidateHooks())
-	return hooks.NewRunner(cfg.Hooks[hooks.EventPreToolUse], t.TempDir(), t.TempDir())
+	return hooks.NewRunner(hooks.Static(cfg.Hooks), t.TempDir(), t.TempDir())
 }
 
 func TestHookedTool_AllowStampsHookApproval(t *testing.T) {
