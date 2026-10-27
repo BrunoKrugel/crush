@@ -220,6 +220,7 @@ type sessionAgent struct {
 	systemPrompt       *csync.Value[string]
 	systemPromptPrefix *csync.Value[string]
 	compactionHooks    func(event string) CompactionHookRunner
+	hooks              *hooks.Runner
 	smallModel         *csync.Value[Model]
 	messageQueue       *csync.Map[string, []SessionAgentCall]
 	todoKill           func(sessionID string, reason string)
@@ -253,6 +254,7 @@ type sessionAgent struct {
 
 type SessionAgentOptions struct {
 	RunComplete          pubsub.Publisher[notify.RunComplete]
+	Hooks                *hooks.Runner
 	Ledger               ledger.Service
 	Sessions             session.Service
 	Messages             message.Service
@@ -307,6 +309,7 @@ func newSessionAgent(opts SessionAgentOptions) *sessionAgent {
 		observeMemory:        opts.ObserveMemory,
 		snapshots:            opts.Snapshots,
 		compactionHooks:      opts.CompactionHooks,
+		hooks:                opts.Hooks,
 		memory:               newMemoryHolder(opts.Memory),
 		messageQueue:         csync.NewMap[string, []SessionAgentCall](),
 		activeRequests:       csync.NewMap[string, *activeCancel](),
@@ -1181,6 +1184,14 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		} else if ctx.Err() != nil {
 			complete.Cancelled = true
 		}
+		// Exactly one end-of-turn hook fires: Interrupt when the user
+		// cancelled, StopFailure when the provider failed, TurnEnd
+		// otherwise, with the assistant's reply attached.
+		endEv := turnEndEvent(retErr, currentAssistant)
+		if complete.Cancelled && retErr == nil {
+			endEv = hooks.Event{Name: hooks.EventInterrupt}
+		}
+		a.fireTurnHook(context.WithoutCancel(ctx), call, endEv)
 		// Prefer the per-call hook when supplied so the coordinator
 		// can coalesce retries (e.g. unauthorized → re-auth → retry)
 		// into a single user-visible terminal event. The fallback
@@ -1196,6 +1207,7 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		}
 	}()
 	preparing = false
+	a.fireTurnHook(genCtx, call, hooks.Event{Name: hooks.EventTurnStart})
 
 	history, files := a.preparePrompt(msgs, largeModel.CatwalkCfg.SupportsImages, call.Attachments...)
 
@@ -1890,7 +1902,7 @@ func (a *sessionAgent) runSummarize(ctx context.Context, sessionID, instructions
 		// this compaction at this moment, not to compaction forever.
 		slog.Info("Compaction denied by hook",
 			"session_id", sessionID, "reason", result.Reason)
-		return compaction.Preview{}, nil
+		return compaction.Preview{}, fmt.Errorf("%w: %s", ErrCompactionBlocked, result.Reason)
 	}
 
 	aiMsgs, _ := a.preparePrompt(region, largeModel.CatwalkCfg.SupportsImages)
@@ -3478,8 +3490,15 @@ func (a *sessionAgent) publishSummarizing(sessionID, title string, done bool, pr
 // runCompactionHook fires one compaction event and reports whether anything
 // ran. A failing hook never blocks a compaction: only an explicit deny does.
 func (a *sessionAgent) runCompactionHook(ctx context.Context, event, sessionID string, detail hooks.CompactionDetail) (hooks.AggregateResult, bool) {
+	// The per-event factory (tests inject fakes through it) wins; the
+	// app-owned shared runner is the fallback and yields an empty
+	// result when nothing is configured.
 	if a.compactionHooks == nil {
-		return hooks.AggregateResult{}, false
+		if a.hooks == nil {
+			return hooks.AggregateResult{}, false
+		}
+		result := a.hooks.Run(ctx, hooks.CompactionEvent(event, sessionID, detail))
+		return result, true
 	}
 	runner := a.compactionHooks(event)
 	if runner == nil {

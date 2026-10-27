@@ -63,7 +63,9 @@ func TestPreCompactHookCanSkipCompaction(t *testing.T) {
 	hookRunner := &fakeCompactionHooks{denyFor: map[string]bool{hooks.EventPreCompact: true}}
 	sa.compactionHooks = hookRunner.runnerFor
 
-	require.NoError(t, sa.Summarize(ctx, sessionID, "keep the failing names", fantasy.ProviderOptions{}, nil))
+	// Upstream #3146 semantics: a denied compaction is reported as
+	// ErrCompactionBlocked instead of a silent no-op.
+	require.ErrorIs(t, sa.Summarize(ctx, sessionID, "keep the failing names", fantasy.ProviderOptions{}, nil), ErrCompactionBlocked)
 
 	require.Equal(t, []string{hooks.EventPreCompact}, hookRunner.fired,
 		"a denied compaction never reaches the model")

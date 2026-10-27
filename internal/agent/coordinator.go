@@ -1145,6 +1145,7 @@ func (c *coordinator) buildAgent(ctx context.Context, agent config.Agent, isSubA
 		Snapshots:            c.snapshots,
 		ObserveMemory:        c.observesMemory(isSubAgent),
 		CompactionHooks:      c.compactionHooks(isSubAgent),
+		Hooks:                c.hookRunner,
 		// The todo enforcement ladder (#315) applies to every agent the
 		// coordinator builds (main, plan, and agent-tool sub-agents
 		// alike) with this agent type's overrides layered over the
