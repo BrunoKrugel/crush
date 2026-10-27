@@ -160,7 +160,7 @@ func processMultiEditWithCreation(edit editContext, params MultiEditParams, call
 	if _, err := os.Stat(params.FilePath); err == nil {
 		return fantasy.NewTextErrorResponse(fmt.Sprintf("file already exists: %s", params.FilePath)), nil
 	} else if !os.IsNotExist(err) {
-		return fantasy.ToolResponse{}, fmt.Errorf("failed to access file: %w", err)
+		return fantasy.NewTextErrorResponse(fmt.Sprintf("Failed to access file: %s", err)), nil
 	}
 
 	currentContent, failedEdits, whitespaceCorrected := applyEditsToContent(firstEdit.NewString, params.Edits[1:], 1)
@@ -211,13 +211,13 @@ func processMultiEditWithCreation(edit editContext, params MultiEditParams, call
 	}
 
 	if err = writeFileWithParents(params.FilePath, []byte(currentContent)); err != nil {
-		return fantasy.ToolResponse{}, err
+		return fantasy.NewTextErrorResponse(fmt.Sprintf("Failed to write file: %s", err)), nil
 	}
 
 	// Update file history
 	_, err = edit.files.Create(edit.ctx, sessionID, params.FilePath, "")
 	if err != nil {
-		return fantasy.ToolResponse{}, fmt.Errorf("error creating file history: %w", err)
+		slog.Error("Error creating file history", "error", err)
 	}
 
 	_, err = edit.files.CreateVersion(edit.ctx, sessionID, params.FilePath, currentContent)
@@ -319,7 +319,7 @@ func processMultiEditExistingFile(edit editContext, params MultiEditParams, call
 	}
 
 	if err := commitFileChange(edit, sessionID, params.FilePath, oldContent, writeContent); err != nil {
-		return fantasy.ToolResponse{}, err
+		return fantasy.NewTextErrorResponse(fmt.Sprintf("Failed to write file: %s", err)), nil
 	}
 
 	var message string

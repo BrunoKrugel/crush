@@ -61,12 +61,15 @@ func TestWriteToolRefusesToWriteAFileItCannotRead(t *testing.T) {
 	input, err := sonic.Marshal(WriteParams{FilePath: "secret.txt", Content: "new body"})
 	require.NoError(t, err)
 
-	_, runErr := tool.Run(ctx, fantasy.ToolCall{ID: "c", Name: WriteToolName, Input: string(input)})
+	resp, runErr := tool.Run(ctx, fantasy.ToolCall{ID: "c", Name: WriteToolName, Input: string(input)})
+	require.NoError(t, runErr)
 
 	// Silently continuing here would show the user a whole-file "add" in the preview
 	// and store an empty previous version, so the write has to fail instead.
-	require.Error(t, runErr)
-	require.ErrorContains(t, runErr, "secret.txt")
+	// Recoverable failures come back as failed tool results the model can
+	// act on, not as Go errors that end the turn (upstream PR #4143).
+	require.True(t, resp.IsError)
+	require.Contains(t, resp.Content, "secret.txt")
 	require.Empty(t, perm.writeParams(), "no approval should be requested for a write we cannot describe")
 }
 

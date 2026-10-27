@@ -290,7 +290,7 @@ func NewBashTool(permissions permission.Service, workingDir, spillDir string, at
 				// jobs never count against the cap.
 				bgShell, err := bgManager.Start(context.Background(), sessionID, execWorkingDir, blockFuncs(allowedCommands, allowAllCommands), params.Command, params.Description, maxBackgroundJobs)
 				if err != nil {
-					return fantasy.ToolResponse{}, fmt.Errorf("error starting background shell: %w", err)
+					return fantasy.NewTextErrorResponse("Failed to start background shell: " + err.Error()), nil
 				}
 
 				// Wait a short time to detect fast failures (blocked commands, syntax errors, etc.)
@@ -304,7 +304,7 @@ func NewBashTool(permissions permission.Service, workingDir, spillDir string, at
 					interrupted := shell.IsInterrupt(execErr)
 					exitCode := shell.ExitCode(execErr)
 					if exitCode == 0 && !interrupted && execErr != nil {
-						return fantasy.ToolResponse{}, fmt.Errorf("[Job %s] error executing command: %w", bgShell.ID, execErr)
+						return fantasy.NewTextErrorResponse(fmt.Sprintf("[Job %s] Error executing command: %s", bgShell.ID, execErr)), nil
 					}
 
 					stdout = formatOutput(stdout, stderr, execErr, spillDir)
@@ -348,7 +348,7 @@ func NewBashTool(permissions permission.Service, workingDir, spillDir string, at
 			// the cap.
 			bgShell, err := bgManager.Start(context.Background(), sessionID, execWorkingDir, blockFuncs(allowedCommands, allowAllCommands), params.Command, params.Description, maxBackgroundJobs)
 			if err != nil {
-				return fantasy.ToolResponse{}, fmt.Errorf("error starting shell: %w", err)
+				return fantasy.NewTextErrorResponse("Failed to start shell: " + err.Error()), nil
 			}
 
 			// Wait for either completion, auto-background threshold, or context cancellation
@@ -391,7 +391,7 @@ func NewBashTool(permissions permission.Service, workingDir, spillDir string, at
 				interrupted := shell.IsInterrupt(execErr)
 				exitCode := shell.ExitCode(execErr)
 				if exitCode == 0 && !interrupted && execErr != nil {
-					return fantasy.ToolResponse{}, fmt.Errorf("[Job %s] error executing command: %w", bgShell.ID, execErr)
+					return fantasy.NewTextErrorResponse(fmt.Sprintf("[Job %s] Error executing command: %s", bgShell.ID, execErr)), nil
 				}
 
 				stdout = formatOutput(stdout, stderr, execErr, spillDir)

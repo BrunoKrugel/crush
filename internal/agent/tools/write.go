@@ -88,7 +88,7 @@ func NewWriteTool(
 					return fantasy.NewTextErrorResponse(fmt.Sprintf("File %s already contains the exact content. No changes made.", filePath)), nil
 				}
 			} else if !os.IsNotExist(err) {
-				return fantasy.ToolResponse{}, fmt.Errorf("error checking file: %w", err)
+				return fantasy.NewTextErrorResponse(fmt.Sprintf("Failed to check file: %s", err)), nil
 			}
 
 			oldContent := ""
@@ -101,7 +101,7 @@ func NewWriteTool(
 					// empty previous version in the file history, both of which are wrong
 					// in a way nothing downstream can detect. The earlier same-content
 					// check above handles its read error properly; this one did not.
-					return fantasy.ToolResponse{}, fmt.Errorf("error reading existing file %s: %w", filePath, readErr)
+					return fantasy.NewTextErrorResponse(fmt.Sprintf("Failed to read existing file %s: %s", filePath, readErr)), nil
 				}
 				oldContent = string(oldBytes)
 			}
@@ -142,7 +142,7 @@ func NewWriteTool(
 			}
 
 			if err = writeFileWithParents(filePath, []byte(params.Content)); err != nil {
-				return fantasy.ToolResponse{}, err
+				return fantasy.NewTextErrorResponse(fmt.Sprintf("Failed to write file: %s", err)), nil
 			}
 
 			// Check if file exists in history
@@ -150,8 +150,7 @@ func NewWriteTool(
 			if err != nil {
 				_, err = files.Create(ctx, sessionID, filePath, oldContent)
 				if err != nil {
-					// Log error but don't fail the operation
-					return fantasy.ToolResponse{}, fmt.Errorf("error creating file history: %w", err)
+					slog.Error("Error creating file history", "error", err)
 				}
 			}
 			if file.Content != oldContent {
