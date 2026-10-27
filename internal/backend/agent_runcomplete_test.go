@@ -196,3 +196,7 @@ func (c *errorCoordinator) DispatchLive(sessionID string) []dispatch.TodoSnapsho
 func (*errorCoordinator) ListSettledMessages(context.Context, string) ([]message.Message, error) {
 	return nil, nil
 }
+
+func (c *errorCoordinator) ClassifierModel(context.Context) (fantasy.LanguageModel, bool, error) {
+	return nil, false, nil
+}

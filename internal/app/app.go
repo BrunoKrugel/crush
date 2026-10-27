@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -108,6 +109,10 @@ type App struct {
 	// hookRunner runs user hooks for every event; it reads the config
 	// store on each event so reloads need no extra wiring (#3146).
 	hookRunner *hooks.Runner
+
+	// currentSessionID is the session the user is working in, reported
+	// by the TUI and the non-interactive runner, for SessionEnd.
+	currentSessionID atomic.Value
 }
 
 // New initializes a new application instance. skillsMgr carries the
@@ -406,10 +411,17 @@ func (app *App) resolveSession(ctx context.Context, continueSessionID string, us
 		if err != nil || sess.ParentSessionID != "" {
 			return session.Session{}, fmt.Errorf("no sessions found to continue")
 		}
+		app.TrackCurrentSession(sess.ID)
 		return sess, nil
 
 	default:
-		return app.Sessions.Create(ctx, agent.DefaultSessionName)
+		sess, err := app.Sessions.Create(ctx, agent.DefaultSessionName)
+		if err != nil {
+			return session.Session{}, err
+		}
+		app.SessionCreated(ctx, sess)
+		app.TrackCurrentSession(sess.ID)
+		return sess, nil
 	}
 }
 
@@ -1193,6 +1205,10 @@ func (app *App) Shutdown() {
 	if app.AgentCoordinator != nil {
 		app.AgentCoordinator.CancelAll()
 	}
+
+	// SessionEnd fires after the agents stopped, so Interrupt precedes
+	// it. Fire-and-forget: the hook's own timeout bounds it.
+	app.fireSessionEnd()
 
 	// Release dispatch workspaces synchronously while the app is still
 	// alive (#367): decided and workless workspaces go now, completed or

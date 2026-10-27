@@ -257,3 +257,7 @@ func (c *blockingCoordinator) DispatchLive(sessionID string) []dispatch.TodoSnap
 func (*blockingCoordinator) ListSettledMessages(context.Context, string) ([]message.Message, error) {
 	return nil, nil
 }
+
+func (c *blockingCoordinator) ClassifierModel(context.Context) (fantasy.LanguageModel, bool, error) {
+	return nil, false, nil
+}

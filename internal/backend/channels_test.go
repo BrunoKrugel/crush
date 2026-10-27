@@ -376,3 +376,7 @@ func (c *recordingCoordinator) DispatchLive(sessionID string) []dispatch.TodoSna
 func (*recordingCoordinator) ListSettledMessages(context.Context, string) ([]message.Message, error) {
 	return nil, nil
 }
+
+func (c *recordingCoordinator) ClassifierModel(context.Context) (fantasy.LanguageModel, bool, error) {
+	return nil, false, nil
+}
