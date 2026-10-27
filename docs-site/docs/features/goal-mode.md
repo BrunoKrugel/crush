@@ -27,6 +27,9 @@ budget runs out, or when you cancel it.
 
 ## When to use it
 
+While a goal is active, the header shows a `GOAL` badge with the
+remaining turn budget, so the state is visible at a glance.
+
 Goal mode is for work that is long, mechanical, and checkable:
 
 - *"make the CI green"* — one failure at a time, until the build passes;

@@ -55,7 +55,9 @@ branched, the files are not.
 ## How to use it
 
 1. Open the command palette (<kbd>ctrl+p</kbd>) and pick **Fork
-   Conversation**. The fork point defaults to your last prompt.
+   Conversation**. The fork point defaults to your last prompt — or press
+   <kbd>f</kbd> on a focused user message in the transcript to fork at
+   that exact point.
 2. Give the fork a name, or leave it empty to derive one from the source
    session.
 3. Press <kbd>tab</kbd> to ask for a fresh worktree instead of restoring
@@ -65,8 +67,8 @@ branched, the files are not.
 
 ## Limits
 
-- Forking runs in the process that owns the session database. A client
-  attached to a remote server cannot fork; run the fork from the server's
-  own TUI.
 - A fork needs a message to fork from. In a session with no prompt yet,
   there is nothing to branch.
+- Remote clients fork through the server:
+  `POST /v1/workspaces/{id}/sessions/{sid}/fork` accepts the message to
+  branch from, a title, and a worktree flag.

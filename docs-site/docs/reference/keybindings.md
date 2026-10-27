@@ -21,10 +21,13 @@ running build.
 | <kbd>ctrl+s</kbd> | Session picker |
 | <kbd>ctrl+z</kbd> | Suspend |
 | <kbd>tab</kbd> | Change focus |
-| <kbd>ctrl+y</kbd> | Toggle [yolo mode](/configuration/permissions#yolo-mode) |
+| <kbd>ctrl+y</kbd> | Cycle the permission mode: normal → [auto mode](/features/auto-mode) → [yolo](/configuration/permissions#yolo-mode) |
 :::info[Fork feature]
 <kbd>tab</kbd> is three-state here — chat, editor, sidebar — because the fork
-makes the [sidebar focusable](/fork#sidebar-and-header).
+makes the [sidebar focusable](/fork#sidebar-and-header). The command
+palette groups its system commands into sections (Sessions, Models,
+Settings, Application), scrolls with the mouse wheel, and a double click
+runs the command under the pointer.
 :::
 
 ## Editor

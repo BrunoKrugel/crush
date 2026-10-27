@@ -182,7 +182,19 @@ crush server --host unix:///tmp/crush.sock
 
 ## `stats`
 
-Show usage statistics — tokens, cost, and activity patterns.
+Show usage statistics — tokens, cost, and activity patterns — rendered as
+an HTML report.
+
+:::info[Fork feature]
+The report has a fork-features section: forked sessions, goal-mode
+sessions, snapshots, dispatched and completed agents, sessions compacted
+through the ledger, skills used (a per-skill usage chart), and a chart of
+the fork-specific tool calls. Every counter is best effort — a database
+from before a migration reports zero — and the section stays hidden when
+nothing registered. See the [snapshots](/features/snapshots),
+[forking](/features/forking), [goal mode](/features/goal-mode), and
+[dispatched agents](/agents/overview) pages for what produces them.
+:::
 
 | Flag | Does |
 | --- | --- |
