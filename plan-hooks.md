@@ -210,6 +210,22 @@ additions onto it:
   Port upstream's #3956 docs syntax fix while in there.
 - Update the builtin `crush-hooks` / `crush-config` skills.
 
+## Status
+
+| Step | Status |
+| --- | --- |
+| 1. Unified event model + runner | **Done** (2026-10-27, 987c6dcaa) |
+| 2. App-owned runner | **Done** (2026-10-27, dae49dcf2) — also fixed the gap where the permission shell hooks had no production wiring |
+| 3. Permission events | **Done** (2026-10-27, d10495277) — results on every outcome incl. cancelled; cancelled notification through proto/server/client/UI |
+| 4. Compaction events | **Done** (achieved by 1–2; the deny-skip semantics and fork detail verified by tests) |
+| 5. Tool/turn events | **Done** (2026-10-27, b168ac145) — ErrCompactionBlocked contract adopted |
+| 6. Session lifecycle | **Done** (2026-10-27, 175bb8856) |
+| 7. CC compat + docs | **Done** (2026-10-27, this commit) — README and docs-site updated |
+
+Open follow-ups (tracked below, not blocking): `include_transcript` on turn
+events (open question 3); `StopFailure`-and-watchdogs design note (open
+question 4); snapshot/fork remote endpoints for the client SDK.
+
 ## Sequencing and dependencies
 
 ```

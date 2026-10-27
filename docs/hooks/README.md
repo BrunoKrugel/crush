@@ -201,20 +201,67 @@ agent spawn sub-agents" still works.
 Hooks are keyed by event name. Only `command` is required, and you can omit
 `matcher` to match all tools.
 
-### PrePermission
+### PermissionRequest
 
-Fires right before Crush would prompt for a permission. Allow skips the
-prompt. Deny blocks the call and carries the reason back to the model.
-Silence is not an opinion: the normal prompt still runs, and so does
-auto mode when it is enabled.
+Fires when Crush is about to ask a human — either the permission prompt
+itself, or (first) as the last pre-prompt check, where an allow skips the
+prompt and a deny blocks the call and carries the reason back to the
+model. Silence is not an opinion: the normal prompt still runs, and so
+does auto mode when it is enabled.
 
 Matched against the tool name. Same envelope as `PreToolUse`.
 
-### PermissionDenied
+> [!NOTE]
+> This event was called `PrePermission` before upstream PR #3146; the old
+> name still loads with a deprecation warning.
 
-Fires after a permission request has been denied. Fire-and-forget: the
-denial already happened, so a hook here cannot undo it and a slow hook
-does not delay it. Use it to log.
+### PermissionResult
+
+Fires when a permission prompt is resolved: granted, denied, or cancelled
+(the turn was cancelled while the prompt was open). Fire-and-forget: the
+outcome already happened, so a hook here cannot change it and a slow hook
+does not delay it. The payload's `decision` field carries
+`"granted"`, `"denied"`, or `"cancelled"`; use it to log and audit.
+
+### PostToolUse and PostToolUseFailure
+
+`PostToolUse` fires after a tool succeeds; `PostToolUseFailure` after it
+fails (a Go error or an error response both count). A post hook can
+replace the output (`updated_output`), add context, or halt the turn.
+A blocking post hook cannot undo the call, so its reason is handed to
+the model as feedback instead.
+
+Matched against the tool name.
+
+### SessionStart and SessionEnd
+
+`SessionStart` fires when a session is created (`source: "startup"`) or
+resumed (`source: "resume"`). `SessionEnd` fires for the session the user
+was working in when the app exits (`reason: "exit"`), after the agents
+have stopped.
+
+### TurnStart, TurnEnd, StopFailure, and Interrupt
+
+`TurnStart` fires when the agent begins processing a prompt;
+`TurnEnd` fires when the turn completes, carrying the assistant's reply
+in `last_assistant_message`; `StopFailure` fires when the turn ends with
+a provider error; `Interrupt` when the user cancelled. Sub-agent and
+non-interactive turns fire none. Matchers do not apply.
+
+### The permission verdict order
+
+When a tool call would prompt, the checks run in a fixed order:
+
+1. hard denies (blocked commands, denied permissions)
+2. the allowlist (`allowed_tools`, `permissions.allow`, and session grants)
+3. an explicit `PreToolUse` hook allow (stamped pre-approval)
+4. **auto mode** (the in-process classifier) when enabled
+5. `PermissionRequest` hooks
+6. the human prompt
+
+A `PermissionRequest` hook can still veto what auto mode escalated, and
+auto mode cannot override a hook's deny. Whatever resolves first wins;
+everything past a resolution is skipped.
 
 ### PreCompact and PostCompact
 
@@ -630,6 +677,13 @@ hooks](https://docs.claude.com/en/docs/claude-code/hooks): the config shape,
 stdin payload, output envelope, and exit codes line up so most Claude Code
 hooks run under Crush unchanged. This document covers the Crush-specific API
 only — anything not documented here isn't guaranteed to work.
+
+Payload field names follow Claude Code where an equivalent exists:
+`hook_event_name` (kept alongside Crush's older `event`), `tool_response`
+on `PostToolUse`, `last_assistant_message` on `TurnEnd`, and the
+`permissionDecision` / `hookSpecificOutput` output forms are accepted.
+`CLAUDE_PROJECT_DIR` is exported alongside `CRUSH_PROJECT_DIR` so scripts
+written for Claude Code can locate themselves.
 
 One intentional divergence: Crush treats `updated_input` as a shallow-merge
 patch against the original `tool_input` rather than a full replacement. Keys

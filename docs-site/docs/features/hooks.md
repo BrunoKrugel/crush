@@ -108,7 +108,7 @@ hook payload carries the dispatched session's ID. Unlike `agent` and
 `agentic_fetch` they have `bash`, `edit`, `multiedit`, and `write`, so a policy
 that blocks `git push -f` or `rm -rf` stops them too.
 
-### `PrePermission`
+### `PermissionRequest`
 
 Fires when a tool call is about to prompt. An allow skips the prompt. A deny
 blocks the call and the reason is what the model sees. Silence falls through
@@ -118,11 +118,41 @@ Matched against the tool name, same as `PreToolUse`. This is the slot for a
 policy that should decide only the calls a human would otherwise approve,
 not every call.
 
-### `PermissionDenied`
+> This event was called `PrePermission` before upstream PR #3146. The old
+> name still loads with a deprecation warning.
 
-Fires after a permission request has been denied. It does not block and it
-cannot undo the denial. Use it to log or to notify. A slow hook here does
-not delay the denial.
+### `PermissionResult`
+
+Fires when a permission prompt is resolved: granted, denied, or cancelled
+(the turn was cancelled while the prompt was open). It does not block and
+it cannot change the outcome. The payload's `decision` field carries
+`"granted"`, `"denied"`, or `"cancelled"`; use it to log or to notify. A
+slow hook here does not delay the resolution.
+
+### `PostToolUse` and `PostToolUseFailure`
+
+`PostToolUse` fires after a tool succeeds; `PostToolUseFailure` after it
+fails. A post hook can replace the tool's output (`updated_output`), add
+context, or halt the turn. A blocking post hook cannot undo the call, so
+its reason is handed to the model as feedback.
+
+### `SessionStart` / `SessionEnd`, `TurnStart` / `TurnEnd`, `StopFailure`, `Interrupt`
+
+Lifecycle hooks: `SessionStart` on session creation (`source: "startup"`)
+or resume (`source: "resume"`); `SessionEnd` on app exit
+(`reason: "exit"`); `TurnStart` when the agent begins a prompt; `TurnEnd`
+when it finishes (the assistant's reply rides in
+`last_assistant_message`); `StopFailure` on a provider error; `Interrupt`
+on cancel. Sub-agent and non-interactive turns fire none. Matchers do not
+apply to any of these.
+
+### The permission verdict order
+
+When a tool call would prompt, the checks run in a fixed order: hard
+denies, the allowlist and session grants, an explicit `PreToolUse` hook
+allow, [auto mode](/features/auto-mode), `PermissionRequest` hooks, and
+finally the human prompt. A `PermissionRequest` hook can still veto what
+auto mode escalated; auto mode cannot override a hook's deny.
 
 ## Execution model
 
