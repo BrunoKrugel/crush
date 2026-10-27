@@ -17,10 +17,18 @@ need to author correct hooks.
 
 ## Supported Events
 
-`PreToolUse`, `PreCompact` and `PostCompact` are currently supported. Compaction
-events take no matcher and can only deny (skip this compaction) or halt. Event
-names are case-insensitive and
-accept snake_case (`PreToolUse`, `pretooluse`, `pre_tool_use` all work).
+- **`PreToolUse`** — before a tool call: allow, deny, halt, rewrite input, inject context.
+- **`PostToolUse` / `PostToolUseFailure`** — after a tool succeeds/fails: replace output (`updated_output`), inject context, halt.
+- **`PermissionRequest`** — before a permission prompt: allow skips the prompt, deny blocks. Fork note: this event was called `PrePermission` before upstream PR #3146; the old name still loads with a deprecation warning.
+- **`PermissionResult`** — when a prompt resolves (`decision` in the payload: `granted`, `denied`, or `cancelled`). Observational only. Fork note: formerly `PermissionDenied`.
+- **`PreCompact` / `PostCompact`** — around session compaction: `PreCompact` can deny (skip this compaction) or halt; no matcher.
+- **`SessionStart` / `SessionEnd`**, **`TurnStart` / `TurnEnd`**, **`StopFailure` / `Interrupt`** — lifecycle events; no matcher, observational.
+
+Only the five tool events take a `matcher`. Event names are case-insensitive
+and accept snake_case (`PreToolUse`, `pretooluse`, `pre_tool_use` all work).
+
+Sub-agent tool calls and sub-agent / non-interactive turns fire no hooks; the
+sub-agent tool call itself does.
 
 ## Configuration
 
@@ -59,6 +67,8 @@ the input/output contract is identical regardless of language.
 | `CRUSH_SESSION_ID`           | Current session ID                       |
 | `CRUSH_CWD`                  | Working directory                        |
 | `CRUSH_PROJECT_DIR`          | Project root directory                   |
+| `CLAUDE_PROJECT_DIR`         | Same as `CRUSH_PROJECT_DIR` (CC compat)  |
+| `CRUSH_TRANSCRIPT`           | Permission events, opt-in: the reasoning-blind transcript |
 | `CRUSH_TOOL_INPUT_COMMAND`   | For `bash` calls: the shell command      |
 | `CRUSH_TOOL_INPUT_FILE_PATH` | For file tools: the target file path     |
 
@@ -67,12 +77,22 @@ the input/output contract is identical regardless of language.
 ```json
 {
   "event": "PreToolUse",
+  "hook_event_name": "PreToolUse",
   "session_id": "313909e",
   "cwd": "/home/user/project",
   "tool_name": "bash",
   "tool_input": {"command": "rm -rf /"}
 }
 ```
+
+Field names follow Claude Code where an equivalent exists (`hook_event_name`
+is kept alongside the older `event`). Event-specific fields: `tool_response`
+(`PostToolUse`), `last_assistant_message` (`TurnEnd`), `decision` — the
+outcome: `granted`/`denied`/`cancelled` (`PermissionResult`), `source`
+(`SessionStart`), `reason` (`SessionEnd`), `trigger` (compaction events).
+On the permission events a hook configured to receive one also gets the
+reasoning-blind session transcript as the `transcript` payload field and
+the `CRUSH_TRANSCRIPT` env var.
 
 ## Output
 
@@ -114,6 +134,14 @@ policy violation).
 - **`updated_input`**: **shallow-merge patch** against `tool_input`, not a
   replacement. Keys you include overwrite; keys you don't are preserved.
   Nested objects are replaced wholesale, not deep-merged. Ignored on deny/halt.
+
+## The Permission Verdict Order
+
+When a tool call would prompt, the checks run in order: hard denies →
+allowlist/session grants → an explicit `PreToolUse` hook allow →
+auto mode (when enabled) → `PermissionRequest` hooks → the human prompt.
+A `PermissionRequest` hook can veto what auto mode escalated; auto mode
+cannot override a hook's deny.
 
 ## Aggregation (Multiple Hooks)
 

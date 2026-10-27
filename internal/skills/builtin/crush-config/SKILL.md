@@ -218,10 +218,14 @@ option ui exit-banner compact
 
 ## Hooks runtime
 
-Hooks are user-defined shell commands that fire on agent events. Currently only
-`PreToolUse` runs before a tool executes, and `PreCompact`/`PostCompact` run
-around session compaction. This behavior is
-the same however the hook is defined (`hook add` or JSON).
+Hooks are user-defined shell commands that fire on agent events. The full
+event list (upstream PR #3146): `PreToolUse`, `PostToolUse`,
+`PostToolUseFailure`, `PermissionRequest`, `PermissionResult`,
+`SessionStart`, `SessionEnd`, `TurnStart`, `TurnEnd`, `StopFailure`,
+`Interrupt`, `PreCompact`, `PostCompact`. Only the five tool events take a
+`matcher`. Sub-agent tool calls and sub-agent / non-interactive turns fire
+no hooks. This behavior is the same however the hook is defined
+(`hook add` or JSON).
 
 ### How hooks work
 
@@ -269,7 +273,8 @@ Event names are case-insensitive and accept snake_case: `PreToolUse`,
 - `decision`: `allow` to explicitly allow, `deny` to block, `none` (or omit).
 - `reason`: explanation (used when denying).
 - `context`: extra context appended to the tool result.
-- `updated_input`: replacement JSON for the tool input; last non-empty wins.
+- `updated_input`: **shallow-merge patch** against the tool input; keys you include overwrite, the rest are preserved.
+- `updated_output`: replaces the tool's output (`PostToolUse` only); last non-empty wins.
 
 **Exit code 2** — the tool call is blocked; stderr is the deny reason.
 
