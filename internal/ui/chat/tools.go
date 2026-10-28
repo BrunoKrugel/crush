@@ -113,6 +113,9 @@ type ToolRenderOpts struct {
 	ExpandedContent bool
 	Compact         bool
 	IsSpinning      bool
+	// LiveOutput is output streamed while the tool runs, shown instead of
+	// the result until the tool finishes.
+	LiveOutput string
 }
 
 // IsPending returns true if the tool call is still pending (not finished and
@@ -172,6 +175,27 @@ type baseToolMessageItem struct {
 	hasCappedWidth     bool
 	expandedContent    bool
 	surfaceScanned     bool
+	// liveOutput is output streamed while the tool runs. It is display
+	// only and is cleared once the result arrives.
+	liveOutput string
+}
+
+// LiveOutputItem is implemented by tool items that can show output while
+// the tool is still running.
+type LiveOutputItem interface {
+	SetLiveOutput(output string) bool
+}
+
+// SetLiveOutput sets the output to show while the tool runs. It is ignored
+// once a result is set, and reports whether the item changed.
+func (t *baseToolMessageItem) SetLiveOutput(output string) bool {
+	if t.result != nil || t.liveOutput == output {
+		return false
+	}
+	t.liveOutput = output
+	t.clearCache()
+	t.Bump()
+	return true
 }
 
 var _ Expandable = (*baseToolMessageItem)(nil)
@@ -236,7 +260,7 @@ func NewToolMessageItem(
 	case tools.BashToolName:
 		item = NewBashToolMessageItem(sty, toolCall, result, canceled, workingDir)
 	case tools.JobOutputToolName:
-		item = NewJobOutputToolMessageItem(sty, toolCall, result, canceled)
+		item = NewJobOutputToolMessageItem(sty, toolCall, result, canceled, workingDir)
 	case tools.JobKillToolName:
 		item = NewJobKillToolMessageItem(sty, toolCall, result, canceled)
 	case tools.ViewToolName:
@@ -366,6 +390,8 @@ func (t *baseToolMessageItem) RawRender(width int) string {
 			Compact:         t.isCompact,
 			IsSpinning:      t.isSpinning(),
 			Status:          t.computeStatus(),
+			Elapsed:         t.elapsed(),
+			LiveOutput:      t.liveOutput,
 		})
 
 		// Prepend hook indicator if hooks ran for this tool call.
@@ -450,6 +476,10 @@ func (t *baseToolMessageItem) SetResult(res *message.ToolResult) {
 	// New metadata may carry different surfaces; force a rebuild on the
 	// next render while preserving focus/edits when it is unchanged.
 	t.surfaceScanned = false
+
+	if res != nil {
+		t.liveOutput = ""
+	}
 	t.clearCache()
 	t.Bump()
 }

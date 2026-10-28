@@ -3,6 +3,7 @@ package chat
 import (
 	"cmp"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -94,6 +95,10 @@ func (b *BashToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *
 		return header
 	}
 
+	if live, ok := toolLiveOutputContent(sty, opts, cappedWidth); ok {
+		return joinToolParts(header, live)
+	}
+
 	if earlyState, ok := toolEarlyStateContent(sty, opts, cappedWidth); ok {
 		return joinToolParts(header, earlyState)
 	}
@@ -132,12 +137,43 @@ func NewJobOutputToolMessageItem(
 	toolCall message.ToolCall,
 	result *message.ToolResult,
 	canceled bool,
+	workingDir string,
 ) ToolMessageItem {
-	return newBaseToolMessageItem(sty, toolCall, result, &JobOutputToolRenderContext{}, canceled)
+	return newBaseToolMessageItem(sty, toolCall, result, &JobOutputToolRenderContext{workingDir: workingDir}, canceled)
+}
+
+// cwdHint renders a short relative-directory hint when a tool ran outside
+// the workspace root. An empty result means no hint: either the directory
+// matches the workspace, or the command already cd'd somewhere itself.
+func cwdHint(workspace, dir, command string) string {
+	if dir == "" || workspace == "" {
+		return ""
+	}
+	if strings.HasPrefix(strings.TrimSpace(common.StripBashDisplayPrefix(command, workspace)), "cd ") {
+		return ""
+	}
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(workspace, dir)
+	}
+	rel, err := filepath.Rel(workspace, dir)
+	if err != nil || rel == "." {
+		return ""
+	}
+	return filepath.ToSlash(rel)
+}
+
+// withCwd appends a "(cwd=dir)" hint to a job description.
+func withCwd(description, cwd string) string {
+	if cwd == "" {
+		return description
+	}
+	return strings.TrimSpace(description + " (cwd=" + cwd + ")")
 }
 
 // JobOutputToolRenderContext renders job_output tool messages.
-type JobOutputToolRenderContext struct{}
+type JobOutputToolRenderContext struct {
+	workingDir string
+}
 
 // RenderTool implements the [ToolRenderer] interface.
 func (j *JobOutputToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *ToolRenderOpts) string {
@@ -155,7 +191,8 @@ func (j *JobOutputToolRenderContext) RenderTool(sty *styles.Styles, width int, o
 	if opts.HasResult() && opts.Result.Metadata != "" {
 		var meta tools.JobOutputResponseMetadata
 		if err := sonic.Unmarshal([]byte(opts.Result.Metadata), &meta); err == nil {
-			description = cmp.Or(meta.Description, meta.Command)
+			cwd := cwdHint(j.workingDir, meta.WorkingDirectory, meta.Command)
+			description = withCwd(cmp.Or(meta.Description, meta.Command), cwd)
 		}
 	}
 
@@ -225,6 +262,10 @@ func renderJobTool(sty *styles.Styles, opts *ToolRenderOpts, width int, action, 
 		return header
 	}
 
+	if live, ok := toolLiveOutputContent(sty, opts, width); ok {
+		return joinToolParts(header, live)
+	}
+
 	if earlyState, ok := toolEarlyStateContent(sty, opts, width); ok {
 		return joinToolParts(header, earlyState)
 	}
@@ -265,4 +306,23 @@ func jobHeader(sty *styles.Styles, status ToolStatus, action, shellID, descripti
 // joinToolParts joins header and body with a blank line separator.
 func joinToolParts(header, body string) string {
 	return strings.Join([]string{header, "", body}, "\n")
+}
+
+// toolLiveOutputContent renders output streamed while a tool is still
+// running. When collapsed it shows the newest lines rather than the first,
+// since those are the ones still changing. Returns false when there is a
+// result or no live output yet.
+func toolLiveOutputContent(sty *styles.Styles, opts *ToolRenderOpts, width int) (string, bool) {
+	if opts.HasResult() || opts.LiveOutput == "" || opts.Status != ToolStatusRunning {
+		return "", false
+	}
+	bodyWidth := width - toolBodyLeftPaddingTotal
+	output := opts.LiveOutput
+	if !opts.ExpandedContent {
+		lines := strings.Split(output, "\n")
+		if keep := collapsedMaxLines(len(lines)); len(lines) > keep {
+			output = strings.Join(lines[len(lines)-keep:], "\n")
+		}
+	}
+	return sty.Tool.Body.Render(toolOutputPlainContent(sty, output, bodyWidth, opts.ExpandedContent)), true
 }
