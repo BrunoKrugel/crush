@@ -52,7 +52,7 @@ func (m *UI) landingView() string {
 	if len(m.channelStatusItems()) > 0 {
 		columnCount++
 	}
-	columnWidth := min(30, max(1, (width-(columnCount-1))/columnCount))
+	columnWidth := min(44, max(1, (width-(columnCount-1))/columnCount))
 	columnHeight := max(1, remainingHeightArea.Dy())
 
 	columns := []string{
