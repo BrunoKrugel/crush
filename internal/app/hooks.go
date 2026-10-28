@@ -15,7 +15,7 @@ const sessionEndTimeout = 2 * time.Second
 // SessionCreated fires SessionStart for a freshly created session. Every
 // session creation path that runs hooks goes through here.
 func (app *App) SessionCreated(ctx context.Context, sess session.Session) {
-	if sess.ID == "" {
+	if sess.ID == "" || app.Sessions == nil {
 		return
 	}
 	app.hookRunner.Run(ctx, hooks.Event{
@@ -27,7 +27,7 @@ func (app *App) SessionCreated(ctx context.Context, sess session.Session) {
 
 // SessionResumed fires SessionStart for a session the user returned to.
 func (app *App) SessionResumed(ctx context.Context, sess session.Session) {
-	if sess.ID == "" {
+	if sess.ID == "" || app.Sessions == nil {
 		return
 	}
 	app.hookRunner.Run(ctx, hooks.Event{

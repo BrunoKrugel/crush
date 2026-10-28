@@ -942,6 +942,13 @@ func (b *Backend) SetCurrentSession(ctx context.Context, workspaceID, clientID, 
 	// that session's viewers.
 	if sessionID != "" {
 		b.republishPendingPrompts(ctx, ws, sessionID)
+		// The hook runner is app-owned: a workspace without a live app
+		// (some test doubles) has nothing to fire.
+		if ws.App != nil && ws.Sessions != nil {
+			if sess, err := ws.Sessions.Get(ctx, sessionID); err == nil {
+				ws.SessionResumed(ctx, sess)
+			}
+		}
 	}
 	return nil
 }

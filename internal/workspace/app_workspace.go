@@ -83,7 +83,12 @@ func (w *AppWorkspace) agentClient() (agentClient, bool) {
 // -- Sessions --
 
 func (w *AppWorkspace) CreateSession(ctx context.Context, title string) (session.Session, error) {
-	return w.app.Sessions.Create(ctx, title)
+	sess, err := w.app.Sessions.Create(ctx, title)
+	if err != nil {
+		return session.Session{}, err
+	}
+	w.app.SessionCreated(ctx, sess)
+	return sess, nil
 }
 
 func (w *AppWorkspace) GetSession(ctx context.Context, sessionID string) (session.Session, error) {
@@ -144,6 +149,14 @@ func (w *AppWorkspace) ParseAgentToolSessionID(sessionID string) (string, string
 // to know which session is live to support agent resume.
 func (w *AppWorkspace) SetCurrentSession(ctx context.Context, sessionID string) error {
 	w.app.TrackCurrentSession(sessionID)
+	// Every session load is a resume for hook purposes: the user came
+	// back to a session that already exists. Clearing (empty sessionID,
+	// the landing screen) fires nothing.
+	if sessionID != "" {
+		if sess, err := w.app.Sessions.Get(ctx, sessionID); err == nil {
+			w.app.SessionResumed(ctx, sess)
+		}
+	}
 	return nil
 }
 

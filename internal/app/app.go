@@ -411,6 +411,7 @@ func (app *App) resolveSession(ctx context.Context, continueSessionID string, us
 		if err != nil || sess.ParentSessionID != "" {
 			return session.Session{}, fmt.Errorf("no sessions found to continue")
 		}
+		app.SessionResumed(ctx, sess)
 		app.TrackCurrentSession(sess.ID)
 		return sess, nil
 
