@@ -22,7 +22,15 @@ need to author correct hooks.
 - **`PermissionRequest`** — before a permission prompt: allow skips the prompt, deny blocks. Fork note: this event was called `PrePermission` before upstream PR #3146; the old name still loads with a deprecation warning.
 - **`PermissionResult`** — when a prompt resolves (`decision` in the payload: `granted`, `denied`, or `cancelled`). Observational only. Fork note: formerly `PermissionDenied`.
 - **`PreCompact` / `PostCompact`** — around session compaction: `PreCompact` can deny (skip this compaction) or halt; no matcher.
-- **`SessionStart` / `SessionEnd`**, **`TurnStart` / `TurnEnd`**, **`StopFailure` / `Interrupt`** — lifecycle events; no matcher, observational.
+- **`SessionStart`** — a session is created (`source: "startup"`) or the
+  user returns to one (`source: "resume"`); fires from the TUI, the
+  server, and scripted runs alike.
+- **`SessionEnd`** — for the session the user was in when the app exits
+  (`reason: "exit"`), after the agents have stopped.
+- **`TurnStart` / `TurnEnd`** — around every top-level turn; `TurnEnd`
+  carries the assistant's reply in `last_assistant_message`.
+- **`StopFailure` / `Interrupt`** — the turn ended with a provider error
+  / the user cancelled. Exactly one end-of-turn hook fires.
 
 Only the five tool events take a `matcher`. Event names are case-insensitive
 and accept snake_case (`PreToolUse`, `pretooluse`, `pre_tool_use` all work).

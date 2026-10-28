@@ -223,8 +223,10 @@ event list (upstream PR #3146): `PreToolUse`, `PostToolUse`,
 `PostToolUseFailure`, `PermissionRequest`, `PermissionResult`,
 `SessionStart`, `SessionEnd`, `TurnStart`, `TurnEnd`, `StopFailure`,
 `Interrupt`, `PreCompact`, `PostCompact`. Only the five tool events take a
-`matcher`. Sub-agent tool calls and sub-agent / non-interactive turns fire
-no hooks. This behavior is the same however the hook is defined
+`matcher`. `SessionStart` fires on session creation (`source: "startup"`)
+and on returning to an existing one (`source: "resume"`); `SessionEnd`
+fires when the app exits. Sub-agent tool calls and sub-agent /
+non-interactive turns fire no hooks. This behavior is the same however the hook is defined
 (`hook add` or JSON).
 
 ### How hooks work
