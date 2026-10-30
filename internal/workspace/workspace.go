@@ -232,6 +232,10 @@ type Workspace interface {
 	// does not change the yolo (skip) flag.
 	PermissionSetAutoMode(enabled bool)
 
+	// HostContext returns what the host application has in view, such
+	// as its open files, or the zero context when there is no host.
+	HostContext(ctx context.Context) (proto.HostContext, error)
+
 	// Questions
 	//
 	// QuestionAnswer resolves the pending question with responses.

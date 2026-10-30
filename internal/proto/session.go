@@ -22,6 +22,16 @@ type ForkRequest struct {
 	Worktree  bool   `json:"worktree,omitempty"`
 }
 
+// HostContext is what the application hosting Crush, such as an editor, has
+// in view: the files it has open, and the file and line the user is on. The
+// agent gets it with each prompt, so that "here" or "this file" means what
+// the user sees. The zero HostContext is none.
+type HostContext struct {
+	OpenFiles  []string `json:"open_files,omitempty"`
+	ActiveFile string   `json:"active_file,omitempty"`
+	Line       int      `json:"line,omitempty"` // 1-based line of the cursor in ActiveFile
+}
+
 type Session struct {
 	Channel          string  `json:"channel,omitempty"`
 	Title            string  `json:"title"`

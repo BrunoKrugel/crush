@@ -228,6 +228,7 @@ func (c *scriptedCoordinator) DiscardSummarize(context.Context, string, string) 
 
 func (c *scriptedCoordinator) RestoreSummarize(context.Context, string) error { return nil }
 func (c *scriptedCoordinator) Model() agent.Model                             { return agent.Model{} }
+
 func (c *scriptedCoordinator) ClassifierModel(context.Context) (fantasy.LanguageModel, bool, error) {
 	return nil, false, nil
 }
@@ -235,6 +236,17 @@ func (c *scriptedCoordinator) UpdateModels(context.Context) error            { r
 func (c *scriptedCoordinator) SetInteractive(context.Context, bool) error    { return nil }
 func (c *scriptedCoordinator) SetMainAgent(string) error                     { return nil }
 func (c *scriptedCoordinator) GenerateTitle(context.Context, string, string) {}
+
+func (c *scriptedCoordinator) SetHostContext(proto.HostContext) {
+	{
+	}
+}
+
+func (c *scriptedCoordinator) HostContext() proto.HostContext {
+	{
+		return proto.HostContext{}
+	}
+}
 
 // agentE2EHarness extends the SSE harness with a scripted coordinator
 // wired into the workspace's embedded app.App, so POST /agent drives a

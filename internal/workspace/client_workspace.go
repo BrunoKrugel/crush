@@ -532,6 +532,12 @@ func (w *ClientWorkspace) PermissionSetAutoMode(enabled bool) {
 	_ = w.client.SetPermissionsAutoMode(context.Background(), w.workspaceID(), enabled)
 }
 
+// -- Host context --
+
+func (w *ClientWorkspace) HostContext(ctx context.Context) (proto.HostContext, error) {
+	return w.client.GetHostContext(ctx, w.workspaceID())
+}
+
 // -- Questions --
 
 // QuestionAnswer submits answers for a question via the client SDK.

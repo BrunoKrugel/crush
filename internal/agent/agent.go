@@ -47,6 +47,7 @@ import (
 	"github.com/charmbracelet/crush/internal/ledger"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/permission"
+	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/snapshot"
@@ -107,6 +108,11 @@ type SessionAgentCall struct {
 	Steer             bool
 	HiddenUserMessage bool
 	NonInteractive    bool
+
+	// HostContext is what the host application had in view when the
+	// prompt was sent. The model sees it with this prompt only; it is
+	// not stored with the message.
+	HostContext proto.HostContext
 }
 
 // filterToolsForChannel scopes the tool list for a turn. A channel-originated
@@ -1229,7 +1235,7 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		maxOutputTokens = &call.MaxOutputTokens
 	}
 	result, err = agent.Stream(genCtx, fantasy.AgentStreamCall{
-		Prompt:           message.PromptWithTextAttachments(call.Prompt, call.Attachments),
+		Prompt:           hostContextPrompt(call.HostContext) + message.PromptWithTextAttachments(call.Prompt, call.Attachments),
 		Files:            files,
 		Messages:         history,
 		Headers:          sessionHeaders(call.SessionID),

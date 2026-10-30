@@ -423,6 +423,15 @@ func (w *AppWorkspace) PermissionSetAutoMode(enabled bool) {
 	w.app.Permissions.SetAutoModeEnabled(enabled)
 }
 
+// -- Host context --
+
+func (w *AppWorkspace) HostContext(_ context.Context) (proto.HostContext, error) {
+	if w.app.AgentCoordinator == nil {
+		return proto.HostContext{}, nil
+	}
+	return w.app.AgentCoordinator.HostContext(), nil
+}
+
 // -- Questions --
 
 func (w *AppWorkspace) QuestionAnswer(responses []question.Answer) bool {

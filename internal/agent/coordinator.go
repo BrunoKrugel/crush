@@ -29,6 +29,7 @@ import (
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/compaction"
 	"github.com/charmbracelet/crush/internal/config"
+	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/discover"
 	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/filetracker"
@@ -44,6 +45,7 @@ import (
 	"github.com/charmbracelet/crush/internal/oauth/copilot"
 	openaioauth "github.com/charmbracelet/crush/internal/oauth/openai"
 	"github.com/charmbracelet/crush/internal/permission"
+	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/question"
 	"github.com/charmbracelet/crush/internal/scheduler"
@@ -178,6 +180,10 @@ type Coordinator interface {
 	Model() Model
 	UpdateModels(ctx context.Context) error
 	GenerateTitle(ctx context.Context, sessionID, prompt string)
+	// SetHostContext records what the host application has in view;
+	// each run from then on tells the model about it.
+	SetHostContext(hc proto.HostContext)
+	HostContext() proto.HostContext
 	// DeliverAgentMessage delivers a message to the dispatched agent
 	// running on the message's session as its next input (#312) — the
 	// transport-agnostic injection seam shared by the message_agent tool,
@@ -224,6 +230,7 @@ type coordinator struct {
 	dispatchProvider     *dispatch.GitWorktreeProvider
 	semanticClient       *semantic.Client
 	skillTracker         *skills.Tracker
+	hostContext          csync.Value[proto.HostContext]
 	builds               map[*readiness]struct{}
 	hookRunner           *hooks.Runner
 	promptBuildHook      func()
@@ -2057,6 +2064,10 @@ func (c *coordinator) IsBusy() bool {
 func (c *coordinator) IsSessionBusy(sessionID string) bool {
 	return c.currentAgent().IsSessionBusy(sessionID)
 }
+
+func (c *coordinator) SetHostContext(hc proto.HostContext) { c.hostContext.Set(hc) }
+
+func (c *coordinator) HostContext() proto.HostContext { return c.hostContext.Get() }
 
 func (c *coordinator) ListSettledMessages(ctx context.Context, sessionID string) ([]message.Message, error) {
 	return c.currentAgent().ListSettledMessages(ctx, sessionID)

@@ -381,3 +381,14 @@ func (s *stubCoordinator) DispatchLive(sessionID string) []dispatch.TodoSnapshot
 func (*stubCoordinator) ListSettledMessages(context.Context, string) ([]message.Message, error) {
 	return nil, nil
 }
+
+func (c *stubCoordinator) SetHostContext(proto.HostContext) {
+	{
+	}
+}
+
+func (c *stubCoordinator) HostContext() proto.HostContext {
+	{
+		return proto.HostContext{}
+	}
+}

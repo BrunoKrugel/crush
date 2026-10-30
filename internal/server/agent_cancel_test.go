@@ -309,3 +309,14 @@ func (s *runCoordinator) DispatchLive(sessionID string) []dispatch.TodoSnapshot 
 func (*runCoordinator) ListSettledMessages(context.Context, string) ([]message.Message, error) {
 	return nil, nil
 }
+
+func (c *runCoordinator) SetHostContext(proto.HostContext) {
+	{
+	}
+}
+
+func (c *runCoordinator) HostContext() proto.HostContext {
+	{
+		return proto.HostContext{}
+	}
+}
