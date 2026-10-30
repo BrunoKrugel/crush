@@ -65,20 +65,6 @@ func (s *Status) ClearInfoMsg(seq uint64) {
 	}
 }
 
-// SetInfoMsg pins msg on the status bar with no expiry timer; it stays
-// until ClearInfo removes it or a newer message replaces it.
-func (s *Status) SetInfoMsg(msg util.InfoMsg) {
-	s.msg = msg
-	s.msgSeq++
-}
-
-// ClearInfo removes any pinned or expired-pending message. Bumping the
-// sequence also invalidates a pending TTL tick from an earlier Show.
-func (s *Status) ClearInfo() {
-	s.msgSeq++
-	s.msg = util.InfoMsg{}
-}
-
 // SetMode sets the input mode and permission-mode state used for the mode
 // badge. Yolo wins over auto when both are set.
 func (s *Status) SetMode(mode uiInputMode, yolo, auto bool) {
