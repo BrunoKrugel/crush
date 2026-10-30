@@ -165,6 +165,11 @@ func (m *Message) HasShellCommand() bool {
 	return false
 }
 
+// IsPrompt reports whether the message is something the user typed.
+func (m *Message) IsPrompt() bool {
+	return m.Role == User && !m.HasShellCommand()
+}
+
 // ShellCommands returns all ShellCommand parts from the message.
 func (m *Message) ShellCommands() []ShellCommand {
 	var cmds []ShellCommand

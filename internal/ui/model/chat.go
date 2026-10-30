@@ -1400,6 +1400,17 @@ func abs(x int) int {
 	return x
 }
 
+// LastPromptID returns the id of the last stored prompt in view, or "".
+func (m *Chat) LastPromptID() string {
+	for i := m.list.Len() - 1; i >= 0; i-- {
+		item, ok := m.list.ItemAt(i).(*chat.UserMessageItem)
+		if ok && item.ID() != chat.PendingUserID && item.Message().IsPrompt() {
+			return item.ID()
+		}
+	}
+	return ""
+}
+
 // containsMessage reports whether any of msgs carries the given id.
 func containsMessage(msgs []chat.MessageItem, id string) bool {
 	return slices.ContainsFunc(msgs, func(msg chat.MessageItem) bool {
