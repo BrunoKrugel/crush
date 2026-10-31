@@ -95,6 +95,7 @@ func (s *runCoordinator) IsSessionBusy(string) bool {
 func (s *runCoordinator) QueuedPrompts(string) int              { return 0 }
 func (s *runCoordinator) QueuedPromptsList(string) []string     { return nil }
 func (s *runCoordinator) ClearQueue(string)                     {}
+func (s *runCoordinator) AddNote(string, string)                {}
 func (s *runCoordinator) ListCronTasks(string) []scheduler.Task { return nil }
 func (s *runCoordinator) Summarize(context.Context, string, string) error {
 	return s.summarizeErr

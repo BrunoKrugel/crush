@@ -55,6 +55,7 @@ func (c *errorCoordinator) IsSessionBusy(string) bool                         { 
 func (c *errorCoordinator) QueuedPrompts(string) int                          { return 0 }
 func (c *errorCoordinator) QueuedPromptsList(string) []string                 { return nil }
 func (c *errorCoordinator) ClearQueue(string)                                 {}
+func (c *errorCoordinator) AddNote(string, string)                            {}
 func (c *errorCoordinator) ListCronTasks(string) []scheduler.Task             { return nil }
 func (c *errorCoordinator) Summarize(context.Context, string, string) error   { return nil }
 

@@ -162,6 +162,13 @@ type AgentMessage struct {
 	HiddenUserMessage bool                    `json:"hidden_user_message,omitempty"`
 }
 
+// SessionNote is something the host application tells a session's agent,
+// to be read with the session's next prompt. It starts no run and is not a
+// chat message.
+type SessionNote struct {
+	Text string `json:"text"`
+}
+
 // ShellCommandRequest represents a request to run a shell command directly.
 type ShellCommandRequest struct {
 	SessionID string `json:"session_id"`

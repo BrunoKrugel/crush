@@ -160,6 +160,7 @@ type SessionAgent interface {
 	QueuedPrompts(sessionID string) int
 	QueuedPromptsList(sessionID string) []string
 	ClearQueue(sessionID string)
+	AddNote(sessionID, text string)
 	Summarize(ctx context.Context, sessionID, instructions string, opts fantasy.ProviderOptions, onAuthRefresh func(context.Context, *fantasy.ProviderError) error) error
 	SummarizePreview(ctx context.Context, sessionID, instructions string, opts fantasy.ProviderOptions, onAuthRefresh func(context.Context, *fantasy.ProviderError) error) (compaction.Preview, error)
 	ConfirmSummarize(ctx context.Context, sessionID string, preview compaction.Preview) error
@@ -229,9 +230,12 @@ type sessionAgent struct {
 	hooks              *hooks.Runner
 	smallModel         *csync.Value[Model]
 	messageQueue       *csync.Map[string, []SessionAgentCall]
-	todoKill           func(sessionID string, reason string)
-	activeRequests     *csync.Map[string, *activeCancel]
-	todoEnforcement    *todoEnforcement
+	// notes are what the host told the agent since its last turn, by
+	// session, to add to the next prompt. They are not chat messages.
+	notes           *csync.Map[string, []string]
+	todoKill        func(sessionID string, reason string)
+	activeRequests  *csync.Map[string, *activeCancel]
+	todoEnforcement *todoEnforcement
 	// goal drives goal mode: the turn-budgeted loop that keeps working
 	// toward a goal until a cheap evaluator says it is met. Nil when
 	// the agent cannot judge goals.
@@ -318,6 +322,7 @@ func newSessionAgent(opts SessionAgentOptions) *sessionAgent {
 		hooks:                opts.Hooks,
 		memory:               newMemoryHolder(opts.Memory),
 		messageQueue:         csync.NewMap[string, []SessionAgentCall](),
+		notes:                csync.NewMap[string, []string](),
 		activeRequests:       csync.NewMap[string, *activeCancel](),
 		dispatchMu:           csync.NewMap[string, *sync.Mutex](),
 		acceptedRuns:         csync.NewMap[string, int](),
@@ -1235,7 +1240,7 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 		maxOutputTokens = &call.MaxOutputTokens
 	}
 	result, err = agent.Stream(genCtx, fantasy.AgentStreamCall{
-		Prompt:           hostContextPrompt(call.HostContext) + message.PromptWithTextAttachments(call.Prompt, call.Attachments),
+		Prompt:           hostContextPrompt(call.HostContext) + notesPrompt(a.takeNotes(call.SessionID)) + message.PromptWithTextAttachments(call.Prompt, call.Attachments),
 		Files:            files,
 		Messages:         history,
 		Headers:          sessionHeaders(call.SessionID),
@@ -3020,6 +3025,23 @@ func (a *sessionAgent) ClearQueue(sessionID string) {
 		slog.Debug("Clearing queued prompts", "session_id", sessionID)
 		a.clearQueueAndNotify(sessionID)
 	}
+}
+
+// AddNote keeps text for the session's next prompt, which the agent reads
+// with it. Nothing runs and nothing is shown in the chat.
+func (a *sessionAgent) AddNote(sessionID, text string) {
+	if text == "" {
+		return
+	}
+	existing, _ := a.notes.Get(sessionID)
+	a.notes.Set(sessionID, append(existing, text))
+}
+
+// takeNotes returns and forgets the session's notes, for the prompt about to run.
+func (a *sessionAgent) takeNotes(sessionID string) []string {
+	notes, _ := a.notes.Get(sessionID)
+	a.notes.Del(sessionID)
+	return notes
 }
 
 func (a *sessionAgent) CancelAll() {

@@ -69,6 +69,7 @@ func (c *blockingCoordinator) IsSessionBusy(string) bool                        
 func (c *blockingCoordinator) QueuedPrompts(string) int                          { return 0 }
 func (c *blockingCoordinator) QueuedPromptsList(string) []string                 { return nil }
 func (c *blockingCoordinator) ClearQueue(string)                                 {}
+func (c *blockingCoordinator) AddNote(string, string)                            {}
 func (c *blockingCoordinator) ListCronTasks(string) []scheduler.Task             { return nil }
 func (c *blockingCoordinator) Summarize(context.Context, string, string) error   { return nil }
 

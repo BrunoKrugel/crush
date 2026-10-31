@@ -166,6 +166,7 @@ type Coordinator interface {
 	QueuedPrompts(sessionID string) int
 	QueuedPromptsList(sessionID string) []string
 	ClearQueue(sessionID string)
+	AddNote(sessionID, text string)
 	ListCronTasks(sessionID string) []scheduler.Task
 	// Summarize compacts a session and adopts the checkpoint it writes.
 	Summarize(ctx context.Context, sessionID, instructions string) error
@@ -2055,6 +2056,10 @@ func (c *coordinator) ClearQueue(sessionID string) {
 // ListCronTasks returns the scheduled tasks belonging to sessionID.
 func (c *coordinator) ListCronTasks(sessionID string) []scheduler.Task {
 	return c.cronStore.List(sessionID)
+}
+
+func (c *coordinator) AddNote(sessionID, text string) {
+	c.currentAgent().AddNote(sessionID, text)
 }
 
 func (c *coordinator) IsBusy() bool {

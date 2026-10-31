@@ -177,6 +177,7 @@ func (c *recordingCoordinator) IsSessionBusy(string) bool                       
 func (c *recordingCoordinator) QueuedPrompts(string) int                        { return 0 }
 func (c *recordingCoordinator) QueuedPromptsList(string) []string               { return nil }
 func (c *recordingCoordinator) ClearQueue(string)                               {}
+func (c *recordingCoordinator) AddNote(string, string)                          {}
 func (c *recordingCoordinator) SetMainAgent(string) error                       { return nil }
 func (c *recordingCoordinator) ListCronTasks(string) []scheduler.Task           { return nil }
 func (c *recordingCoordinator) Summarize(context.Context, string, string) error { return nil }
