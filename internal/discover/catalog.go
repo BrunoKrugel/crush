@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"slices"
 
-	"charm.land/catwalk/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/catwalk"
 )
 
 // MergeCatalog fills in metadata on discovered models from the catalog
@@ -41,17 +41,17 @@ func MergeCatalog(models, catalog []catwalk.Model) []catwalk.Model {
 		if (m.Name == "" || m.Name == m.ID) && c.Name != "" {
 			m.Name = c.Name
 		}
-		if m.CostPer1MIn == 0 {
-			m.CostPer1MIn = c.CostPer1MIn
+		if m.Pricing.Input == 0 {
+			m.Pricing.Input = c.Pricing.Input
 		}
-		if m.CostPer1MOut == 0 {
-			m.CostPer1MOut = c.CostPer1MOut
+		if m.Pricing.Output == 0 {
+			m.Pricing.Output = c.Pricing.Output
 		}
-		if m.CostPer1MInCached == 0 {
-			m.CostPer1MInCached = c.CostPer1MInCached
+		if m.Pricing.CacheCreate == 0 {
+			m.Pricing.CacheCreate = c.Pricing.CacheCreate
 		}
-		if m.CostPer1MOutCached == 0 {
-			m.CostPer1MOutCached = c.CostPer1MOutCached
+		if m.Pricing.CacheHit == 0 {
+			m.Pricing.CacheHit = c.Pricing.CacheHit
 		}
 		if m.ContextWindow == 0 {
 			m.ContextWindow = c.ContextWindow
@@ -59,17 +59,17 @@ func MergeCatalog(models, catalog []catwalk.Model) []catwalk.Model {
 		if m.DefaultMaxTokens == 0 {
 			m.DefaultMaxTokens = c.DefaultMaxTokens
 		}
-		if !m.CanReason {
-			m.CanReason = c.CanReason
+		if m.Reasoning.Thinking == "" {
+			m.Reasoning.Thinking = c.Reasoning.Thinking
+			if len(m.Reasoning.EffortLevels) == 0 {
+				m.Reasoning.EffortLevels = slices.Clone(c.Reasoning.EffortLevels)
+			}
+			if m.Reasoning.DefaultEffortLevel == "" {
+				m.Reasoning.DefaultEffortLevel = c.Reasoning.DefaultEffortLevel
+			}
 		}
-		if len(m.ReasoningLevels) == 0 {
-			m.ReasoningLevels = slices.Clone(c.ReasoningLevels)
-		}
-		if m.DefaultReasoningEffort == "" {
-			m.DefaultReasoningEffort = c.DefaultReasoningEffort
-		}
-		if !m.SupportsImages {
-			m.SupportsImages = c.SupportsImages
+		if !m.Capabilities.Vision {
+			m.Capabilities.Vision = c.Capabilities.Vision
 		}
 	}
 	return models

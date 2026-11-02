@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"charm.land/catwalk/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/catwalk"
 	"charm.land/fantasy/providers/openaicompat"
 	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"

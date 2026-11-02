@@ -2,27 +2,30 @@ package openai
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 
-	"charm.land/catwalk/pkg/catwalk"
-	"github.com/bytedance/sonic"
+	"charm.land/catwalk/v3/pkg/catwalk"
 	"github.com/charmbracelet/crush/internal/oauth"
 )
 
 // ModelInfo mirrors one entry of the Codex backend model catalog.
 type ModelInfo struct {
-	Slug                     string `json:"slug"`
-	DisplayName              string `json:"display_name"`
-	Description              string `json:"description"`
-	Visibility               string `json:"visibility"`
-	DefaultReasoningLevel    string `json:"default_reasoning_level"`
+	Slug          string `json:"slug"`
+	DisplayName   string `json:"display_name"`
+	Description   string `json:"description"`
+	Visibility    string `json:"visibility"`
+	ContextWindow int64  `json:"context_window"`
+
+	DefaultReasoningLevel string `json:"default_reasoning_level"`
+	// SupportedReasoningLevels is a list of {effort, description}
+	// presets in the backend's own shape.
 	SupportedReasoningLevels []struct {
 		Effort string `json:"effort"`
 	} `json:"supported_reasoning_levels"`
-	ContextWindow int64 `json:"context_window"`
 }
 
 type modelsResponse struct {
@@ -74,7 +77,7 @@ func Models(ctx context.Context, token *oauth.Token) ([]catwalk.Model, error) {
 	}
 
 	var mr modelsResponse
-	if err := sonic.Unmarshal(body, &mr); err != nil {
+	if err := json.Unmarshal(body, &mr); err != nil {
 		return nil, fmt.Errorf("decode Codex model catalog: %w", err)
 	}
 
@@ -91,14 +94,20 @@ func Models(ctx context.Context, token *oauth.Token) ([]catwalk.Model, error) {
 				levels = append(levels, level.Effort)
 			}
 		}
+		reasoning := catwalk.Reasoning{Thinking: catwalk.ThinkingNever}
+		if len(levels) > 0 {
+			reasoning = catwalk.Reasoning{
+				Thinking:           catwalk.ThinkingToggleable,
+				EffortLevels:       catwalk.NewEffortLevels(levels...),
+				DefaultEffortLevel: m.DefaultReasoningLevel,
+			}
+		}
 		models = append(models, catwalk.Model{
-			ID:                     m.Slug,
-			Name:                   m.DisplayName,
-			ContextWindow:          m.ContextWindow,
-			CanReason:              len(levels) > 0,
-			ReasoningLevels:        levels,
-			DefaultReasoningEffort: m.DefaultReasoningLevel,
-			SupportsImages:         true,
+			ID:            m.Slug,
+			Name:          m.DisplayName,
+			ContextWindow: m.ContextWindow,
+			Reasoning:     reasoning,
+			Capabilities:  catwalk.Capabilities{Vision: true},
 		})
 	}
 	if len(models) == 0 {

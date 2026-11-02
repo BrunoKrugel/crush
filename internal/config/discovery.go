@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"charm.land/catwalk/pkg/catwalk"
-	"charm.land/catwalk/pkg/embedded"
+	"charm.land/catwalk/v3/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/embedded"
 	"github.com/charmbracelet/crush/internal/discover"
 )
 
@@ -166,7 +166,7 @@ func discoverProviderModels(
 		}
 
 		providerID := cmp.Or(pc.ID, id)
-		providerType := cmp.Or(pc.Type, catwalk.TypeOpenAICompat)
+		providerType := cmp.Or(pc.Type, catwalk.TypeCompletions)
 		cfg := discover.Config{
 			ID:             providerID,
 			BaseURL:        pc.BaseURL,
@@ -338,7 +338,7 @@ func discoveryJobs(c *Config, known map[string]bool) []discoveryJob {
 				APIKey:       pc.APIKey,
 				ExtraHeaders: pc.ExtraHeaders,
 			},
-			providerType: string(cmp.Or(pc.Type, catwalk.TypeOpenAICompat)),
+			providerType: string(cmp.Or(pc.Type, catwalk.TypeCompletions)),
 		})
 	}
 	return jobs

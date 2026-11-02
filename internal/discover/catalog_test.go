@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"charm.land/catwalk/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/catwalk"
 	"github.com/stretchr/testify/require"
 )
 
@@ -15,18 +15,21 @@ func TestMergeCatalog(t *testing.T) {
 
 	catalog := []catwalk.Model{
 		{
-			ID:                     "glm-5.3",
-			Name:                   "GLM-5.3",
-			CostPer1MIn:            1,
-			CostPer1MOut:           3,
-			CostPer1MInCached:      0.5,
-			CostPer1MOutCached:     0.25,
-			ContextWindow:          1_000_000,
-			DefaultMaxTokens:       128_000,
-			CanReason:              true,
-			ReasoningLevels:        []string{"low", "high", "max"},
-			DefaultReasoningEffort: "high",
-			SupportsImages:         true,
+			ID:   "glm-5.3",
+			Name: "GLM-5.3",
+			Pricing: catwalk.Pricing{
+				Input:    1,
+				Output:   3,
+				CacheHit: 0.5,
+			},
+			ContextWindow:    1_000_000,
+			DefaultMaxTokens: 128_000,
+			Reasoning: catwalk.Reasoning{
+				Thinking:           catwalk.ThinkingToggleable,
+				EffortLevels:       catwalk.NewEffortLevels("low", "high", "max"),
+				DefaultEffortLevel: "high",
+			},
+			Capabilities: catwalk.Capabilities{Vision: true},
 		},
 		{ID: "catalog-only", Name: "Catalog Only"},
 	}
@@ -49,24 +52,27 @@ func TestMergeCatalog(t *testing.T) {
 	t.Run("keeps values the user set", func(t *testing.T) {
 		t.Parallel()
 		models := []catwalk.Model{{
-			ID:                     "glm-5.3",
-			Name:                   "My GLM",
-			ContextWindow:          200_000,
-			DefaultMaxTokens:       32_000,
-			CostPer1MIn:            9,
-			ReasoningLevels:        []string{"high"},
-			DefaultReasoningEffort: "high",
+			ID:               "glm-5.3",
+			Name:             "My GLM",
+			ContextWindow:    200_000,
+			DefaultMaxTokens: 32_000,
+			Pricing:          catwalk.Pricing{Input: 9},
+			Reasoning: catwalk.Reasoning{
+				Thinking:           catwalk.ThinkingToggleable,
+				EffortLevels:       catwalk.NewEffortLevels("high"),
+				DefaultEffortLevel: "high",
+			},
 		}}
 
 		got := MergeCatalog(models, catalog)
 		require.Equal(t, "My GLM", got[0].Name)
 		require.Equal(t, int64(200_000), got[0].ContextWindow)
 		require.Equal(t, int64(32_000), got[0].DefaultMaxTokens)
-		require.InDelta(t, 9, got[0].CostPer1MIn, 0)
-		require.Equal(t, []string{"high"}, got[0].ReasoningLevels)
+		require.InDelta(t, 9, got[0].Pricing.Input, 0)
+		require.Equal(t, []catwalk.EffortLevel{{Value: "high", Display: "High"}}, got[0].Reasoning.EffortLevels)
 		// Unset fields are still filled around the user's values.
-		require.InDelta(t, 3, got[0].CostPer1MOut, 0)
-		require.True(t, got[0].CanReason)
+		require.InDelta(t, 3, got[0].Pricing.Output, 0)
+		require.Equal(t, catwalk.ThinkingToggleable, got[0].Reasoning.Thinking)
 	})
 
 	t.Run("leaves models the catalog does not know", func(t *testing.T) {
@@ -78,10 +84,15 @@ func TestMergeCatalog(t *testing.T) {
 
 	t.Run("does not alias the catalog's reasoning levels", func(t *testing.T) {
 		t.Parallel()
-		cat := []catwalk.Model{{ID: "m", ReasoningLevels: []string{"low", "high"}}}
+		cat := []catwalk.Model{{
+			ID: "m",
+			Reasoning: catwalk.Reasoning{
+				EffortLevels: catwalk.NewEffortLevels("low", "high"),
+			},
+		}}
 		got := MergeCatalog([]catwalk.Model{{ID: "m"}}, cat)
-		got[0].ReasoningLevels[0] = "changed"
-		require.Equal(t, "low", cat[0].ReasoningLevels[0])
+		got[0].Reasoning.EffortLevels[0].Value = "changed"
+		require.Equal(t, "low", cat[0].Reasoning.EffortLevels[0].Value)
 	})
 
 	t.Run("no catalog is a no-op", func(t *testing.T) {
@@ -104,8 +115,11 @@ func TestFetchProviderFeed(t *testing.T) {
 				"id": "hyper",
 				"models": [
 					{"id": "glm-5.3", "name": "GLM 5.3", "context_window": 1000000,
-					 "can_reason": true, "reasoning_levels": ["low", "high", "max"],
-					 "default_reasoning_effort": "high"}
+					 "reasoning": {"thinking": "toggleable",
+					               "effort_levels": [{"value": "low", "display": "Low"},
+					                                 {"value": "high", "display": "High"},
+					                                 {"value": "max", "display": "Max"}],
+					               "default_effort_level": "high"}}
 				]
 			}`))
 		}))
@@ -116,7 +130,7 @@ func TestFetchProviderFeed(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, p.Models, 1)
 		require.Equal(t, "GLM 5.3", p.Models[0].Name)
-		require.Equal(t, []string{"low", "high", "max"}, p.Models[0].ReasoningLevels)
+		require.Equal(t, catwalk.NewEffortLevels("low", "high", "max"), p.Models[0].Reasoning.EffortLevels)
 	})
 
 	t.Run("reports a non-200 response", func(t *testing.T) {

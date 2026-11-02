@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"charm.land/catwalk/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/catwalk"
 	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/hyper"
 	"github.com/charmbracelet/crush/internal/csync"
@@ -68,6 +68,7 @@ func Load(ctx context.Context, workingDir, dataDir string, debug bool) (*ConfigS
 		if !json.Valid(wsData) {
 			return nil, fmt.Errorf("invalid JSON in config file %s", store.workspacePath)
 		}
+		wsData = migrateCatwalkV2File(store.workspacePath, wsData)
 		merged, mergeErr := loadFromBytes(append([][]byte{mustMarshalConfig(cfg)}, wsData))
 		if mergeErr == nil {
 			// Preserve defaults that setDefaults already applied.
@@ -491,8 +492,10 @@ func (c *Config) configureProviders(ctx context.Context, store *ConfigStore, env
 		// Make sure the provider ID is set.
 		providerConfig.ID = id
 		providerConfig.Name = cmp.Or(providerConfig.Name, id) // Use ID as name if not set
-		// Default to OpenAI if not set.
-		providerConfig.Type = cmp.Or(providerConfig.Type, catwalk.TypeOpenAICompat)
+		// Default to the OpenAI chat completions wire format if not set,
+		// and translate legacy catwalk v2 type names onto their v3
+		// endpoint types so pre-migration configs keep working.
+		providerConfig.Type = NormalizeProviderType(cmp.Or(providerConfig.Type, catwalk.TypeCompletions))
 		if !slices.Contains(catwalk.KnownProviderTypes(), providerConfig.Type) &&
 			providerConfig.Type != hyper.Name &&
 			!discover.IsKnownCustomProvider(string(providerConfig.Type)) {
@@ -827,7 +830,7 @@ func (c *Config) defaultModelSelection(knownProviders []catwalk.Provider) (large
 			Provider:        string(p.ID),
 			Model:           defaultLargeModel.ID,
 			MaxTokens:       defaultLargeModel.DefaultMaxTokens,
-			ReasoningEffort: defaultLargeModel.DefaultReasoningEffort,
+			ReasoningEffort: defaultLargeModel.Reasoning.DefaultEffortLevel,
 		}
 
 		defaultSmallModel := c.GetModel(string(p.ID), p.DefaultSmallModelID)
@@ -842,7 +845,7 @@ func (c *Config) defaultModelSelection(knownProviders []catwalk.Provider) (large
 			Provider:        string(p.ID),
 			Model:           defaultSmallModel.ID,
 			MaxTokens:       defaultSmallModel.DefaultMaxTokens,
-			ReasoningEffort: defaultSmallModel.DefaultReasoningEffort,
+			ReasoningEffort: defaultSmallModel.Reasoning.DefaultEffortLevel,
 		}
 		return largeModel, smallModel, err
 	}
@@ -920,7 +923,7 @@ func resolveSelectedModels(cfg *Config, knownProviders []catwalk.Provider) (reso
 			if largeModelSelected.ReasoningEffort != "" {
 				large.ReasoningEffort = largeModelSelected.ReasoningEffort
 			} else {
-				large.ReasoningEffort = model.DefaultReasoningEffort
+				large.ReasoningEffort = model.Reasoning.DefaultEffortLevel
 			}
 			large.Think = largeModelSelected.Think
 			if largeModelSelected.Temperature != nil {
@@ -965,7 +968,7 @@ func resolveSelectedModels(cfg *Config, knownProviders []catwalk.Provider) (reso
 			if smallModelSelected.ReasoningEffort != "" {
 				small.ReasoningEffort = smallModelSelected.ReasoningEffort
 			} else {
-				small.ReasoningEffort = model.DefaultReasoningEffort
+				small.ReasoningEffort = model.Reasoning.DefaultEffortLevel
 			}
 			if smallModelSelected.Temperature != nil {
 				small.Temperature = smallModelSelected.Temperature
@@ -1106,6 +1109,7 @@ func loadFromConfigPaths(ctx context.Context, configPaths []string, userLevelCou
 			if !json.Valid(data) {
 				return nil, nil, fmt.Errorf("invalid JSON in config file %s", path)
 			}
+			data = migrateCatwalkV2File(path, data)
 			data = stripProjectAutoMode(path, data, isUserLevel)
 			addTopLevelKeys(jsonDirKeys, dir, data)
 			configs = append(configs, data)
@@ -1183,6 +1187,10 @@ func loadFromBytes(configs [][]byte) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Safety net for sources that cannot be rewritten on disk (e.g.
+	// crushrc builtins producing JSON): migrate the merged result in
+	// memory so decoding always sees the v3 schema.
+	data, _ = migrateCatwalkV2(data)
 	var config Config
 	if err := sonic.Unmarshal(data, &config); err != nil {
 		return nil, err
@@ -1566,3 +1574,31 @@ func ProjectSkillsDir(workingDir string) []string {
 }
 
 func isAppleTerminal() bool { return os.Getenv("TERM_PROGRAM") == "Apple_Terminal" }
+
+// legacyProviderTypes maps provider type values from the catwalk v2
+// schema onto the v3 endpoint types that describe the same API format, so
+// configs written before the migration keep working. Custom provider
+// types with registered enrichers (ollama, litellm, ...) are not listed
+// here and pass through unchanged.
+var legacyProviderTypes = map[catwalk.Type]catwalk.Type{
+	"openai":        catwalk.TypeResponses,
+	"openai-compat": catwalk.TypeCompletions,
+	"openrouter":    catwalk.TypeCompletions,
+	"vercel":        catwalk.TypeCompletions,
+	"anthropic":     catwalk.TypeMessages,
+	"azure":         catwalk.TypeResponses,
+	"bedrock":       catwalk.TypeMessages,
+	"google":        catwalk.TypeCompletions,
+	"google-vertex": catwalk.TypeCompletions,
+}
+
+// NormalizeProviderType maps a catwalk v2 provider type onto the v3
+// endpoint type describing the same API format. Types that are already
+// v3 or are not legacy names pass through unchanged. catwalk's v3 data
+// still carries v2 names for some providers (OpenAI, MiniMax, ...).
+func NormalizeProviderType(t catwalk.Type) catwalk.Type {
+	if mapped, ok := legacyProviderTypes[t]; ok {
+		return mapped
+	}
+	return t
+}

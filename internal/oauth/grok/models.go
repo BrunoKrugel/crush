@@ -2,14 +2,14 @@ package grok
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
-	"charm.land/catwalk/pkg/catwalk"
-	"github.com/bytedance/sonic"
+	"charm.land/catwalk/v3/pkg/catwalk"
 	"github.com/charmbracelet/crush/internal/oauth"
 )
 
@@ -21,17 +21,26 @@ var modelsEndpoint = APIBaseURL + "/models"
 
 // modelCapabilities mirrors the request parameters a model accepts.
 type modelCapabilities struct {
-	DefaultReasoningEffort string   `json:"default_reasoning_effort"`
-	ReasoningEffort        []string `json:"reasoning_effort"`
+	// ReasoningEffort lists the effort values the model honors.
+	ReasoningEffort []string `json:"reasoning_effort"`
+	// DefaultReasoningEffort is used when no effort is selected.
+	DefaultReasoningEffort string `json:"default_reasoning_effort"`
 }
 
 // modelInfo mirrors one entry of the xAI model listing.
 type modelInfo struct {
-	CompletionTextTokenPrice *int64             `json:"completion_text_token_price"`
-	Capabilities             *modelCapabilities `json:"capabilities"`
-	ID                       string             `json:"id"`
-	ContextLength            int64              `json:"context_length"`
-	PromptImageTokenPrice    int64              `json:"prompt_image_token_price"`
+	ID string `json:"id"`
+	// ContextLength is the maximum context length in tokens.
+	ContextLength int64 `json:"context_length"`
+	// CompletionTextTokenPrice is in USD cents per 100M tokens and is
+	// set only for text-generating models; image and video generation
+	// models carry image_price instead. Its presence is the
+	// language-model filter.
+	CompletionTextTokenPrice *int64 `json:"completion_text_token_price"`
+	// PromptImageTokenPrice is in USD cents per 100M tokens; a non-zero
+	// value marks models that accept image input.
+	PromptImageTokenPrice int64              `json:"prompt_image_token_price"`
+	Capabilities          *modelCapabilities `json:"capabilities"`
 }
 
 type modelsResponse struct {
@@ -72,7 +81,7 @@ func Models(ctx context.Context, token *oauth.Token) ([]catwalk.Model, error) {
 	}
 
 	var mr modelsResponse
-	if err := sonic.Unmarshal(body, &mr); err != nil {
+	if err := json.Unmarshal(body, &mr); err != nil {
 		return nil, fmt.Errorf("decode Grok model catalog: %w", err)
 	}
 
@@ -89,14 +98,20 @@ func Models(ctx context.Context, token *oauth.Token) ([]catwalk.Model, error) {
 			levels = m.Capabilities.ReasoningEffort
 			defaultEffort = m.Capabilities.DefaultReasoningEffort
 		}
+		reasoning := catwalk.Reasoning{Thinking: catwalk.ThinkingNever}
+		if len(levels) > 0 {
+			reasoning = catwalk.Reasoning{
+				Thinking:           catwalk.ThinkingToggleable,
+				EffortLevels:       catwalk.NewEffortLevels(levels...),
+				DefaultEffortLevel: defaultEffort,
+			}
+		}
 		models = append(models, catwalk.Model{
-			ID:                     m.ID,
-			Name:                   modelName(m.ID),
-			ContextWindow:          m.ContextLength,
-			CanReason:              len(levels) > 0,
-			ReasoningLevels:        levels,
-			DefaultReasoningEffort: defaultEffort,
-			SupportsImages:         m.PromptImageTokenPrice > 0,
+			ID:            m.ID,
+			Name:          modelName(m.ID),
+			ContextWindow: m.ContextLength,
+			Reasoning:     reasoning,
+			Capabilities:  catwalk.Capabilities{Vision: m.PromptImageTokenPrice > 0},
 		})
 	}
 	if len(models) == 0 {

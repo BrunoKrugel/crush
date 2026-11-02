@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"charm.land/catwalk/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/catwalk"
 	"github.com/charmbracelet/crush/internal/agent/hyper"
 	"github.com/stretchr/testify/require"
 )
@@ -14,7 +14,7 @@ import (
 func TestHyperEnricher(t *testing.T) {
 	t.Parallel()
 
-	feed := `{"id": "hyper", "models": [{"id": "glm-5.3", "name": "GLM-5.3", "context_window": 1000000, "can_reason": true}]}`
+	feed := `{"id": "hyper", "models": [{"id": "glm-5.3", "name": "GLM-5.3", "context_window": 1000000, "reasoning": {"thinking": "always"}}]}`
 
 	t.Run("fills metadata from the live feed", func(t *testing.T) {
 		t.Parallel()
@@ -25,7 +25,7 @@ func TestHyperEnricher(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		cfg := Config{ID: "hyper", BaseURL: srv.URL, APIType: string(catwalk.TypeOpenAICompat)}
+		cfg := Config{ID: "hyper", BaseURL: srv.URL, APIType: string(catwalk.TypeCompletions)}
 		models := []catwalk.Model{{ID: "glm-5.3", Name: "glm-5.3"}}
 
 		e := &hyperEnricher{}
@@ -33,7 +33,7 @@ func TestHyperEnricher(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "GLM-5.3", result[0].Name)
 		require.Equal(t, int64(1000000), result[0].ContextWindow)
-		require.True(t, result[0].CanReason)
+		require.Equal(t, catwalk.ThinkingAlways, result[0].Reasoning.Thinking)
 	})
 
 	t.Run("falls back to the bundled copy when the feed fails", func(t *testing.T) {
@@ -46,7 +46,7 @@ func TestHyperEnricher(t *testing.T) {
 		bundled := hyper.Embedded().Models
 		require.NotEmpty(t, bundled, "the bundled Hyper catalog must not be empty")
 
-		cfg := Config{ID: "hyper", BaseURL: srv.URL, APIType: string(catwalk.TypeOpenAICompat)}
+		cfg := Config{ID: "hyper", BaseURL: srv.URL, APIType: string(catwalk.TypeCompletions)}
 		models := []catwalk.Model{{ID: bundled[0].ID, Name: bundled[0].ID}}
 
 		e := &hyperEnricher{}
@@ -65,7 +65,7 @@ func TestHyperEnricher(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		cfg := Config{ID: "hyper", BaseURL: srv.URL + "/v1", APIType: string(catwalk.TypeAnthropic)}
+		cfg := Config{ID: "hyper", BaseURL: srv.URL + "/v1", APIType: string(catwalk.TypeMessages)}
 		models := []catwalk.Model{{ID: "some-model", Name: "some-model"}}
 
 		e := &hyperEnricher{}

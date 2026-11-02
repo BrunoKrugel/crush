@@ -17,6 +17,11 @@ import (
 //	    [--supports-images true|false] [--price-input F]
 //	    [--price-output F] [--price-cache-create F]
 //	    [--price-cache-hit F] [--reasoning-effort low|medium|high]
+//
+// The pricing, reasoning, and capability flags write the catwalk v3
+// nested JSON (pricing.input, capabilities.vision, reasoning.*), and the
+// v2 spellings are accepted and translated (see modelV2ToV3Fields).
+//
 //	model remove <provider>/<id>   (alias: rm)
 //	model large [<provider>/<id>] [--think] [--reasoning-effort L]
 //	    [--max-tokens N] [--temperature F] [--top-p F] [--top-k N]
@@ -73,6 +78,22 @@ var modelAddFlags = []flagSpec{
 	{name: "--reasoning-effort", jsonKey: "default_reasoning_effort", kind: flagString, op: opSet},
 }
 
+// modelV2ToV3Fields rewrites the v2 model keys the flags write onto the
+// catwalk v3 nested schema the config decodes: the cost fields became
+// pricing, supports_attachments became capabilities.vision, and the
+// can_reason/reasoning_levels/default_reasoning_effort trio became the
+// reasoning object.
+var modelV2ToV3Fields = map[string]string{
+	"cost_per_1m_in":           "pricing.input",
+	"cost_per_1m_out":          "pricing.output",
+	"cost_per_1m_in_cached":    "pricing.cache_create",
+	"cost_per_1m_out_cached":   "pricing.cache_hit",
+	"supports_attachments":     "capabilities.vision",
+	"can_reason":               "reasoning.thinking",
+	"reasoning_levels":         "reasoning.effort_levels",
+	"default_reasoning_effort": "reasoning.default_effort_level",
+}
+
 func modelAdd(b *ConfigBuilder, args []string, stderr io.Writer) error {
 	if len(args) < 3 {
 		return usage(stderr, "usage: model add <provider>/<id> [--name NAME] [--context-window N] [--default-max-tokens N] [--can-reason true|false] [--supports-images true|false] [--price-input F] [--price-output F] [--price-cache-create F] [--price-cache-hit F] [--reasoning-effort low|medium|high]")
@@ -90,6 +111,25 @@ func modelAdd(b *ConfigBuilder, args []string, stderr io.Writer) error {
 	model := map[string]any{"id": id}
 	if err := applyFlags(modelAddFlags, args, 3, model, "model add", stderr); err != nil {
 		return err
+	}
+	// The v2 keys the flags write are translated onto the catwalk v3
+	// nested schema the config decodes. can_reason:true becomes
+	// reasoning.thinking "toggleable" unless an explicit thinking mode
+	// was set; supports_attachments becomes capabilities.vision.
+	for v2Key, v3Key := range modelV2ToV3Fields {
+		if v, ok := model[v2Key]; ok {
+			delete(model, v2Key)
+			if v2Key == "can_reason" {
+				if b, isBool := v.(bool); isBool && b {
+					v = "toggleable"
+				} else if isBool {
+					v = "never"
+				}
+			}
+			if err := setNested(model, v3Key, v); err != nil {
+				return err
+			}
+		}
 	}
 
 	p := childMap(providers, provider)
@@ -188,5 +228,22 @@ func modelSelect(b *ConfigBuilder, args []string, stdout, stderr io.Writer) erro
 	}
 
 	slog.Info("Model selected in shell config", "slot", slot, "provider", provider, "model", id)
+	return nil
+}
+
+// setNested sets value at the dotted path within obj, creating nested
+// maps as needed.
+func setNested(obj map[string]any, path string, value any) error {
+	parts := strings.Split(path, ".")
+	cur := obj
+	for _, part := range parts[:len(parts)-1] {
+		next, ok := cur[part].(map[string]any)
+		if !ok {
+			next = map[string]any{}
+			cur[part] = next
+		}
+		cur = next
+	}
+	cur[parts[len(parts)-1]] = value
 	return nil
 }

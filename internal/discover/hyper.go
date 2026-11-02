@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"charm.land/catwalk/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/catwalk"
 	"github.com/charmbracelet/crush/internal/agent/hyper"
 )
 
@@ -26,7 +26,7 @@ func init() {
 type hyperEnricher struct{}
 
 func (e *hyperEnricher) EnrichModels(ctx context.Context, cfg Config, resolver Resolver, models []catwalk.Model) ([]catwalk.Model, error) {
-	if cfg.APIType != string(catwalk.TypeOpenAICompat) && cfg.APIType != hyper.Name {
+	if cfg.APIType != string(catwalk.TypeCompletions) && cfg.APIType != hyper.Name {
 		return models, nil
 	}
 

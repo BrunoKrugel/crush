@@ -1,5 +1,10 @@
 # Porting plan: upstream PR #3829 — Catwalk v3
 
+> **Status: port ~85% done as WIP on `fork` (uncommitted).** Steps 1-5 are
+> complete and all touched suites are green. Steps 7-8 are partially done.
+> See "Where the port stands" near the end for exactly what remains and how
+> to pick it up in a fresh session.
+
 Plan for pulling
 [`charmbracelet/crush#3829`](https://github.com/charmbracelet/crush/pull/3829)
 ("feat: Catwalk v3", merged upstream 2026-10-29, 47 files, +1,705/−684)
@@ -162,6 +167,112 @@ levels with display names), `model/sidebar.go`,
 `ui/dialog/commands.go`, and `skills/builtin/crush-config/SKILL.md`
 (flag documentation). Regenerate `schema.json`. Update the user's
 crushrc if anything migrated.
+
+## Where the port stands (handoff note for the next session)
+
+**Dependency note (differs from the plan above):** upstream released
+`charm.land/catwalk/v3 v3.0.1` as a proper module, so the port pins
+**v3.0.1**, not the v3-preview branch. go.mod got `v0.52.81` replaced by
+`charm.land/catwalk/v3 v3.0.1`; every import moved to
+`charm.land/catwalk/v3/pkg/catwalk` and `.internal/config/provider.go`
+and `catwalk.go` to `.../v3/pkg/embedded`. The catalog URL and the test
+stub changed from `/v2/providers` to `/v3/providers`
+(`internal/config/provider.go`, `internal/config/openai_test.go`).
+
+**Done and green (work in the working tree, uncommitted):**
+- `internal/oauth/openai/models.go`, `grok/models.go` — upstream v3
+  versions (reasoning object, capabilities).
+- `internal/discover/catalog.go` — merge rewritten for
+  Pricing/Reasoning/Capabilities/MaxAttachments.
+- `internal/config/config.go` — `ReasoningEffortLevels()` reads, the
+  provider-test URL switch rewritten for v3 types (bedrock/vercel/
+  google special-cased; anthropic via `InferenceProviderAnthropic`
+  with `/v1/models`), `ToProvider` simplified to a passthrough.
+- `internal/config/load.go` — `NormalizeProviderType` +
+  `legacyProviderTypes` wired into `configureProviders`; migrate
+  points wired for workspace data, per-file JSON reads, and the
+  in-memory safety net in `loadFromBytes` (crushrc JSON cannot be
+  rewritten on disk).
+- `internal/config/migrate_v3.go` (new) — `migrateCatwalkV2`,
+  `migrateCatwalkV2File`, `migrateCatwalkV2Model`,
+  `legacyModelPricingFields`. Tests in `migrate_v3_test.go` cover the
+  rewrite, the v3 no-op, `can_reason:false → never`, file persistence,
+  and the legacy type translation.
+- `internal/config/hyper.go` — v3 endpoint `/api/v1/provider/v3`;
+  `internal/agent/hyper/provider.{go,json}` — upstream v3 versions.
+- `internal/agent/coordinator.go` — step 5 landed: the copilot
+  responses table and both `isOpenCode*` model-ID lists are deleted;
+  `buildProvider(providerCfg, model, isSubAgent, wireType)` now takes
+  the wire type, normalizes it, selects bespoke-SDK providers by ID
+  (bedrock/azure/vertex/gemini/openrouter/vercel), and switches on the
+  wire type for everything else (`messages` → anthropic,
+  `responses` → `buildOpenaiResponsesProvider` with the ChatGPT-token
+  flow split out, `completions` → openai-compat with the ZAI
+  `tool_stream` and Hyper base-URL handling preserved);
+  `buildModelFromSelected` resolves the catwalk model first and passes
+  `catwalkModel.EffectiveType(providerCfg.Type)`.
+- `internal/agent/opencode_routing_test.go` — reworked for wire types:
+  the two table tests for the deleted helpers are gone; the routing
+  test builds all three wire types per gateway.
+- `internal/shellconfig/model.go` — step 4: `model add` keeps the v2
+  flag spellings (`--price-input`, `--can-reason`,
+  `--supports-images`) and translates them at write time onto v3
+  nested JSON (`pricing.input`, `reasoning.thinking` value
+  toggleable/never, `capabilities.vision`) via `modelV2ToV3Fields` +
+  `setNested`; `TestShellConfigProviderAddAndModel` passes.
+- `internal/ui/**` — all v2 reads fixed (`Capabilities.Vision`,
+  `Reasoning.EffortLevels`, `Reasoning.DefaultEffortLevel`,
+  `ReasoningEffortLevels()`); `internal/ui/dialog/reasoning.go` and
+  `models_item.go` are upstream's versions.
+- `schema.json` — regenerated from the v3 model shape (pricing,
+  reasoning, capabilities; v2 keys gone).
+- `internal/message/attachment.go` — `IsAudio()` added.
+- Suites green: config, shellconfig (via config), home, discover,
+  oauth/..., ui/dialog, ui/model (except the 3 known pre-existing
+  flaky failures), agent, agent/tools, backend, server, client,
+  workspace, message, hyper.
+
+**Still to do (in order):**
+1. **Attachments: the cap + audio in the UI (step 7).** Port upstream's
+   `internal/ui/common/common.go` additions (`AllowedAudioTypes`,
+   `IsAudioPath`) and the `internal/ui/model/ui.go` attachment-cap
+   warning + `currentModelMaxAttachments()` (upstream diff lines around
+   the `MaxAttachments` reads). Reconcile with the fork's
+   `IsTextMIME`-led choke point so audio is a third kind next to image
+   and text. Port upstream's `common_test.go` and the ui_test additions.
+2. **Skills/docs (step 8).** `internal/skills/builtin/crush-config/
+   SKILL.md` documents the provider `type` values and model fields —
+   update for the v3 meanings (upstream's 8-line diff) plus the
+   translated `model add` flags. Check `docs-site` provider-field
+   references for v2 names (`cost_per_1m_in`, `supports_attachments`).
+3. **Full sweep + regressions.** `go build ./...`, the whole
+   `go test ./...` (ignore the known pre-existing failures: glm-5.1
+   golden, the four listed flaky ones, the csync lock vet finding),
+   then the zai regression with the user's real config:
+   `go run . models | grep zai` and `go run . run "reply OK"` — the
+   legacy `openai-compat` type must translate and serve.
+4. **Commit + push.** One semantic commit for the whole port is fine
+   (upstream precedent: single migration commit):
+   `feat: catwalk v3 — wire types, nested model schema, and user-config migration (upstream PR #3829)`.
+
+**Gotchas the next session should know:**
+- The naive `CostPer1MIn` string replacements across agent/ui tests work
+  because the fork's tests reference `catwalk.Model` fields directly;
+  any leftover `CostPer1M*` in tests compiles only if nothing else broke
+  — trust the vet sweep, not the string.
+- `internal/config/discovery_test.go`'s "another API type" subtest now
+  uses **anthropic** (catalog type `messages`) instead of gemini: the
+  v3 catalog lists gemini as `completions`, so the old premise died.
+  The zai subtest compares effort **values** (`wantLevels`) against
+  `ReasoningEffortLevels()` because `Want.Reasoning.EffortLevels`
+  carries `{value, display}` structs.
+- Upstream's `reasoning_effort_test.go`, `oauth/*_test.go`, and
+  `ui/dialog/reasoning.go`+`models_item.go` were taken verbatim from
+  upstream main.
+- `loadFromBytes`'s in-memory migration is required because crushrc
+  builtins produce JSON that has no file to rewrite on disk; the JSON
+  file paths in `loadFromConfigPaths` migrate via
+  `migrateCatwalkV2File` (persists rewrite, preserves permissions).
 
 ## Sequencing
 

@@ -24,7 +24,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/catwalk/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/catwalk"
 	"charm.land/lipgloss/v2"
 	"charm.land/x/nerdfont"
 	"github.com/charmbracelet/crush/internal/agent"
@@ -4806,7 +4806,7 @@ func (m *UI) currentModelSupportsImages() bool {
 		return false
 	}
 	model := cfg.GetModelByType(agentCfg.Model)
-	return model != nil && model.SupportsImages
+	return model != nil && model.Capabilities.Vision
 }
 
 // currentModelName returns the display name of the coder agent's current

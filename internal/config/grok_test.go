@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"charm.land/catwalk/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/catwalk"
 	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/oauth"
@@ -226,7 +226,7 @@ func TestLoadRefreshesGrokModelsWhenCatwalkUpdates(t *testing.T) {
 	newCatwalkStub(t, http.StatusOK, []catwalk.Provider{{
 		Name:                "xAI",
 		ID:                  catwalk.InferenceProviderXAI,
-		Type:                catwalk.TypeOpenAICompat,
+		Type:                catwalk.TypeCompletions,
 		DefaultLargeModelID: "grok-4.5",
 		DefaultSmallModelID: "grok-4.5",
 		Models: []catwalk.Model{

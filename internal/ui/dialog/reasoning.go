@@ -1,6 +1,7 @@
 package dialog
 
 import (
+	"cmp"
 	"errors"
 
 	"charm.land/bubbles/v2/help"
@@ -25,9 +26,11 @@ const (
 
 // Reasoning represents a dialog for selecting reasoning effort.
 type Reasoning struct {
-	com    *common.Common
-	list   *list.FilterableList
-	help   help.Model
+	com   *common.Common
+	help  help.Model
+	list  *list.FilterableList
+	input textinput.Model
+
 	keyMap struct {
 		Select   key.Binding
 		Next     key.Binding
@@ -35,18 +38,17 @@ type Reasoning struct {
 		UpDown   key.Binding
 		Close    key.Binding
 	}
-	input textinput.Model
 }
 
 // ReasoningItem represents a reasoning effort list item.
 type ReasoningItem struct {
 	*list.Versioned
-	t         *styles.Styles
-	cache     map[int]string
 	effort    string
 	title     string
-	m         fuzzy.Match
 	isCurrent bool
+	t         *styles.Styles
+	m         fuzzy.Match
+	cache     map[int]string
 	focused   bool
 }
 
@@ -246,27 +248,29 @@ func (r *Reasoning) setReasoningItems() error {
 		return errors.New("model configuration not found")
 	}
 
-	if len(model.ReasoningLevels) == 0 {
+	levels := model.Reasoning.EffortLevels
+	if len(levels) == 0 {
 		return errors.New("no reasoning levels available")
 	}
 
 	currentEffort := selectedModel.ReasoningEffort
 	if currentEffort == "" {
-		currentEffort = model.DefaultReasoningEffort
+		currentEffort = model.Reasoning.DefaultEffortLevel
 	}
 
-	items := make([]list.FilterableItem, 0, len(model.ReasoningLevels))
+	items := make([]list.FilterableItem, 0, len(levels))
 	selectedIndex := 0
-	for i, effort := range model.ReasoningLevels {
+	for i, level := range levels {
+		display := cmp.Or(level.Display, common.FormatReasoningEffort(level.Value))
 		item := &ReasoningItem{
 			Versioned: list.NewVersioned(),
-			effort:    effort,
-			title:     common.FormatReasoningEffort(effort),
-			isCurrent: effort == currentEffort,
+			effort:    level.Value,
+			title:     display,
+			isCurrent: level.Value == currentEffort,
 			t:         r.com.Styles,
 		}
 		items = append(items, item)
-		if effort == currentEffort {
+		if level.Value == currentEffort {
 			selectedIndex = i
 		}
 	}

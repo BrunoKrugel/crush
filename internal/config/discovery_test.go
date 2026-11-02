@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"charm.land/catwalk/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/catwalk"
 	"github.com/charmbracelet/crush/internal/agent/hyper"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/discover"
@@ -610,19 +610,23 @@ func TestDiscoverProviderModels_FillsCatalogMetadata(t *testing.T) {
 			"id": "hyper",
 			"models": [{
 				"id": "live-model", "name": "Live Model", "context_window": 123456,
-				"default_max_tokens": 4096, "can_reason": true,
-				"reasoning_levels": ["low", "high", "max"], "default_reasoning_effort": "high"
+				"default_max_tokens": 4096,
+				"reasoning": {"thinking": "toggleable", "effort_levels": [
+					{"value": "low", "display": "Low"},
+					{"value": "high", "display": "High"},
+					{"value": "max", "display": "Max"}
+				], "default_effort_level": "high"}
 			}]
 		}`)
 
-		models := discoverOne(t, "hyper", catwalk.TypeOpenAICompat, srv)
+		models := discoverOne(t, "hyper", catwalk.TypeCompletions, srv)
 		require.Len(t, models, 1)
 		require.Equal(t, "Live Model", models[0].Name)
 		require.Equal(t, int64(123456), models[0].ContextWindow)
 		require.Equal(t, int64(4096), models[0].DefaultMaxTokens)
-		require.True(t, models[0].CanReason)
-		require.Equal(t, []string{"low", "high", "max"}, models[0].ReasoningLevels)
-		require.Equal(t, "high", models[0].DefaultReasoningEffort)
+		require.True(t, models[0].CanReason())
+		require.Equal(t, []string{"low", "high", "max"}, models[0].ReasoningEffortLevels())
+		require.Equal(t, "high", models[0].Reasoning.DefaultEffortLevel)
 	})
 
 	t.Run("hyper falls back to the bundled copy", func(t *testing.T) {
@@ -632,7 +636,7 @@ func TestDiscoverProviderModels_FillsCatalogMetadata(t *testing.T) {
 		want := bundled[0]
 		srv := newServer(t, []string{want.ID}, "")
 
-		models := discoverOne(t, "hyper", catwalk.TypeOpenAICompat, srv)
+		models := discoverOne(t, "hyper", catwalk.TypeCompletions, srv)
 		require.Len(t, models, 1)
 		require.Equal(t, want.Name, models[0].Name)
 		require.Equal(t, want.ContextWindow, models[0].ContextWindow)
@@ -642,7 +646,7 @@ func TestDiscoverProviderModels_FillsCatalogMetadata(t *testing.T) {
 		t.Parallel()
 		srv := newServer(t, []string{"live-model"}, `{"id": "hyper", "models": [{"id": "live-model", "name": "Live Model"}]}`)
 
-		models := discoverOne(t, "hyper", catwalk.TypeAnthropic, srv)
+		models := discoverOne(t, "hyper", catwalk.TypeMessages, srv)
 		require.Len(t, models, 1)
 		require.Equal(t, "live-model", models[0].Name)
 	})
@@ -655,24 +659,30 @@ func TestDiscoverProviderModels_FillsCatalogMetadata(t *testing.T) {
 		want := zai.Models[0]
 		srv := newServer(t, []string{want.ID}, "")
 
-		models := discoverOne(t, "zai", catwalk.TypeOpenAICompat, srv)
+		models := discoverOne(t, "zai", catwalk.TypeCompletions, srv)
 		require.Len(t, models, 1)
 		require.Equal(t, want.Name, models[0].Name)
 		require.Equal(t, want.ContextWindow, models[0].ContextWindow)
-		require.Equal(t, want.CanReason, models[0].CanReason)
-		require.Equal(t, want.ReasoningLevels, models[0].ReasoningLevels)
+		require.Equal(t, want.CanReason(), models[0].CanReason())
+		var wantLevels []string
+		for _, level := range want.Reasoning.EffortLevels {
+			wantLevels = append(wantLevels, level.Value)
+		}
+		require.Equal(t, wantLevels, models[0].ReasoningEffortLevels())
 	})
 
 	t.Run("a catalog for another API type is not used", func(t *testing.T) {
 		t.Parallel()
-		gemini, ok := embeddedCatalog()["gemini"]
+		// In the v3 catalog, gemini speaks completions like the probe, so
+		// use a provider whose catalog type differs (anthropic: messages).
+		anthropic, ok := embeddedCatalog()["anthropic"]
 		require.True(t, ok)
-		require.Equal(t, catwalk.TypeGoogle, gemini.Type)
-		require.NotEmpty(t, gemini.Models)
-		id := gemini.Models[0].ID
+		require.Equal(t, catwalk.TypeMessages, anthropic.Type)
+		require.NotEmpty(t, anthropic.Models)
+		id := anthropic.Models[0].ID
 		srv := newServer(t, []string{id}, "")
 
-		models := discoverOne(t, "gemini", catwalk.TypeOpenAICompat, srv)
+		models := discoverOne(t, "anthropic", catwalk.TypeCompletions, srv)
 		require.Len(t, models, 1)
 		require.Equal(t, id, models[0].Name)
 		require.Zero(t, models[0].ContextWindow)
@@ -684,11 +694,11 @@ func TestDiscoverProviderModels_FillsCatalogMetadata(t *testing.T) {
 		// ID, decides whether a catalog applies.
 		srv := newServer(t, []string{"glm-5.3"}, "")
 
-		models := discoverOne(t, "myprov", catwalk.TypeOpenAICompat, srv)
+		models := discoverOne(t, "myprov", catwalk.TypeCompletions, srv)
 		require.Len(t, models, 1)
 		require.Equal(t, "glm-5.3", models[0].Name)
 		require.Zero(t, models[0].ContextWindow)
-		require.False(t, models[0].CanReason)
+		require.False(t, models[0].CanReason())
 	})
 }
 

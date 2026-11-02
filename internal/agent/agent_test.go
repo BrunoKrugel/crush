@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"charm.land/catwalk/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/catwalk"
 	"charm.land/fantasy"
 	"charm.land/x/vcr"
 	"github.com/charmbracelet/crush/internal/agent/tools"
@@ -1294,10 +1294,8 @@ func TestWorkaroundProviderMediaLimitations_TextOnlyModel(t *testing.T) {
 	// Non-Anthropic provider, no image support — should replace media with
 	// a text placeholder and not create a synthetic user message.
 	largeModel := Model{
-		ModelCfg: config.SelectedModel{Provider: "openai"},
-		CatwalkCfg: catwalk.Model{
-			SupportsImages: false,
-		},
+		ModelCfg:   config.SelectedModel{Provider: "openai"},
+		CatwalkCfg: catwalk.Model{},
 	}
 
 	result := agent.workaroundProviderMediaLimitations(messages, largeModel)
@@ -1340,7 +1338,7 @@ func TestWorkaroundProviderMediaLimitations_VisionModel(t *testing.T) {
 	largeModel := Model{
 		ModelCfg: config.SelectedModel{Provider: "openai"},
 		CatwalkCfg: catwalk.Model{
-			SupportsImages: true,
+			Capabilities: catwalk.Capabilities{Vision: true},
 		},
 	}
 
@@ -1393,7 +1391,7 @@ func TestWorkaroundProviderMediaLimitations_AnthropicProvider(t *testing.T) {
 	largeModel := Model{
 		ModelCfg: config.SelectedModel{Provider: string(catwalk.InferenceProviderAnthropic)},
 		CatwalkCfg: catwalk.Model{
-			SupportsImages: true,
+			Capabilities: catwalk.Capabilities{Vision: true},
 		},
 	}
 

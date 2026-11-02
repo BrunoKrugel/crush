@@ -695,7 +695,7 @@ func (c *Commands) defaultCommandGroups() []CommandGroup {
 		cfgPrime := c.com.Config()
 		agentCfg := cfgPrime.Agents[config.AgentCoder]
 		model := cfgPrime.GetModelByType(agentCfg.Model)
-		if model != nil && model.SupportsImages {
+		if model != nil && model.Capabilities.Vision {
 			session = append(session, NewCommandItem(t, "file_picker", "Open File Picker", "ctrl+f", ActionOpenDialog{
 				DialogID: FilePickerID,
 			}))
@@ -717,11 +717,11 @@ func (c *Commands) defaultCommandGroups() []CommandGroup {
 	if agentCfg, ok := cfg.Agents[config.AgentCoder]; ok {
 		providerCfg := cfg.GetProviderForModel(agentCfg.Model)
 		reasoningModel := cfg.GetModelByType(agentCfg.Model)
-		if providerCfg != nil && reasoningModel != nil && reasoningModel.CanReason {
+		if providerCfg != nil && reasoningModel != nil && reasoningModel.CanReason() {
 			selectedModel := cfg.Models[agentCfg.Model]
 
 			// Anthropic models: thinking toggle
-			if reasoningModel.CanReason && len(reasoningModel.ReasoningLevels) == 0 {
+			if reasoningModel.CanReason() && len(reasoningModel.ReasoningEffortLevels()) == 0 {
 				status := "Enable"
 				if selectedModel.Think {
 					status = "Disable"
@@ -730,7 +730,7 @@ func (c *Commands) defaultCommandGroups() []CommandGroup {
 			}
 
 			// OpenAI models: reasoning effort dialog
-			if len(reasoningModel.ReasoningLevels) > 0 {
+			if len(reasoningModel.ReasoningEffortLevels()) > 0 {
 				model = append(model, NewCommandItem(t, "select_reasoning_effort", "Select Reasoning Effort", "", ActionOpenDialog{
 					DialogID: ReasoningID,
 				}))

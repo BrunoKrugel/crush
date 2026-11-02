@@ -16,7 +16,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/catwalk/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/catwalk"
 	"charm.land/fantasy"
 	"github.com/charmbracelet/crush/internal/a2a"
 	"github.com/charmbracelet/crush/internal/agent"
@@ -790,7 +790,7 @@ func (app *App) GetDefaultSmallModel(providerID string) config.SelectedModel {
 						Provider:        providerID,
 						Model:           small.ID,
 						MaxTokens:       small.DefaultMaxTokens,
-						ReasoningEffort: small.DefaultReasoningEffort,
+						ReasoningEffort: small.Reasoning.DefaultEffortLevel,
 					}
 				}
 				return largeModelCfg
@@ -803,7 +803,7 @@ func (app *App) GetDefaultSmallModel(providerID string) config.SelectedModel {
 		Provider:        providerID,
 		Model:           defaultSmallModelID,
 		MaxTokens:       model.DefaultMaxTokens,
-		ReasoningEffort: model.DefaultReasoningEffort,
+		ReasoningEffort: model.Reasoning.DefaultEffortLevel,
 	}
 }
 

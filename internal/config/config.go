@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"charm.land/catwalk/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/catwalk"
 	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/hooks"
@@ -104,34 +104,15 @@ type ProviderConfig struct {
 	FlatRate           bool              `json:"flat_rate,omitempty" jsonschema:"description=Flat-rate mode for this provider"`
 }
 
-// ToProvider converts the [ProviderConfig] to a [catwalk.Provider].
+// ToProvider converts the [ProviderConfig] to a [catwalk.Provider]. The
+// models are already v3-shaped: the loader migrates v2-authored config to
+// the v3 schema before it reaches here.
 func (c *ProviderConfig) ToProvider() catwalk.Provider {
-	// Convert config provider to provider.Provider format
-	provider := catwalk.Provider{
+	return catwalk.Provider{
 		Name:   c.Name,
 		ID:     catwalk.InferenceProvider(c.ID),
-		Models: make([]catwalk.Model, len(c.Models)),
+		Models: c.Models,
 	}
-
-	// Convert models
-	for i, model := range c.Models {
-		provider.Models[i] = catwalk.Model{
-			ID:                     model.ID,
-			Name:                   model.Name,
-			CostPer1MIn:            model.CostPer1MIn,
-			CostPer1MOut:           model.CostPer1MOut,
-			CostPer1MInCached:      model.CostPer1MInCached,
-			CostPer1MOutCached:     model.CostPer1MOutCached,
-			ContextWindow:          model.ContextWindow,
-			DefaultMaxTokens:       model.DefaultMaxTokens,
-			CanReason:              model.CanReason,
-			ReasoningLevels:        model.ReasoningLevels,
-			DefaultReasoningEffort: model.DefaultReasoningEffort,
-			SupportsImages:         model.SupportsImages,
-		}
-	}
-
-	return provider
 }
 
 func (c *ProviderConfig) SetupGitHubCopilot() {
@@ -1399,15 +1380,16 @@ func (c *Config) ValidateReasoningEffort(provider, modelID, effort string) error
 	if model == nil {
 		return fmt.Errorf("model %q not found for provider %q", modelID, provider)
 	}
-	if len(model.ReasoningLevels) == 0 {
+	levels := model.ReasoningEffortLevels()
+	if len(levels) == 0 {
 		return fmt.Errorf("model %q does not support reasoning effort", modelID)
 	}
-	if slices.Contains(model.ReasoningLevels, effort) {
+	if slices.Contains(levels, effort) {
 		return nil
 	}
 	return fmt.Errorf(
 		"model %q does not support reasoning effort %q, accepted values: %s",
-		modelID, effort, strings.Join(model.ReasoningLevels, ", "),
+		modelID, effort, strings.Join(levels, ", "),
 	)
 }
 
@@ -1691,9 +1673,38 @@ func (c *ProviderConfig) TestConnection(resolver VariableResolver) error {
 		return nil
 	}
 
+	// Bedrock, Azure, Gemini, and the bespoke-SDK providers keep their
+	// own checks; everything else — completions, responses, messages,
+	// and custom enricher types — exposes an OpenAI-style /models
+	// endpoint.
 	switch c.Type {
-	case catwalk.TypeOpenAI, catwalk.TypeOpenAICompat, catwalk.TypeOpenRouter:
+	case "bedrock", "bedrock-europe":
+		// NOTE: Bedrock has a `/foundation-models` endpoint that we could in
+		// theory use, but apparently the authorization is region-specific,
+		// so it's not so trivial.
+		if strings.HasPrefix(apiKey, "ABSK") { // Bedrock API keys
+			return nil
+		}
+		return errors.New("not a valid bedrock api key")
+	case "vercel":
+		// NOTE: Vercel does not validate API keys on the `/models` endpoint.
+		if strings.HasPrefix(apiKey, "vck_") { // Vercel API keys
+			return nil
+		}
+		return errors.New("not a valid vercel api key")
+	case "google":
 		baseURL, _ := resolver.ResolveValue(c.BaseURL)
+		baseURL = cmp.Or(baseURL, "https://generativelanguage.googleapis.com")
+		testURL = baseURL + "/v1beta/models?key=" + url.QueryEscape(apiKey)
+	default:
+		baseURL, _ := resolver.ResolveValue(c.BaseURL)
+		if providerID == catwalk.InferenceProviderAnthropic {
+			baseURL = cmp.Or(baseURL, "https://api.anthropic.com")
+			testURL = baseURL + "/v1/models"
+			headers["x-api-key"] = apiKey
+			headers["anthropic-version"] = "2023-06-01"
+			break
+		}
 		baseURL = cmp.Or(baseURL, "https://api.openai.com/v1")
 
 		switch providerID {
@@ -1706,37 +1717,6 @@ func (c *ProviderConfig) TestConnection(resolver VariableResolver) error {
 		}
 
 		headers["Authorization"] = "Bearer " + apiKey
-	case catwalk.TypeAnthropic:
-		baseURL, _ := resolver.ResolveValue(c.BaseURL)
-		baseURL = cmp.Or(baseURL, "https://api.anthropic.com/v1")
-
-		switch providerID {
-		case catwalk.InferenceKimiCoding:
-			testURL = baseURL + "/v1/models"
-		default:
-			testURL = baseURL + "/models"
-		}
-
-		headers["x-api-key"] = apiKey
-		headers["anthropic-version"] = "2023-06-01"
-	case catwalk.TypeGoogle:
-		baseURL, _ := resolver.ResolveValue(c.BaseURL)
-		baseURL = cmp.Or(baseURL, "https://generativelanguage.googleapis.com")
-		testURL = baseURL + "/v1beta/models?key=" + url.QueryEscape(apiKey)
-	case catwalk.TypeBedrock:
-		// NOTE: Bedrock has a `/foundation-models` endpoint that we could in
-		// theory use, but apparently the authorization is region-specific,
-		// so it's not so trivial.
-		if strings.HasPrefix(apiKey, "ABSK") { // Bedrock API keys
-			return nil
-		}
-		return errors.New("not a valid bedrock api key")
-	case catwalk.TypeVercel:
-		// NOTE: Vercel does not validate API keys on the `/models` endpoint.
-		if strings.HasPrefix(apiKey, "vck_") { // Vercel API keys
-			return nil
-		}
-		return errors.New("not a valid vercel api key")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1928,7 +1908,7 @@ func (c *Config) FirstAvailableModel(knownProviders []catwalk.Provider) (Selecte
 			Provider:        providerConfig.ID,
 			Model:           model.ID,
 			MaxTokens:       model.DefaultMaxTokens,
-			ReasoningEffort: model.DefaultReasoningEffort,
+			ReasoningEffort: model.Reasoning.DefaultEffortLevel,
 		}, true
 	}
 	return SelectedModel{}, false

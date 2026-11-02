@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"charm.land/catwalk/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/catwalk"
 	"charm.land/fantasy"
 	"charm.land/fantasy/providers/anthropic"
 	"charm.land/fantasy/providers/bedrock"
@@ -1220,7 +1220,7 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 	preparing = false
 	a.fireTurnHook(genCtx, call, hooks.Event{Name: hooks.EventTurnStart})
 
-	history, files := a.preparePrompt(msgs, largeModel.CatwalkCfg.SupportsImages, call.Attachments...)
+	history, files := a.preparePrompt(msgs, largeModel.CatwalkCfg.Capabilities.Vision, call.Attachments...)
 
 	var stepMessages []fantasy.Message
 	var shouldSummarize bool
@@ -1333,7 +1333,7 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 			}
 			callContext = context.WithValue(callContext, tools.MessageIDContextKey, assistantMsg.ID)
 			callContext = context.WithValue(callContext, tools.ChannelContextKey, call.Channel)
-			callContext = context.WithValue(callContext, tools.SupportsImagesContextKey, largeModel.CatwalkCfg.SupportsImages)
+			callContext = context.WithValue(callContext, tools.SupportsImagesContextKey, largeModel.CatwalkCfg.Capabilities.Vision)
 			callContext = context.WithValue(callContext, tools.ModelNameContextKey, largeModel.CatwalkCfg.Name)
 			callContext = context.WithValue(callContext, tools.ContentWidthContextKey, call.ContentWidth)
 			currentAssistant = &assistantMsg
@@ -1916,7 +1916,7 @@ func (a *sessionAgent) runSummarize(ctx context.Context, sessionID, instructions
 		return compaction.Preview{}, fmt.Errorf("%w: %s", ErrCompactionBlocked, result.Reason)
 	}
 
-	aiMsgs, _ := a.preparePrompt(region, largeModel.CatwalkCfg.SupportsImages)
+	aiMsgs, _ := a.preparePrompt(region, largeModel.CatwalkCfg.Capabilities.Vision)
 
 	// Compaction is a visible pause, and a failed one is worse than a silent
 	// one, so observers are told when it starts and - always, including on
@@ -2767,7 +2767,7 @@ func (a *sessionAgent) GenerateTitle(ctx context.Context, sessionID string, user
 	var success bool
 	for _, attempt := range attempts {
 		tok := int64(40)
-		if attempt.model.CatwalkCfg.CanReason {
+		if attempt.model.CatwalkCfg.CanReason() {
 			tok = attempt.model.CatwalkCfg.DefaultMaxTokens
 		}
 		agent := newAgent(attempt.model.Model, titlePrompt, tok)
@@ -2826,10 +2826,10 @@ func (a *sessionAgent) GenerateTitle(ctx context.Context, sessionID string, user
 	}
 
 	modelConfig := model.CatwalkCfg
-	cost := modelConfig.CostPer1MInCached/1e6*float64(resp.TotalUsage.CacheCreationTokens) +
-		modelConfig.CostPer1MOutCached/1e6*float64(resp.TotalUsage.CacheReadTokens) +
-		modelConfig.CostPer1MIn/1e6*float64(resp.TotalUsage.InputTokens) +
-		modelConfig.CostPer1MOut/1e6*float64(resp.TotalUsage.OutputTokens)
+	cost := modelConfig.Pricing.CacheCreate/1e6*float64(resp.TotalUsage.CacheCreationTokens) +
+		modelConfig.Pricing.CacheHit/1e6*float64(resp.TotalUsage.CacheReadTokens) +
+		modelConfig.Pricing.Input/1e6*float64(resp.TotalUsage.InputTokens) +
+		modelConfig.Pricing.Output/1e6*float64(resp.TotalUsage.OutputTokens)
 
 	// Use override cost if available (e.g., from OpenRouter).
 	if openrouterCost != nil {
@@ -2918,10 +2918,10 @@ func (a *sessionAgent) updateSessionUsage(model Model, session *session.Session,
 	}
 
 	modelConfig := model.CatwalkCfg
-	cost := modelConfig.CostPer1MInCached/1e6*float64(usage.CacheCreationTokens) +
-		modelConfig.CostPer1MOutCached/1e6*float64(usage.CacheReadTokens) +
-		modelConfig.CostPer1MIn/1e6*float64(usage.InputTokens) +
-		modelConfig.CostPer1MOut/1e6*float64(usage.OutputTokens)
+	cost := modelConfig.Pricing.CacheCreate/1e6*float64(usage.CacheCreationTokens) +
+		modelConfig.Pricing.CacheHit/1e6*float64(usage.CacheReadTokens) +
+		modelConfig.Pricing.Input/1e6*float64(usage.InputTokens) +
+		modelConfig.Pricing.Output/1e6*float64(usage.OutputTokens)
 
 	if !estimated {
 	}
@@ -3223,7 +3223,7 @@ func (a *sessionAgent) workaroundProviderMediaLimitations(messages []fantasy.Mes
 		return boundImages(messages, largeModel.ModelCfg.Provider)
 	}
 
-	supportsImages := largeModel.CatwalkCfg.SupportsImages
+	supportsImages := largeModel.CatwalkCfg.Capabilities.Vision
 
 	convertedMessages := make([]fantasy.Message, 0, len(messages))
 
