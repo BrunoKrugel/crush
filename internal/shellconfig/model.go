@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"strings"
 )
 
@@ -14,9 +15,11 @@ import (
 //
 //	model add <provider>/<id> [--name NAME] [--context-window N]
 //	    [--default-max-tokens N] [--can-reason true|false]
+//	    [--thinking always|never|toggleable]
 //	    [--supports-images true|false] [--price-input F]
 //	    [--price-output F] [--price-cache-create F]
 //	    [--price-cache-hit F] [--reasoning-effort low|medium|high]
+//	    [--max-attachments N]
 //
 // The pricing, reasoning, and capability flags write the catwalk v3
 // nested JSON (pricing.input, capabilities.vision, reasoning.*), and the
@@ -69,6 +72,13 @@ var modelAddFlags = []flagSpec{
 	{name: "--name", jsonKey: "name", kind: flagString, op: opSet},
 	{name: "--context-window", jsonKey: "context_window", kind: flagInt, op: opSet},
 	{name: "--default-max-tokens", jsonKey: "default_max_tokens", kind: flagInt, op: opSet},
+	{name: "--thinking", jsonKey: "thinking", child: "reasoning", kind: flagString, op: opSetChild, validate: func(v any) error {
+		thinking, ok := v.(string)
+		if !ok || !slices.Contains([]string{"always", "never", "toggleable"}, thinking) {
+			return fmt.Errorf("--thinking expects always, never, or toggleable, got %v", v)
+		}
+		return nil
+	}},
 	{name: "--can-reason", jsonKey: "can_reason", kind: flagBool, op: opSet},
 	{name: "--supports-images", jsonKey: "supports_attachments", kind: flagBool, op: opSet},
 	{name: "--price-input", jsonKey: "cost_per_1m_in", kind: flagFloat, op: opSet},
@@ -76,6 +86,7 @@ var modelAddFlags = []flagSpec{
 	{name: "--price-cache-create", jsonKey: "cost_per_1m_in_cached", kind: flagFloat, op: opSet},
 	{name: "--price-cache-hit", jsonKey: "cost_per_1m_out_cached", kind: flagFloat, op: opSet},
 	{name: "--reasoning-effort", jsonKey: "default_reasoning_effort", kind: flagString, op: opSet},
+	{name: "--max-attachments", jsonKey: "max_attachments", kind: flagInt, op: opSet},
 }
 
 // modelV2ToV3Fields rewrites the v2 model keys the flags write onto the
@@ -96,7 +107,7 @@ var modelV2ToV3Fields = map[string]string{
 
 func modelAdd(b *ConfigBuilder, args []string, stderr io.Writer) error {
 	if len(args) < 3 {
-		return usage(stderr, "usage: model add <provider>/<id> [--name NAME] [--context-window N] [--default-max-tokens N] [--can-reason true|false] [--supports-images true|false] [--price-input F] [--price-output F] [--price-cache-create F] [--price-cache-hit F] [--reasoning-effort low|medium|high]")
+		return usage(stderr, "usage: model add <provider>/<id> [--name NAME] [--context-window N] [--default-max-tokens N] [--can-reason true|false] [--thinking always|never|toggleable] [--supports-images true|false] [--price-input F] [--price-output F] [--price-cache-create F] [--price-cache-hit F] [--reasoning-effort low|medium|high] [--max-attachments N]")
 	}
 	provider, id, ok := splitProviderModel(args[2])
 	if !ok {
@@ -120,6 +131,10 @@ func modelAdd(b *ConfigBuilder, args []string, stderr io.Writer) error {
 		if v, ok := model[v2Key]; ok {
 			delete(model, v2Key)
 			if v2Key == "can_reason" {
+				// An explicit --thinking wins over the legacy boolean.
+				if r, hasReasoning := model["reasoning"].(map[string]any); hasReasoning && r["thinking"] != nil {
+					continue
+				}
 				if b, isBool := v.(bool); isBool && b {
 					v = "toggleable"
 				} else if isBool {

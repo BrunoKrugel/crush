@@ -15,22 +15,28 @@ your own.
 
 | Type | Use for |
 | --- | --- |
-| `openai` | Proxying or routing requests **through OpenAI** |
-| `openai-compat` | Non-OpenAI providers with an OpenAI-compatible API |
-| `anthropic` | Anthropic and Anthropic-compatible APIs |
+| `completions` | Providers speaking the OpenAI chat completions protocol |
+| `responses` | Providers speaking the OpenAI responses protocol |
+| `messages` | Providers speaking the Anthropic messages protocol |
 | `google-vertex` | Google Cloud Vertex AI |
 | `ollama`, `lmstudio`, `llamacpp`, `omlx`, `litellm` | [Local models](#local-models) — these auto-discover |
 
 :::note
-Pick the right OpenAI type. `openai` is for OpenAI itself (or a proxy in front
-of it); `openai-compat` is for everything else that merely speaks the same
-protocol. Choosing wrong degrades the experience.
+Legacy type values `openai`, `openai-compat`, and `anthropic` are still
+accepted and migrated automatically to the protocol types (`completions`
+or `messages`). Existing configs keep working unchanged.
+:::
+
+:::note
+Pick the right OpenAI type. `responses` is for OpenAI's responses API;
+`completions` is for OpenAI itself and everything else that speaks the
+same chat completions protocol. Choosing wrong degrades the experience.
 :::
 
 ## OpenAI-compatible APIs
 
 ```bash
-provider add deepseek --type openai-compat \
+provider add deepseek --type completions \
   --base-url "https://api.deepseek.com/v1" \
   --api-key "$DEEPSEEK_API_KEY"
 
