@@ -54,7 +54,7 @@ model add deepseek/deepseek-chat \
 
 ```bash
 provider add custom-anthropic \
-  --type anthropic \
+  --type messages \
   --base-url "https://api.anthropic.com/v1" \
   --api-key "$ANTHROPIC_API_KEY" \
   --extra-header anthropic-version 2023-06-01
@@ -63,7 +63,7 @@ model add custom-anthropic/claude-sonnet-4-20250514 \
   --name "Claude Sonnet 4" \
   --context-window 200000 \
   --default-max-tokens 50000 \
-  --can-reason true \
+  --thinking toggleable \
   --supports-images true \
   --price-input 3 \
   --price-output 15 \
@@ -125,7 +125,7 @@ model add vertexai/claude-sonnet-4@20250514 \
   --name "VertexAI Sonnet 4" \
   --context-window 200000 \
   --default-max-tokens 50000 \
-  --can-reason true \
+  --thinking toggleable \
   --supports-images true \
   --price-input 3 \
   --price-output 15 \
@@ -162,7 +162,7 @@ You can still list models explicitly. **User-defined models always take
 precedence over discovered ones**, and any field you set is never overwritten by
 auto-discovery.
 
-Auto-discovery runs when the model list is empty for any `openai-compat`
+Auto-discovery runs when the model list is empty for any `completions`
 provider, or whenever `--discover-models true` is set — in which case discovered
 models are *merged* with your hand-configured ones and your explicit fields win
 on conflicts.
@@ -185,7 +185,7 @@ model add ollama/qwen3:30b \
 Some providers need a preamble prepended to the system prompt:
 
 ```bash
-provider add my-proxy --type openai-compat \
+provider add my-proxy --type completions \
   --system-prompt-prefix "You are operating behind an internal gateway."
 ```
 
