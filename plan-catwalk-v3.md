@@ -1,9 +1,11 @@
 # Porting plan: upstream PR #3829 — Catwalk v3
 
-> **Status: port ~85% done as WIP on `fork` (uncommitted).** Steps 1-5 are
-> complete and all touched suites are green. Steps 7-8 are partially done.
-> See "Where the port stands" near the end for exactly what remains and how
-> to pick it up in a fresh session.
+> **Status: DONE.** The port is committed on `fork` (the v3 migration
+> commit plus a follow-up with step 7-8: audio attachments, the
+> attachment cap, the `--thinking`/`--max-attachments` flags, and the
+> doc updates). The zai regression passed. Steps 1-5 were already
+> complete when this session picked up; see "Where the port stands"
+> for the record of what was done.
 
 Plan for pulling
 [`charmbracelet/crush#3829`](https://github.com/charmbracelet/crush/pull/3829)
