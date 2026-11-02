@@ -33,9 +33,7 @@ const (
 	// elsewhere.
 	AgentIcon string = "󰚩"
 
-	// GitBranchIcon is the Powerline git branch glyph (U+E0A0), shown beside
-	// the checked-out branch when the terminal is expected to render Nerd
-	// Font glyphs.
+	// GitBranchIcon is the Powerline branch glyph, shown only with Nerd Fonts.
 	GitBranchIcon string = "\ue0a0"
 
 	ArrowRightIcon string = "→"

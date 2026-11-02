@@ -26,7 +26,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/catwalk/v3/pkg/catwalk"
 	"charm.land/lipgloss/v2"
-	"charm.land/x/nerdfont"
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/agent/hyper"
 	"github.com/charmbracelet/crush/internal/agent/notify"
@@ -288,19 +287,21 @@ type UI struct {
 		start int
 		text  string
 	}
-	lastCompletionFilePath   string
-	sidebarDrawLogo          string
-	workingPlaceholder       string
-	summarizingNote          string
-	summarizingNoteSession   string
-	planReadySessionID       string
-	pillsView                string
-	completionsQuery         string
-	sidebarLogo              string
-	readyPlaceholder         string
-	probedSession            string
-	lastCompletionText       string
-	gitBranch                string
+	lastCompletionFilePath string
+	sidebarDrawLogo        string
+	workingPlaceholder     string
+	summarizingNote        string
+	summarizingNoteSession string
+	planReadySessionID     string
+	pillsView              string
+	completionsQuery       string
+	sidebarLogo            string
+	readyPlaceholder       string
+	probedSession          string
+	lastCompletionText     string
+	gitBranch              string
+	// nerdFonts reports whether the terminal renders Nerd Font glyphs.
+	nerdFonts                bool
 	initialSessionID         string
 	pendingBangCommand       string
 	themeKey                 string
@@ -517,8 +518,6 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 	ui.isTransparent = opts.TUI.IsTransparent()
 	// enable mouse support (default on)
 	ui.mouseEnabled = opts.TUI.Mouse == nil || *opts.TUI.Mouse
-	// apply the Nerd Font override before anything probes the terminal
-	applyNerdFontsOption(opts)
 
 	return ui
 }
@@ -579,6 +578,7 @@ func (m *UI) Init() tea.Cmd {
 	// The branch is shown from the first frame on, so read it now and keep
 	// polling for checkouts made outside Crush.
 	cmds = append(cmds, m.fetchGitBranch(), m.gitBranchTicker())
+	cmds = append(cmds, detectNerdFonts(m.com.Config().Options.TUI))
 	cmds = append(cmds, m.hyperCreditsTicker())
 	// Prime the memoized MCP state off-thread. There is deliberately no
 	// wait for server-side MCP initialization: the init gate is
@@ -1644,6 +1644,8 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.hyperCreditsTicker())
 	case gitBranchUpdatedMsg:
 		m.gitBranch = msg.branch
+	case nerdFontsMsg:
+		m.nerdFonts = bool(msg)
 	case gitBranchPollMsg:
 		cmds = append(cmds, m.fetchGitBranch(), m.gitBranchTicker())
 	case util.InfoMsg:
@@ -3131,16 +3133,6 @@ func (m *UI) hyperCreditsTicker() tea.Cmd {
 // path. A failed read keeps whatever the last poll reported.
 func (m *UI) fetchGitBranch() tea.Cmd {
 	return func() tea.Msg {
-		// Warm the Nerd Font probe here rather than on the render path:
-		// the first probe may shell out to fc-list or read font
-		// directories, and [UI.gitBranchLabel] needs the answer for every
-		// frame that shows a branch.
-		slog.Debug(
-			"Nerd font support",
-			"supported", nerdfont.Supported(),
-			"reason", nerdfont.Reason(),
-		)
-
 		ctx, cancel := context.WithTimeout(context.Background(), gitBranchFetchTimeout)
 		defer cancel()
 		branch, err := m.com.Workspace.GitBranch(ctx)
@@ -7945,19 +7937,6 @@ func renderLogo(t *styles.Styles, compact, hyper bool, width int) string {
 	})
 }
 
-// gitBranchLabel renders the polled branch with the git branch glyph when
-// the terminal is expected to render Nerd Font glyphs. Without Nerd Font
-// support it is the bare branch name, as it has always been.
-func (m *UI) gitBranchLabel() string {
-	if m.gitBranch == "" {
-		return ""
-	}
-	if glyph := nerdfont.Glyph(styles.GitBranchIcon, ""); glyph != "" {
-		return glyph + " " + m.gitBranch
-	}
-	return m.gitBranch
-}
-
 func (m *UI) openCheckpointHandoff() {
 	if m.pendingPreview == nil || m.session == nil {
 		return
@@ -8050,17 +8029,6 @@ func (m *UI) scaledWheelLines(delta float64) int {
 	lines := int(scaled)
 	m.wheelRemainder = scaled - float64(lines)
 	return lines
-}
-
-// applyNerdFontsOption wires the tui.nerd_fonts option into Nerd Font
-// detection: nil keeps automatic detection, and true or false force glyphs
-// on and off.
-func applyNerdFontsOption(opts *config.Options) {
-	if opts == nil || opts.TUI == nil || opts.TUI.NerdFonts == nil {
-		nerdfont.ClearOverride()
-		return
-	}
-	nerdfont.SetOverride(*opts.TUI.NerdFonts)
 }
 
 // refreshMCPStates re-seeds MCP client states without handleStateChanged's
