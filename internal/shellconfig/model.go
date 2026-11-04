@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+
+	"charm.land/catwalk/v3/pkg/catwalk"
 )
 
 // handleModel implements the `model` builtin.
@@ -90,8 +92,10 @@ var modelAddFlags = []flagSpec{
 	{name: "--max-attachments", jsonKey: "max_attachments", kind: flagInt, op: opSet},
 	// --reasoning-level lists the selectable effort tiers behind one model
 	// entry, which is how a family that sells one model per tier collapses
-	// into a single picker row.
-	{name: "--reasoning-level", jsonKey: "effort_levels", child: "reasoning", kind: flagString, op: opAppendChild},
+	// into a single picker row. The collected values become the reasoning
+	// schema's effort levels after the flags are parsed.
+	{name: "--reasoning-level", jsonKey: "reasoning_levels", kind: flagString, op: opAppend},
+	{name: "--max-attachments", jsonKey: "max_attachments", kind: flagInt, op: opSet},
 }
 
 // modelV2ToV3Fields rewrites the v2 model keys the flags write onto the
@@ -150,6 +154,25 @@ func modelAdd(b *ConfigBuilder, args []string, stderr io.Writer) error {
 				return err
 			}
 		}
+	}
+
+	// Translate the collected --reasoning-level tiers into the reasoning
+	// schema, deriving each tier's display name the way the catalog does.
+	if levels, ok := model["reasoning_levels"].([]any); ok {
+		delete(model, "reasoning_levels")
+		effortLevels := make([]any, 0, len(levels))
+		for _, level := range levels {
+			value, ok := level.(string)
+			if !ok {
+				continue
+			}
+			effortLevel := catwalk.NewEffortLevels(value)[0]
+			effortLevels = append(effortLevels, map[string]any{
+				"value":   effortLevel.Value,
+				"display": effortLevel.Display,
+			})
+		}
+		childMap(model, "reasoning")["effort_levels"] = effortLevels
 	}
 
 	p := childMap(providers, provider)

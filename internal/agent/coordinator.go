@@ -94,6 +94,45 @@ var copilotResponsesModels = map[string]bool{
 	"gpt-6-astra":   true,
 	"grok-4.5":      true,
 	"grok-4.6":      true,
+||||||| parent of 4599c0acd (fix(plugins): keep custom Google providers on the Google SDK)
+// servingProvider returns the fantasy provider package that serves the
+// given provider and model. Providers with bespoke SDKs (Bedrock, Azure,
+// Google, Vertex AI, OpenRouter, Vercel, Hyper) are selected by ID;
+// everything else, gateways like Copilot and OpenCode included, is
+// determined by the catwalk type, which describes the API endpoint
+// format the model speaks and so the key its provider options are read
+// from.
+func servingProvider(providerCfg config.ProviderConfig, model catwalk.Model) string {
+	if providerCfg.Type == config.TypeGoogle {
+		return google.Name
+	}
+	switch providerCfg.ID {
+	case string(catwalk.InferenceProviderBedrock), string(catwalk.InferenceProviderBedrockEurope):
+		return bedrock.Name
+	case string(catwalk.InferenceProviderAzure):
+		return azure.Name
+	case string(catwalk.InferenceProviderGemini), string(catwalk.InferenceProviderVertexAI):
+		return google.Name
+	case string(catwalk.InferenceProviderOpenRouter):
+		return openrouter.Name
+	case string(catwalk.InferenceProviderVercel):
+		return vercel.Name
+	case hyper.Name:
+		return hyper.Name
+	}
+
+	switch model.EffectiveType(providerCfg.Type) {
+	case catwalk.TypeResponses:
+		return openai.Name
+	case catwalk.TypeMessages:
+		return anthropic.Name
+	case catwalk.TypeCompletions:
+		return openaicompat.Name
+	default:
+		// Custom provider types (litellm, ollama, lmstudio, ...) are
+		// handled by the caller through IsKnownCustomProvider.
+		return string(providerCfg.Type)
+	}
 }
 
 // OpenCode models that use the Anthropic Messages API instead of Chat
@@ -2690,6 +2729,10 @@ func (c *coordinator) buildProvider(providerCfg config.ProviderConfig, model con
 			baseURL = strings.TrimSuffix(baseURL, "/v1")
 			return c.buildAnthropicProvider(baseURL, apiKey, headers, providerCfg.ID, nil, providerCfg.Gateway)
 		}
+	}
+
+	if providerCfg.Type == config.TypeGoogle {
+		return c.buildGoogleProvider(baseURL, apiKey, headers, providerCfg)
 	}
 
 	switch wireType {

@@ -38,6 +38,409 @@ import (
 
 const defaultCatwalkURL = "https://catwalk.charm.land"
 
+<<<<<<< HEAD
+||||||| parent of 4599c0acd (fix(plugins): keep custom Google providers on the Google SDK)
+// legacyProviderTypes maps provider type values from the catwalk v2
+// schema onto the v3 endpoint types that describe the same API format, so
+// configs written before the migration keep working. Custom provider
+// types with registered enrichers (ollama, litellm, ...) are not listed
+// here and pass through unchanged.
+var legacyProviderTypes = map[catwalk.Type]catwalk.Type{
+	"openai":        catwalk.TypeResponses,
+	"openai-compat": catwalk.TypeCompletions,
+	"openrouter":    catwalk.TypeCompletions,
+	"vercel":        catwalk.TypeCompletions,
+	"anthropic":     catwalk.TypeMessages,
+	"azure":         catwalk.TypeResponses,
+	"bedrock":       catwalk.TypeMessages,
+	"google":        catwalk.TypeCompletions,
+	"google-vertex": catwalk.TypeCompletions,
+}
+
+// NormalizeProviderType maps a catwalk v2 provider type onto the v3
+// endpoint type describing the same API format. Types that are already
+// v3 or are not legacy names pass through unchanged. catwalk's v3 data
+// still carries v2 names for some providers (OpenAI, MiniMax, ...).
+func NormalizeProviderType(t catwalk.Type) catwalk.Type {
+	if mapped, ok := legacyProviderTypes[t]; ok {
+		return mapped
+	}
+	return t
+}
+
+// legacyModelPricingFields maps catwalk v2 model cost fields onto their
+// v3 pricing counterparts.
+var legacyModelPricingFields = map[string]string{
+	"cost_per_1m_in":         "input",
+	"cost_per_1m_out":        "output",
+	"cost_per_1m_in_cached":  "cache_create",
+	"cost_per_1m_out_cached": "cache_hit",
+}
+
+// migrateCatwalkV2 rewrites a merged user config from the catwalk v2
+// schema onto the v3 schema so pre-migration configs decode correctly.
+// In v3, flat model fields moved into nested structures: the cost
+// fields became pricing, supports_attachments became
+// capabilities.vision, and the can_reason/reasoning_levels/
+// default_reasoning_effort trio became the reasoning object. The
+// rewrite is pure and is a no-op for configs already written with v3
+// fields; use migrateCatwalkV2File to persist the result.
+func migrateCatwalkV2(data []byte) ([]byte, bool) {
+	var root map[string]any
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	if err := dec.Decode(&root); err != nil {
+		return data, false
+	}
+	providers, ok := root["providers"].(map[string]any)
+	if !ok {
+		return data, false
+	}
+
+	changed := false
+	for _, raw := range providers {
+		provider, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		for _, key := range []string{"models", "chatgpt_models"} {
+			models, ok := provider[key].([]any)
+			if !ok {
+				continue
+			}
+			for i, rawModel := range models {
+				model, ok := rawModel.(map[string]any)
+				if !ok {
+					continue
+				}
+				if migrateCatwalkV2Model(model) {
+					models[i] = model
+					changed = true
+				}
+			}
+		}
+	}
+	if !changed {
+		return data, false
+	}
+
+	out, err := json.Marshal(root)
+	if err != nil {
+		return data, false
+	}
+	return out, true
+}
+
+// migrateCatwalkV2File migrates a JSON config file from the catwalk v2
+// model schema onto v3 and persists the rewrite atomically, preserving
+// the file's permissions. The returned bytes are always the migrated
+// form, so loading continues even when the write fails.
+func migrateCatwalkV2File(path string, data []byte) []byte {
+	migrated, changed := migrateCatwalkV2(data)
+	if !changed {
+		return data
+	}
+	perm := os.FileMode(0o600)
+	if info, err := os.Stat(path); err == nil {
+		perm = info.Mode().Perm()
+	}
+	if err := atomicWriteFile(path, migrated, perm); err != nil {
+		slog.Warn("Failed to write migrated config", "path", path, "error", err)
+	} else {
+		slog.Info("Migrated config file to the catwalk v3 model schema", "path", path)
+	}
+	return migrated
+}
+
+// migrateCatwalkV2Model migrates a single model object in place and
+// reports whether anything changed. Legacy fields are removed after
+// being folded into their v3 counterparts so they never leak back into
+// the decoded config.
+func migrateCatwalkV2Model(model map[string]any) bool {
+	changed := false
+
+	if _, ok := model["pricing"]; !ok {
+		pricing := map[string]any{}
+		for legacy, field := range legacyModelPricingFields {
+			value, ok := model[legacy]
+			if !ok {
+				continue
+			}
+			pricing[field] = value
+			delete(model, legacy)
+			changed = true
+		}
+		if len(pricing) > 0 {
+			model["pricing"] = pricing
+		}
+	} else {
+		for legacy := range legacyModelPricingFields {
+			if _, ok := model[legacy]; ok {
+				delete(model, legacy)
+				changed = true
+			}
+		}
+	}
+
+	if value, ok := model["supports_attachments"]; ok {
+		delete(model, "supports_attachments")
+		capabilities, ok := model["capabilities"].(map[string]any)
+		if !ok {
+			capabilities = map[string]any{}
+			model["capabilities"] = capabilities
+		}
+		if _, ok := capabilities["vision"]; !ok {
+			capabilities["vision"] = value
+		}
+		changed = true
+	}
+
+	canReason, hasCanReason := model["can_reason"]
+	levels, hasLevels := model["reasoning_levels"]
+	defaultEffort, hasDefaultEffort := model["default_reasoning_effort"]
+	for _, legacy := range []string{"can_reason", "reasoning_levels", "default_reasoning_effort"} {
+		if _, ok := model[legacy]; ok {
+			delete(model, legacy)
+			changed = true
+		}
+	}
+	if _, ok := model["reasoning"]; !ok && (hasCanReason || hasLevels || hasDefaultEffort) {
+		reasoning := map[string]any{}
+		if can, ok := canReason.(bool); ok && !can {
+			reasoning["thinking"] = catwalk.ThinkingNever
+		} else {
+			reasoning["thinking"] = catwalk.ThinkingToggleable
+			if raw, ok := levels.([]any); ok && len(raw) > 0 {
+				values := make([]string, 0, len(raw))
+				for _, level := range raw {
+					if value, ok := level.(string); ok {
+						values = append(values, value)
+					}
+				}
+				if len(values) > 0 {
+					effortLevels := make([]any, 0, len(values))
+					for _, level := range catwalk.NewEffortLevels(values...) {
+						effortLevels = append(effortLevels, map[string]any{
+							"value":   level.Value,
+							"display": level.Display,
+						})
+					}
+					reasoning["effort_levels"] = effortLevels
+					if effort, ok := defaultEffort.(string); ok && effort != "" {
+						reasoning["default_effort_level"] = effort
+					}
+				}
+			}
+		}
+		model["reasoning"] = reasoning
+	}
+
+	return changed
+}
+
+=======
+// legacyProviderTypes maps provider type values from the catwalk v2
+// schema onto the v3 endpoint types that describe the same API format, so
+// configs written before the migration keep working. Custom provider
+// types with registered enrichers (ollama, litellm, ...) are not listed
+// here and pass through unchanged.
+var legacyProviderTypes = map[catwalk.Type]catwalk.Type{
+	"openai":        catwalk.TypeResponses,
+	"openai-compat": catwalk.TypeCompletions,
+	"openrouter":    catwalk.TypeCompletions,
+	"vercel":        catwalk.TypeCompletions,
+	"anthropic":     catwalk.TypeMessages,
+	"azure":         catwalk.TypeResponses,
+	"bedrock":       catwalk.TypeMessages,
+	"google-vertex": catwalk.TypeCompletions,
+}
+
+// TypeGoogle names a custom provider that speaks the Gemini API. Unlike
+// the endpoint types, it selects the Google SDK rather than an OpenAI one.
+const TypeGoogle = catwalk.Type("google")
+
+// NormalizeProviderType maps a catwalk v2 provider type onto the v3
+// endpoint type describing the same API format. Types that are already
+// v3 or are not legacy names pass through unchanged. catwalk's v3 data
+// still carries v2 names for some providers (OpenAI, MiniMax, ...).
+func NormalizeProviderType(t catwalk.Type) catwalk.Type {
+	if mapped, ok := legacyProviderTypes[t]; ok {
+		return mapped
+	}
+	return t
+}
+
+// legacyModelPricingFields maps catwalk v2 model cost fields onto their
+// v3 pricing counterparts.
+var legacyModelPricingFields = map[string]string{
+	"cost_per_1m_in":         "input",
+	"cost_per_1m_out":        "output",
+	"cost_per_1m_in_cached":  "cache_create",
+	"cost_per_1m_out_cached": "cache_hit",
+}
+
+// migrateCatwalkV2 rewrites a merged user config from the catwalk v2
+// schema onto the v3 schema so pre-migration configs decode correctly.
+// In v3, flat model fields moved into nested structures: the cost
+// fields became pricing, supports_attachments became
+// capabilities.vision, and the can_reason/reasoning_levels/
+// default_reasoning_effort trio became the reasoning object. The
+// rewrite is pure and is a no-op for configs already written with v3
+// fields; use migrateCatwalkV2File to persist the result.
+func migrateCatwalkV2(data []byte) ([]byte, bool) {
+	var root map[string]any
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	if err := dec.Decode(&root); err != nil {
+		return data, false
+	}
+	providers, ok := root["providers"].(map[string]any)
+	if !ok {
+		return data, false
+	}
+
+	changed := false
+	for _, raw := range providers {
+		provider, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		for _, key := range []string{"models", "chatgpt_models"} {
+			models, ok := provider[key].([]any)
+			if !ok {
+				continue
+			}
+			for i, rawModel := range models {
+				model, ok := rawModel.(map[string]any)
+				if !ok {
+					continue
+				}
+				if migrateCatwalkV2Model(model) {
+					models[i] = model
+					changed = true
+				}
+			}
+		}
+	}
+	if !changed {
+		return data, false
+	}
+
+	out, err := json.Marshal(root)
+	if err != nil {
+		return data, false
+	}
+	return out, true
+}
+
+// migrateCatwalkV2File migrates a JSON config file from the catwalk v2
+// model schema onto v3 and persists the rewrite atomically, preserving
+// the file's permissions. The returned bytes are always the migrated
+// form, so loading continues even when the write fails.
+func migrateCatwalkV2File(path string, data []byte) []byte {
+	migrated, changed := migrateCatwalkV2(data)
+	if !changed {
+		return data
+	}
+	perm := os.FileMode(0o600)
+	if info, err := os.Stat(path); err == nil {
+		perm = info.Mode().Perm()
+	}
+	if err := atomicWriteFile(path, migrated, perm); err != nil {
+		slog.Warn("Failed to write migrated config", "path", path, "error", err)
+	} else {
+		slog.Info("Migrated config file to the catwalk v3 model schema", "path", path)
+	}
+	return migrated
+}
+
+// migrateCatwalkV2Model migrates a single model object in place and
+// reports whether anything changed. Legacy fields are removed after
+// being folded into their v3 counterparts so they never leak back into
+// the decoded config.
+func migrateCatwalkV2Model(model map[string]any) bool {
+	changed := false
+
+	if _, ok := model["pricing"]; !ok {
+		pricing := map[string]any{}
+		for legacy, field := range legacyModelPricingFields {
+			value, ok := model[legacy]
+			if !ok {
+				continue
+			}
+			pricing[field] = value
+			delete(model, legacy)
+			changed = true
+		}
+		if len(pricing) > 0 {
+			model["pricing"] = pricing
+		}
+	} else {
+		for legacy := range legacyModelPricingFields {
+			if _, ok := model[legacy]; ok {
+				delete(model, legacy)
+				changed = true
+			}
+		}
+	}
+
+	if value, ok := model["supports_attachments"]; ok {
+		delete(model, "supports_attachments")
+		capabilities, ok := model["capabilities"].(map[string]any)
+		if !ok {
+			capabilities = map[string]any{}
+			model["capabilities"] = capabilities
+		}
+		if _, ok := capabilities["vision"]; !ok {
+			capabilities["vision"] = value
+		}
+		changed = true
+	}
+
+	canReason, hasCanReason := model["can_reason"]
+	levels, hasLevels := model["reasoning_levels"]
+	defaultEffort, hasDefaultEffort := model["default_reasoning_effort"]
+	for _, legacy := range []string{"can_reason", "reasoning_levels", "default_reasoning_effort"} {
+		if _, ok := model[legacy]; ok {
+			delete(model, legacy)
+			changed = true
+		}
+	}
+	if _, ok := model["reasoning"]; !ok && (hasCanReason || hasLevels || hasDefaultEffort) {
+		reasoning := map[string]any{}
+		if can, ok := canReason.(bool); ok && !can {
+			reasoning["thinking"] = catwalk.ThinkingNever
+		} else {
+			reasoning["thinking"] = catwalk.ThinkingToggleable
+			if raw, ok := levels.([]any); ok && len(raw) > 0 {
+				values := make([]string, 0, len(raw))
+				for _, level := range raw {
+					if value, ok := level.(string); ok {
+						values = append(values, value)
+					}
+				}
+				if len(values) > 0 {
+					effortLevels := make([]any, 0, len(values))
+					for _, level := range catwalk.NewEffortLevels(values...) {
+						effortLevels = append(effortLevels, map[string]any{
+							"value":   level.Value,
+							"display": level.Display,
+						})
+					}
+					reasoning["effort_levels"] = effortLevels
+					if effort, ok := defaultEffort.(string); ok && effort != "" {
+						reasoning["default_effort_level"] = effort
+					}
+				}
+			}
+		}
+		model["reasoning"] = reasoning
+	}
+
+	return changed
+}
+
+>>>>>>> 4599c0acd (fix(plugins): keep custom Google providers on the Google SDK)
 // Load loads the configuration from the default paths and returns a
 // ConfigStore that owns both the pure-data Config and all runtime state.
 func Load(ctx context.Context, workingDir, dataDir string, debug bool) (*ConfigStore, error) {
@@ -524,6 +927,7 @@ func (c *Config) configureProviders(ctx context.Context, store *ConfigStore, env
 		// endpoint types so pre-migration configs keep working.
 		providerConfig.Type = NormalizeProviderType(cmp.Or(providerConfig.Type, catwalk.TypeCompletions))
 		if !slices.Contains(catwalk.KnownProviderTypes(), providerConfig.Type) &&
+			providerConfig.Type != TypeGoogle &&
 			providerConfig.Type != hyper.Name &&
 			!discover.IsKnownCustomProvider(string(providerConfig.Type)) {
 			slog.Warn("Skipping custom provider due to unsupported provider type", "provider", id)
@@ -643,10 +1047,12 @@ func (c *Config) configureProviders(ctx context.Context, store *ConfigStore, env
 		if providerConfig.Gateway != nil {
 			if providerConfig.Gateway.Usable() {
 				// The adapter is attached where a provider family lets the
-				// SDK take a client, today google and anthropic. Saying so
-				// beats ignoring the declaration.
-				if providerConfig.Type != catwalk.TypeGoogle && providerConfig.Type != catwalk.TypeAnthropic {
-					slog.Warn("Gateway adapter is only applied to google- and anthropic-type providers",
+				// SDK take a client: for custom providers that is the Messages
+				// and Google API builders, alongside the known google logins
+				// this loop never sees. Saying so beats ignoring the
+				// declaration.
+				if providerConfig.Type != catwalk.TypeMessages && providerConfig.Type != TypeGoogle {
+					slog.Warn("Gateway adapter is only applied to Messages- and Google-type providers",
 						"provider", id, "type", string(providerConfig.Type))
 				}
 				if _, err := gateway.New(providerConfig.Gateway, "", nil); err != nil {

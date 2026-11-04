@@ -63,10 +63,14 @@ const (
 	// childMap(target, child)[jsonKey], replacing any previous one, e.g.
 	// a --tools list under tools.allow.
 	opSetChildValue
-	// opAppendChild appends the parsed value to the list at
+	// opAppendChild appends the parsed value to the single-level child at
 	// childMap(target, child)[jsonKey], e.g. a repeated --deny-tool under
 	// tools.deny.
 	opAppendChild
+	// opSetInChild assigns childMapPath(target, child)[jsonKey] = value, e.g.
+	// --price-input F stored under pricing.input, or --oauth-issuer URL
+	// writing auth.issuer.
+	opSetInChild
 )
 
 // flagSpec declares one command-line flag: how it parses, where it writes,
@@ -299,14 +303,16 @@ func storeFlag(target map[string]any, spec flagSpec, val any) {
 		}
 	case opSetChildValue:
 		childMap(target, spec.child)[spec.jsonKey] = val
-	case opAppendChild:
-		child := childMap(target, spec.child)
-		if s, ok := val.(string); ok {
-			child[spec.jsonKey] = appendArr(child, spec.jsonKey, s)
-		}
 	case opMergeChild:
 		if obj, ok := val.(map[string]any); ok {
 			maps.Copy(childMapPath(target, spec.child), obj)
+		}
+	case opSetInChild:
+		childMapPath(target, spec.child)[spec.jsonKey] = val
+	case opAppendChild:
+		child := childMapPath(target, spec.child)
+		if s, ok := val.(string); ok {
+			child[spec.jsonKey] = appendArr(child, spec.jsonKey, s)
 		}
 	}
 }
