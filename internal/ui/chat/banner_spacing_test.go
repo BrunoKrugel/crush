@@ -32,7 +32,7 @@ func TestFinishBannerIsSetOffFromContent(t *testing.T) {
 			message.TextContent{Text: "Now the real test, replay:"},
 			message.Finish{Reason: message.FinishReasonCanceled, Time: 1},
 		)},
-		{"truncated", assistantWith(
+		{name: "truncated", msg: assistantWith(
 			message.TextContent{Text: "Now the real test, replay:"},
 			message.Finish{Reason: message.FinishReasonMaxTokens, Time: 1},
 		)},

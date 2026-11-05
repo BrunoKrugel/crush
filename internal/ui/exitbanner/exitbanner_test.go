@@ -6,9 +6,12 @@ import (
 
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/session"
+	"github.com/charmbracelet/crush/internal/ui/styles"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 )
+
+var testStyles = styles.CharmtonePantera()
 
 func testSession() *session.Session {
 	return &session.Session{ID: "abc123def456", Title: "Fix the flaky test"}
@@ -75,17 +78,17 @@ func TestRender(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := Render(tt.banner, tt.sess, 100)
+			got := Render(&testStyles, tt.banner, tt.sess, 100)
 			if tt.empty {
 				require.Empty(t, got)
 				return
 			}
 			require.NotEmpty(t, got)
 			for _, want := range tt.want {
-				require.Contains(t, got, want)
+				require.Contains(t, ansi.Strip(got), want)
 			}
 			for _, notWant := range tt.notWant {
-				require.NotContains(t, got, notWant)
+				require.NotContains(t, ansi.Strip(got), notWant)
 			}
 		})
 	}
@@ -94,7 +97,7 @@ func TestRender(t *testing.T) {
 func TestRenderCompactIsExactlyTwoLines(t *testing.T) {
 	t.Parallel()
 
-	got := Render(config.ExitBannerCompact, testSession(), 100)
+	got := Render(&testStyles, config.ExitBannerCompact, testSession(), 100)
 	require.Len(t, strings.Split(got, "\n"), 2)
 }
 
@@ -104,7 +107,7 @@ func TestRenderTruncatesLongTitles(t *testing.T) {
 	sess := testSession()
 	sess.Title = strings.Repeat("long ", 60)
 
-	got := Render(config.ExitBannerCompact, sess, 40)
+	got := Render(&testStyles, config.ExitBannerCompact, sess, 40)
 	for line := range strings.SplitSeq(got, "\n") {
 		require.LessOrEqual(t, ansi.StringWidth(line), 40, "line wider than the terminal: %q", line)
 	}
@@ -117,7 +120,7 @@ func TestRenderFlattensNewlinesInTitles(t *testing.T) {
 	sess := testSession()
 	sess.Title = "first\nsecond"
 
-	got := Render(config.ExitBannerCompact, sess, 100)
+	got := Render(&testStyles, config.ExitBannerCompact, sess, 100)
 	require.Len(t, strings.Split(got, "\n"), 2)
 	require.Contains(t, got, "first second")
 }
@@ -127,7 +130,7 @@ func TestRenderFitsTheGivenWidth(t *testing.T) {
 
 	for _, width := range []int{40, 80, 200} {
 		for _, banner := range []config.ExitBanner{config.ExitBannerCompact, config.ExitBannerDefault} {
-			got := Render(banner, testSession(), width)
+			got := Render(&testStyles, banner, testSession(), width)
 			for line := range strings.SplitSeq(got, "\n") {
 				require.LessOrEqual(t, ansi.StringWidth(line), width,
 					"%s banner overflows width %d: %q", banner, width, line)
@@ -142,7 +145,7 @@ func TestRenderNonPositiveWidthUsesFallback(t *testing.T) {
 	sess := testSession()
 	sess.Title = strings.Repeat("long ", 60)
 
-	got := Render(config.ExitBannerCompact, sess, 0)
+	got := Render(&testStyles, config.ExitBannerCompact, sess, 0)
 	for line := range strings.SplitSeq(got, "\n") {
 		require.LessOrEqual(t, ansi.StringWidth(line), FallbackWidth)
 	}

@@ -111,6 +111,13 @@ const (
 )
 
 type Styles struct {
+	// Exit banner
+	ExitBanner struct {
+		Text  lipgloss.Style // Parting message, session title, and resume command
+		Label lipgloss.Style // Session and Continue labels
+	}
+
+	// Tool - styles for tool call rendering
 	Tool struct {
 		IconPending             lipgloss.Style
 		IconSuccess             lipgloss.Style
