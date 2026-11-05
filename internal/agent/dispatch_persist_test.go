@@ -194,7 +194,7 @@ func TestCreateUserMessagePersistsSteerMark(t *testing.T) {
 		SessionID: sess.ID,
 		Prompt:    "stop writing Rust and use Go",
 		Steer:     true,
-	})
+	}, "")
 	require.NoError(t, err)
 	require.True(t, msg.Content().Steer)
 
@@ -205,7 +205,7 @@ func TestCreateUserMessagePersistsSteerMark(t *testing.T) {
 	plain, err := agent.createUserMessage(ctx, SessionAgentCall{
 		SessionID: sess.ID,
 		Prompt:    "fix the bug",
-	})
+	}, "")
 	require.NoError(t, err)
 	require.False(t, plain.Content().Steer)
 }
