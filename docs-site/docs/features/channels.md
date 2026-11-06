@@ -84,7 +84,11 @@ A `channel_reply` block makes the routing deterministic: when a turn that
 originated from that channel finishes **without** the model having replied
 through the channel, Crush sends the final assistant response back through the
 configured tool — to the sender for direct messages, or to the group for group
-messages.
+messages. When the response stopped before it was complete — cut off at the
+output token limit, refused by the provider's safety classifier, or ended early
+by the provider itself — the reply closes with a parenthetical note saying so,
+because the recipient sees only the text and would otherwise read a half answer
+as a whole one.
 
 ```json
 {
