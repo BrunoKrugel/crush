@@ -114,6 +114,10 @@ and average response time.
 Crush summarises a conversation automatically when it grows past what the
 context window comfortably holds, preserving the thread while dropping the bulk.
 
+The checkpoint is a handoff brief, not a transcript: what the task is, what
+changed and whether it was verified, what remains, and the check that marks it
+done. The most recent turns stay verbatim.
+
 Turn it off if you would rather manage context yourself:
 
 ```bash
