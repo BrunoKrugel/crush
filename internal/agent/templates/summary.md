@@ -14,7 +14,7 @@ The failure you are preventing is not vagueness. It is a successor that redoes w
 
 ## Files & Changes
 
-- Files that were modified (with brief description of changes)
+- Files that were modified (what changed and whether it was verified)
 - Files that were read/analyzed (why they're relevant)
 - Key files not yet touched but will need changes
 - File paths and line numbers for important code locations
@@ -44,6 +44,8 @@ Be specific. Don't write "implement authentication" - write:
 1. Add JWT middleware to src/middleware/auth.js:15
 2. Update login handler in src/routes/user.js:45 to return token
 3. Test with: npm test -- auth.test.js
+
+State the condition for completion: the command or check that must pass for the task to be done.
 
 **Rules**:
 
