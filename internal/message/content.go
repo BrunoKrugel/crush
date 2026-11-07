@@ -200,6 +200,7 @@ type Message struct {
 	SessionID               string
 	ID                      string
 	Model                   string
+	ModelName               string
 	Provider                string
 	PrismModelName          string
 	Parts                   []ContentPart

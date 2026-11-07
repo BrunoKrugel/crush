@@ -1702,6 +1702,7 @@ func protoToMessage(m proto.Message) message.Message {
 		SessionID:               m.SessionID,
 		Role:                    message.MessageRole(m.Role),
 		Model:                   m.Model,
+		ModelName:               m.ModelName,
 		Provider:                m.Provider,
 		PrismModelID:            m.PrismModelID,
 		PrismModelName:          m.PrismModelName,

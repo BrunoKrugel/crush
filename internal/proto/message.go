@@ -14,10 +14,11 @@ import (
 
 // CreateMessageParams represents parameters for creating a message.
 type CreateMessageParams struct {
-	Role     MessageRole   `json:"role"`
-	Model    string        `json:"model"`
-	Provider string        `json:"provider,omitempty"`
-	Parts    []ContentPart `json:"parts"`
+	Role      MessageRole   `json:"role"`
+	Model     string        `json:"model"`
+	ModelName string        `json:"model_name,omitempty"`
+	Provider  string        `json:"provider,omitempty"`
+	Parts     []ContentPart `json:"parts"`
 }
 
 // Message represents a message in the proto layer.
@@ -26,6 +27,7 @@ type Message struct {
 	PrismDollarSavings      *float64      `json:"prism_dollar_savings,omitempty"`
 	PrismModelID            string        `json:"prism_model_id,omitempty"`
 	Model                   string        `json:"model"`
+	ModelName               string        `json:"model_name,omitempty"`
 	Provider                string        `json:"provider"`
 	ID                      string        `json:"id"`
 	PrismModelName          string        `json:"prism_model_name,omitempty"`

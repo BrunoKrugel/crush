@@ -663,10 +663,11 @@ func (a *sessionAgent) persistCanceledTurn(ctx context.Context, call SessionAgen
 	}
 	largeModel := a.largeModel.Get()
 	assistant, err := a.messages.Create(writeCtx, call.SessionID, message.CreateMessageParams{
-		Role:     message.Assistant,
-		Parts:    []message.ContentPart{},
-		Model:    largeModel.ModelCfg.Model,
-		Provider: largeModel.ModelCfg.Provider,
+		Role:      message.Assistant,
+		Parts:     []message.ContentPart{},
+		Model:     largeModel.ModelCfg.Model,
+		ModelName: a.modelDisplayName(largeModel.ModelCfg),
+		Provider:  largeModel.ModelCfg.Provider,
 	})
 	if err != nil {
 		return err
@@ -1386,10 +1387,11 @@ func (a *sessionAgent) run(ctx context.Context, call SessionAgentCall, owner *ac
 
 			var assistantMsg message.Message
 			assistantMsg, err = a.messages.Create(callContext, call.SessionID, message.CreateMessageParams{
-				Role:     message.Assistant,
-				Parts:    []message.ContentPart{},
-				Model:    largeModel.ModelCfg.Model,
-				Provider: largeModel.ModelCfg.Provider,
+				Role:      message.Assistant,
+				Parts:     []message.ContentPart{},
+				Model:     largeModel.ModelCfg.Model,
+				ModelName: a.modelDisplayName(largeModel.ModelCfg),
+				Provider:  largeModel.ModelCfg.Provider,
 			})
 			if err != nil {
 				return callContext, prepared, err
@@ -2021,6 +2023,7 @@ func (a *sessionAgent) runSummarize(ctx context.Context, sessionID, instructions
 	summaryMessage, err := a.messages.Create(ctx, sessionID, message.CreateMessageParams{
 		Role:             message.Assistant,
 		Model:            largeModel.ModelCfg.Model,
+		ModelName:        a.modelDisplayName(largeModel.ModelCfg),
 		Provider:         largeModel.ModelCfg.Provider,
 		IsSummaryMessage: true,
 	})
@@ -2947,6 +2950,22 @@ func extractPrismModel(metadata fantasy.ProviderMetadata) (modelID, modelName st
 	_ = pm.ExtraField(hyper.PrismModelIDField, &modelID)
 	_ = pm.ExtraField(hyper.PrismModelNameField, &modelName)
 	return modelID, modelName
+}
+
+// modelDisplayName resolves the display name of a model from the
+// current config, falling back to the model ID when no entry exists or
+// the entry has no name. The result is persisted on assistant messages
+// so the UI keeps showing a meaningful name after the model is renamed
+// or removed from the config.
+func (a *sessionAgent) modelDisplayName(model config.SelectedModel) string {
+	if a.cfg != nil {
+		if cfg := a.cfg.Config(); cfg != nil {
+			if m := cfg.GetModel(model.Provider, model.Model); m != nil && m.Name != "" {
+				return m.Name
+			}
+		}
+	}
+	return model.Model
 }
 
 // extractPrismSavings returns the hypercredit and dollar savings from
