@@ -158,21 +158,28 @@ func modelAdd(b *ConfigBuilder, args []string, stderr io.Writer) error {
 
 	// Translate the collected --reasoning-level tiers into the reasoning
 	// schema, deriving each tier's display name the way the catalog does.
-	if levels, ok := model["reasoning_levels"].([]any); ok {
-		delete(model, "reasoning_levels")
-		effortLevels := make([]any, 0, len(levels))
-		for _, level := range levels {
-			value, ok := level.(string)
-			if !ok {
-				continue
+	// The v2→v3 mapping has already nested the collected slice under
+	// reasoning.effort_levels by the time control reaches here, so rewrite
+	// whatever raw strings it deposited in place.
+	reasoning := childMap(model, "reasoning")
+	var effortLevels []any
+	if raw, exists := reasoning["effort_levels"]; exists {
+		if levels, ok := raw.([]any); ok {
+			for _, level := range levels {
+				value, isStr := level.(string)
+				if !isStr {
+					continue
+				}
+				effortLevel := catwalk.NewEffortLevels(value)[0]
+				effortLevels = append(effortLevels, map[string]any{
+					"value":   effortLevel.Value,
+					"display": effortLevel.Display,
+				})
 			}
-			effortLevel := catwalk.NewEffortLevels(value)[0]
-			effortLevels = append(effortLevels, map[string]any{
-				"value":   effortLevel.Value,
-				"display": effortLevel.Display,
-			})
 		}
-		childMap(model, "reasoning")["effort_levels"] = effortLevels
+	}
+	if len(effortLevels) > 0 {
+		reasoning["effort_levels"] = effortLevels
 	}
 
 	p := childMap(providers, provider)

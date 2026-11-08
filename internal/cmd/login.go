@@ -24,9 +24,8 @@ var loginCmd = &cobra.Command{
 	The platform should be provided as an argument.
 	Available platforms are: hyper, copilot, openai (chatgpt), grok (xai), and honcho.
 	Providers whose OAuth flow is declared in config — including providers
-	added by a plugin — sign in the same way.
-	Example: `
-	# Authenticate with Charm Hyper
+	added by a plugin — sign in the same way.`,
+	Example: `# Authenticate with Charm Hyper
 	crush login
 
 	# Authenticate with GitHub Copilot
@@ -45,8 +44,7 @@ var loginCmd = &cobra.Command{
 	crush login example
 
 	# Force re-authentication even if already logged in
-	crush login -f copilot
-	`,
+	crush login -f copilot`,
 	ValidArgs: []cobra.Completion{
 		"hyper",
 		"copilot",

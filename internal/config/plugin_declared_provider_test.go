@@ -27,6 +27,10 @@ func TestDeclaredOAuthProviderPlugin(t *testing.T) {
 
 	workDir := t.TempDir()
 	writePluginScript(t, workDir, "example.sh", `#!/usr/bin/env bash
+# The host shell can expose a credential to a built-in provider, which
+# would flip the signed-out assertions: test from defaults off.
+option default-providers false
+
 provider add example-sub \
   --name "Example Subscription" \
   --type anthropic \

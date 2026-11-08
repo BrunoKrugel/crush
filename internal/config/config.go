@@ -83,7 +83,7 @@ type SelectedModel struct {
 }
 
 type ProviderConfig struct {
-	OAuthToken         *oauth.Token      `json:"oauth,omitempty" jsonschema:"description=OAuth2 token for authentication with the provider"`
+	OAuthToken *oauth.Token `json:"oauth,omitempty" jsonschema:"description=OAuth2 token for authentication with the provider"`
 	// Auth describes an OAuth flow for a provider that Crush does not
 	// ship, so signing in needs no code: declare the issuer and client,
 	// then run crush login. Absent means the provider authenticates with
@@ -101,25 +101,25 @@ type ProviderConfig struct {
 	// jq program a plugin declares, which is how a provider whose catalog
 	// names fields Crush has never seen still reports context windows and
 	// capability lists. See [oauth.CatalogSpec].
-	Catalog *oauth.CatalogSpec `json:"catalog,omitempty" jsonschema:"description=Endpoint and jq program that read the provider's model catalog"`
-	AutoDiscoverModels *bool             `json:"discover_models,omitempty" jsonschema:"description=Auto-discover models from /v1/models endpoint. When true with existing models they are merged (yours win),default=true"`
-	ExtraParams        map[string]string `json:"-"`
-	ProviderOptions    map[string]any    `json:"provider_options,omitempty" jsonschema:"description=Additional provider-specific options for this provider"`
-	ExtraBody          map[string]any    `json:"extra_body,omitempty" jsonschema:"description=Additional fields to include in request bodies\\, only works with openai-compatible providers"`
-	ExtraHeaders       map[string]string `json:"extra_headers,omitempty" jsonschema:"description=Additional HTTP headers to send with requests"`
-	APIKey             string            `json:"api_key,omitempty" jsonschema:"description=API key for authentication with the provider,example=$OPENAI_API_KEY"`
-	SystemPromptPrefix string            `json:"system_prompt_prefix,omitempty" jsonschema:"description=Custom prefix to add to system prompts for this provider"`
-	APIKeyTemplate     string            `json:"-"`
-	ID                 string            `json:"id,omitempty" jsonschema:"description=Unique identifier for the provider,example=openai"`
-	Type               catwalk.Type      `json:"type,omitempty" jsonschema:"description=Provider type that determines the API format,default=openai"`
-	BaseURL            string            `json:"base_url,omitempty" jsonschema:"description=Base URL for the provider's API,format=uri,example=https://api.openai.com/v1"`
-	AWSAuthRefresh     string            `json:"aws_auth_refresh,omitempty" jsonschema:"description=Shell command to run when AWS credentials expire (Bedrock only)."`
-	Name               string            `json:"name,omitempty" jsonschema:"description=Human-readable name for the provider,example=OpenAI"`
-	Models             []catwalk.Model   `json:"models,omitempty" jsonschema:"description=List of models available from this provider"`
-	ChatGPTModels      []catwalk.Model   `json:"chatgpt_models,omitempty" jsonschema:"-"`
-	GrokModels         []catwalk.Model   `json:"grok_models,omitempty" jsonschema:"-"`
-	Disable            bool              `json:"disable,omitempty" jsonschema:"description=Whether this provider is disabled,default=false"`
-	FlatRate           bool              `json:"flat_rate,omitempty" jsonschema:"description=Flat-rate mode for this provider"`
+	Catalog            *oauth.CatalogSpec `json:"catalog,omitempty" jsonschema:"description=Endpoint and jq program that read the provider's model catalog"`
+	AutoDiscoverModels *bool              `json:"discover_models,omitempty" jsonschema:"description=Auto-discover models from /v1/models endpoint. When true with existing models they are merged (yours win),default=true"`
+	ExtraParams        map[string]string  `json:"-"`
+	ProviderOptions    map[string]any     `json:"provider_options,omitempty" jsonschema:"description=Additional provider-specific options for this provider"`
+	ExtraBody          map[string]any     `json:"extra_body,omitempty" jsonschema:"description=Additional fields to include in request bodies\\, only works with openai-compatible providers"`
+	ExtraHeaders       map[string]string  `json:"extra_headers,omitempty" jsonschema:"description=Additional HTTP headers to send with requests"`
+	APIKey             string             `json:"api_key,omitempty" jsonschema:"description=API key for authentication with the provider,example=$OPENAI_API_KEY"`
+	SystemPromptPrefix string             `json:"system_prompt_prefix,omitempty" jsonschema:"description=Custom prefix to add to system prompts for this provider"`
+	APIKeyTemplate     string             `json:"-"`
+	ID                 string             `json:"id,omitempty" jsonschema:"description=Unique identifier for the provider,example=openai"`
+	Type               catwalk.Type       `json:"type,omitempty" jsonschema:"description=Provider type that determines the API format,default=openai"`
+	BaseURL            string             `json:"base_url,omitempty" jsonschema:"description=Base URL for the provider's API,format=uri,example=https://api.openai.com/v1"`
+	AWSAuthRefresh     string             `json:"aws_auth_refresh,omitempty" jsonschema:"description=Shell command to run when AWS credentials expire (Bedrock only)."`
+	Name               string             `json:"name,omitempty" jsonschema:"description=Human-readable name for the provider,example=OpenAI"`
+	Models             []catwalk.Model    `json:"models,omitempty" jsonschema:"description=List of models available from this provider"`
+	ChatGPTModels      []catwalk.Model    `json:"chatgpt_models,omitempty" jsonschema:"-"`
+	GrokModels         []catwalk.Model    `json:"grok_models,omitempty" jsonschema:"-"`
+	Disable            bool               `json:"disable,omitempty" jsonschema:"description=Whether this provider is disabled,default=false"`
+	FlatRate           bool               `json:"flat_rate,omitempty" jsonschema:"description=Flat-rate mode for this provider"`
 }
 
 // ToProvider converts the [ProviderConfig] to a [catwalk.Provider]. The
@@ -143,6 +143,9 @@ func (c *ProviderConfig) SetupGitHubCopilot() {
 func (c *ProviderConfig) HasAPIKey(resolver VariableResolver) bool {
 	if c.APIKey == "" {
 		return false
+	}
+	if resolver == nil {
+		return true
 	}
 	v, err := resolver.ResolveValue(c.APIKey)
 	return err == nil && v != ""

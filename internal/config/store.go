@@ -1706,7 +1706,7 @@ func (s *ConfigStore) reloadFromDiskLocked(ctx context.Context) error {
 		if !cfg.IsConfigured() {
 			slog.Warn("No providers configured after reload")
 		} else {
-			resolved, resolveErr := resolveSelectedModels(cfg, providers)
+			resolved, resolveErr := resolveSelectedModels(cfg, providers, s.resolver)
 			if resolveErr != nil {
 				setupErr = fmt.Errorf("failed to configure selected models during reload: %w", resolveErr)
 			} else {

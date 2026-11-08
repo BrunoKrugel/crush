@@ -133,7 +133,9 @@ func TestNormalizeProviderTypeTranslatesLegacyNames(t *testing.T) {
 	require.Equal(t, catwalk.TypeCompletions, NormalizeProviderType("openai-compat"))
 	require.Equal(t, catwalk.TypeMessages, NormalizeProviderType("anthropic"))
 	require.Equal(t, catwalk.TypeResponses, NormalizeProviderType("openai"))
-	require.Equal(t, catwalk.TypeCompletions, NormalizeProviderType("google"))
+	// "google" no longer aliases completions: it is the standalone Gemini
+	// API type, which keeps the Google SDK rather than an OpenAI one.
+	require.Equal(t, TypeGoogle, NormalizeProviderType("google"))
 	// v3 names and custom enricher types pass through.
 	require.Equal(t, catwalk.TypeCompletions, NormalizeProviderType(catwalk.TypeCompletions))
 	require.Equal(t, catwalk.Type("ollama"), NormalizeProviderType("ollama"))

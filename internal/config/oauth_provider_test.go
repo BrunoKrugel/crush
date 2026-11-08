@@ -145,14 +145,14 @@ func TestDefaultModelSelectionSkipsSignedOutProviders(t *testing.T) {
 		},
 	})}
 
-	large, _, err := cfg.defaultModelSelection(nil)
+	large, _, err := cfg.defaultModelSelection(nil, identityResolver{})
 	require.NoError(t, err)
 	require.Equal(t, "openai", large.Provider, "the signed-out provider must not be selected")
 
 	// With only signed-out providers there is no default yet, and that is
 	// not an error: the picker still lists the models, awaiting a sign-in.
 	only := &Config{Providers: csync.NewMapFrom(map[string]ProviderConfig{"gemini-sub": signedOut})}
-	large, _, err = only.defaultModelSelection(nil)
+	large, _, err = only.defaultModelSelection(nil, identityResolver{})
 	require.NoError(t, err)
 	require.Empty(t, large.Provider)
 	require.True(t, only.IsConfigured(), "a signed-out provider is still configured")

@@ -46,8 +46,13 @@ model add gemini-sub/flash --name "Flash" --can-reason true \
   --reasoning-effort medium`)
 
 	model := result["providers"].(map[string]any)["gemini-sub"].(map[string]any)["models"].([]any)[0].(map[string]any)
-	require.Equal(t, []any{"low", "medium", "high"}, model["reasoning_levels"].([]any))
-	require.Equal(t, "medium", model["default_reasoning_effort"])
+	reasoning := model["reasoning"].(map[string]any)
+	require.Equal(t, []any{
+		map[string]any{"value": "low", "display": "Low"},
+		map[string]any{"value": "medium", "display": "Medium"},
+		map[string]any{"value": "high", "display": "High"},
+	}, reasoning["effort_levels"], "collected --reasoning-level tiers become the reasoning levels")
+	require.Equal(t, "medium", reasoning["default_effort_level"])
 }
 
 // TestModelAddReplacesDuplicateID verifies that re-adding a model id updates

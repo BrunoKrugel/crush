@@ -290,7 +290,7 @@ type UI struct {
 	// usageProvider is the provider usageMeters was fetched for. The pair is
 	// replaced together, so switching to a model on another provider never
 	// shows limits that do not apply to it.
-	usageProvider string
+	usageProvider           string
 	frames                  *frameCache
 	hyperCredits            *int
 	inspectDispatchTargets  map[string]bool
@@ -310,7 +310,8 @@ type UI struct {
 	bangCancel              context.CancelFunc
 	header                  *header
 	mcpStates               map[string]mcp.ClientInfo
-	promptHistory           struct {		messages []string
+	promptHistory           struct {
+		messages []string
 		index    int
 		draft    string
 	}

@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -1780,7 +1781,7 @@ func TestConfig_configureSelectedModels(t *testing.T) {
 		cfg := &Config{}
 		configure(t, cfg, knownProviders)
 
-		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders)
+		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders, identityResolver{})
 		require.NoError(t, resolveErr)
 		cfg.applySelectedModels(resolved)
 
@@ -1807,7 +1808,7 @@ func TestConfig_configureSelectedModels(t *testing.T) {
 		resolver := NewShellVariableResolver(env)
 		require.NoError(t, cfg.configureProviders(context.Background(), store, env, resolver, knownProviders))
 
-		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders)
+		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders, identityResolver{})
 		require.NoError(t, resolveErr)
 		cfg.applySelectedModels(resolved)
 
@@ -1830,7 +1831,7 @@ func TestConfig_configureSelectedModels(t *testing.T) {
 		}
 		configure(t, cfg, knownProviders)
 
-		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders)
+		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders, identityResolver{})
 		require.NoError(t, resolveErr)
 		cfg.applySelectedModels(resolved)
 
@@ -1853,7 +1854,7 @@ func TestConfig_configureSelectedModels(t *testing.T) {
 		}
 		configure(t, cfg, knownProviders)
 
-		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders)
+		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders, identityResolver{})
 		require.NoError(t, resolveErr)
 		cfg.applySelectedModels(resolved)
 
@@ -1881,7 +1882,7 @@ func TestConfig_configureSelectedModels(t *testing.T) {
 		}
 		configure(t, cfg, knownProviders)
 
-		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders)
+		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders, identityResolver{})
 		require.NoError(t, resolveErr)
 		cfg.applySelectedModels(resolved)
 
@@ -1903,7 +1904,7 @@ func TestConfig_configureSelectedModels(t *testing.T) {
 		}
 		configure(t, cfg, knownProviders)
 
-		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders)
+		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders, identityResolver{})
 		require.NoError(t, resolveErr)
 		cfg.applySelectedModels(resolved)
 
@@ -1919,7 +1920,7 @@ func TestConfig_configureSelectedModels(t *testing.T) {
 		}
 		configure(t, cfg, knownProviders)
 
-		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders)
+		resolved, resolveErr := resolveSelectedModels(cfg, knownProviders, identityResolver{})
 		require.NoError(t, resolveErr)
 		cfg.applySelectedModels(resolved)
 
@@ -1941,7 +1942,7 @@ func TestConfig_configureSelectedModels(t *testing.T) {
 		}
 		configure(t, cfg, nil)
 
-		resolved, resolveErr := resolveSelectedModels(cfg, nil)
+		resolved, resolveErr := resolveSelectedModels(cfg, nil, identityResolver{})
 		require.NoError(t, resolveErr)
 		cfg.applySelectedModels(resolved)
 
@@ -2442,7 +2443,7 @@ func TestLoadFromConfigPaths_PersistsCatwalkV2Migration(t *testing.T) {
 			}
 		}`), 0o644))
 
-		cfg, loaded, err := loadFromConfigPaths(context.Background(), []string{path})
+		cfg, loaded, err := loadFromConfigPaths(context.Background(), []string{path}, 0)
 		require.NoError(t, err)
 		require.Contains(t, loaded, path)
 		provider, ok := cfg.Providers.Get("openrouter")
@@ -2489,7 +2490,7 @@ func TestLoadFromConfigPaths_PersistsCatwalkV2Migration(t *testing.T) {
 		}`)
 		require.NoError(t, os.WriteFile(path, original, 0o644))
 
-		_, _, err := loadFromConfigPaths(context.Background(), []string{path})
+		_, _, err := loadFromConfigPaths(context.Background(), []string{path}, 0)
 		require.NoError(t, err)
 		rewritten, err := os.ReadFile(path)
 		require.NoError(t, err)

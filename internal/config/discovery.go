@@ -51,8 +51,6 @@ const modelDiscoveryTimeout = 15 * time.Second
 // discoveryJob is one custom provider's model-discovery task: enabled,
 // with a base URL, and either opted in through discover_models or lacking
 // an explicit models list.
-// discoveryJob is one custom provider whose models come from its /models
-// endpoint, or from a declared catalog when it has one.
 type discoveryJob struct {
 	id           string
 	providerType string
@@ -428,55 +426,60 @@ func (s *ConfigStore) RefreshDiscoveredModels(ctx context.Context) (bool, error)
 // probeAndCache discovers models for jobs concurrently and caches every
 // non-empty result. Failures are logged and left out of the returned map.
 func (s *ConfigStore) probeAndCache(ctx context.Context, jobs []discoveryJob, resolver VariableResolver) map[string][]catwalk.Model {
-	// The probe goes through the fork's discoverProviderModels, which adds
-	// the per-provider deadline, the ID-keyed enrichers, and the catalog
-	// merge that the plain probe lacks.
-	byID := make(map[string]discoveryJob, len(jobs))
+	// The standard probe goes through the fork's discoverProviderModels,
+	// which adds the per-provider deadline, the ID-keyed enrichers, and the
+	// catalog merge that the plain probe lacks.
 	candidates := make(map[string]ProviderConfig, len(jobs))
+	catalogs := make(map[string]discoveryJob)
 	for _, job := range jobs {
-		byID[job.id] = job
-		candidates[job.id] = ProviderConfig{
-			ID:           job.cfg.ID,
-			BaseURL:      job.cfg.BaseURL,
-			APIKey:       job.cfg.APIKey,
-			ExtraHeaders: job.cfg.ExtraHeaders,
-			Type:         catwalk.Type(job.providerType),
+		if job.catalog == nil {
+			candidates[job.id] = ProviderConfig{
+				ID:           job.cfg.ID,
+				BaseURL:      job.cfg.BaseURL,
+				APIKey:       job.cfg.APIKey,
+				ExtraHeaders: job.cfg.ExtraHeaders,
+				Type:         catwalk.Type(job.providerType),
+			}
+			continue
 		}
-		wg.Go(func() {
-			var models []catwalk.Model
-			var err error
-			if job.catalog != nil {
-				models, err = discover.Catalog(ctx, *job.catalog, resolver)
-			} else {
-				models, err = discover.DiscoverModels(ctx, job.cfg, resolver)
-				if err == nil && len(models) > 0 {
-					if enricher := discover.GetEnricher(job.providerType); enricher != nil {
-						models, _ = enricher.EnrichModels(ctx, job.cfg, resolver, models)
-					}
-				}
-			}
-			if err != nil {
-				slog.Warn("Model discovery failed", "provider", job.id, "error", err)
-				return
-			}
-			if len(models) == 0 {
-				return
-			}
-			slog.Info("Discovered models for provider", "provider", job.id, "count", len(models))
-			s.cacheModels(job, models)
-			mu.Lock()
-			found[job.id] = models
-			mu.Unlock()
-		})
+		// A declared catalog replaces the standard probe entirely: the
+		// listing's shape is the plugin's business, and the OpenAI-shaped
+		// /models endpoint would report ids alone.
+		catalogs[job.id] = job
+	}
+
+	waitJobs := make(map[string]discoveryJob, len(jobs))
+	for _, job := range jobs {
+		waitJobs[job.id] = job
 	}
 	known := map[string]bool{}
 	models, _ := discoverProviderModels(ctx, candidates, known, resolver, modelDiscoveryTimeout)
 	for id, result := range models {
 		if len(result) > 0 {
 			slog.Info("Discovered models for provider", "provider", id, "count", len(result))
-			s.cacheModels(byID[id], result)
+			s.cacheModels(waitJobs[id], result)
 		}
 	}
+
+	var probes sync.WaitGroup
+	var mu sync.Mutex
+	for id, job := range catalogs {
+		probes.Go(func() {
+			found, err := discover.Catalog(ctx, *job.catalog, resolver)
+			if err != nil {
+				slog.Warn("Reading the declared catalog failed", "provider", id, "error", err)
+				return
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if len(found) > 0 {
+				slog.Info("Read the provider's declared catalog", "provider", id, "count", len(found))
+				s.cacheModels(job, found)
+				models[id] = found
+			}
+		})
+	}
+	probes.Wait()
 	return models
 }
 

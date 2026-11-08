@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -34,713 +35,6 @@ import (
 	"github.com/charmbracelet/crush/internal/dispatch"
 	"github.com/charmbracelet/crush/internal/filetracker"
 	"github.com/charmbracelet/crush/internal/goal"
-	"github.com/charmbracelet/crush/internal/gateway"
-	"github.com/charmbracelet/crush/internal/history"
-	"github.com/charmbracelet/crush/internal/honcho"
-	"github.com/charmbracelet/crush/internal/hooks"
-	"github.com/charmbracelet/crush/internal/ledger"
-	"github.com/charmbracelet/crush/internal/log"
-	"github.com/charmbracelet/crush/internal/lsp"
-	"github.com/charmbracelet/crush/internal/message"
-	"github.com/charmbracelet/crush/internal/oauth"
-	"github.com/charmbracelet/crush/internal/oauth/copilot"
-	openaioauth "github.com/charmbracelet/crush/internal/oauth/openai"
-	"github.com/charmbracelet/crush/internal/permission"
-	"github.com/charmbracelet/crush/internal/proto"
-	"github.com/charmbracelet/crush/internal/pubsub"
-	"github.com/charmbracelet/crush/internal/question"
-	"github.com/charmbracelet/crush/internal/scheduler"
-	"github.com/charmbracelet/crush/internal/semantic"
-	"github.com/charmbracelet/crush/internal/session"
-	"github.com/charmbracelet/crush/internal/skills"
-	"github.com/charmbracelet/crush/internal/snapshot"
-	"github.com/charmbracelet/crush/internal/symbols"
-	"golang.org/x/sync/errgroup"
-
-	"charm.land/fantasy/providers/anthropic"
-	"charm.land/fantasy/providers/azure"
-	"charm.land/fantasy/providers/bedrock"
-	"charm.land/fantasy/providers/google"
-	"charm.land/fantasy/providers/openai"
-	"charm.land/fantasy/providers/openaicompat"
-	"charm.land/fantasy/providers/openrouter"
-	"charm.land/fantasy/providers/vercel"
-	openaisdk "github.com/charmbracelet/openai-go/option"
-	"github.com/qjebbs/go-jsons"
-)
-
-// Coordinator errors.
-var (
-	errCoderAgentNotConfigured    = errors.New("coder agent not configured")
-	errMainAgentNotFound          = errors.New("main agent not found")
-	errModelProviderNotConfigured = errors.New("model provider not configured")
-	errModelNotFound              = errors.New("model not found in provider config")
-	errLargeModelNotSelected      = errors.New("large model not selected")
-	errSmallModelNotSelected      = errors.New("small model not selected")
-)
-
-// Copilot models that use the Responses API instead of Chat Completions.
-var copilotResponsesModels = map[string]bool{
-	"gpt-5.2":       true,
-	"gpt-5.2-codex": true,
-	"gpt-5.3-codex": true,
-	"gpt-5.4":       true,
-	"gpt-5.4-mini":  true,
-	"gpt-5.5":       true,
-	"gpt-5-mini":    true,
-	"gpt-5.6-luna":  true,
-	"gpt-5.6-terra": true,
-	"gpt-5.6-sol":   true,
-	"gpt-6-astra":   true,
-	"grok-4.5":      true,
-	"grok-4.6":      true,
-||||||| parent of 4599c0acd (fix(plugins): keep custom Google providers on the Google SDK)
-// servingProvider returns the fantasy provider package that serves the
-// given provider and model. Providers with bespoke SDKs (Bedrock, Azure,
-// Google, Vertex AI, OpenRouter, Vercel, Hyper) are selected by ID;
-// everything else, gateways like Copilot and OpenCode included, is
-// determined by the catwalk type, which describes the API endpoint
-// format the model speaks and so the key its provider options are read
-// from.
-func servingProvider(providerCfg config.ProviderConfig, model catwalk.Model) string {
-	if providerCfg.Type == config.TypeGoogle {
-		return google.Name
-	}
-	switch providerCfg.ID {
-	case string(catwalk.InferenceProviderBedrock), string(catwalk.InferenceProviderBedrockEurope):
-		return bedrock.Name
-	case string(catwalk.InferenceProviderAzure):
-		return azure.Name
-	case string(catwalk.InferenceProviderGemini), string(catwalk.InferenceProviderVertexAI):
-		return google.Name
-	case string(catwalk.InferenceProviderOpenRouter):
-		return openrouter.Name
-	case string(catwalk.InferenceProviderVercel):
-		return vercel.Name
-	case hyper.Name:
-		return hyper.Name
-	}
-
-	switch model.EffectiveType(providerCfg.Type) {
-	case catwalk.TypeResponses:
-		return openai.Name
-	case catwalk.TypeMessages:
-		return anthropic.Name
-	case catwalk.TypeCompletions:
-		return openaicompat.Name
-	default:
-		// Custom provider types (litellm, ollama, lmstudio, ...) are
-		// handled by the caller through IsKnownCustomProvider.
-		return string(providerCfg.Type)
-	}
-}
-
-// OpenCode models that use the Anthropic Messages API instead of Chat
-// Completions. Which endpoint serves each model differs per provider, see
-// https://opencode.ai/docs/zen and https://opencode.ai/docs/go.
-
-// OpenCode models that use the OpenAI Responses API instead of Chat
-// Completions. See https://opencode.ai/docs/zen and https://opencode.ai/docs/go.
-
-type Coordinator interface {
-	SetMainAgent(agentName string) error
-	// ClassifierModel builds the auto-mode classifier model from the
-	// current config. ok is false when no model is selected, which is
-	// rules-only mode, not an error.
-	ClassifierModel(ctx context.Context) (fantasy.LanguageModel, bool, error)
-	// SetInteractive flips the coordinator between the interactive and
-	// non-interactive tool palettes in place (#420): the question,
-	// dispatch, message_agent and cancel tools follow the flag in
-	// buildTools. A re-init after a new client attach calls it instead
-	// of rebuilding the coordinator, so the dispatch registry, the
-	// injection targets, the cron scheduler and the sweep survive.
-	// Same-mode calls are a no-op; the last attach decides the mode.
-	SetInteractive(ctx context.Context, interactive bool) error
-	Run(ctx context.Context, sessionID, prompt string, attachments ...message.Attachment) (*fantasy.AgentResult, error)
-	// StartGoal starts goal mode on a session: the goal is recorded on
-	// the session, and the first turn runs with the goal text as its
-	// prompt. The loop's continuation turns follow it, judged by the
-	// evaluator after every turn. The call returns when the goal loop
-	// ends.
-	StartGoal(ctx context.Context, sessionID, text string, budget int) error
-	// CancelGoal stops goal mode on a session: the goal stops asking
-	// for turns.
-	CancelGoal(ctx context.Context, sessionID string) error
-	// RunAccepted runs a call that was already accepted via
-	// BeginAccepted on the fire-and-forget dispatch path. The handle is
-	// the only carrier of accept-state across the backend.runAgent /
-	// Coordinator / sessionAgent.Run layers: it reaches
-	// sessionAgent.Run as SessionAgentCall.Accepted, where it is
-	// consumed under dispatchMu once the accepted -> (cancel-on-entry |
-	// queued | active) transition is chosen.
-	RunAccepted(ctx context.Context, accept *AcceptedRun, sessionID, prompt string, attachments ...message.Attachment) (*fantasy.AgentResult, error)
-	BeginAccepted(sessionID string) *AcceptedRun
-	Cancel(sessionID string)
-	CancelAll()
-	IsSessionBusy(sessionID string) bool
-	IsBusy() bool
-	// ListSettledMessages reads a session's transcript, first settling any
-	// tool calls a dead process left without a reply.
-	ListSettledMessages(ctx context.Context, sessionID string) ([]message.Message, error)
-	QueuedPrompts(sessionID string) int
-	QueuedPromptsList(sessionID string) []string
-	ClearQueue(sessionID string)
-	AddNote(sessionID, text string)
-	ListCronTasks(sessionID string) []scheduler.Task
-	// Summarize compacts a session and adopts the checkpoint it writes.
-	Summarize(ctx context.Context, sessionID, instructions string) error
-	// SummarizePreview writes a checkpoint without adopting it.
-	SummarizePreview(ctx context.Context, sessionID, instructions string) (compaction.Preview, error)
-	// ConfirmSummarize adopts a previewed checkpoint.
-	ConfirmSummarize(ctx context.Context, sessionID string, preview compaction.Preview) error
-	// DiscardSummarize throws away a previewed checkpoint.
-	DiscardSummarize(ctx context.Context, sessionID, checkpointID string) error
-	// RestoreSummarize undoes the session's most recent compaction.
-	RestoreSummarize(ctx context.Context, sessionID string) error
-	Model() Model
-	UpdateModels(ctx context.Context) error
-	GenerateTitle(ctx context.Context, sessionID, prompt string)
-	// SetHostContext records what the host application has in view;
-	// each run from then on tells the model about it.
-	SetHostContext(hc proto.HostContext)
-	HostContext() proto.HostContext
-	// DeliverAgentMessage delivers a message to the dispatched agent
-	// running on the message's session as its next input (#312) — the
-	// transport-agnostic injection seam shared by the message_agent tool,
-	// the editor's @handle routing (#313), and #71's A2A follow-up
-	// messages. Addressing a finished session returns a refusal; so does
-	// a message whose FromSessionID does not own the dispatch (#399).
-	DeliverAgentMessage(ctx context.Context, msg AgentMessage) error
-	// DispatchLive returns the snapshots of every non-terminal dispatch
-	// created from sessionID (#313/#399): a session with one still
-	// running cannot be deleted. Finished handles and other sessions'
-	// dispatches never appear.
-	DispatchLive(sessionID string) []dispatch.TodoSnapshot
-}
-
-// liveDispatch is the coordinator's record of one running dispatch
-// (#371): the cancel for the dispatch's root context, the task session
-// and agent behind the run, the wander-kill state, and a done channel
-// closed when the run's teardown drops the record. #372 (cancel at
-// shutdown) and #373 (user-initiated cancel) build on it.
-type liveDispatch struct {
-	agent     SessionAgent
-	cancel    context.CancelFunc
-	kill      *dispatchKill
-	done      chan struct{}
-	sessionID string
-}
-
-type coordinator struct {
-	ledger               ledger.Service
-	snapshots            *snapshot.Service
-	dispatchRecords      dispatch.DispatchRecords
-	sessions             session.Service
-	messages             message.Service
-	permissions          permission.Service
-	questions            question.Service
-	history              history.Service
-	filetracker          filetracker.Service
-	dispatchHost         DispatchHost
-	notify               pubsub.Publisher[notify.Notification]
-	runComplete          pubsub.Publisher[notify.RunComplete]
-	dispatchCtx          context.Context
-	dispatchProviderErr  error
-	mainAgent            SessionAgent
-	dispatchProvider     *dispatch.GitWorktreeProvider
-	semanticClient       *semantic.Client
-	skillTracker         *skills.Tracker
-	hostContext          csync.Value[proto.HostContext]
-	builds               map[*readiness]struct{}
-	hookRunner           *hooks.Runner
-	promptBuildHook      func()
-	cronStore            *scheduler.Store
-	semanticSymbols      *symbols.Extractor
-	dispatchReg          *dispatch.AgentRegistry
-	agents               map[string]SessionAgent
-	lspManager           *lsp.Manager
-	dispatchAgentBuilder func(context.Context, dispatchAgentOptions) (*dispatchedAgent, error)
-	spawnDispatch        func(func())
-	pendingResults       map[string][]dispatch.DispatchResult
-	deliveryFailures     map[string]int
-	dispatchCollector    *dispatch.TodoCollector
-	liveDispatches       map[string]*liveDispatch
-	semanticStore        *semantic.Store
-	cfg                  *config.ConfigStore
-	dispatchQuestions    chan struct{}
-	mainAgentName        string
-	// memory yields the cross-session recall backend for every agent
-	// this coordinator builds. It is asked again on each build, so a
-	// backend connected mid-session is picked up by the same refresh a
-	// model change triggers. Nil, or a provider returning nil, means
-	// no memory.
-	memory                   MemoryProvider
-	dispatchSinks            []dispatch.TodoSink
-	allSkills                []*skills.Skill
-	activeSkills             []*skills.Skill
-	dispatchSlots            int
-	dispatchShutdownRootWait time.Duration
-	dispatchPersistWindow    time.Duration
-	dispatchShutdownWait     time.Duration
-	agentMu                  sync.RWMutex
-	dispatchMu               sync.Mutex
-	buildsMu                 sync.Mutex
-	shuttingDown             atomic.Bool
-	interactive              bool
-}
-
-// CoordinatorOptions holds the dependencies for NewCoordinator. Using a
-// struct keeps the constructor self-documenting and avoids a long
-// positional parameter list.
-type CoordinatorOptions struct {
-	Ledger          ledger.Service
-	Snapshots       *snapshot.Service
-	RunComplete     pubsub.Publisher[notify.RunComplete]
-	Messages        message.Service
-	Permissions     permission.Service
-	Questions       question.Service
-	History         history.Service
-	FileTracker     filetracker.Service
-	DispatchRecords dispatch.DispatchRecords
-	Sessions        session.Service
-	DispatchHost    DispatchHost
-	Notify          pubsub.Publisher[notify.Notification]
-	Skills          *skills.Manager
-	SemanticStore   *semantic.Store
-	SemanticClient  *semantic.Client
-	Config          *config.ConfigStore
-	LSPManager      *lsp.Manager
-	DispatchSinks   []dispatch.TodoSink
-	Interactive     bool
-
-	// Memory yields the cross-session recall backend. Nil, or a
-	// provider returning nil, disables it. Use StaticMemory for a
-	// value that never changes.
-	Memory MemoryProvider
-
-	// HookRunner runs user hooks for every event. Nil runs nothing. The
-	// app owns the single runner and reads hook config through its
-	// Source on each event, so reloads need no extra wiring (#3146).
-	HookRunner *hooks.Runner
-}
-
-func NewCoordinator(ctx context.Context, opts CoordinatorOptions) (Coordinator, error) {
-	// Skills are pre-discovered by the caller (see app.New /
-	// backend.CreateWorkspace) and passed in via the manager. If no
-	// manager was provided (legacy callers), fall back to an in-line
-	// discovery so the coordinator still works.
-	var allSkills, activeSkills []*skills.Skill
-	if opts.Skills != nil {
-		allSkills = opts.Skills.AllSkills()
-		activeSkills = opts.Skills.ActiveSkills()
-	} else {
-		allSkills, activeSkills = discoverSkills(opts.Config, opts.Memory.get())
-	}
-	skillTracker := skills.NewTracker(activeSkills)
-
-	cronStore := scheduler.NewStore(filepath.Join(opts.Config.Config().Options.DataDirectory, "scheduled_tasks.json"))
-	if err := cronStore.Load(); err != nil {
-		slog.Error("Failed to load scheduled tasks", "error", err)
-	}
-
-	c := &coordinator{
-		cfg:             opts.Config,
-		hookRunner:      opts.HookRunner,
-		sessions:        opts.Sessions,
-		messages:        opts.Messages,
-		permissions:     opts.Permissions,
-		questions:       opts.Questions,
-		history:         opts.History,
-		filetracker:     opts.FileTracker,
-		lspManager:      opts.LSPManager,
-		notify:          opts.Notify,
-		runComplete:     opts.RunComplete,
-		agents:          make(map[string]SessionAgent),
-		cronStore:       cronStore,
-		allSkills:       allSkills,
-		activeSkills:    activeSkills,
-		skillTracker:    skillTracker,
-		interactive:     opts.Interactive,
-		memory:          opts.Memory,
-		semanticStore:   opts.SemanticStore,
-		semanticClient:  opts.SemanticClient,
-		semanticSymbols: symbols.NewExtractor(),
-		dispatchReg:     dispatch.NewAgentRegistry(),
-		dispatchCtx:     ctx,
-		dispatchSinks:   opts.DispatchSinks,
-		dispatchHost:    opts.DispatchHost,
-		dispatchRecords: opts.DispatchRecords,
-
-		dispatchPersistWindow: dispatchResultPersistWindow,
-	}
-
-	agentCfg, ok := opts.Config.Config().Agents[config.AgentCoder]
-	if !ok {
-		return nil, errCoderAgentNotConfigured
-	}
-
-	// The cron tools are registered unconditionally in buildAgent, so the
-	// matching prompt guidance is always on for the coder agent. These
-	// coder-only sections ride the coder agent's build (#432): the
-	// definition's prompt — builtin or file — renders with them, and a
-	// file-based template that does not reference the fields is unaffected.
-	coderOpts := []prompt.Option{
-		prompt.WithScheduling(),
-		prompt.WithFeatures(c.liveMemoryFeatures),
-	}
-
-	agent, err := c.buildAgent(ctx, agentCfg, false, coderOpts...)
-	if err != nil {
-		return nil, err
-	}
-	c.agents[config.AgentCoder] = agent
-
-	planCfg, ok := c.cfg.Config().Agents[config.AgentPlan]
-	if ok && !planCfg.Disabled {
-		planAgent, err := c.buildAgent(ctx, planCfg, false, prompt.WithFeatures(c.liveMemoryFeatures))
-		if err != nil {
-			return nil, err
-		}
-		c.agents[config.AgentPlan] = planAgent
-	}
-
-	// #392: every agent definition is published on the per-process A2A
-	// host as one stable card, whether or not its entry point routes
-	// its turns through the runtime yet — the definitions are the
-	// host's card listing, and the per-definition routes are live
-	// protocol surfaces that reject runs until an entry point serves a
-	// turn on them. Publishing is best-effort: a host that cannot
-	// listen fails the runs that need it, not the whole coordinator.
-	if catalog, ok := opts.DispatchHost.(AgentCatalog); ok {
-		for id, ag := range opts.Config.Config().Agents {
-			if ag.Disabled {
-				continue
-			}
-			if err := catalog.PublishAgentDefinition(ctx, AgentDefinitionCard{
-				ID:          id,
-				Name:        ag.Name,
-				Description: ag.Description,
-			}); err != nil {
-				slog.Error("Failed to publish agent definition card", "agent", id, "error", err)
-			}
-		}
-	}
-
-	cronScheduler := scheduler.NewScheduler(c.cronStore, c.fireScheduledTask)
-	go cronScheduler.Run(ctx)
-
-	// Dispatch session-end backstop: release the workspaces that are
-	// safe to remove when the coordinator's context ends (#63's Sweep,
-	// wired here per #64; #367 makes the pass selective, keeping work
-	// worth salvaging on disk).
-	go c.sweepDispatchOnDone(ctx)
-
-	c.mainAgent = agent
-	c.mainAgentName = config.AgentCoder
-	return c, nil
-}
-
-// activeAgent returns the coordinator's current main agent and its config
-// name as one snapshot. Callers use the snapshot for the whole operation,
-// so a SetMainAgent racing mid-flight never splits a run, model refresh, or
-// summarize across two agents.
-func (c *coordinator) activeAgent() (SessionAgent, string) {
-	c.agentMu.RLock()
-	defer c.agentMu.RUnlock()
-	return c.mainAgent, c.mainAgentName
-}
-
-// currentAgent returns the current main agent.
-func (c *coordinator) currentAgent() SessionAgent {
-	agent, _ := c.activeAgent()
-	return agent
-}
-
-func (c *coordinator) SetMainAgent(agentName string) error {
-	c.agentMu.Lock()
-	defer c.agentMu.Unlock()
-	agent, ok := c.agents[agentName]
-	if !ok {
-		if c.cfg != nil {
-			if cfg, ok := c.cfg.Config().Agents[agentName]; ok && cfg.Disabled {
-				return fmt.Errorf("agent %q is disabled", agentName)
-			}
-		}
-		return fmt.Errorf("%w: %s", errMainAgentNotFound, agentName)
-	}
-	c.mainAgent = agent
-	c.mainAgentName = agentName
-	return nil
-}
-
-// isInteractive reports the current tool-palette mode. Reads take the
-// lock because SetInteractive flips the flag from attach goroutines.
-func (c *coordinator) isInteractive() bool {
-	c.agentMu.RLock()
-	defer c.agentMu.RUnlock()
-	return c.interactive
-}
-
-// SetInteractive implements Coordinator.
-func (c *coordinator) SetInteractive(ctx context.Context, interactive bool) error {
-	c.agentMu.Lock()
-	if c.interactive == interactive {
-		c.agentMu.Unlock()
-		return nil
-	}
-	c.interactive = interactive
-	c.agentMu.Unlock()
-
-	// The flag flips before the rebuild so a run interleaving mid-flight
-	// picks up the new palette on its own updateAgentModels pass, and so
-	// a partially-failed rebuild self-heals on the next run. Rebuild
-	// without agentMu held (run and UpdateModels call it the same way),
-	// and cover both main agents so a SetMainAgent'd plan agent is
-	// rebuilt too. The dispatch registry, the injection targets, the
-	// cron scheduler and the sweep are deliberately untouched: they
-	// belong to the coordinator, not to either palette (#420).
-	for _, name := range []string{config.AgentCoder, config.AgentPlan} {
-		c.agentMu.RLock()
-		agent, ok := c.agents[name]
-		c.agentMu.RUnlock()
-		if !ok || agent == nil {
-			continue
-		}
-		if err := c.updateAgentModels(ctx, agent, name); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// fireScheduledTask runs a due scheduled task's prompt against its
-// session. The prompt is injected as a normal user turn so it respects
-// the session's busy queue: it fires between turns, never mid-response,
-// matching Claude Code's scheduler semantics.
-func (c *coordinator) fireScheduledTask(ctx context.Context, task scheduler.Task) error {
-	if _, err := c.sessions.Get(ctx, task.SessionID); err != nil {
-		// The session is gone (deleted or never persisted), so nothing
-		// this task fires can ever land. Drop the whole session's tasks,
-		// durable ones included: leaving them behind means the scheduler
-		// retries a dead session on every fire, forever.
-		c.cronStore.DropSession(task.SessionID)
-		return fmt.Errorf("session %s for scheduled task %s no longer exists", task.SessionID, task.ID)
-	}
-
-	prompt := task.Prompt
-	go func() {
-		if _, err := c.run(ctx, nil, task.SessionID, prompt); err != nil {
-			slog.Error("Scheduled task run failed", "id", task.ID, "session_id", task.SessionID, "error", err)
-		}
-	}()
-	return nil
-}
-
-// Run implements Coordinator.
-func (c *coordinator) Run(ctx context.Context, sessionID string, prompt string, attachments ...message.Attachment) (*fantasy.AgentResult, error) {
-	return c.run(ctx, nil, sessionID, prompt, attachments...)
-}
-
-// StartGoal starts goal mode on a session: the goal is recorded on the
-// session, and the first turn runs with the goal text as its prompt.
-// The loop's continuation turns follow it, judged by the evaluator
-// after every turn.
-//
-// The call returns when the goal loop ends: the goal was met, its turn
-// budget ran out, or the run was canceled.
-func (c *coordinator) StartGoal(ctx context.Context, sessionID, text string, budget int) error {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return errors.New("the goal cannot be empty")
-	}
-	if _, err := c.sessions.SetGoal(ctx, sessionID, &goal.Goal{
-		Text:       text,
-		State:      goal.StateActive,
-		TurnBudget: goal.NormalizeBudget(budget),
-	}); err != nil {
-		return fmt.Errorf("failed to record the goal: %w", err)
-	}
-	_, err := c.run(ctx, nil, sessionID, text)
-	return err
-}
-
-// CancelGoal stops goal mode on a session: the goal stops asking for
-// turns, and the session says the goal was cancelled.
-func (c *coordinator) CancelGoal(ctx context.Context, sessionID string) error {
-	sess, err := c.sessions.Get(ctx, sessionID)
-	if err != nil {
-		return err
-	}
-	if sess.Goal == nil {
-		return nil
-	}
-	g := *sess.Goal
-	g.State = goal.StateCancelled
-	g.Pending = false
-	if _, err := c.sessions.SetGoal(ctx, sessionID, &g); err != nil {
-		return err
-	}
-	if c.notify != nil {
-		c.notify.Publish(pubsub.CreatedEvent, notify.Notification{
-			SessionID: sessionID,
-			Type:      notify.TypeGoal,
-			Message:   fmt.Sprintf("Goal cancelled: %s", g.Text),
-		})
-	}
-	return nil
-}
-
-// RunAccepted implements Coordinator.
-func (c *coordinator) RunAccepted(ctx context.Context, accept *AcceptedRun, sessionID string, prompt string, attachments ...message.Attachment) (*fantasy.AgentResult, error) {
-	return c.run(ctx, accept, sessionID, prompt, attachments...)
-}
-
-// run is the shared implementation behind Run and RunAccepted. When
-// accept is non-nil it is threaded onto the SessionAgentCall as
-// Accepted so sessionAgent.Run can consume the accept reservation under
-// dispatchMu; when nil (the in-process/local path) no accept tracking
-// applies.
-func (c *coordinator) run(ctx context.Context, accept *AcceptedRun, sessionID string, prompt string, attachments ...message.Attachment) (*fantasy.AgentResult, error) {
-	// MCP servers connect asynchronously (see mcp.Initialize).
-	//
-	// Interactive runs never wait for that to finish: the tool list below
-	// is built from whatever is registered right now, servers still
-	// connecting are simply absent from this run's palette, and they are
-	// picked up by later runs once they register and publish
-	// EventToolsListChanged. Blocking here froze the TUI for the duration
-	// of the slowest server's connect timeout whenever a prompt was sent
-	// before initialization finished — most visibly on the first message.
-	//
-	// Non-interactive runs get a single shot at the tool palette, so they
-	// do wait for initialization to settle — but bounded by InitWaitBudget
-	// rather than each server's connect timeout, so a server wedged
-	// mid-handshake cannot stall a headless run for minutes. Past the
-	// budget the turn proceeds without the stragglers; their tools simply
-	// stay absent from this run.
-	if !c.isInteractive() {
-		if err := mcp.WaitForInitBudget(ctx, mcp.InitWaitBudget); err != nil {
-			return nil, fmt.Errorf("failed to wait for MCP initialization: %w", err)
-		}
-	}
-
-	// refresh models before each run. Snapshot the agent first: the run,
-	// its model settings, and the model refresh below must all target the
-	// same agent even if SetMainAgent swaps the main agent mid-flight.
-	agent, agentName := c.activeAgent()
-
-	// Wait for this agent's own build-time setup (system prompt, initial
-	// tool list) rather than for coordinator-wide state: a latch belonging
-	// to the agent cannot be rearmed by a later build while this run is
-	// parked on it. Waiting on the snapshot keeps the wait and the run on
-	// the same agent. See readiness and joestump-agent/crush#298.
-	if err := agent.WaitReady(); err != nil {
-		return nil, err
-	}
-
-	if err := c.updateAgentModels(ctx, agent, agentName); err != nil {
-		return nil, fmt.Errorf("failed to update models: %w", err)
-	}
-
-	model := agent.Model()
-	maxTokens := model.CatwalkCfg.DefaultMaxTokens
-	if model.ModelCfg.MaxTokens != 0 {
-		maxTokens = model.ModelCfg.MaxTokens
-	}
-
-	providerCfg, ok := c.cfg.Config().Providers.Get(model.ModelCfg.Provider)
-	if !ok {
-		return nil, errModelProviderNotConfigured
-	}
-
-	mergedOptions, temp, topP, topK, freqPenalty, presPenalty := mergeCallOptions(model, providerCfg)
-
-	// Inject session_id for OpenRouter sticky routing (no-op for other providers).
-	injectOpenrouterSessionID(mergedOptions, sessionID)
-
-	if err := c.refreshTokenIfExpired(ctx, providerCfg); err != nil {
-		// NOTE(@andreynering): We don't return here because the event handling to ask the user to reauthenticate
-		// depends on the flow below. If refresh fails, proceed with the token we have.
-		slog.Error("Failed to refresh OAuth2 token. Proceeding with existing token.", "error", err)
-	}
-
-	// Coalesce per-attempt RunComplete payloads so only the final
-	// outcome reaches subscribers. Without this, the first attempt's
-	// failed RunComplete (unauthorized) would race ahead of the
-	// retry's success, and `crush run` would exit on the stale error
-	// before ever seeing the retry result. Each attempt's
-	// SessionAgentCall.OnComplete hook overwrites latest; we publish
-	// exactly once after retries resolve, via PublishMustDeliver, so
-	// a momentarily-full subscriber buffer can't silently drop the
-	// terminal event.
-	var (
-		latest    notify.RunComplete
-		hasLatest bool
-	)
-	onComplete := func(rc notify.RunComplete) {
-		latest = rc
-		hasLatest = true
-	}
-	// Propagate the caller-supplied RunID (set via agent.WithRunID
-	// at the HTTP boundary in backend.SendMessage) onto the
-	// SessionAgentCall so the terminal RunComplete event echoes it
-	// back. Both attempts in the retry chain reuse the same RunID;
-	// the coalesce closure publishes the final outcome under that
-	// same correlator.
-	runID := RunIDFromContext(ctx)
-	systemDelivery := SystemDeliveryFromContext(ctx)
-	// A delivery turn's queue verdict (#355): set only on the dispatch
-	// delivery path, it stamps the durable records once a queued
-	// delivery reaches the parent. Nil everywhere else.
-	onConsumed := deliveryConsumedFromContext(ctx)
-	channel := ChannelFromContext(ctx)
-	c.syncSessionChannel(ctx, sessionID, channel)
-	run := func() (*fantasy.AgentResult, error) {
-		return agent.Run(ctx, SessionAgentCall{
-			SessionID:         sessionID,
-			RunID:             runID,
-			HiddenUserMessage: message.HiddenUserMessage(ctx),
-			PermissionPolicy:  permission.RequestPolicyFromContext(ctx),
-			Channel:           ChannelFromContext(ctx),
-			ContentWidth:      ContentWidthFromContext(ctx),
-			Prompt:            prompt,
-			Attachments:       attachments,
-			MaxOutputTokens:   maxTokens,
-			ProviderOptions:   mergedOptions,
-			Temperature:       temp,
-			TopP:              topP,
-			TopK:              callTopK(providerCfg, topK),
-			FrequencyPenalty:  freqPenalty,
-			PresencePenalty:   presPenalty,
-			systemDelivery:    systemDelivery,
-			OnComplete:        onComplete,
-			OnConsumed:        onConsumed,
-			Accepted:          accept,
-			OnAuthRefresh:     c.makeAuthRefreshCallback(providerCfg),
-		})
-	}
-	beforeLoaded := c.skillTracker.LoadedNames()
-	result, originalErr := run()
-	logTurnSkillUsage(sessionID, prompt, c.activeSkills, c.skillTracker, beforeLoaded)
-
-	// Notify only if still unauthorized after retry — a successful
-	// retry means the user doesn't need to re-authenticate. AWS SSO is
-	// handled transparently inside OnAuthRefresh, so it needs no post-run
-	// notification here.
-	if originalErr != nil && isUnauthorized(originalErr) && c.notify != nil && model.ModelCfg.Provider == hyper.Name {
-		c.notify.Publish(pubsub.CreatedEvent, notify.Notification{
-			Type:       notify.TypeReAuthenticate,
-			ProviderID: model.ModelCfg.Provider,
-		})
-	}
-
-	if originalErr != nil && isUndecodableProviderError(originalErr) && providerCfg.OAuthToken != nil {
-		slog.Warn("Provider sent an error body the SDK could not decode; refreshing credentials",
-			"provider", providerCfg.ID, "error", originalErr)
-		if err := c.retryAfterUnauthorized(ctx, providerCfg); err != nil {
-			slog.Error("Failed to refresh credentials after an undecodable provider error",
-				"provider", providerCfg.ID, "error", err)
-		}
-	}
 	"github.com/charmbracelet/crush/internal/history"
 	"github.com/charmbracelet/crush/internal/honcho"
 	"github.com/charmbracelet/crush/internal/hooks"
@@ -1399,7 +693,7 @@ func (c *coordinator) run(ctx context.Context, accept *AcceptedRun, sessionID st
 			ProviderID: model.ModelCfg.Provider,
 		})
 	}
-	c.askToSignInAgain(originalErr, model)
+
 	if originalErr != nil && isUndecodableProviderError(originalErr) && providerCfg.OAuthToken != nil {
 		slog.Warn("Provider sent an error body the SDK could not decode; refreshing credentials",
 			"provider", providerCfg.ID, "error", originalErr)
@@ -1408,8 +702,6 @@ func (c *coordinator) run(ctx context.Context, accept *AcceptedRun, sessionID st
 				"provider", providerCfg.ID, "error", err)
 		}
 	}
-
-	c.askToSignInAgain(originalErr, model)
 
 	if hasLatest && c.runComplete != nil {
 		c.runComplete.PublishMustDeliver(ctx, pubsub.UpdatedEvent, latest)
@@ -2371,17 +1663,10 @@ func (c *coordinator) hyperAPIKey() string {
 	return config.ResolveHyperAPIKey(c.cfg.Config())
 }
 
-func (c *coordinator) buildAnthropicProvider(baseURL, apiKey string, headers map[string]string, providerID string, token *oauth.Token, gw *oauth.GatewaySpec) (fantasy.Provider, error) {
+func (c *coordinator) buildAnthropicProvider(baseURL, apiKey string, headers map[string]string, providerID string) (fantasy.Provider, error) {
 	var opts []anthropic.Option
 
 	switch {
-	case token != nil:
-		// A subscription login: the OAuth access token is the credential,
-		// carried as a bearer header, with no API key at all. Sending
-		// x-api-key too would make the API answer 401.
-		// NOTE: Prevent the SDK from picking up the API key from env.
-		os.Setenv("ANTHROPIC_API_KEY", "")
-		headers["Authorization"] = "Bearer " + token.AccessToken
 	case strings.HasPrefix(apiKey, "Bearer "):
 		// NOTE: Prevent the SDK from picking up the API key from env.
 		os.Setenv("ANTHROPIC_API_KEY", "")
@@ -2403,31 +1688,8 @@ func (c *coordinator) buildAnthropicProvider(baseURL, apiKey string, headers map
 		opts = append(opts, anthropic.WithBaseURL(baseURL))
 	}
 
-	var httpClient *http.Client
 	if c.cfg.Config().Options.Debug {
-		httpClient = log.NewHTTPClient()
-	}
-	if gw != nil {
-		// The provider declares that its traffic needs rewriting, so the
-		// adapter sits under the client and sees the requests the SDK built.
-		gatewayToken := apiKey
-		if token != nil {
-			gatewayToken = token.AccessToken
-		}
-		var base http.RoundTripper
-		if httpClient != nil {
-			base = httpClient.Transport
-		}
-		adapter, err := gateway.New(gw, gatewayToken, base)
-		if err != nil {
-			return nil, fmt.Errorf("gateway adapter for provider %s: %w", providerID, err)
-		}
-		if httpClient == nil {
-			httpClient = &http.Client{}
-		}
-		httpClient.Transport = adapter
-	}
-	if httpClient != nil {
+		httpClient := log.NewHTTPClient()
 		opts = append(opts, anthropic.WithHTTPClient(httpClient))
 	}
 	return anthropic.New(opts...)
@@ -2610,36 +1872,13 @@ func (c *coordinator) buildBedrockProvider(apiKey string, headers map[string]str
 	return bedrock.New(opts...)
 }
 
-func (c *coordinator) buildGoogleProvider(baseURL, apiKey string, headers map[string]string, providerCfg config.ProviderConfig) (fantasy.Provider, error) {
+func (c *coordinator) buildGoogleProvider(baseURL, apiKey string, headers map[string]string) (fantasy.Provider, error) {
 	opts := []google.Option{
 		google.WithBaseURL(baseURL),
 		google.WithGeminiAPIKey(apiKey),
 	}
-	var httpClient *http.Client
 	if c.cfg.Config().Options.Debug {
-		httpClient = log.NewHTTPClient()
-	}
-	if providerCfg.Gateway != nil {
-		// The provider declares that its traffic needs rewriting, so the
-		// adapter sits under the client and sees the requests the SDK built.
-		token := apiKey
-		if providerCfg.OAuthToken != nil {
-			token = providerCfg.OAuthToken.AccessToken
-		}
-		var base http.RoundTripper
-		if httpClient != nil {
-			base = httpClient.Transport
-		}
-		adapter, err := gateway.New(providerCfg.Gateway, token, base)
-		if err != nil {
-			return nil, fmt.Errorf("gateway adapter for provider %s: %w", providerCfg.ID, err)
-		}
-		if httpClient == nil {
-			httpClient = &http.Client{}
-		}
-		httpClient.Transport = adapter
-	}
-	if httpClient != nil {
+		httpClient := log.NewHTTPClient()
 		opts = append(opts, google.WithHTTPClient(httpClient))
 	}
 	if len(headers) > 0 {
@@ -2664,18 +1903,6 @@ func (c *coordinator) buildGoogleVertexProvider(headers map[string]string, optio
 	opts = append(opts, google.WithVertex(project, location))
 
 	return google.New(opts...)
-}
-
-// notifiesOnRevokedToken reports whether a provider should ask the user to
-// sign in again once its OAuth token stops working: the ones Crush knows and
-// any provider that declares its own login, which has no recovery path other
-// than re-authenticating.
-func (c *coordinator) notifiesOnRevokedToken(providerID string) bool {
-	if providerID == hyper.Name {
-		return true
-	}
-	pc, ok := c.cfg.Config().Providers.Get(providerID)
-	return ok && pc.UsesOAuth()
 }
 
 func (c *coordinator) isAnthropicThinking(model config.SelectedModel) bool {
@@ -2706,7 +1933,13 @@ func (c *coordinator) buildProvider(providerCfg config.ProviderConfig, model con
 	baseURL, _ := c.cfg.Resolve(providerCfg.BaseURL)
 
 	// Providers with bespoke SDKs are selected by ID; everything else is
-	// served by the wire type the model speaks.
+	// served by the wire type the model speaks. A custom provider that
+	// declares itself the Gemini API keeps the Google SDK instead of
+	// being served as an OpenAI-compatible endpoint.
+	if providerCfg.Type == config.TypeGoogle {
+		return c.buildGoogleProvider(baseURL, apiKey, headers)
+	}
+
 	switch providerCfg.ID {
 	case string(catwalk.InferenceProviderBedrock), string(catwalk.InferenceProviderBedrockEurope):
 		return c.buildBedrockProvider(apiKey, headers, providerCfg.ID)
@@ -2715,7 +1948,7 @@ func (c *coordinator) buildProvider(providerCfg config.ProviderConfig, model con
 	case string(catwalk.InferenceProviderVertexAI):
 		return c.buildGoogleVertexProvider(headers, providerCfg.ExtraParams)
 	case string(catwalk.InferenceProviderGemini):
-		return c.buildGoogleProvider(baseURL, apiKey, headers, providerCfg)
+		return c.buildGoogleProvider(baseURL, apiKey, headers)
 	case string(catwalk.InferenceProviderOpenRouter):
 		return c.buildOpenrouterProvider(baseURL, apiKey, headers)
 	case string(catwalk.InferenceProviderVercel):
@@ -2727,24 +1960,13 @@ func (c *coordinator) buildProvider(providerCfg config.ProviderConfig, model con
 		// /v1 prefix the chat completions and responses endpoints use.
 		if wireType == catwalk.TypeMessages {
 			baseURL = strings.TrimSuffix(baseURL, "/v1")
-			return c.buildAnthropicProvider(baseURL, apiKey, headers, providerCfg.ID, nil, providerCfg.Gateway)
+			return c.buildAnthropicProvider(baseURL, apiKey, headers, providerCfg.ID)
 		}
-	}
-
-	if providerCfg.Type == config.TypeGoogle {
-		return c.buildGoogleProvider(baseURL, apiKey, headers, providerCfg)
 	}
 
 	switch wireType {
 	case catwalk.TypeMessages:
-		// A provider that declares its own OAuth flow authenticates with the
-		// login's bearer token rather than an API key; Claude Pro and Max
-		// subscriptions work this way.
-		var oauthToken *oauth.Token
-		if providerCfg.UsesOAuth() {
-			oauthToken = providerCfg.OAuthToken
-		}
-		return c.buildAnthropicProvider(baseURL, apiKey, headers, providerCfg.ID, oauthToken, providerCfg.Gateway)
+		return c.buildAnthropicProvider(baseURL, apiKey, headers, providerCfg.ID)
 	case catwalk.TypeResponses:
 		return c.buildOpenaiResponsesProvider(baseURL, apiKey, headers, providerCfg, isSubAgent)
 	case catwalk.TypeCompletions, catwalk.Type(hyper.Name):
@@ -2980,89 +2202,12 @@ func (c *coordinator) GenerateTitle(ctx context.Context, sessionID, prompt strin
 }
 
 // refreshTokenIfExpired proactively refreshes the OAuth token if it has expired.
-// aheadRefreshTimeout bounds an OAuth renewal that runs ahead of expiry.
-// It is detached from the turn, so nothing else would ever stop it.
-const aheadRefreshTimeout = 2 * time.Minute
-
-// refreshTokenIfExpired brings the OAuth credential up to date before a
-// turn uses it.
-//
-// It reconciles with disk first, then renews: early and in the background
-// when the token is merely nearing its deadline, and inline only once it
-// has crossed it.
-//
-// Every outcome is logged. A turn that should have refreshed and did not
-// looks exactly like one that had nothing to do, so without the skip line
-// there is no way to tell a broken expiry check from a healthy token.
 func (c *coordinator) refreshTokenIfExpired(ctx context.Context, providerCfg config.ProviderConfig) error {
-	if providerCfg.OAuthToken == nil {
+	if providerCfg.OAuthToken == nil || !providerCfg.OAuthToken.IsExpired() {
 		return nil
 	}
-
-	// Disk is the authority on which credential is current, since a peer
-	// may have rotated ours away while this session sat idle. Reconcile
-	// before judging expiry so the decision is made against the live
-	// token rather than against a snapshot from hours ago. Presenting a
-	// retired refresh token to a provider that rotates them costs the
-	// whole token family rather than just the attempt.
-	if adopted, err := c.cfg.AdoptNewerDiskToken(config.ScopeGlobal, providerCfg.ID); err != nil {
-		slog.Warn("Failed to reconcile the OAuth token with disk",
-			"provider", providerCfg.ID, "error", err)
-	} else if adopted {
-		if current, ok := c.cfg.Config().Providers.Get(providerCfg.ID); ok {
-			providerCfg = current
-		}
-		if err := c.UpdateModels(ctx); err != nil {
-			return err
-		}
-	}
-
-	token := providerCfg.OAuthToken
-	if token.IsExpired() {
-		slog.Info("OAuth token expired, refreshing before the turn",
-			"provider", providerCfg.ID,
-			"refresh_token", token.Fingerprint(),
-			"expires_in_s", token.ExpiresInSeconds())
-		return c.refreshOAuth2Token(ctx, providerCfg)
-	}
-
-	if token.ShouldRefreshAhead() {
-		c.refreshOAuth2TokenAhead(ctx, providerCfg)
-		return nil
-	}
-
-	slog.Debug("OAuth token still valid, not refreshing",
-		"provider", providerCfg.ID,
-		"refresh_token", token.Fingerprint(),
-		"expires_in_s", token.ExpiresInSeconds())
-	return nil
-}
-
-// refreshOAuth2TokenAhead renews a credential that is nearing its deadline
-// without making the turn wait for it. The current token is still good, so
-// a failure here costs nothing: the turn proceeds, and if the renewal never
-// lands the inline path picks it up once the token actually expires.
-//
-// The work is detached from the turn's context so that finishing or
-// cancelling the turn does not abort an exchange already in flight —
-// abandoning one halfway is how a rotated token gets lost. Concurrent
-// attempts collapse in the store's single-flight, so a burst of turns
-// inside the window still produces one exchange.
-func (c *coordinator) refreshOAuth2TokenAhead(ctx context.Context, providerCfg config.ProviderConfig) {
-	token := providerCfg.OAuthToken
-	slog.Info("OAuth token nearing expiry, refreshing ahead of the turn",
-		"provider", providerCfg.ID,
-		"refresh_token", token.Fingerprint(),
-		"expires_in_s", token.ExpiresInSeconds())
-
-	detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), aheadRefreshTimeout)
-	go func() {
-		defer cancel()
-		if err := c.refreshOAuth2Token(detached, providerCfg); err != nil {
-			slog.Warn("Ahead-of-time OAuth refresh failed; continuing with the current token",
-				"provider", providerCfg.ID, "error", err)
-		}
-	}()
+	slog.Debug("Token needs to be refreshed", "provider", providerCfg.ID)
+	return c.refreshOAuth2Token(ctx, providerCfg)
 }
 
 // retryAfterUnauthorized attempts to refresh credentials after an auth error

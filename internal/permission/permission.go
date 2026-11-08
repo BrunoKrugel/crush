@@ -306,6 +306,35 @@ func (s *permissionService) Deny(permission PermissionRequest) bool {
 	return s.resolve(permission, false, true, nil)
 }
 
+// isAllowed reports whether a tool or tool:action key is on the allowlist,
+// accepting the spelling MCP tools used before they were renamed to the
+// doubled-underscore form. A configuration written against the old names
+// keeps working rather than silently reverting to prompting.
+func (s *permissionService) isAllowed(key string) bool {
+	if slices.Contains(s.allowedTools, key) {
+		return true
+	}
+	if legacy := legacyMCPToolKey(key); legacy != "" {
+		return slices.Contains(s.allowedTools, legacy)
+	}
+	return false
+}
+
+// legacyMCPToolKey converts "mcp__server__tool" back to the single-underscore
+// "mcp_server_tool" an older config would name. It returns "" for anything
+// that is not an MCP tool key.
+//
+// The canonical form is built by tools.MCPToolName, which this package cannot
+// import: the tools package depends on this one.
+func legacyMCPToolKey(key string) string {
+	const prefix = "mcp__"
+	if !strings.HasPrefix(key, prefix) {
+		return ""
+	}
+	rest := strings.Replace(key[len(prefix):], "__", "_", 1)
+	return "mcp_" + rest
+}
+
 func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRequest) (bool, error) {
 	if s.skipFn() {
 		return true, nil

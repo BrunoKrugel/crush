@@ -1,7 +1,6 @@
 package shellconfig
 
 import (
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -150,12 +149,4 @@ func TestProviderCatalogFlags(t *testing.T) {
 	require.Equal(t, "POST", catalog["method"])
 	require.Equal(t, `{"pageSize":200}`, catalog["body"])
 	require.Equal(t, map[string]any{"anthropic-version": "2023-06-01"}, catalog["headers"])
-}
-
-// loadScriptErr runs a script that is expected to fail at load time.
-func loadScriptErr(t *testing.T, script string) error {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "crushrc")
-	_, err := LoadShellConfig(t.Context(), path, []byte(script))
-	return err
 }

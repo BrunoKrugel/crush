@@ -61,15 +61,15 @@ type Session struct {
 	// Goal is the goal-mode state: the goal the session works toward,
 	// its turn budget, and where that budget stands. Nil when the
 	// session runs no goal.
-	Goal                *goal.Goal
-	Todos               []Todo
-	Cost                float64
-	CompletionTokens    int64
-	PromptTokens        int64
-	MessageCount        int64
-	CreatedAt           int64
-	UpdatedAt           int64
-	EstimatedUsage      bool
+	Goal             *goal.Goal
+	Todos            []Todo
+	Cost             float64
+	CompletionTokens int64
+	PromptTokens     int64
+	MessageCount     int64
+	CreatedAt        int64
+	UpdatedAt        int64
+	EstimatedUsage   bool
 }
 
 type Service interface {

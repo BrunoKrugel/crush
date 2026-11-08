@@ -135,13 +135,11 @@ func sessionSetup(cmd *cobra.Command) (context.Context, *sessionServices, func()
 }
 
 func runSessionList(cmd *cobra.Command, _ []string) error {
-
 	ctx, svc, cleanup, err := sessionSetup(cmd)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
-
 
 	list, err := svc.sessions.List(ctx)
 	if err != nil {
@@ -255,13 +253,11 @@ func resolveSessionID(ctx context.Context, svc session.Service, id string) (sess
 }
 
 func runSessionShow(cmd *cobra.Command, args []string) error {
-
 	ctx, svc, cleanup, err := sessionSetup(cmd)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
-
 
 	sess, err := resolveSessionID(ctx, svc.sessions, args[0])
 	if err != nil {
@@ -281,13 +277,11 @@ func runSessionShow(cmd *cobra.Command, args []string) error {
 }
 
 func runSessionDelete(cmd *cobra.Command, args []string) error {
-
 	ctx, svc, cleanup, err := sessionSetup(cmd)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
-
 
 	sess, err := resolveSessionID(ctx, svc.sessions, args[0])
 	if err != nil {
@@ -313,13 +307,11 @@ func runSessionDelete(cmd *cobra.Command, args []string) error {
 }
 
 func runSessionRename(cmd *cobra.Command, args []string) error {
-
 	ctx, svc, cleanup, err := sessionSetup(cmd)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
-
 
 	sess, err := resolveSessionID(ctx, svc.sessions, args[0])
 	if err != nil {
@@ -346,13 +338,11 @@ func runSessionRename(cmd *cobra.Command, args []string) error {
 }
 
 func runSessionLast(cmd *cobra.Command, _ []string) error {
-
 	ctx, svc, cleanup, err := sessionSetup(cmd)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
-
 
 	list, err := svc.sessions.List(ctx)
 	if err != nil {

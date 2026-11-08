@@ -33,6 +33,10 @@ func NewOAuthGeneric(
 
 // OAuthGeneric drives a spec-declared flow through the shared OAuth dialog.
 type OAuthGeneric struct {
+	// Token belongs to an LLM provider, whose credential is its API key,
+	// so the defaults save it there and resume model selection.
+	oauthAPIKey
+
 	spec       *oauth.AuthSpec
 	display    string
 	browser    *generic.BrowserFlow
