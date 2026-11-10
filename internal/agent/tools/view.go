@@ -112,6 +112,16 @@ func NewViewTool(
 			// Handle relative paths
 			filePath := filepathext.SmartJoin(workingDir, params.FilePath)
 
+			if absJoined, absErr := filepath.Abs(filePath); absErr != nil {
+				return fantasy.ToolResponse{}, fmt.Errorf("error resolving file path: %w", absErr)
+			} else if !isInSkillsPath(absJoined, skillsPaths) {
+				contained, err := ContainPath(ctx, filePath)
+				if err != nil {
+					return fantasy.NewTextErrorResponse(err.Error()), nil
+				}
+				filePath = contained
+			}
+
 			// Check if file is outside working directory and request permission if needed
 			absWorkingDir, err := filepath.Abs(workingDir)
 			if err != nil {
@@ -233,8 +243,7 @@ func NewViewTool(
 			}
 			content, hasMore, err := readTextFile(filePath, params.Offset, params.Limit, maxContentSize)
 			if err != nil {
-				var tooLarge contentTooLargeError
-				if errors.As(err, &tooLarge) {
+				if tooLarge, ok := errors.AsType[contentTooLargeError](err); ok {
 					return fantasy.NewTextErrorResponse(fmt.Sprintf("Content section is too large (%d bytes). Maximum size is %d bytes",
 						tooLarge.Size, tooLarge.Max)), nil
 				}

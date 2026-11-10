@@ -1,9 +1,16 @@
 package proto
 
 import (
-	"encoding/json"
 	"errors"
+
+	"github.com/bytedance/sonic"
+	"github.com/charmbracelet/crush/internal/agent/notify"
 )
+
+// SummaryResponse distinguishes cancellation from other HTTP conflicts.
+type SummaryResponse struct {
+	Cancelled bool `json:"cancelled"`
+}
 
 // AgentEventType represents the type of agent event.
 type AgentEventType string
@@ -27,37 +34,23 @@ func (t *AgentEventType) UnmarshalText(text []byte) error {
 
 // AgentEvent represents an event emitted by the agent.
 type AgentEvent struct {
-	Type    AgentEventType `json:"type"`
-	Message Message        `json:"message"`
-	Error   error          `json:"error,omitempty"`
-
-	// RunID echoes the caller-supplied AgentMessage.RunID for the run
-	// that produced this event. It lets observers (notably
-	// `crush run`) attribute an error event to a specific request
-	// instead of to any in-flight run on the session. Empty when no
-	// caller set one.
-	RunID string `json:"run_id,omitempty"`
-
-	// When summarizing.
-	SessionID    string `json:"session_id,omitempty"`
-	SessionTitle string `json:"session_title,omitempty"`
-	Progress     string `json:"progress,omitempty"`
-	Done         bool   `json:"done,omitempty"`
-
-	// AWS SSO progress fields, carried for TypeAWSSSOAuth and
-	// TypeAWSSSOAuthResult so the refresh dialog works in client/server
-	// mode. The command runs on the server; these ferry its progress to
-	// the client. AWSSOCommand is the refresh command being run; AWSSOURL
-	// is the verification URL once it appears in the command output. The
-	// result's failure text travels through Error, like TypeAgentError.
-	AWSSOCommand string `json:"aws_sso_command,omitempty"`
-	AWSSOURL     string `json:"aws_sso_url,omitempty"`
+	Error        error              `json:"error,omitempty"`
+	Type         AgentEventType     `json:"type"`
+	RunID        string             `json:"run_id,omitempty"`
+	FinishState  notify.FinishState `json:"finish_state,omitempty"`
+	SessionID    string             `json:"session_id,omitempty"`
+	SessionTitle string             `json:"session_title,omitempty"`
+	Progress     string             `json:"progress,omitempty"`
+	AWSSOCommand string             `json:"aws_sso_command,omitempty"`
+	AWSSOURL     string             `json:"aws_sso_url,omitempty"`
+	Message      Message            `json:"message"`
+	Done         bool               `json:"done,omitempty"`
 }
 
 // MarshalJSON implements the [json.Marshaler] interface.
 func (e AgentEvent) MarshalJSON() ([]byte, error) {
 	type Alias AgentEvent
-	return json.Marshal(&struct {
+	return sonic.Marshal(&struct {
 		Error string `json:"error,omitempty"`
 		Alias
 	}{
@@ -71,7 +64,7 @@ func (e AgentEvent) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON implements the [json.Unmarshaler] interface.
+// UnmarshalJSON implements the [sonic.Unmarshaler] interface.
 func (e *AgentEvent) UnmarshalJSON(data []byte) error {
 	type Alias AgentEvent
 	aux := &struct {
@@ -80,7 +73,7 @@ func (e *AgentEvent) UnmarshalJSON(data []byte) error {
 	}{
 		Alias: Alias(*e),
 	}
-	if err := json.Unmarshal(data, &aux); err != nil {
+	if err := sonic.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 	*e = AgentEvent(aux.Alias)

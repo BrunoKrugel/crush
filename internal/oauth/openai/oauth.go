@@ -12,7 +12,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/oauth"
 )
 
@@ -175,7 +175,7 @@ func requestToken(ctx context.Context, vals url.Values) (*oauth.Token, error) {
 	}
 
 	var tr tokenResponse
-	if err := json.Unmarshal(body, &tr); err != nil {
+	if err := sonic.Unmarshal(body, &tr); err != nil {
 		return nil, fmt.Errorf("decode token response: %w", err)
 	}
 	if tr.AccessToken == "" {
@@ -207,10 +207,10 @@ func requestToken(ctx context.Context, vals url.Values) (*oauth.Token, error) {
 // payload. Values are used only for routing requests, never for
 // authorization decisions.
 type Claims struct {
-	ChatGPTAccountID string `json:"chatgpt_account_id"`
-	Auth             *struct {
+	Auth *struct {
 		ChatGPTAccountID string `json:"chatgpt_account_id"`
 	} `json:"https://api.openai.com/auth"`
+	ChatGPTAccountID string `json:"chatgpt_account_id"`
 }
 
 // ParseJWTClaims decodes the payload segment of a JWT without verifying
@@ -231,7 +231,7 @@ func ParseJWTClaims(token string) (*Claims, error) {
 	}
 
 	var claims Claims
-	if err := json.Unmarshal(payload, &claims); err != nil {
+	if err := sonic.Unmarshal(payload, &claims); err != nil {
 		return nil, fmt.Errorf("decode JWT claims: %w", err)
 	}
 	return &claims, nil

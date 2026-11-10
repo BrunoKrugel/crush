@@ -18,7 +18,6 @@ import (
 	"github.com/charmbracelet/crush/internal/oauth"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 )
@@ -36,6 +35,15 @@ type fakeASOpts struct {
 	// in the authorization response, and the SDK rejects the authorization
 	// if no issuer comes back.
 	issSupported bool
+	// clientIDMetadataSupported advertises the Client ID Metadata Document
+	// registration method (SEP-991), like Home Assistant.
+	clientIDMetadataSupported bool
+	// noRegistrationEndpoint omits registration_endpoint from the
+	// authorization server metadata, so dynamic registration is impossible.
+	noRegistrationEndpoint bool
+	// trailingSlashIssuer makes the metadata issuer end in "/", modelling
+	// servers that publish an issuer the SDK normalizes away.
+	trailingSlashIssuer bool
 }
 
 // newFakeAS starts an httptest server speaking enough of the OAuth
@@ -55,6 +63,11 @@ func newFakeAS(t *testing.T, opts fakeASOpts) (base, mcpURL string) {
 		expiresIn = 3600
 	}
 
+	issuerSuffix := ""
+	if opts.trailingSlashIssuer {
+		issuerSuffix = "/"
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/oauth-protected-resource/mcp", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{
@@ -64,12 +77,17 @@ func newFakeAS(t *testing.T, opts fakeASOpts) (base, mcpURL string) {
 	})
 	mux.HandleFunc("/.well-known/oauth-authorization-server", func(w http.ResponseWriter, r *http.Request) {
 		meta := map[string]any{
-			"issuer":                           baseURL,
+			"issuer":                           baseURL + issuerSuffix,
 			"authorization_endpoint":           baseURL + "/authorize",
 			"token_endpoint":                   baseURL + "/token",
-			"registration_endpoint":            baseURL + "/register",
 			"code_challenge_methods_supported": []string{"S256"},
 			"scopes_supported":                 []string{"offline_access"},
+		}
+		if !opts.noRegistrationEndpoint {
+			meta["registration_endpoint"] = baseURL + "/register"
+		}
+		if opts.clientIDMetadataSupported {
+			meta["client_id_metadata_document_supported"] = true
 		}
 		if opts.issSupported {
 			meta["authorization_response_iss_parameter_supported"] = true
@@ -208,6 +226,62 @@ func TestHandler_FreshAuthorize(t *testing.T) {
 	require.Equal(t, base+"/token", saved.Client.TokenURL)
 }
 
+// TestHandler_ClientIDMetadataDocument proves SEP-991 registration: a
+// server that advertises client_id_metadata_document_supported and has no
+// registration endpoint (e.g. Home Assistant) authorizes using the
+// configured metadata document URL as the client_id.
+func TestHandler_ClientIDMetadataDocument(t *testing.T) {
+	base, mcpURL := newFakeAS(t, fakeASOpts{
+		accessToken:               "cimd-access",
+		refreshToken:              "cimd-refresh",
+		clientIDMetadataSupported: true,
+		noRegistrationEndpoint:    true,
+	})
+
+	// The SDK validates the metadata document URL is a non-root HTTPS
+	// URL up front; it is never fetched by the client itself, so a fake
+	// https URL works with the http test server.
+	metadataURL := "https://client.example.com/oauth-client.json"
+
+	var saved *oauth.Token
+	h, err := NewHandler("test", mcpURL, nil, nil, func(tok *oauth.Token) {
+		saved = tok
+	}, true, 0, WithClientIDMetadataURL(metadataURL))
+	require.NoError(t, err)
+	t.Cleanup(h.Close)
+	h.openURL = browserRedirect("cimd-code")
+
+	require.NoError(t, authorizeWith401(t, h, base, mcpURL))
+
+	ts, err := h.TokenSource(t.Context())
+	require.NoError(t, err)
+	tok, err := ts.Token()
+	require.NoError(t, err)
+	require.Equal(t, "cimd-access", tok.AccessToken)
+	require.NotNil(t, saved)
+	require.Equal(t, metadataURL, saved.Client.ClientID)
+}
+
+// TestHandler_NoSupportedRegistrationMethod proves the guidance error is
+// returned when the server supports neither dynamic registration nor the
+// Client ID Metadata Document method and no client is pre-registered.
+func TestHandler_NoSupportedRegistrationMethod(t *testing.T) {
+	base, mcpURL := newFakeAS(t, fakeASOpts{
+		clientIDMetadataSupported: true,
+		noRegistrationEndpoint:    true,
+	})
+
+	h, err := NewHandler("test", mcpURL, nil, nil, func(*oauth.Token) {}, true, 0)
+	require.NoError(t, err)
+	t.Cleanup(h.Close)
+	h.openURL = func(string) error { return nil }
+
+	err = authorizeWith401(t, h, base, mcpURL)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "does not support automatic OAuth client registration")
+	require.Contains(t, err.Error(), "oauth_client_id")
+}
+
 // TestHandler_PreregisteredClientSkipsDCR proves that a configured client is
 // used even when the server does not support dynamic client registration
 // (as with GitHub or Slack): the flow authorizes without ever calling
@@ -324,15 +398,15 @@ func TestHasRefreshableToken(t *testing.T) {
 	t.Parallel()
 	full := &oauth.Token{AccessToken: "a", Client: &oauth.OAuthClient{TokenURL: "https://x/token"}}
 	tests := []struct {
-		name string
 		tok  *oauth.Token
+		name string
 		want bool
 	}{
-		{"nil", nil, false},
-		{"no access token", &oauth.Token{Client: &oauth.OAuthClient{TokenURL: "x"}}, false},
-		{"no client", &oauth.Token{AccessToken: "a"}, false},
-		{"no token url", &oauth.Token{AccessToken: "a", Client: &oauth.OAuthClient{}}, false},
-		{"complete", full, true},
+		{name: "nil", tok: nil, want: false},
+		{name: "no access token", tok: &oauth.Token{Client: &oauth.OAuthClient{TokenURL: "x"}}, want: false},
+		{name: "no client", tok: &oauth.Token{AccessToken: "a"}, want: false},
+		{name: "no token url", tok: &oauth.Token{AccessToken: "a", Client: &oauth.OAuthClient{}}, want: false},
+		{name: "complete", tok: full, want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -553,18 +627,19 @@ func TestCallbackReceiver_ConcurrentAuthorizeOpensOneTab(t *testing.T) {
 
 	base := serveReceiver(t, r)
 
-	const callers = 4
+	// Stand in for the browser: record the open, but hold the redirect
+	// until every caller has joined the flight. Releasing it immediately
+	// would let a fast settle retire the flight before the slowest caller
+	// arrives, and that late caller would open a second tab.
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }) })
 
-	// Stand in for the browser: record the open, then redirect back once
-	// every caller has joined, as they would while a real user consents.
 	var opens atomic.Int64
 	r.handler = &Handler{openURL: func(string) error {
 		opens.Add(1)
 		go func() {
-			assert.Eventually(t, func() bool {
-				flight := r.current()
-				return flight != nil && flight.joined.Load() == callers-1
-			}, 10*time.Second, time.Millisecond)
+			<-release
 			resp, gerr := http.Get(base + callbackPath + "?code=abc&state=xyz") //nolint:noctx
 			if gerr == nil {
 				resp.Body.Close()
@@ -573,6 +648,7 @@ func TestCallbackReceiver_ConcurrentAuthorizeOpensOneTab(t *testing.T) {
 		return nil
 	}}
 
+	const callers = 4
 	var wg sync.WaitGroup
 	results := make(chan *auth.AuthorizationResult, callers)
 	errs := make(chan error, callers)
@@ -583,6 +659,15 @@ func TestCallbackReceiver_ConcurrentAuthorizeOpensOneTab(t *testing.T) {
 			errs <- ferr
 		})
 	}
+
+	// Every caller must be parked on the same flight before the redirect
+	// lands, or the opens==1 assertion below is left to the scheduler.
+	require.Eventually(t, func() bool {
+		flight := r.current()
+		return flight != nil && flight.refs.Load() == callers
+	}, 5*time.Second, time.Millisecond, "all callers must join the in-flight authorization")
+	releaseOnce.Do(func() { close(release) })
+
 	wg.Wait()
 	close(results)
 	close(errs)
@@ -683,6 +768,65 @@ func TestHandler_PassesIssuerThrough(t *testing.T) {
 	require.Equal(t, int64(1), opens.Load())
 	require.NotNil(t, h.Token())
 	require.Equal(t, "a", h.Token().AccessToken)
+}
+
+// TestHandler_NormalizesTrailingSlashIssuer is a regression test for logins
+// failing against authorization servers whose issuer ends in a trailing
+// slash. The metadata fixup strips that slash before the SDK validates it,
+// while the redirect carries the server's verbatim iss, so the SDK's exact
+// RFC 9207 comparison of "https://as/" against "https://as" rejected a
+// login the user had already completed in the browser.
+func TestHandler_NormalizesTrailingSlashIssuer(t *testing.T) {
+	tests := []struct {
+		name          string
+		metadataSlash bool
+	}{
+		{"issuer has a trailing slash", true},
+		{"redirect names an issuer with a trailing slash", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			base, mcpURL := newFakeAS(t, fakeASOpts{
+				clientID:            "c",
+				accessToken:         "a",
+				issSupported:        true,
+				trailingSlashIssuer: tt.metadataSlash,
+			})
+			h, err := NewHandler("test", mcpURL, nil, nil, func(*oauth.Token) {}, true, 0)
+			require.NoError(t, err)
+			t.Cleanup(h.Close)
+
+			var opens atomic.Int64
+			redirect := browserRedirectIss("code123", base+"/")
+			h.openURL = func(u string) error {
+				opens.Add(1)
+				return redirect(u)
+			}
+
+			require.NoError(t, authorizeWith401(t, h, base, mcpURL))
+			require.Equal(t, int64(1), opens.Load(), "one login must open exactly one browser tab")
+			require.NotNil(t, h.Token())
+			require.Equal(t, "a", h.Token().AccessToken)
+		})
+	}
+}
+
+// TestHandler_RejectsWrongIssuerWithTrailingSlash guards the normalization
+// above from turning into a blanket acceptance: stripping a trailing slash
+// must not let a redirect naming a different server through.
+func TestHandler_RejectsWrongIssuerWithTrailingSlash(t *testing.T) {
+	base, mcpURL := newFakeAS(t, fakeASOpts{
+		clientID:     "c",
+		accessToken:  "a",
+		issSupported: true,
+	})
+	h, err := NewHandler("test", mcpURL, nil, nil, func(*oauth.Token) {}, true, 0)
+	require.NoError(t, err)
+	t.Cleanup(h.Close)
+
+	h.openURL = browserRedirectIss("code123", "https://attacker.example.com/")
+
+	require.ErrorContains(t, authorizeWith401(t, h, base, mcpURL), "issuer")
 }
 
 // TestHandler_RejectsWrongIssuer confirms the issuer is passed through for

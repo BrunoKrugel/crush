@@ -35,10 +35,10 @@ type EditPermissionsParams struct {
 }
 
 type EditResponseMetadata struct {
-	Additions  int    `json:"additions"`
-	Removals   int    `json:"removals"`
 	OldContent string `json:"old_content,omitempty"`
 	NewContent string `json:"new_content,omitempty"`
+	Additions  int    `json:"additions"`
+	Removals   int    `json:"removals"`
 }
 
 const EditToolName = "edit"
@@ -71,8 +71,13 @@ func NewEditTool(
 
 			params.FilePath = filepathext.SmartJoin(workingDir, params.FilePath)
 
+			contained, err := ContainPath(ctx, params.FilePath)
+			if err != nil {
+				return fantasy.NewTextErrorResponse(err.Error()), nil
+			}
+			params.FilePath = contained
+
 			var response fantasy.ToolResponse
-			var err error
 
 			editCtx := editContext{ctx, permissions, files, filetracker, workingDir}
 
@@ -281,7 +286,7 @@ func loadExistingFile(edit editContext, filePath, sessionError string) (sessionI
 
 	lastRead := edit.filetracker.LastReadTime(edit.ctx, sessionID, filePath)
 	if lastRead.IsZero() {
-		return "", "", false, fantasy.NewTextErrorResponse("you must read the file before editing it. Use the View tool first"), nil
+		return "", "", false, fantasy.NewTextErrorResponse("you must read the file before editing it; use the View tool first"), nil
 	}
 
 	modTime := fileInfo.ModTime().Truncate(time.Second)

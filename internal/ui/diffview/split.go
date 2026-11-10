@@ -8,9 +8,9 @@ import (
 )
 
 type splitHunk struct {
+	lines    []*splitLine
 	fromLine int
 	toLine   int
-	lines    []*splitLine
 }
 
 type splitLine struct {

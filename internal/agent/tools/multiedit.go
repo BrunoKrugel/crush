@@ -26,7 +26,7 @@ type MultiEditOperation struct {
 
 type MultiEditParams struct {
 	FilePath string               `json:"file_path" description:"The absolute path to the file to modify"`
-	Edits    []MultiEditOperation `json:"edits" description:"Array of edit operations to perform sequentially on the file"`
+	Edits    []MultiEditOperation `json:"edits" description:"Array of edit operations to perform sequentially on the file" items_description:"A single edit operation"`
 }
 
 type MultiEditPermissionsParams struct {
@@ -36,18 +36,18 @@ type MultiEditPermissionsParams struct {
 }
 
 type FailedEdit struct {
-	Index int                `json:"index"`
 	Error string             `json:"error"`
 	Edit  MultiEditOperation `json:"edit"`
+	Index int                `json:"index"`
 }
 
 type MultiEditResponseMetadata struct {
-	Additions    int          `json:"additions"`
-	Removals     int          `json:"removals"`
 	OldContent   string       `json:"old_content,omitempty"`
 	NewContent   string       `json:"new_content,omitempty"`
-	EditsApplied int          `json:"edits_applied"`
 	EditsFailed  []FailedEdit `json:"edits_failed,omitempty"`
+	Additions    int          `json:"additions"`
+	Removals     int          `json:"removals"`
+	EditsApplied int          `json:"edits_applied"`
 }
 
 const MultiEditToolName = "multiedit"
@@ -76,13 +76,18 @@ func NewMultiEditTool(
 
 			params.FilePath = filepathext.SmartJoin(workingDir, params.FilePath)
 
+			contained, err := ContainPath(ctx, params.FilePath)
+			if err != nil {
+				return fantasy.NewTextErrorResponse(err.Error()), nil
+			}
+			params.FilePath = contained
+
 			// Validate all edits before applying any
 			if err := validateEdits(params.Edits); err != nil {
 				return fantasy.NewTextErrorResponse(err.Error()), nil
 			}
 
 			var response fantasy.ToolResponse
-			var err error
 
 			editCtx := editContext{ctx, permissions, files, filetracker, workingDir}
 			// Handle file creation case (first edit has empty old_string)

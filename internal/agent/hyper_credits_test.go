@@ -15,10 +15,9 @@ import (
 // closed, which lets tests hold one fetch in flight.
 type creditsRecorder struct {
 	release chan struct{}
-
-	mu    sync.Mutex
-	keys  []string
-	calls int
+	keys    []string
+	calls   int
+	mu      sync.Mutex
 }
 
 func (r *creditsRecorder) fetch(ctx context.Context, apiKey string) (*int, error) {

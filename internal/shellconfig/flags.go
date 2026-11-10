@@ -1,12 +1,15 @@
 package shellconfig
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/bytedance/sonic"
 )
 
 // flagKind is the value type a flag parses from the command line.
@@ -28,6 +31,17 @@ const (
 	flagJSONObject
 	// flagJSONAny parses the value as arbitrary JSON.
 	flagJSONAny
+	// flagStringList consumes every argument until the next one that
+	// starts with "--", storing them as one list, e.g. --tools @read
+	// @write.
+	flagStringList
+	// flagCountOrOff parses a non-negative integer, or "off" stored as
+	// the string "off" (the form the config's IntOrOff knob decodes as
+	// zero). A negative integer is an error.
+	flagCountOrOff
+	// flagDurationOrOff parses a Go duration ("5m"), a bare number of
+	// seconds, or "off". A negative duration is an error.
+	flagDurationOrOff
 )
 
 // flagOp is how a parsed flag value is written into the target map.
@@ -39,13 +53,23 @@ const (
 	// opAppend appends value to the []any at target[jsonKey].
 	opAppend
 	// opSetChild assigns childMap(target, child)[jsonKey] = value, e.g. a
-	// single --env KEY VALUE entry under an "env" object.
+	// single --env KEY VALUE entry under an "env" object. The child path
+	// may be dotted to reach a nested object.
 	opSetChild
 	// opMergeChild merges a JSON object into childMap(target, child), e.g.
 	// --provider-options '{...}'.
 	opMergeChild
-	// opSetInChild assigns childMap(target, child)[jsonKey] = value, e.g.
-	// --price-input F stored under pricing.input.
+	// opSetChildValue assigns the whole parsed value to
+	// childMap(target, child)[jsonKey], replacing any previous one, e.g.
+	// a --tools list under tools.allow.
+	opSetChildValue
+	// opAppendChild appends the parsed value to the single-level child at
+	// childMap(target, child)[jsonKey], e.g. a repeated --deny-tool under
+	// tools.deny.
+	opAppendChild
+	// opSetInChild assigns childMapPath(target, child)[jsonKey] = value, e.g.
+	// --price-input F stored under pricing.input, or --oauth-issuer URL
+	// writing auth.issuer.
 	opSetInChild
 )
 
@@ -53,16 +77,13 @@ const (
 // and an optional validator. A builtin's whole flag surface is a []flagSpec
 // handed to applyFlags, which replaces the per-builtin parse loops.
 type flagSpec struct {
-	name    string // long flag including dashes, e.g. "--api-key"
-	jsonKey string // destination key in the target map
-	kind    flagKind
-	op      flagOp
-	child   string // child map name for opSetChild / opMergeChild
-
-	// validate, if non-nil, checks the parsed value before it is stored.
-	// It receives the value as string, bool, int64, float64, or
-	// map[string]any depending on kind.
 	validate func(any) error
+	parse    func(args []string, i int) (any, int, error)
+	name     string
+	jsonKey  string
+	child    string
+	kind     flagKind
+	op       flagOp
 }
 
 // applyFlags parses args[start:] against specs and writes the results into
@@ -103,6 +124,10 @@ func findFlag(specs []flagSpec, name string) (flagSpec, bool) {
 // parseFlagValue reads the value(s) for spec starting at args[i] and returns
 // the parsed value plus the index to resume from.
 func parseFlagValue(spec flagSpec, args []string, i int) (any, int, error) {
+	if spec.parse != nil {
+		return spec.parse(args, i)
+	}
+
 	name := strings.TrimPrefix(spec.name, "--")
 
 	switch spec.kind {
@@ -161,7 +186,7 @@ func parseFlagValue(spec flagSpec, args []string, i int) (any, int, error) {
 			return nil, 0, err
 		}
 		var object map[string]any
-		if err := json.Unmarshal([]byte(v), &object); err != nil || object == nil {
+		if err := sonic.Unmarshal([]byte(v), &object); err != nil || object == nil {
 			return nil, 0, fmt.Errorf("%s: --%s expects a JSON object, got %q", args[0], name, v)
 		}
 		return object, i + 2, nil
@@ -172,10 +197,72 @@ func parseFlagValue(spec flagSpec, args []string, i int) (any, int, error) {
 			return nil, 0, err
 		}
 		var parsed any
-		if err := json.Unmarshal([]byte(v), &parsed); err != nil {
+		if err := sonic.Unmarshal([]byte(v), &parsed); err != nil {
 			return nil, 0, fmt.Errorf("%s: --%s expects valid JSON, got %q: %s", args[0], name, v, err)
 		}
 		return parsed, i + 2, nil
+
+	case flagStringList:
+		var list []string
+		for j := i + 1; j < len(args) && !strings.HasPrefix(args[j], "--"); j++ {
+			list = append(list, args[j])
+		}
+		if len(list) == 0 {
+			return nil, 0, fmt.Errorf("%s: --%s requires at least one value", args[0], name)
+		}
+		// Accept comma-separated values as well as space-separated ones:
+		// "bash,grep,view" and "bash grep view" both name three tools.
+		// A single-element value containing a comma would otherwise reach
+		// validation as one unknown tool name and fail the whole config.
+		var expanded []string
+		for _, value := range list {
+			for part := range strings.SplitSeq(value, ",") {
+				if part = strings.TrimSpace(part); part != "" {
+					expanded = append(expanded, part)
+				}
+			}
+		}
+		return expanded, i + 1 + len(list), nil
+
+	case flagCountOrOff:
+		v, err := nextArg(args, i, name)
+		if err != nil {
+			return nil, 0, err
+		}
+		if strings.EqualFold(v, "off") {
+			return "off", i + 2, nil
+		}
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return nil, 0, fmt.Errorf("%s: --%s expects an integer or off, got %q", args[0], name, v)
+		}
+		if n < 0 {
+			return nil, 0, fmt.Errorf("%s: --%s must not be negative, got %d", args[0], name, n)
+		}
+		return n, i + 2, nil
+
+	case flagDurationOrOff:
+		v, err := nextArg(args, i, name)
+		if err != nil {
+			return nil, 0, err
+		}
+		if strings.EqualFold(v, "off") {
+			return "off", i + 2, nil
+		}
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			if n < 0 {
+				return nil, 0, fmt.Errorf("%s: --%s must not be negative, got %d", args[0], name, n)
+			}
+			return n, i + 2, nil
+		}
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return nil, 0, fmt.Errorf("%s: --%s expects a duration (5m) or off, got %q", args[0], name, v)
+		}
+		if d < 0 {
+			return nil, 0, fmt.Errorf("%s: --%s must not be negative, got %q", args[0], name, v)
+		}
+		return v, i + 2, nil
 
 	default:
 		return nil, 0, fmt.Errorf("%s: --%s has unknown flag kind", args[0], name)
@@ -190,6 +277,18 @@ func nextArg(args []string, i int, flag string) (string, error) {
 	return args[i+1], nil
 }
 
+// oneOf returns a validator accepting only the listed values. The flag name
+// is repeated in the message so the error says which flag was wrong.
+func oneOf(flag string, allowed ...string) func(any) error {
+	return func(v any) error {
+		s, _ := v.(string)
+		if slices.Contains(allowed, s) {
+			return nil
+		}
+		return fmt.Errorf("%s must be one of: %s", flag, strings.Join(allowed, ", "))
+	}
+}
+
 // storeFlag writes a parsed value into target according to spec.op.
 func storeFlag(target map[string]any, spec flagSpec, val any) {
 	switch spec.op {
@@ -200,13 +299,32 @@ func storeFlag(target map[string]any, spec flagSpec, val any) {
 		target[spec.jsonKey] = append(arr, val)
 	case opSetChild:
 		if kv, ok := val.([2]string); ok {
-			childMap(target, spec.child)[kv[0]] = kv[1]
+			childMapPath(target, spec.child)[kv[0]] = kv[1]
 		}
+	case opSetChildValue:
+		childMap(target, spec.child)[spec.jsonKey] = val
 	case opMergeChild:
 		if obj, ok := val.(map[string]any); ok {
-			maps.Copy(childMap(target, spec.child), obj)
+			maps.Copy(childMapPath(target, spec.child), obj)
 		}
 	case opSetInChild:
-		childMap(target, spec.child)[spec.jsonKey] = val
+		childMapPath(target, spec.child)[spec.jsonKey] = val
+	case opAppendChild:
+		child := childMapPath(target, spec.child)
+		if s, ok := val.(string); ok {
+			child[spec.jsonKey] = appendArr(child, spec.jsonKey, s)
+		}
 	}
+}
+
+// childMapPath returns the nested object at a possibly dotted path under
+// parent, creating intermediate objects as needed. A single segment is the
+// common case; two segments reach a field of a nested object, as
+// --oauth-param does with auth.extra_params.
+func childMapPath(parent map[string]any, path string) map[string]any {
+	current := parent
+	for segment := range strings.SplitSeq(path, ".") {
+		current = childMap(current, segment)
+	}
+	return current
 }

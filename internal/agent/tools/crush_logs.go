@@ -9,12 +9,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 )
 
 const CrushLogsToolName = "crush_logs"
@@ -182,15 +184,15 @@ func readLastLines(filePath string, n int) ([]map[string]any, error) {
 		}
 
 		// Parse lines from end to start to get most recent first.
-		for i := len(lines) - 1; i >= 0; i-- {
-			if len(lines[i]) > maxLogLineSize {
+		for _, line := range slices.Backward(lines) {
+			if len(line) > maxLogLineSize {
 				// Skip oversized lines silently.
 				continue
 			}
 
 			// Try to parse as JSON.
 			var entry map[string]any
-			if err := json.Unmarshal(lines[i], &entry); err != nil {
+			if err := sonic.Unmarshal(line, &entry); err != nil {
 				// Skip malformed lines silently.
 				continue
 			}
@@ -207,7 +209,7 @@ func readLastLines(filePath string, n int) ([]map[string]any, error) {
 	// Handle final remainder.
 	if len(remainder) > 0 && len(remainder) <= maxLogLineSize {
 		var entry map[string]any
-		if err := json.Unmarshal(remainder, &entry); err == nil {
+		if err := sonic.Unmarshal(remainder, &entry); err == nil {
 			if len(entries) < n {
 				entries = append(entries, entry)
 			}
@@ -464,7 +466,7 @@ func formatValue(value any, key string) string {
 		return "null"
 	case map[string]any, []any:
 		// Objects and arrays are JSON-encoded and quoted.
-		jsonBytes, err := json.Marshal(v)
+		jsonBytes, err := sonic.Marshal(v)
 		if err != nil {
 			return quoteString(fmt.Sprintf("%v", v))
 		}

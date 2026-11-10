@@ -19,8 +19,8 @@ import (
 // through the wrapper.
 type renderCountingItem struct {
 	inner       MessageItem
-	renderHits  int
 	highlightCb func(start [4]int)
+	renderHits  int
 }
 
 func newRenderCountingItem(inner MessageItem) *renderCountingItem {

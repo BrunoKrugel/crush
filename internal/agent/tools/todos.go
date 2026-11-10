@@ -15,7 +15,7 @@ var todosDescription string
 const TodosToolName = "todos"
 
 type TodosParams struct {
-	Todos []TodoItem `json:"todos" description:"The updated todo list"`
+	Todos []TodoItem `json:"todos" description:"The updated todo list" items_description:"A single todo item"`
 }
 
 type TodoItem struct {
@@ -25,12 +25,12 @@ type TodoItem struct {
 }
 
 type TodosResponseMetadata struct {
-	IsNew         bool           `json:"is_new"`
+	JustStarted   string         `json:"just_started,omitempty"`
 	Todos         []session.Todo `json:"todos"`
 	JustCompleted []string       `json:"just_completed,omitempty"`
-	JustStarted   string         `json:"just_started,omitempty"`
 	Completed     int            `json:"completed"`
 	Total         int            `json:"total"`
+	IsNew         bool           `json:"is_new"`
 }
 
 func NewTodosTool(sessions session.Service) fantasy.AgentTool {

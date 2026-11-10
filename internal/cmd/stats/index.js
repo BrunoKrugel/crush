@@ -95,6 +95,80 @@ document.getElementById("avg-tokens").innerHTML =
 document.getElementById("avg-response").innerHTML =
   '<span title="Average">x̅</span> ' + formatTime(stats.avg_response_time_ms);
 
+// Fork-feature counters: hidden entirely when the databases carry none, so
+// an upstream database renders exactly as before.
+if (stats.fork) {
+  const fork = stats.fork;
+  const forkCounters = [
+    ["fork-sessions", fork.forked_sessions],
+    ["goal-sessions", fork.goal_sessions],
+    ["snapshots", fork.snapshots],
+    ["dispatches", fork.dispatched_agents],
+    ["dispatches-done", fork.completed_dispatches],
+    ["compacted-sessions", fork.compacted_sessions],
+    ["skill-count", fork.skill_uses?.length || 0],
+  ];
+  const hasAny = forkCounters.some(([, v]) => v > 0) || (fork.tool_calls?.length > 0);
+  if (hasAny) {
+    document.getElementById("fork-grid").style.display = "";
+    for (const [id, value] of forkCounters) {
+      document.getElementById(id).textContent = formatNumber(value);
+    }
+  }
+  if (fork.skill_uses?.length > 0) {
+    document.getElementById("skills-card").style.display = "";
+    const skills = getTopItemsWithOthers(fork.skill_uses, "uses", "skill");
+    const skillMax = Math.max(...skills.map((s) => s.uses));
+    new Chart(document.getElementById("skillChart"), {
+      type: "bar",
+      data: {
+        labels: skills.map((s) => s.skill),
+        datasets: [
+          {
+            label: "Uses",
+            data: skills.map((s) => s.uses),
+            backgroundColor: (ctx) => interpolateColor(ctx.raw / skillMax),
+            borderRadius: 4,
+          },
+        ],
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: easeDuration, easing: easeType },
+        plugins: { legend: { display: false } },
+      },
+    });
+  }
+  if (fork.tool_calls?.length > 0) {
+    document.getElementById("fork-tools-card").style.display = "";
+    const forkTools = getTopItemsWithOthers(fork.tool_calls, "call_count", "tool_name");
+    const forkMax = Math.max(...forkTools.map((t) => t.call_count));
+    new Chart(document.getElementById("forkToolChart"), {
+      type: "bar",
+      data: {
+        labels: forkTools.map((t) => t.tool_name),
+        datasets: [
+          {
+            label: "Calls",
+            data: forkTools.map((t) => t.call_count),
+            backgroundColor: (ctx) => interpolateColor(ctx.raw / forkMax),
+            borderRadius: 4,
+          },
+        ],
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: easeDuration, easing: easeType },
+        plugins: { legend: { display: false } },
+      },
+    });
+  }
+}
+
 // Chart defaults
 Chart.defaults.color = colors.squid;
 Chart.defaults.borderColor = colors.squid;
@@ -419,16 +493,32 @@ if (projectStats && projectStats.length > 1) {
       const displayPath = p.project_path || "unknown";
       const projectName = displayPath.split("/").pop() || displayPath;
       const dirPath = displayPath.substring(0, displayPath.length - projectName.length) || "/";
-      row.innerHTML = `
-        <td>
-          <div class="project-name">${projectName}</div>
-          <div class="project-path" title="${displayPath}">${dirPath}</div>
-        </td>
-        <td>${formatNumber(p.stats.total.total_sessions)}</td>
-        <td>${formatNumber(p.stats.total.total_messages)}</td>
-        <td>${formatNumber(p.stats.total.total_tokens)}</td>
-        <td>${formatCost(p.stats.total.total_cost)}</td>
-      `;
+
+      const nameCell = document.createElement("td");
+      const nameDiv = document.createElement("div");
+      nameDiv.className = "project-name";
+      nameDiv.textContent = projectName;
+      const pathDiv = document.createElement("div");
+      pathDiv.className = "project-path";
+      pathDiv.textContent = dirPath;
+      pathDiv.setAttribute("title", displayPath);
+      nameCell.appendChild(nameDiv);
+      nameCell.appendChild(pathDiv);
+
+      const sessionsCell = document.createElement("td");
+      sessionsCell.textContent = formatNumber(p.stats.total.total_sessions);
+      const messagesCell = document.createElement("td");
+      messagesCell.textContent = formatNumber(p.stats.total.total_messages);
+      const tokensCell = document.createElement("td");
+      tokensCell.textContent = formatNumber(p.stats.total.total_tokens);
+      const costCell = document.createElement("td");
+      costCell.textContent = formatCost(p.stats.total.total_cost);
+
+      row.appendChild(nameCell);
+      row.appendChild(sessionsCell);
+      row.appendChild(messagesCell);
+      row.appendChild(tokensCell);
+      row.appendChild(costCell);
       fragment.appendChild(row);
     });
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/oauth"
 	"github.com/charmbracelet/crush/internal/proto"
@@ -13,7 +14,7 @@ import (
 func TestConfigProviderKeyRequestStringRoundTrip(t *testing.T) {
 	t.Parallel()
 
-	apiKey, err := json.Marshal("sk-test-123")
+	apiKey, err := sonic.Marshal("sk-test-123")
 	require.NoError(t, err)
 
 	src := proto.ConfigProviderKeyRequest{
@@ -22,11 +23,11 @@ func TestConfigProviderKeyRequestStringRoundTrip(t *testing.T) {
 		Kind:       proto.APIKeyKindString,
 		APIKey:     apiKey,
 	}
-	b, err := json.Marshal(src)
+	b, err := sonic.Marshal(src)
 	require.NoError(t, err)
 
 	var got proto.ConfigProviderKeyRequest
-	require.NoError(t, json.Unmarshal(b, &got))
+	require.NoError(t, sonic.Unmarshal(b, &got))
 	require.Equal(t, proto.APIKeyKindString, got.Kind)
 
 	decoded, err := got.DecodeAPIKey()
@@ -45,7 +46,7 @@ func TestConfigProviderKeyRequestOAuthRoundTrip(t *testing.T) {
 		ExpiresIn:    60,
 		ExpiresAt:    1234567890,
 	}
-	apiKey, err := json.Marshal(tok)
+	apiKey, err := sonic.Marshal(tok)
 	require.NoError(t, err)
 
 	src := proto.ConfigProviderKeyRequest{
@@ -54,11 +55,11 @@ func TestConfigProviderKeyRequestOAuthRoundTrip(t *testing.T) {
 		Kind:       proto.APIKeyKindOAuth,
 		APIKey:     apiKey,
 	}
-	b, err := json.Marshal(src)
+	b, err := sonic.Marshal(src)
 	require.NoError(t, err)
 
 	var got proto.ConfigProviderKeyRequest
-	require.NoError(t, json.Unmarshal(b, &got))
+	require.NoError(t, sonic.Unmarshal(b, &got))
 	require.Equal(t, proto.APIKeyKindOAuth, got.Kind)
 
 	decoded, err := got.DecodeAPIKey()

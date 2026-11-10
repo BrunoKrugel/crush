@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/charmbracelet/crush/internal/db"
+	"github.com/charmbracelet/crush/internal/goal"
 	"github.com/charmbracelet/crush/internal/event"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/google/uuid"
@@ -62,6 +63,11 @@ type Session struct {
 	Channel          string
 	CreatedAt        int64
 	UpdatedAt        int64
+	ForkedFromSessionID  string
+	ForkedFromSnapshotID string
+	ForkedFromMessageID  string
+	SummaryCutMessageID  string
+	Goal             *goal.Goal
 }
 
 type Service interface {

@@ -19,7 +19,7 @@ import (
 
 type LSParams struct {
 	Path   string   `json:"path,omitempty" description:"The path to the directory to list (defaults to current working directory)"`
-	Ignore []string `json:"ignore,omitempty" description:"List of glob patterns to ignore"`
+	Ignore []string `json:"ignore,omitempty" description:"List of glob patterns to ignore" items_description:"A glob pattern to ignore"`
 	Depth  int      `json:"depth,omitempty" description:"The maximum depth to traverse"`
 }
 
@@ -82,6 +82,12 @@ func NewLsTool(permissions permission.Service, workingDir string, lsConfig confi
 			}
 
 			searchPath = filepathext.SmartJoin(workingDir, searchPath)
+
+			contained, err := ContainPath(ctx, searchPath)
+			if err != nil {
+				return fantasy.NewTextErrorResponse(err.Error()), nil
+			}
+			searchPath = contained
 
 			// Check if directory is outside working directory and request permission if needed
 			absWorkingDir, err := filepath.Abs(workingDir)

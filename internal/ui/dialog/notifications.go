@@ -33,16 +33,15 @@ var AllNotificationStyles = []NotificationStyle{
 	{ID: "native", Title: "Native", Description: "Use system notifications (macOS/Linux/Windows)"},
 	{ID: "osc", Title: "OSC", Description: "Use terminal OSC escape sequences"},
 	{ID: "bell", Title: "Bell", Description: "Use terminal bell character"},
+	{ID: "herdr", Title: "Herdr", Description: "Surface toasts in herdr's UI (inside a herdr pane)"},
 	{ID: "disabled", Title: "Disabled", Description: "Turn off notifications"},
 }
 
 // Notifications represents a dialog for selecting notification style.
 type Notifications struct {
-	com   *common.Common
-	help  help.Model
-	list  *list.FilterableList
-	input textinput.Model
-
+	com    *common.Common
+	list   *list.FilterableList
+	help   help.Model
 	keyMap struct {
 		Select   key.Binding
 		Next     key.Binding
@@ -50,16 +49,17 @@ type Notifications struct {
 		UpDown   key.Binding
 		Close    key.Binding
 	}
+	input textinput.Model
 }
 
 // NotificationItem represents a notification style list item.
 type NotificationItem struct {
 	*list.Versioned
-	style     NotificationStyle
-	isCurrent bool
 	t         *styles.Styles
-	m         fuzzy.Match
 	cache     map[int]string
+	style     NotificationStyle
+	m         fuzzy.Match
+	isCurrent bool
 	focused   bool
 }
 

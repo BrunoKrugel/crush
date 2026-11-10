@@ -84,6 +84,11 @@ type TextContent struct {
 	// context and user notes. It is stored so the replayed history matches
 	// what the model saw, which signed thinking blocks depend on.
 	Context string `json:"context,omitempty"`
+	// Steer marks a message injected into a running dispatched agent
+	// (#312). It is UI metadata only — it never reaches the model — and
+	// lets a rebuilt transcript tell steers apart from the dispatch's
+	// initial prompt and from todo nudges (#410).
+	Steer bool `json:"steer,omitempty"`
 }
 
 func (tc TextContent) String() string {
@@ -104,9 +109,11 @@ func (iuc ImageURLContent) String() string {
 func (ImageURLContent) isPart() {}
 
 type BinaryContent struct {
-	Path     string
-	MIMEType string
-	Data     []byte
+	Path           string
+	MIMEType       string
+	Data           []byte
+	Kind           AttachmentKind `json:",omitempty"`
+	PromptArgCount int            `json:",omitempty"`
 }
 
 func (bc BinaryContent) String(p catwalk.InferenceProvider) string {

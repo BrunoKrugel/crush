@@ -1,8 +1,7 @@
 package chat
 
 import (
-	"encoding/json"
-
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/fsext"
 	"github.com/charmbracelet/crush/internal/message"
@@ -37,7 +36,7 @@ func (r *RenameToolRenderContext) RenderTool(sty *styles.Styles, width int, opts
 	}
 
 	var params tools.RenameParams
-	_ = json.Unmarshal([]byte(opts.ToolCall.Input), &params)
+	_ = sonic.Unmarshal([]byte(opts.ToolCall.Input), &params)
 
 	toolParams := []string{params.Symbol + " → " + params.NewName}
 	if params.Path != "" {

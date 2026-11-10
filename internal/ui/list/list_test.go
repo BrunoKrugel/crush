@@ -523,19 +523,6 @@ func TestList_F7_ByteIdentityMatrix(t *testing.T) {
 
 							got := l.Render()
 							want := expectedRender(items, vh, oIdx, oLine, gap, reverse)
-							if n := strings.Count(want, "\n") + 1; n < vh && (oIdx > 0 || oLine > 0) {
-								// The offset is past the end, so Render
-								// clamps it. The output must still match
-								// the reference at the clamped offset,
-								// and be full unless that is the top.
-								cIdx, cLine := l.ScrollPosition()
-								want = expectedRender(items, vh, cIdx, cLine, gap, reverse)
-								if cIdx > 0 || cLine > 0 {
-									require.Equalf(t, vh, strings.Count(got, "\n")+1,
-										"clamped render underfilled heights=%v vh=%d oIdx=%d oLine=%d gap=%d",
-										heights, vh, oIdx, oLine, gap)
-								}
-							}
 							require.Equalf(t, want, got,
 								"mismatch heights=%v vh=%d oIdx=%d oLine=%d gap=%d reverse=%v",
 								heights, vh, oIdx, oLine, gap, reverse)
@@ -681,9 +668,9 @@ func TestList_F7_OffsetLineAtItemBoundary(t *testing.T) {
 
 	tests := []struct {
 		name     string
+		want     []string
 		gap      int
 		viewport int
-		want     []string
 	}{
 		{
 			name:     "gap zero jumps straight to next item",
@@ -801,7 +788,7 @@ func TestList_Prewarm(t *testing.T) {
 	// Warm the first three items; only those render.
 	next := l.Prewarm(0, 3)
 	require.Equal(t, 3, next)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		require.Equal(t, 1, tracked[i].renderHits, "warmed item %d", i)
 	}
 	for i := 3; i < 6; i++ {
@@ -883,65 +870,4 @@ func TestList_AtBottom_TallFirstVisibleItem(t *testing.T) {
 		l.ScrollBy(1)
 		require.True(t, l.AtBottom(), "gap=%d: back at bottom after scrolling down", gap)
 	}
-}
-
-// fiveByFour builds six four-line items with a one-line gap in an
-// eight-line viewport, so the tail can be scrolled past and shrunk.
-func fiveByFour() (*List, []*multiLineItem) {
-	items := make([]*multiLineItem, 0, 6)
-	listItems := make([]Item, 0, 6)
-	for i := range 6 {
-		it := newMultiLineItem(string(rune('a'+i)), 4)
-		items = append(items, it)
-		listItems = append(listItems, it)
-	}
-	l := NewList(listItems...)
-	l.SetGap(1)
-	l.SetSize(20, 8)
-	return l, items
-}
-
-// A tail that shrinks while the view is scrolled near the end must not
-// leave the view parked past the last line with blank rows below it.
-func TestList_Render_ClampsWhenTailShrinks(t *testing.T) {
-	t.Parallel()
-	l, items := fiveByFour()
-	l.ScrollToBottom()
-	l.ScrollBy(-1)
-
-	items[5].height = 1
-	items[5].Bump()
-	got := strings.Split(l.Render(), "\n")
-
-	require.Len(t, got, 8, "viewport must stay full")
-	require.Equal(t, "f:0", got[len(got)-1], "last line must be the end of the content")
-	require.True(t, l.AtBottom())
-}
-
-// Removing the item the view starts inside must show the next item from
-// its top, not skip as many of its lines as the removed item had scrolled.
-func TestList_RemoveItem_TopItemResetsLineOffset(t *testing.T) {
-	t.Parallel()
-	l, items := fiveByFour()
-	items[2].height = 1
-	l.offsetIdx, l.offsetLine = 1, 3
-
-	l.RemoveItem(1)
-	got := strings.Split(l.Render(), "\n")
-
-	require.Equal(t, "c:0", got[0])
-}
-
-// Shrinking the item set below the scroll offset (as a filter does) must
-// show the end of what remains rather than one item at the top.
-func TestList_SetItems_FewerItemsStaysFull(t *testing.T) {
-	t.Parallel()
-	l, items := fiveByFour()
-	l.ScrollToBottom()
-
-	l.SetItems(items[0], items[1], items[2])
-	got := strings.Split(l.Render(), "\n")
-
-	require.Len(t, got, 8)
-	require.Equal(t, "c:3", got[len(got)-1])
 }

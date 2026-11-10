@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/crush/internal/config"
+	"github.com/charmbracelet/crush/internal/honcho"
 	"github.com/charmbracelet/crush/internal/skills"
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/dialog"
@@ -28,8 +29,8 @@ type skillStatusItem struct {
 }
 
 var builtinSkillsCache struct {
-	once   sync.Once
 	skills []*skills.Skill
+	once   sync.Once
 }
 
 func cachedBuiltinSkills() []*skills.Skill {
@@ -64,12 +65,18 @@ func (m *UI) skillStatusItems() []skillStatusItem {
 	var items []skillStatusItem
 	stateNames := make(map[string]struct{}, len(m.skillStates))
 
-	disabledSet := make(map[string]bool)
+	// Config is read twice below, for disabled skills and for feature
+	// gating, and Config() dereferences the workspace — so resolve it
+	// once behind the nil guard rather than reaching through twice.
+	var cfg *config.Config
 	if m.com != nil && m.com.Workspace != nil {
-		if cfg := m.com.Config(); cfg != nil {
-			for _, name := range cfg.Options.DisabledSkills {
-				disabledSet[name] = true
-			}
+		cfg = m.com.Config()
+	}
+
+	disabledSet := make(map[string]bool)
+	if cfg != nil {
+		for _, name := range cfg.Options.DisabledSkills {
+			disabledSet[name] = true
 		}
 		// Repository overrides mirror the toggle dialog: repo-disabled
 		// skills hide, and config-disabled skills re-enabled for this
@@ -111,7 +118,11 @@ func (m *UI) skillStatusItems() []skillStatusItem {
 		})
 	}
 
-	builtin := cachedBuiltinSkills()
+	// Hide skills whose required integration is switched off, so the
+	// list does not report a skill as online that the agent will never
+	// be offered. Filtering also copies, which matters because the
+	// cached slice is shared and the sort below is in place.
+	builtin := skills.FilterUnavailable(cachedBuiltinSkills(), honcho.Features(cfg))
 	slices.SortStableFunc(builtin, func(a, b *skills.Skill) int {
 		return strings.Compare(a.Name, b.Name)
 	})
@@ -137,6 +148,19 @@ func (m *UI) skillStatusItems() []skillStatusItem {
 }
 
 func skillsList(t *styles.Styles, items []skillStatusItem, width, maxItems int) string {
+	if maxItems <= 0 {
+		return ""
+	}
+
+	if len(items) > maxItems {
+		visibleItems := items[:maxItems-1]
+		remaining := len(items) - (maxItems - 1)
+		items = append(visibleItems, skillStatusItem{
+			name:  "more",
+			title: t.Resource.AdditionalText.Render(fmt.Sprintf("…and %d more", remaining)),
+		})
+	}
+
 	renderedItems := make([]string, 0, len(items))
 	for _, item := range items {
 		renderedItems = append(renderedItems, common.Status(t, common.StatusOpts{
@@ -145,7 +169,7 @@ func skillsList(t *styles.Styles, items []skillStatusItem, width, maxItems int) 
 			Description: item.description,
 		}, width))
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, truncateRows(renderedItems, maxItems, t.Resource.AdditionalText)...)
+	return lipgloss.JoinVertical(lipgloss.Left, renderedItems...)
 }
 
 // skillsTogglesList builds the toggle-skills dialog items from the
@@ -279,11 +303,11 @@ func (m *UI) applySkillToggle(msg dialog.ActionToggleSkill) tea.Cmd {
 			if err := m.com.Workspace.SkillSetConfigDisabled(context.TODO(), name, disable); err != nil {
 				return util.NewErrorMsg(err)
 			}
-			return util.NewInfoMsg(fmt.Sprintf("Skill %q %s globally from the next message", name, status))
+			return util.NewInfoMsg(fmt.Sprintf("Skill %q %s globally", name, status))
 		}
 		if err := m.com.Workspace.SkillSetDisabled(context.TODO(), name, disable); err != nil {
 			return util.NewErrorMsg(err)
 		}
-		return util.NewInfoMsg(fmt.Sprintf("Skill %q %s for this repository from the next message", name, status))
+		return util.NewInfoMsg(fmt.Sprintf("Skill %q %s for this repository", name, status))
 	}
 }

@@ -28,7 +28,14 @@ type runCompleteMarker struct {
 // run's terminal RunComplete. Callers read the result with
 // [RunCompletePublished]. Attaching the marker is optional: code paths
 // without one simply skip the dedup signal.
+//
+// An existing marker is kept rather than shadowed: a publish deep in the
+// call stack must stay observable to every reader up the same chain, so
+// attaching over one would hide it from the dispatcher that installed it.
 func WithRunCompleteMarker(ctx context.Context) context.Context {
+	if _, ok := ctx.Value(runCompleteMarkerKey{}).(*runCompleteMarker); ok {
+		return ctx
+	}
 	return context.WithValue(ctx, runCompleteMarkerKey{}, &runCompleteMarker{})
 }
 
@@ -49,4 +56,29 @@ func RunCompletePublished(ctx context.Context) bool {
 		return m.published.Load()
 	}
 	return false
+}
+
+// withFreshRunCompleteMarker shadows any existing marker with a new one.
+// A queue drain running several turns needs the per-turn dedup to reset per
+// turn: the first turn's terminal publish must not suppress a later turn's
+// fallback. The dispatcher's own marker, further up the chain, is untouched.
+func withFreshRunCompleteMarker(ctx context.Context) context.Context {
+	return context.WithValue(ctx, runCompleteMarkerKey{}, &runCompleteMarker{})
+}
+
+type queuedDispatchKey struct{}
+
+// WithQueuedDispatch marks ctx as carrying a run promoted off the message
+// queue by runQueued. That path publishes the promoted turn's terminal
+// completion (and its error notification) itself when the turn fails before
+// its own terminal defer is installed, so the run's own deferred publish must
+// stay out of its way.
+func WithQueuedDispatch(ctx context.Context) context.Context {
+	return context.WithValue(ctx, queuedDispatchKey{}, true)
+}
+
+// queuedDispatch reports whether ctx carries a queue-promoted run.
+func queuedDispatch(ctx context.Context) bool {
+	v, _ := ctx.Value(queuedDispatchKey{}).(bool)
+	return v
 }

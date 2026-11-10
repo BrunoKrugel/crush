@@ -13,8 +13,8 @@ func TestExpandValue_Success(t *testing.T) {
 	tests := []struct {
 		name  string
 		value string
-		env   []string
 		want  string
+		env   []string
 	}{
 		{
 			name:  "plain string round trip",

@@ -36,16 +36,17 @@ var (
 
 // Skill represents a parsed SKILL.md file.
 type Skill struct {
+	Metadata               map[string]string `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+	Requires               string            `yaml:"requires,omitempty" json:"requires,omitempty"`
 	Name                   string            `yaml:"name" json:"name"`
 	Description            string            `yaml:"description" json:"description"`
-	UserInvocable          bool              `yaml:"user-invocable" json:"user_invocable"`
-	DisableModelInvocation bool              `yaml:"disable-model-invocation" json:"disable_model_invocation"`
 	License                string            `yaml:"license,omitempty" json:"license,omitempty"`
 	Compatibility          string            `yaml:"compatibility,omitempty" json:"compatibility,omitempty"`
-	Metadata               map[string]string `yaml:"metadata,omitempty" json:"metadata,omitempty"`
 	Instructions           string            `yaml:"-" json:"instructions"`
 	Path                   string            `yaml:"-" json:"path"`
 	SkillFilePath          string            `yaml:"-" json:"skill_file_path"`
+	UserInvocable          bool              `yaml:"user-invocable" json:"user_invocable"`
+	DisableModelInvocation bool              `yaml:"disable-model-invocation" json:"disable_model_invocation"`
 	Builtin                bool              `yaml:"-" json:"builtin"`
 }
 
@@ -61,10 +62,11 @@ const (
 
 // SkillState represents the latest discovery status of a skill file.
 type SkillState struct {
-	Name  string
-	Path  string
-	State DiscoveryState
-	Err   error
+	Err    error
+	Name   string
+	Path   string
+	Source SourceType
+	State  DiscoveryState
 }
 
 // Event is published when skill discovery completes.
@@ -211,14 +213,16 @@ func splitFrontmatter(content string) (frontmatter, body string, err error) {
 
 // Discover finds all valid skills in the given paths.
 func Discover(paths []string) []*Skill {
-	skills, _ := DiscoverWithStates(paths)
+	skills, _ := DiscoverWithStates(paths, "")
 	return skills
 }
 
 // DiscoverWithStates finds all valid skills in the given paths and also
 // returns a per-file state slice describing parse/validation outcomes. Useful
-// for diagnostics and UI reporting.
-func DiscoverWithStates(paths []string) ([]*Skill, []*SkillState) {
+// for diagnostics and UI reporting. workingDir is used only to classify each
+// state's Source (paths under the working directory are project skills); pass
+// "" when source labels are not needed.
+func DiscoverWithStates(paths []string, workingDir string) ([]*Skill, []*SkillState) {
 	var skills []*Skill
 	var states []*SkillState
 	var mu sync.Mutex
@@ -226,10 +230,11 @@ func DiscoverWithStates(paths []string) ([]*Skill, []*SkillState) {
 	addState := func(name, path string, state DiscoveryState, err error) {
 		mu.Lock()
 		states = append(states, &SkillState{
-			Name:  name,
-			Path:  path,
-			State: state,
-			Err:   err,
+			Name:   name,
+			Path:   path,
+			Source: sourceFromPath(path, paths, workingDir),
+			State:  state,
+			Err:    err,
 		})
 		mu.Unlock()
 	}
@@ -252,12 +257,19 @@ func DiscoverWithStates(paths []string) ([]*Skill, []*SkillState) {
 			if d.IsDir() || d.Name() != SkillFileName {
 				return nil
 			}
+			// Resolve symlinks so the same file reached via different paths
+			// (e.g. a global dir symlinked into a project) is only parsed,
+			// validated, and warned about once.
+			realPath := path
+			if resolved, err := filepath.EvalSymlinks(path); err == nil {
+				realPath = resolved
+			}
 			mu.Lock()
-			if seen[path] {
+			if seen[realPath] {
 				mu.Unlock()
 				return nil
 			}
-			seen[path] = true
+			seen[realPath] = true
 			mu.Unlock()
 			skill, err := Parse(path)
 			if err != nil {
@@ -292,6 +304,29 @@ func DiscoverWithStates(paths []string) ([]*Skill, []*SkillState) {
 	})
 
 	return skills, states
+}
+
+// sourceFromPath determines the source type of a skill file by matching it
+// against the discovery path it was found under. Discovery paths mix
+// user-configured directories with the project skill dirs config loading
+// appends (e.g. <workingDir>/.crush/skills), so a base inside workingDir
+// classifies as SourceProject and everything else as SourceUser — the same
+// rule catalog.go's skillLabel applies to active skills, so a broken skill's
+// diagnostics row and its healthy sibling always agree on the label.
+func sourceFromPath(filePath string, discoveryPaths []string, workingDir string) SourceType {
+	cleanFile := filepath.Clean(filePath)
+	for _, base := range discoveryPaths {
+		cleanBase := filepath.Clean(base)
+		rel, err := filepath.Rel(cleanBase, cleanFile)
+		if err != nil || escapesParent(rel) {
+			continue
+		}
+		if isProjectSkillPath(cleanBase, workingDir) {
+			return SourceProject
+		}
+		return SourceUser
+	}
+	return SourceUser
 }
 
 // ToPromptXML generates XML for injection into the system prompt.
@@ -403,6 +438,30 @@ func Filter(all []*Skill, disabled []string) []*Skill {
 		if !disabledSet[s.Name] {
 			result = append(result, s)
 		}
+	}
+	return result
+}
+
+// FilterUnavailable drops skills whose Requires feature is not in
+// available.
+//
+// A skill that explains how to use an integration is worse than
+// useless when that integration is off: it spends system-prompt
+// tokens on every turn describing tools the model cannot call.
+func FilterUnavailable(all []*Skill, available []string) []*Skill {
+	availableSet := make(map[string]bool, len(available))
+	for _, name := range available {
+		availableSet[name] = true
+	}
+
+	result := make([]*Skill, 0, len(all))
+	for _, s := range all {
+		if s.Requires != "" && !availableSet[s.Requires] {
+			slog.Debug("Skill hidden, required feature unavailable",
+				"skill", s.Name, "requires", s.Requires)
+			continue
+		}
+		result = append(result, s)
 	}
 	return result
 }

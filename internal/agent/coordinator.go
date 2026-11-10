@@ -142,6 +142,7 @@ type Coordinator interface {
 }
 
 type coordinator struct {
+	memory      *memoryHolder
 	cfg         *config.ConfigStore
 	sessions    session.Service
 	messages    message.Service

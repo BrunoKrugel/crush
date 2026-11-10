@@ -2,15 +2,20 @@ package model
 
 import (
 	"context"
+	"errors"
 	"testing"
 
-	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
+	"github.com/stretchr/testify/require"
+
+	"github.com/charmbracelet/crush/internal/ui/textarea"
 
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/ui/common"
+	"github.com/charmbracelet/crush/internal/ui/util"
 	"github.com/charmbracelet/crush/internal/workspace"
 )
 
@@ -20,19 +25,22 @@ import (
 // stub honest about what the code under test depends on.
 type channelWorkspace struct {
 	workspace.Workspace
-	ready        bool
-	routesRemote bool
 	createErr    error
+	runErr       error
+	channelErr   error
+	runCalls     []channelRun
+	channels     []string
 	newSession   session.Session
 	createCalls  int
-	runCalls     []channelRun
-	runErr       error
+	ready        bool
+	routesRemote bool
 }
 
 type channelRun struct {
 	channel   string
 	sessionID string
 	prompt    string
+	steering  bool
 }
 
 func (w *channelWorkspace) AgentIsReady() bool        { return w.ready }
@@ -51,9 +59,17 @@ func (w *channelWorkspace) AgentRun(_ context.Context, sessionID, prompt string,
 	return w.runErr
 }
 
-func (w *channelWorkspace) AgentRunChannel(_ context.Context, channel, sessionID, prompt string, _ ...message.Attachment) error {
-	w.runCalls = append(w.runCalls, channelRun{channel: channel, sessionID: sessionID, prompt: prompt})
+func (w *channelWorkspace) AgentRunChannel(ctx context.Context, channel, sessionID, prompt string, _ ...message.Attachment) error {
+	w.runCalls = append(w.runCalls, channelRun{channel: channel, sessionID: sessionID, prompt: prompt, steering: message.OperatorSteering(ctx)})
 	return w.runErr
+}
+
+func (w *channelWorkspace) SetSessionChannel(_ context.Context, sessionID, channel string) (session.Session, error) {
+	w.channels = append(w.channels, channel)
+	if w.channelErr != nil {
+		return session.Session{}, w.channelErr
+	}
+	return session.Session{ID: sessionID, Channel: channel}, nil
 }
 
 func (w *channelWorkspace) Config() *config.Config { return nil }
@@ -101,6 +117,9 @@ func TestHandleChannelMessageExistingSession(t *testing.T) {
 	}
 	if ws.runCalls[0].prompt != "<channel source=\"s\">hi</channel>" {
 		t.Errorf("AgentRun prompt = %q", ws.runCalls[0].prompt)
+	}
+	if ws.runCalls[0].steering {
+		t.Error("channel input must not carry operator steering authority")
 	}
 }
 
@@ -165,5 +184,88 @@ func TestHandleChannelMessageDropsWhenNotReadyOrEmpty(t *testing.T) {
 		if ws.createCalls != 0 {
 			t.Error("not-ready event should not create a session")
 		}
+	})
+}
+
+// channelErrorMsgs returns the error InfoMsgs among msgs.
+func channelErrorMsgs(msgs []tea.Msg) []util.InfoMsg {
+	var out []util.InfoMsg
+	for _, msg := range msgs {
+		if info, ok := msg.(util.InfoMsg); ok && info.Type == util.InfoTypeError {
+			out = append(out, info)
+		}
+	}
+	return out
+}
+
+// TestHandleChannelMessageReportsRunError verifies that a failed
+// channel-driven turn surfaces in the TUI the way a failed typed prompt
+// does, instead of only being logged, and that busy/queue state is still
+// refreshed.
+// runCmdTree flattens a tea.Cmd's immediate message, expanding a
+// tea.BatchMsg one level at a time, so tests can assert on the messages a
+// handler produced without running nested commands.
+func runCmdTree(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var msgs []tea.Msg
+		for _, c := range batch {
+			msgs = append(msgs, runCmdTree(c)...)
+		}
+		return msgs
+	}
+	return []tea.Msg{msg}
+}
+
+func TestHandleChannelMessageReportsRunError(t *testing.T) {
+	t.Parallel()
+	ws := &channelWorkspace{ready: true, runErr: errors.New("context window exceeded")}
+	m := newChannelUI(ws)
+	m.session = &session.Session{ID: "sess-1"}
+
+	cmd := m.handleChannelMessage(mcp.Event{Name: "s", ChannelMessage: "<channel source=\"s\">hi</channel>"})
+	require.NotNil(t, cmd)
+	msgs := runCmdTree(cmd)
+
+	errs := channelErrorMsgs(msgs)
+	require.Len(t, errs, 1, "run error must be reported to the UI; got %#v", msgs)
+	require.Equal(t, "s: context window exceeded", errs[0].Msg)
+	require.Contains(t, msgs, tea.Msg(agentRunSubmittedMsg{}), "busy/queue state must still refresh")
+}
+
+// TestHandleChannelMessageCanceledRunIsQuiet verifies a canceled
+// channel-driven turn is not reported as an error, matching the typed
+// prompt path.
+func TestHandleChannelMessageCanceledRunIsQuiet(t *testing.T) {
+	t.Parallel()
+	ws := &channelWorkspace{ready: true, runErr: context.Canceled}
+	m := newChannelUI(ws)
+	m.session = &session.Session{ID: "sess-1"}
+
+	msgs := runCmdTree(m.handleChannelMessage(mcp.Event{Name: "s", ChannelMessage: "<channel source=\"s\">hi</channel>"}))
+	require.Empty(t, channelErrorMsgs(msgs))
+	require.Contains(t, msgs, tea.Msg(agentRunSubmittedMsg{}))
+}
+
+// TestHandleChannelMessageReportsSetupErrors verifies that failures before
+// the run starts, which drop the event, are reported rather than only
+// logged.
+func TestHandleChannelMessageReportsSetupErrors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("session create fails", func(t *testing.T) {
+		t.Parallel()
+		ws := &channelWorkspace{ready: true, createErr: errors.New("disk full")}
+		m := newChannelUI(ws)
+
+		msgs := runCmdTree(m.handleChannelMessage(mcp.Event{Name: "s", ChannelMessage: "<channel source=\"s\">hi</channel>"}))
+		errs := channelErrorMsgs(msgs)
+		require.Len(t, errs, 1, "got %#v", msgs)
+		require.Contains(t, errs[0].Msg, "s: ")
+		require.Contains(t, errs[0].Msg, "disk full")
+		require.Empty(t, ws.runCalls)
 	})
 }

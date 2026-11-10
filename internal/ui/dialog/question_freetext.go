@@ -5,12 +5,12 @@ import (
 	"strings"
 
 	"charm.land/bubbles/v2/key"
-	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/crush/internal/question"
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/charmbracelet/crush/internal/ui/textarea"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -18,19 +18,17 @@ import (
 // FreeText is an open-ended text input component for questions
 // that need a narrative answer rather than a selection.
 type FreeText struct {
-	Styles  *styles.Styles
-	Request question.Question
-	focused bool
-
-	editor       textarea.Model
-	scrollOffset int  // lines scrolled past the top of the textarea viewport
-	wheelActive  bool // wheel-scroll mode: skip cursor-follow until next key press
+	Styles       *styles.Styles
+	Request      question.Question
+	lastResponse question.Answer
 	keyEnter     key.Binding
 	keyNewline   key.Binding
 	keyClose     key.Binding
-
-	lastResponse question.Answer
+	editor       textarea.Model
+	scrollOffset int
 	lastWidth    int
+	focused      bool
+	wheelActive  bool
 }
 
 // freeTextMinEditorHeight and freeTextMaxEditorHeight bound the
@@ -178,7 +176,7 @@ func (d *FreeText) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		header := iconPrompt + d.Styles.Editor.QuestionUnselected.Render(
 			ansi.Wrap(d.Request.Text, contentWidth-iconWidth, ""),
 		)
-		for _, l := range strings.Split(header, "\n") {
+		for l := range strings.SplitSeq(header, "\n") {
 			lines = append(lines, ftLine{text: l, cursorX: -1})
 		}
 		lines = append(lines, ftLine{cursorX: -1}) // blank
@@ -193,7 +191,7 @@ func (d *FreeText) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 				desc = d.Request.Description
 			}
 			desc = strings.TrimSuffix(desc, "\n")
-			for _, l := range strings.Split(desc, "\n") {
+			for l := range strings.SplitSeq(desc, "\n") {
 				lines = append(lines, ftLine{text: l, cursorX: -1})
 			}
 			lines = append(lines, ftLine{cursorX: -1}) // blank

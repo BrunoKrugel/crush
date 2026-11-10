@@ -187,7 +187,7 @@ func (m *ModelItem) RefreshStyles() {
 func (s *SessionItem) RefreshStyles() {
 	s.cache = nil
 	if s.sessionsMode == sessionsModeUpdating {
-		s.updateTitleInput.SetStyles(sessionRenameInputStyles(s.t))
+		s.updateTitleInput.SetStyles(s.t.TextInput)
 	}
 	if s.Versioned != nil {
 		s.Bump()

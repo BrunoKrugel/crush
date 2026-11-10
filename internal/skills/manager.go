@@ -22,19 +22,14 @@ import (
 // workspace (local mode or a client process); the backend server hosts
 // multiple workspaces concurrently and must not enable mirroring.
 type Manager struct {
-	mu           sync.RWMutex
-	allSkills    []*Skill
-	activeSkills []*Skill
-	states       []*SkillState
-
-	// resolvedPaths are the expanded SkillsPaths used during discovery.
-	// Stored so Catalog/ReadContent can label skills without
-	// re-resolving.
-	resolvedPaths []string
+	broker        *pubsub.Broker[Event]
 	workingDir    string
-
-	broker       *pubsub.Broker[Event]
-	globalMirror bool
+	allSkills     []*Skill
+	activeSkills  []*Skill
+	states        []*SkillState
+	resolvedPaths []string
+	mu            sync.RWMutex
+	globalMirror  bool
 }
 
 // ManagerOption configures a Manager at construction time.
@@ -162,6 +157,19 @@ func (m *Manager) Shutdown() {
 	}
 }
 
+// Reload re-runs discovery from the given config, replaces all internal
+// skill lists and states, and publishes the new states to subscribers.
+// This is the mechanism for hot-reloading skills without restarting Crush.
+func (m *Manager) Reload(cfg DiscoveryConfig) {
+	allSkills, activeSkills, states := DiscoverFromConfig(cfg)
+	m.mu.Lock()
+	m.allSkills = allSkills
+	m.activeSkills = activeSkills
+	m.resolvedPaths = cfg.ResolvePaths()
+	m.mu.Unlock()
+	m.PublishStates(states)
+}
+
 // DiscoverFromConfig walks the embedded builtin FS and every path in
 // cfg.Options.SkillsPaths (after home / env expansion), then dedups and
 // filters by cfg.Options.DisabledSkills. It returns the three slices the
@@ -178,11 +186,12 @@ func DiscoverFromConfig(cfg DiscoveryConfig) (allSkills, activeSkills []*Skill, 
 	userPaths := cfg.ResolvePaths()
 	if len(userPaths) > 0 {
 		var userSkills []*Skill
-		userSkills, userStates = DiscoverWithStates(userPaths)
+		userSkills, userStates = DiscoverWithStates(userPaths, cfg.WorkingDir)
 		discovered = append(discovered, userSkills...)
 	}
 
 	allSkills = Deduplicate(discovered)
+	allSkills = FilterUnavailable(allSkills, cfg.AvailableFeatures)
 	activeSkills = Filter(allSkills, cfg.DisabledSkills)
 
 	allStates := append([]*SkillState(nil), builtinStates...)
@@ -200,7 +209,11 @@ func DiscoverFromConfig(cfg DiscoveryConfig) (allSkills, activeSkills []*Skill, 
 type DiscoveryConfig struct {
 	SkillsPaths    []string
 	DisabledSkills []string
-	WorkingDir     string
+	// AvailableFeatures names optional integrations that are switched
+	// on. A skill declaring `requires:` is hidden unless its feature
+	// appears here.
+	AvailableFeatures []string
+	WorkingDir        string
 	// Resolver expands $VAR-style references in paths. May be nil.
 	Resolver func(string) (string, error)
 }

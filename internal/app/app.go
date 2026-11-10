@@ -30,6 +30,7 @@ import (
 	"github.com/charmbracelet/crush/internal/herdr"
 	"github.com/charmbracelet/crush/internal/history"
 	"github.com/charmbracelet/crush/internal/hooks"
+	"github.com/charmbracelet/crush/internal/honcho"
 	"github.com/charmbracelet/crush/internal/log"
 	"github.com/charmbracelet/crush/internal/lsp"
 	"github.com/charmbracelet/crush/internal/message"
@@ -101,6 +102,12 @@ type App struct {
 	// currentSessionID is the session the user is working in, reported
 	// by the TUI and the non-interactive runner, for SessionEnd.
 	currentSessionID atomic.Value
+
+	// memory holds the honcho-backed recall service when enabled in
+	// config options. Nil when disabled; memoryProvider treats nil as
+	// "no memory". Fork-only feature kept compiling without wiring.
+	memory   *honcho.Service
+	memoryMu sync.Mutex
 }
 
 // New initializes a new application instance. skillsMgr carries the
@@ -123,8 +130,8 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 	}, store.WorkingDir(), store.WorkingDir())
 
 	permSvc := permission.NewPermissionService(store.WorkingDir(), allowedTools, permissionHooks{hookRunner})
-	if store.Overrides().PermissionMode != permission.PermissionModeNormal {
-		permSvc.SetPermissionMode(store.Overrides().PermissionMode)
+	if permission.PermissionMode(store.Overrides().PermissionMode) != permission.PermissionModeNormal {
+		permSvc.SetPermissionMode(permission.PermissionMode(store.Overrides().PermissionMode))
 	}
 
 	app := &App{

@@ -138,9 +138,9 @@ func TestSkillValidate(t *testing.T) {
 
 	tests := []struct {
 		name    string
+		errMsg  string
 		skill   Skill
 		wantErr bool
-		errMsg  string
 	}{
 		{
 			name: "valid skill",
@@ -248,7 +248,7 @@ description: Name doesn't match directory.
 ---
 `), 0o644))
 
-	skills, states := DiscoverWithStates([]string{tmpDir})
+	skills, states := DiscoverWithStates([]string{tmpDir}, "")
 
 	var normalCount int
 	var errorCount int
@@ -283,7 +283,7 @@ func TestDiscoverEmptyDir(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	skills, states := DiscoverWithStates([]string{tmpDir})
+	skills, states := DiscoverWithStates([]string{tmpDir}, "")
 	require.Empty(t, states)
 	require.Empty(t, skills)
 }
@@ -291,9 +291,78 @@ func TestDiscoverEmptyDir(t *testing.T) {
 func TestDiscoverMissingPath(t *testing.T) {
 	t.Parallel()
 
-	skills, states := DiscoverWithStates([]string{filepath.Join(t.TempDir(), "missing")})
+	skills, states := DiscoverWithStates([]string{filepath.Join(t.TempDir(), "missing")}, "")
 	require.Empty(t, states)
 	require.Empty(t, skills)
+}
+
+// TestDiscoverWithStates_SourceClassification pins that a state's Source is
+// derived from where the skill actually lives: discovery paths under the
+// working directory (the project skill dirs config loading appends, e.g.
+// .crush/skills) label as "project", everything else as "user" — for broken
+// and healthy skills alike. Regression: sourceFromPath used to hardcode
+// SourceUser, so a broken project skill showed as "user error" in the
+// /skills dialog.
+func TestDiscoverWithStates_SourceClassification(t *testing.T) {
+	t.Parallel()
+
+	workingDir := t.TempDir()
+	projectBase := filepath.Join(workingDir, ".crush", "skills")
+	userBase := filepath.Join(t.TempDir(), "user-skills")
+
+	writeSkill := func(base, dir, content string) {
+		t.Helper()
+		skillDir := filepath.Join(base, dir)
+		require.NoError(t, os.MkdirAll(skillDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644))
+	}
+
+	// A broken skill in each location: parse fails, so only the state's
+	// path and source identify where it came from.
+	writeSkill(projectBase, "broken-project", "not a skill at all")
+	writeSkill(userBase, "broken-user", "not a skill at all")
+	// And a healthy project skill, which must classify the same way.
+	writeSkill(projectBase, "good-project", `---
+name: good-project
+description: A healthy project skill.
+---
+Body.
+`)
+
+	_, states := DiscoverWithStates([]string{userBase, projectBase}, workingDir)
+
+	sources := make(map[string]SourceType, len(states))
+	for _, st := range states {
+		sources[filepath.Base(filepath.Dir(st.Path))] = st.Source
+	}
+	require.Equal(t, SourceProject, sources["broken-project"],
+		"a broken skill under the working dir must label as a project error")
+	require.Equal(t, SourceUser, sources["broken-user"],
+		"a broken skill under a user path must label as a user error")
+	require.Equal(t, SourceProject, sources["good-project"])
+}
+
+// TestSourceFromPath covers the classification edges directly: first
+// matching base wins, unmatched files default to user, and an empty
+// workingDir (no project context) classifies everything as user.
+func TestSourceFromPath(t *testing.T) {
+	t.Parallel()
+
+	wd := t.TempDir()
+	projectBase := filepath.Join(wd, ".crush", "skills")
+	userBase := filepath.Join(t.TempDir(), "skills")
+
+	paths := []string{userBase, projectBase}
+	require.Equal(t, SourceProject,
+		sourceFromPath(filepath.Join(projectBase, "x", "SKILL.md"), paths, wd))
+	require.Equal(t, SourceUser,
+		sourceFromPath(filepath.Join(userBase, "x", "SKILL.md"), paths, wd))
+	require.Equal(t, SourceUser,
+		sourceFromPath(filepath.Join(t.TempDir(), "elsewhere", "SKILL.md"), paths, wd),
+		"a file under no discovery path defaults to user")
+	require.Equal(t, SourceUser,
+		sourceFromPath(filepath.Join(projectBase, "x", "SKILL.md"), paths, ""),
+		"without a working dir nothing can classify as project")
 }
 
 func TestToPromptXML(t *testing.T) {
@@ -400,6 +469,45 @@ func TestParseContent_NoFrontmatter(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestDiscoverSymlinkDedup(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	// Create a valid skill.
+	skillDir := filepath.Join(tmpDir, "real-skills", "my-skill")
+	require.NoError(t, os.MkdirAll(skillDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(`---
+name: my-skill
+description: Skill reachable via symlink.
+---
+# My Skill
+`), 0o644))
+
+	// Create a symlink directory pointing at the real skills dir.
+	linkDir := filepath.Join(tmpDir, "linked-skills")
+	require.NoError(t, os.Symlink(filepath.Join(tmpDir, "real-skills"), linkDir))
+
+	// Discover from both the real and symlinked paths.
+	discovered, states := DiscoverWithStates([]string{
+		filepath.Join(tmpDir, "real-skills"),
+		linkDir,
+	}, "")
+
+	// Should find exactly one skill (not two).
+	require.Len(t, discovered, 1, "symlinked duplicate should be deduped")
+	require.Equal(t, "my-skill", discovered[0].Name)
+
+	// Should have exactly one normal state.
+	var normalCount int
+	for _, s := range states {
+		if s.State == StateNormal {
+			normalCount++
+		}
+	}
+	require.Equal(t, 1, normalCount, "symlinked duplicate should produce one state")
+}
+
 func TestDiscoverBuiltin(t *testing.T) {
 	t.Parallel()
 
@@ -453,10 +561,10 @@ func TestDeduplicate(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		input    []*Skill
-		wantLen  int
 		wantName string
 		wantPath string
+		input    []*Skill
+		wantLen  int
 	}{
 		{
 			name:    "no duplicates",

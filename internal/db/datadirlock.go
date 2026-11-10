@@ -1,7 +1,6 @@
 package db
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -10,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/lock"
 	"github.com/charmbracelet/crush/internal/version"
 )
@@ -27,9 +27,9 @@ const dataDirLockFile = "crush.lock"
 // authoritative state of ownership is the operating system flock on
 // the file descriptor.
 type dataDirOwnerInfo struct {
-	PID       int    `json:"pid"`
 	Version   string `json:"version,omitempty"`
 	StartedAt string `json:"started_at,omitempty"`
+	PID       int    `json:"pid"`
 }
 
 // dataDirLock represents an acquired exclusive lock on a data
@@ -94,7 +94,7 @@ func writeOwnerInfo(path string) error {
 		Version:   version.Version,
 		StartedAt: time.Now().UTC().Format(time.RFC3339),
 	}
-	payload, err := json.MarshalIndent(info, "", "  ")
+	payload, err := sonic.MarshalIndent(info, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ func readOwnerInfo(path string) dataDirOwnerInfo {
 		return dataDirOwnerInfo{}
 	}
 	var info dataDirOwnerInfo
-	_ = json.Unmarshal(raw, &info)
+	_ = sonic.Unmarshal(raw, &info)
 	return info
 }
 

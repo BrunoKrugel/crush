@@ -79,6 +79,7 @@ type Config struct {
 	ID           string
 	BaseURL      string
 	APIKey       string
+	APIType      string
 	ExtraHeaders map[string]string
 	// Existing models from config — IDs present in this list are skipped
 	// during discovery (user-specified models win).

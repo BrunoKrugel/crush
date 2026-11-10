@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/tree"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/diff"
@@ -74,8 +75,8 @@ type Compactable interface {
 
 // SpinningState contains the state passed to SpinningFunc for custom spinning logic.
 type SpinningState struct {
-	ToolCall message.ToolCall
 	Result   *message.ToolResult
+	ToolCall message.ToolCall
 	Status   ToolStatus
 }
 
@@ -103,20 +104,15 @@ func (d *DefaultToolRenderContext) RenderTool(sty *styles.Styles, width int, opt
 
 // ToolRenderOpts contains the data needed to render a tool call.
 type ToolRenderOpts struct {
-	ToolCall        message.ToolCall
 	Result          *message.ToolResult
 	Anim            *anim.Anim
+	LiveSurfaces    func(width int) (string, int)
+	ToolCall        message.ToolCall
+	Status          ToolStatus
+	Elapsed         time.Duration
 	ExpandedContent bool
 	Compact         bool
 	IsSpinning      bool
-	Status          ToolStatus
-	// StartedAt is when the tool call started rendering live. Zero for
-	// items restored from history, where the real start time is unknown,
-	// so no elapsed time is shown for them.
-	StartedAt time.Time
-	// Elapsed is how long the tool call has been (or was) running.
-	// Zero when the start time is unknown (restored items).
-	Elapsed time.Duration
 }
 
 // IsPending returns true if the tool call is still pending (not finished and
@@ -155,43 +151,30 @@ func (f ToolRendererFunc) RenderTool(sty *styles.Styles, width int, opts *ToolRe
 
 // baseToolMessageItem represents a tool call message that can be displayed in the UI.
 type baseToolMessageItem struct {
-	*list.Versioned
+	startedAt    time.Time
+	finishedAt   time.Time
+	toolRenderer ToolRenderer
+	spinningFunc SpinningFunc
 	*highlightableMessageItem
 	*cachedMessageItem
 	*focusableMessageItem
-
-	toolRenderer ToolRenderer
-	toolCall     message.ToolCall
-	result       *message.ToolResult
-	messageID    string
-	status       ToolStatus
-	// we use this so we can efficiently cache
-	// tools that have a capped width (e.x bash.. and others)
-	hasCappedWidth bool
-	// isCompact indicates this tool should render in compact mode.
-	isCompact bool
-	// spinningFunc allows tools to override the default spinning logic.
-	// If nil, uses the default: !toolCall.Finished && !canceled.
-	spinningFunc SpinningFunc
-
-	sty             *styles.Styles
-	anim            *anim.Anim
-	expandedContent bool
-	startedAt       time.Time
-	finishedAt      time.Time
+	*list.Versioned
+	result             *message.ToolResult
+	anim               *anim.Anim
+	sty                *styles.Styles
+	messageID          string
+	toolCall           message.ToolCall
+	hyperlinks         []hyperlinkSpan
+	status             ToolStatus
+	surfaceSrcHash     uint64
+	surfaceBuildFailed int
+	isCompact          bool
+	hasCappedWidth     bool
+	expandedContent    bool
+	surfaceScanned     bool
 }
 
 var _ Expandable = (*baseToolMessageItem)(nil)
-
-// markRestored clears startedAt for items rebuilt from session history:
-// the real start time is unknown there, and a constructor timestamp would
-// restart the timer from zero and misreport the elapsed time.
-func (t *baseToolMessageItem) markRestored() {
-	if !t.startedAt.IsZero() {
-		t.startedAt = time.Time{}
-		t.Bump()
-	}
-}
 
 // newBaseToolMessageItem is the internal constructor for base tool message items.
 func newBaseToolMessageItem(
@@ -230,11 +213,6 @@ func newBaseToolMessageItem(
 		GradColorB:  sty.WorkingGradToColor,
 		LabelColor:  sty.WorkingLabelColor,
 		CycleColors: true,
-		// Timer on the pending spinner: quick tools (view, grep, edit)
-		// show the overall turn time, long-running ones their own
-		// elapsed time once it becomes the more useful signal.
-		Suffix:      t.spinnerTimer,
-		SuffixColor: sty.WorkingTimerColor,
 	})
 
 	return t
@@ -258,7 +236,7 @@ func NewToolMessageItem(
 	case tools.BashToolName:
 		item = NewBashToolMessageItem(sty, toolCall, result, canceled, workingDir)
 	case tools.JobOutputToolName:
-		item = NewJobOutputToolMessageItem(sty, toolCall, result, canceled, workingDir)
+		item = NewJobOutputToolMessageItem(sty, toolCall, result, canceled)
 	case tools.JobKillToolName:
 		item = NewJobKillToolMessageItem(sty, toolCall, result, canceled)
 	case tools.ViewToolName:
@@ -283,10 +261,10 @@ func NewToolMessageItem(
 		item = NewSourcegraphToolMessageItem(sty, toolCall, result, canceled)
 	case tools.DiagnosticsToolName:
 		item = NewDiagnosticsToolMessageItem(sty, toolCall, result, canceled)
-	case agent.AgentToolName, agent.AgentDispatchToolName:
+	case agent.AgentToolName:
 		item = NewAgentToolMessageItem(sty, toolCall, result, canceled)
-	case agent.AgentSendToolName, agent.AgentStatusToolName, agent.AgentStopToolName:
-		item = NewAgentControlToolMessageItem(sty, toolCall, result, canceled)
+	case agent.DispatchAgentToolName:
+		item = NewDispatchToolMessageItem(sty, toolCall, result, canceled)
 	case tools.AgenticFetchToolName:
 		item = NewAgenticFetchToolMessageItem(sty, toolCall, result, canceled)
 	case tools.WebFetchToolName:
@@ -297,6 +275,12 @@ func NewToolMessageItem(
 		item = NewTodosToolMessageItem(sty, toolCall, result, canceled)
 	case tools.QuestionToolName:
 		item = NewQuestionToolMessageItem(sty, toolCall, result, canceled)
+	case tools.CronCreateToolName:
+		item = NewCronCreateToolMessageItem(sty, toolCall, result, canceled)
+	case tools.CronListToolName:
+		item = NewCronListToolMessageItem(sty, toolCall, result, canceled)
+	case tools.CronDeleteToolName:
+		item = NewCronDeleteToolMessageItem(sty, toolCall, result, canceled)
 	case tools.ReferencesToolName:
 		item = NewReferencesToolMessageItem(sty, toolCall, result, canceled)
 	case tools.DefinitionToolName:
@@ -382,8 +366,6 @@ func (t *baseToolMessageItem) RawRender(width int) string {
 			Compact:         t.isCompact,
 			IsSpinning:      t.isSpinning(),
 			Status:          t.computeStatus(),
-			StartedAt:       t.startedAt,
-			Elapsed:         t.elapsed(),
 		})
 
 		// Prepend hook indicator if hooks ran for this tool call.
@@ -394,9 +376,13 @@ func (t *baseToolMessageItem) RawRender(width int) string {
 		}
 
 		height = lipgloss.Height(content)
-		// cache the rendered content
 		t.setCachedRender(content, toolItemWidth, height)
 	}
+
+	// Re-index hyperlink spans on every render (cheap relative to the
+	// glamour/tool render above) so the click hit-test always matches
+	// what is on screen, cache hit or not.
+	t.hyperlinks = parseHyperlinkSpans(content)
 
 	return t.renderHighlighted(content, toolItemWidth, height)
 }
@@ -405,7 +391,7 @@ func (t *baseToolMessageItem) RawRender(width int) string {
 func (t *baseToolMessageItem) Render(width int) string {
 	// Cache the prefixed output keyed by (width, prefix variant).
 	// Bypass the cache while spinning (RawRender output is
-	// frame-dependent) or while a highlight range is active.
+	// frame-dependent), while a highlight range is active.
 	useCache := !t.isSpinning() && !t.isHighlighted()
 	var key uint64
 	switch {
@@ -434,6 +420,9 @@ func (t *baseToolMessageItem) Render(width int) string {
 		lines[i] = prefix + ln
 	}
 	out := strings.Join(lines, "\n")
+	// Re-check now that RawRender has built the surfaces. Caching a frame
+	// that contains a live surface freezes it: getCachedPrefixedRender
+	// keys on (width, prefix) alone and ignores Version(), so once the
 	if useCache {
 		t.setCachedPrefixedRender(out, width, key)
 	}
@@ -447,9 +436,7 @@ func (t *baseToolMessageItem) ToolCall() message.ToolCall {
 
 // SetToolCall sets the tool call associated with this message item.
 func (t *baseToolMessageItem) SetToolCall(tc message.ToolCall) {
-	// Capture the end time on the live finished transition so the tool's
-	// total duration can be shown after completion.
-	if tc.Finished && !t.toolCall.Finished && !t.startedAt.IsZero() {
+	if tc.Finished && t.finishedAt.IsZero() {
 		t.finishedAt = time.Now()
 	}
 	t.toolCall = tc
@@ -457,42 +444,12 @@ func (t *baseToolMessageItem) SetToolCall(tc message.ToolCall) {
 	t.Bump()
 }
 
-// elapsed returns how long the tool call has been (or was) running. Zero
-// when the start time is unknown (restored items).
-func (t *baseToolMessageItem) elapsed() time.Duration {
-	if t.startedAt.IsZero() {
-		return 0
-	}
-	end := t.finishedAt
-	if end.IsZero() {
-		end = time.Now()
-	}
-	return end.Sub(t.startedAt)
-}
-
-// toolTimerOwnTimeThreshold is how long a tool call must run before its
-// own elapsed time takes over the pending spinner's timer. Quick tools
-// (view, grep, edit) never cross it and keep showing the overall turn
-// time, which is the more useful signal for them; long-running ones
-// (bash, fetch, sub-agents) switch to their own duration once it starts
-// to matter.
-const toolTimerOwnTimeThreshold = 10 * time.Second
-
-// spinnerTimer returns the timer text shown next to the pending
-// spinner: the overall turn time while the tool is quick, its own
-// elapsed time once it has been running long enough to matter. Empty
-// when no turn is active and the start time is unknown, so renders of
-// restored sessions are unaffected.
-func (t *baseToolMessageItem) spinnerTimer() string {
-	if d := t.elapsed(); d >= toolTimerOwnTimeThreshold {
-		return common.FormatDuration(d)
-	}
-	return common.CurrentElapsed()
-}
-
 // SetResult sets the tool result associated with this message item.
 func (t *baseToolMessageItem) SetResult(res *message.ToolResult) {
 	t.result = res
+	// New metadata may carry different surfaces; force a rebuild on the
+	// next render while preserving focus/edits when it is unchanged.
+	t.surfaceScanned = false
 	t.clearCache()
 	t.Bump()
 }
@@ -524,14 +481,21 @@ func (t *baseToolMessageItem) Status() ToolStatus {
 	return t.status
 }
 
+// HasResult reports whether a tool result has been recorded for this tool
+// call, either through the live event path or linked in from history.
+// The raw status cannot be used for this: the result path calls SetResult
+// and never SetStatus, so a finished tool stays Running here (#405).
+func (t *baseToolMessageItem) HasResult() bool {
+	return t.result != nil
+}
+
 // computeStatus computes the effective status considering the result.
 func (t *baseToolMessageItem) computeStatus() ToolStatus {
-	switch {
-	case t.result == nil:
+	// A cancelled tool's result is an interruption, not a real error.
+	if t.result == nil || t.status == ToolStatusCanceled {
 		return t.status
-	case t.result.IsError && t.status == ToolStatusCanceled:
-		return ToolStatusCanceled // an interruption, not a real error
-	case t.result.IsError:
+	}
+	if t.result.IsError {
 		return ToolStatusError
 	}
 	return ToolStatusSuccess
@@ -580,7 +544,23 @@ func (t *baseToolMessageItem) Finished() bool {
 
 // HandleMouseClick implements MouseClickable.
 func (t *baseToolMessageItem) HandleMouseClick(btn ansi.MouseButton, x, y int) bool {
-	return btn == ansi.MouseLeft
+	handled, _ := t.HandleMouseClickCmd(btn, x, y)
+	return handled
+}
+
+// HandleMouseClickCmd implements [list.MouseClickCommandable]. A plain
+// click on a hyperlink span in the tool output opens the URL in the
+// browser (producing a command, which suppresses the expansion toggle);
+// any other left click reports handled with a nil command so the generic
+// Expandable path toggles the item as before.
+func (t *baseToolMessageItem) HandleMouseClickCmd(btn ansi.MouseButton, x, y int) (bool, tea.Cmd) {
+	if btn != ansi.MouseLeft {
+		return false, nil
+	}
+	if url := spanAt(t.hyperlinks, y, x-MessageLeftPaddingTotal); url != "" {
+		return true, openURL(url)
+	}
+	return true, nil
 }
 
 // HandleKeyEvent implements KeyEventHandler.
@@ -590,6 +570,10 @@ func (t *baseToolMessageItem) HandleKeyEvent(key tea.KeyMsg) (bool, tea.Cmd) {
 		return true, common.CopyToClipboard(text, "Tool content copied to clipboard")
 	}
 	return false, nil
+}
+
+func (t *baseToolMessageItem) SetFocused(focused bool) {
+	t.focusableMessageItem.SetFocused(focused)
 }
 
 // pendingTool renders a tool that is still in progress with an animation.
@@ -691,20 +675,6 @@ func unescapePartialString(s string) string {
 	}
 }
 
-// waitingForToolMessage builds the "Waiting for tool response..." label,
-// including how long the tool has been running and, when a turn is
-// active, the total elapsed turn time.
-func waitingForToolMessage(opts *ToolRenderOpts) string {
-	msg := "Waiting for tool response"
-	if !opts.StartedAt.IsZero() {
-		msg += fmt.Sprintf(" for %s", common.FormatDuration(time.Since(opts.StartedAt)))
-	}
-	if total := common.CurrentElapsed(); total != "" {
-		msg += fmt.Sprintf(" (%s total)", total)
-	}
-	return msg + "..."
-}
-
 // toolEarlyStateContent handles error/cancelled/pending states before content rendering.
 // Returns the rendered output and true if early state was handled.
 func toolEarlyStateContent(sty *styles.Styles, opts *ToolRenderOpts, width int) (string, bool) {
@@ -715,24 +685,13 @@ func toolEarlyStateContent(sty *styles.Styles, opts *ToolRenderOpts, width int) 
 	case ToolStatusCanceled:
 		msg = sty.Tool.StateCancelled.Render("Canceled.")
 	case ToolStatusAwaitingPermission:
-		msg = sty.Tool.StateWaiting.Render("Requesting permission...") + toolTimerSuffix(sty)
+		msg = sty.Tool.StateWaiting.Render("Requesting permission...")
 	case ToolStatusRunning:
-		msg = sty.Tool.StateWaiting.Render(waitingForToolMessage(opts))
+		msg = sty.Tool.StateWaiting.Render("Waiting for tool response...")
 	default:
 		return "", false
 	}
 	return msg, true
-}
-
-// toolTimerSuffix renders the live turn timer shown next to tool calls
-// that are still in flight. Returns an empty string when no turn is
-// active, so renders of persisted sessions are unaffected.
-func toolTimerSuffix(sty *styles.Styles) string {
-	elapsed := common.CurrentElapsed()
-	if elapsed == "" {
-		return ""
-	}
-	return " " + lipgloss.NewStyle().Foreground(sty.WorkingTimerColor).Render(elapsed)
 }
 
 // toolErrorContent formats an error message with an ERROR or WARN tag.
@@ -770,8 +729,7 @@ func toolIcon(sty *styles.Styles, status ToolStatus) string {
 }
 
 // toolParamList formats tool parameters as "main (key=value, ...)" with truncation.
-// When opts.ExpandedContent is true, the output wraps instead of truncating,
-// unless the tool is compact (nested in an agent tree), which always truncates.
+// When opts.ExpandedContent is true, the output wraps instead of truncating.
 func toolParamList(sty *styles.Styles, params []string, width int, opts *ToolRenderOpts) string {
 	// minSpaceForMainParam is the min space required for the main param
 	// if this is less that the value set we will only show the main param nothing else
@@ -801,14 +759,7 @@ func toolParamList(sty *styles.Styles, params []string, width int, opts *ToolRen
 		}
 	}
 
-	// Compact tools are the children of an agent tree, where a wrapped
-	// header would push continuation lines past the tree's branch drawing
-	// and break the bars. They truncate even when expanded, and stay on one
-	// line even when a parameter has newlines of its own.
-	if opts != nil && opts.Compact {
-		output = strings.ReplaceAll(output, "\n", " ")
-	}
-	if width >= 0 && (opts == nil || !opts.ExpandedContent || opts.Compact) {
+	if width >= 0 && (opts == nil || !opts.ExpandedContent) {
 		return sty.Tool.ParamMain.Render(ansi.Truncate(output, width, "…"))
 	}
 	if opts != nil && opts.ExpandedContent && width > 0 && lipgloss.Width(output) > width {
@@ -845,31 +796,29 @@ func capLineWidths(s string, width int) string {
 // toolHeader builds the tool header line: "● ToolName params..."
 // When opts.ExpandedContent is true, long parameters wrap instead of truncating.
 func toolHeader(sty *styles.Styles, status ToolStatus, name string, width int, opts *ToolRenderOpts, params ...string) string {
-	prefix := toolHeaderPrefix(sty, status, name, opts)
+	nested := opts != nil && opts.Compact
+	icon := toolIcon(sty, status)
+	nameStyle := sty.Tool.NameNormal
+	if nested {
+		nameStyle = sty.Tool.NameNested
+	}
+	toolName := nameStyle.Render(name)
+	prefix := fmt.Sprintf("%s %s ", icon, toolName)
 	prefixWidth := lipgloss.Width(prefix)
-	paramsStr := toolParamList(sty, params, width-prefixWidth, opts)
+	remainingWidth := width - prefixWidth
+	paramsStr := toolParamList(sty, params, remainingWidth, opts)
 
 	// When expanded, toolParamList may return multiple lines. Indent
 	// continuation lines to align with the first line's param text.
-	if first, rest, found := strings.Cut(paramsStr, "\n"); found {
-		return prefix + first + "\n" + indentLines(rest, prefixWidth)
+	if strings.Contains(paramsStr, "\n") {
+		lines := strings.Split(paramsStr, "\n")
+		indent := strings.Repeat(" ", prefixWidth)
+		for i := 1; i < len(lines); i++ {
+			lines[i] = indent + lines[i]
+		}
+		return prefix + strings.Join(lines, "\n")
 	}
 	return prefix + paramsStr
-}
-
-// toolHeaderPrefix returns the styled "● ToolName " that leads a tool header.
-func toolHeaderPrefix(sty *styles.Styles, status ToolStatus, name string, opts *ToolRenderOpts) string {
-	nameStyle := sty.Tool.NameNormal
-	if opts != nil && opts.Compact {
-		nameStyle = sty.Tool.NameNested
-	}
-	return fmt.Sprintf("%s %s ", toolIcon(sty, status), nameStyle.Render(name))
-}
-
-// indentLines indents every line of s by n spaces.
-func indentLines(s string, n int) string {
-	indent := strings.Repeat(" ", n)
-	return indent + strings.ReplaceAll(s, "\n", "\n"+indent)
 }
 
 // toolOutputPlainContent renders plain text with optional expansion support.
@@ -877,6 +826,7 @@ func toolOutputPlainContent(sty *styles.Styles, content string, width int, expan
 	content = stringext.NormalizeSpace(content)
 	content = common.StripCursorControl(content)
 	content = common.RemapANSI16(content, sty.ANSI)
+	content = hyperlinkizeURLs(content)
 	lines := strings.Split(content, "\n")
 
 	maxLines := collapsedMaxLines(len(lines))
@@ -997,7 +947,7 @@ func toolOutputHookIndicator(sty *styles.Styles, metadata string, width int) str
 	var meta struct {
 		Hook *hooks.HookMetadata `json:"hook"`
 	}
-	if err := json.Unmarshal([]byte(metadata), &meta); err != nil || meta.Hook == nil {
+	if err := sonic.Unmarshal([]byte(metadata), &meta); err != nil || meta.Hook == nil {
 		return ""
 	}
 	h := meta.Hook
@@ -1139,13 +1089,13 @@ func hookDetail(sty *styles.Styles, hi hooks.HookInfo) string {
 		return sty.Tool.HookDenied.Render(denialMessage)
 	case "allow":
 		result := sty.Tool.HookOK.Render(okMessage)
-		if hi.InputRewrite || hi.OutputRewrite {
+		if hi.InputRewrite {
 			result += " " + sty.Tool.HookRewrote.Render(rewroteMessage)
 		}
 		return result
 	default:
 		result := sty.Tool.HookOK.Render(okMessage)
-		if hi.InputRewrite || hi.OutputRewrite {
+		if hi.InputRewrite {
 			result += " " + sty.Tool.HookRewrote.Render(rewroteMessage)
 		}
 		return result
@@ -1341,12 +1291,7 @@ func toolOutputMarkdownContent(sty *styles.Styles, content string, width int, ex
 		return toolOutputPlainContent(sty, content, width, expanded)
 	}
 
-	// Glamour ends with a blank, still-painted line, sometimes only a
-	// code block's margin wide; drop it so the box ends with its text.
 	lines := strings.Split(rendered, "\n")
-	for len(lines) > 0 && strings.TrimSpace(ansi.Strip(lines[len(lines)-1])) == "" {
-		lines = lines[:len(lines)-1]
-	}
 	maxLines := collapsedMaxLines(len(lines))
 	if expanded {
 		maxLines = len(lines)
@@ -1413,14 +1358,14 @@ func (t *baseToolMessageItem) formatParametersForCopy() string {
 	switch t.toolCall.Name {
 	case tools.BashToolName:
 		var params tools.BashParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
+		if sonic.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
 			cmd := strings.ReplaceAll(params.Command, "\n", " ")
 			cmd = strings.ReplaceAll(cmd, "\t", "    ")
 			return fmt.Sprintf("**Command:** %s", cmd)
 		}
 	case tools.ViewToolName:
 		var params tools.ViewParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
+		if sonic.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
 			var parts []string
 			parts = append(parts, fmt.Sprintf("**File:** %s", fsext.PrettyPath(params.FilePath)))
 			if params.Limit > 0 {
@@ -1433,12 +1378,12 @@ func (t *baseToolMessageItem) formatParametersForCopy() string {
 		}
 	case tools.EditToolName:
 		var params tools.EditParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
+		if sonic.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
 			return fmt.Sprintf("**File:** %s", fsext.PrettyPath(params.FilePath))
 		}
 	case tools.MultiEditToolName:
 		var params tools.MultiEditParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
+		if sonic.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
 			var parts []string
 			parts = append(parts, fmt.Sprintf("**File:** %s", fsext.PrettyPath(params.FilePath)))
 			parts = append(parts, fmt.Sprintf("**Edits:** %d", len(params.Edits)))
@@ -1446,12 +1391,12 @@ func (t *baseToolMessageItem) formatParametersForCopy() string {
 		}
 	case tools.WriteToolName:
 		var params tools.WriteParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
+		if sonic.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
 			return fmt.Sprintf("**File:** %s", fsext.PrettyPath(params.FilePath))
 		}
 	case tools.FetchToolName:
 		var params tools.FetchParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
+		if sonic.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
 			var parts []string
 			parts = append(parts, fmt.Sprintf("**URL:** %s", params.URL))
 			if params.Format != "" {
@@ -1464,7 +1409,7 @@ func (t *baseToolMessageItem) formatParametersForCopy() string {
 		}
 	case tools.AgenticFetchToolName:
 		var params tools.AgenticFetchParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
+		if sonic.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
 			var parts []string
 			if params.URL != "" {
 				parts = append(parts, fmt.Sprintf("**URL:** %s", params.URL))
@@ -1476,12 +1421,12 @@ func (t *baseToolMessageItem) formatParametersForCopy() string {
 		}
 	case tools.WebFetchToolName:
 		var params tools.WebFetchParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
+		if sonic.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
 			return fmt.Sprintf("**URL:** %s", params.URL)
 		}
 	case tools.GrepToolName:
 		var params tools.GrepParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
+		if sonic.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
 			var parts []string
 			parts = append(parts, fmt.Sprintf("**Pattern:** %s", params.Pattern))
 			if params.Path != "" {
@@ -1497,7 +1442,7 @@ func (t *baseToolMessageItem) formatParametersForCopy() string {
 		}
 	case tools.GlobToolName:
 		var params tools.GlobParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
+		if sonic.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
 			var parts []string
 			parts = append(parts, fmt.Sprintf("**Pattern:** %s", params.Pattern))
 			if params.Path != "" {
@@ -1507,7 +1452,7 @@ func (t *baseToolMessageItem) formatParametersForCopy() string {
 		}
 	case tools.LSToolName:
 		var params tools.LSParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
+		if sonic.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
 			path := params.Path
 			if path == "" {
 				path = "."
@@ -1516,7 +1461,7 @@ func (t *baseToolMessageItem) formatParametersForCopy() string {
 		}
 	case tools.DownloadToolName:
 		var params tools.DownloadParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
+		if sonic.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
 			var parts []string
 			parts = append(parts, fmt.Sprintf("**URL:** %s", params.URL))
 			parts = append(parts, fmt.Sprintf("**File Path:** %s", fsext.PrettyPath(params.FilePath)))
@@ -1527,7 +1472,7 @@ func (t *baseToolMessageItem) formatParametersForCopy() string {
 		}
 	case tools.SourcegraphToolName:
 		var params tools.SourcegraphParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
+		if sonic.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
 			var parts []string
 			parts = append(parts, fmt.Sprintf("**Query:** %s", params.Query))
 			if params.Count > 0 {
@@ -1542,39 +1487,13 @@ func (t *baseToolMessageItem) formatParametersForCopy() string {
 		return "**Project:** diagnostics"
 	case agent.AgentToolName:
 		var params agent.AgentParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
+		if sonic.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
 			return fmt.Sprintf("**Task:**\n%s", params.Prompt)
-		}
-	case agent.AgentDispatchToolName:
-		var params agent.AgentDispatchParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
-			return fmt.Sprintf("**Task (%s):**\n%s", params.Label, params.Prompt)
-		}
-	case agent.AgentSendToolName:
-		var params agent.AgentSendParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
-			return fmt.Sprintf("**To %s:**\n%s", params.Label, params.Message)
-		}
-	case agent.AgentStatusToolName:
-		var params agent.AgentStatusParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
-			if params.Label == "" {
-				return "**Subagents:** all"
-			}
-			return fmt.Sprintf("**Subagent:** %s", params.Label)
-		}
-	case agent.AgentStopToolName:
-		var params agent.AgentStopParams
-		if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
-			if params.Reason == "" {
-				return fmt.Sprintf("**Stop:** %s", params.Label)
-			}
-			return fmt.Sprintf("**Stop:** %s\n**Reason:** %s", params.Label, params.Reason)
 		}
 	}
 
 	var params map[string]any
-	if json.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
+	if sonic.Unmarshal([]byte(t.toolCall.Input), &params) == nil {
 		var parts []string
 		for key, value := range params {
 			displayKey := strings.ReplaceAll(key, "_", " ")
@@ -1619,7 +1538,7 @@ func (t *baseToolMessageItem) formatResultForCopy() string {
 		return t.formatAgenticFetchResultForCopy()
 	case tools.WebFetchToolName:
 		return t.formatWebFetchResultForCopy()
-	case agent.AgentToolName, agent.AgentDispatchToolName:
+	case agent.AgentToolName:
 		return t.formatAgentResultForCopy()
 	case tools.DownloadToolName, tools.GrepToolName, tools.GlobToolName, tools.LSToolName, tools.SourcegraphToolName, tools.DiagnosticsToolName, tools.TodosToolName:
 		return fmt.Sprintf("```\n%s\n```", t.result.Content)
@@ -1636,7 +1555,7 @@ func (t *baseToolMessageItem) formatBashResultForCopy() string {
 
 	var meta tools.BashResponseMetadata
 	if t.result.Metadata != "" {
-		json.Unmarshal([]byte(t.result.Metadata), &meta)
+		sonic.Unmarshal([]byte(t.result.Metadata), &meta)
 	}
 
 	output := meta.Output
@@ -1659,7 +1578,7 @@ func (t *baseToolMessageItem) formatViewResultForCopy() string {
 
 	var meta tools.ViewResponseMetadata
 	if t.result.Metadata != "" {
-		json.Unmarshal([]byte(t.result.Metadata), &meta)
+		sonic.Unmarshal([]byte(t.result.Metadata), &meta)
 	}
 
 	if meta.Content == "" {
@@ -1725,12 +1644,12 @@ func (t *baseToolMessageItem) formatEditResultForCopy() string {
 	}
 
 	var meta tools.EditResponseMetadata
-	if json.Unmarshal([]byte(t.result.Metadata), &meta) != nil {
+	if sonic.Unmarshal([]byte(t.result.Metadata), &meta) != nil {
 		return t.result.Content
 	}
 
 	var params tools.EditParams
-	json.Unmarshal([]byte(t.toolCall.Input), &params)
+	sonic.Unmarshal([]byte(t.toolCall.Input), &params)
 
 	var result strings.Builder
 
@@ -1760,12 +1679,12 @@ func (t *baseToolMessageItem) formatMultiEditResultForCopy() string {
 	}
 
 	var meta tools.MultiEditResponseMetadata
-	if json.Unmarshal([]byte(t.result.Metadata), &meta) != nil {
+	if sonic.Unmarshal([]byte(t.result.Metadata), &meta) != nil {
 		return t.result.Content
 	}
 
 	var params tools.MultiEditParams
-	json.Unmarshal([]byte(t.toolCall.Input), &params)
+	sonic.Unmarshal([]byte(t.toolCall.Input), &params)
 
 	var result strings.Builder
 	if meta.OldContent != "" || meta.NewContent != "" {
@@ -1791,7 +1710,7 @@ func (t *baseToolMessageItem) formatWriteResultForCopy() string {
 	}
 
 	var params tools.WriteParams
-	if json.Unmarshal([]byte(t.toolCall.Input), &params) != nil {
+	if sonic.Unmarshal([]byte(t.toolCall.Input), &params) != nil {
 		return t.result.Content
 	}
 
@@ -1852,7 +1771,7 @@ func (t *baseToolMessageItem) formatFetchResultForCopy() string {
 	}
 
 	var params tools.FetchParams
-	if json.Unmarshal([]byte(t.toolCall.Input), &params) != nil {
+	if sonic.Unmarshal([]byte(t.toolCall.Input), &params) != nil {
 		return t.result.Content
 	}
 
@@ -1880,7 +1799,7 @@ func (t *baseToolMessageItem) formatAgenticFetchResultForCopy() string {
 	}
 
 	var params tools.AgenticFetchParams
-	if json.Unmarshal([]byte(t.toolCall.Input), &params) != nil {
+	if sonic.Unmarshal([]byte(t.toolCall.Input), &params) != nil {
 		return t.result.Content
 	}
 
@@ -1906,7 +1825,7 @@ func (t *baseToolMessageItem) formatWebFetchResultForCopy() string {
 	}
 
 	var params tools.WebFetchParams
-	if json.Unmarshal([]byte(t.toolCall.Input), &params) != nil {
+	if sonic.Unmarshal([]byte(t.toolCall.Input), &params) != nil {
 		return t.result.Content
 	}
 
@@ -1939,14 +1858,6 @@ func prettifyToolName(name string) string {
 	switch name {
 	case agent.AgentToolName:
 		return "Agent"
-	case agent.AgentDispatchToolName:
-		return "Create Subagent"
-	case agent.AgentSendToolName:
-		return "Message Subagent"
-	case agent.AgentStatusToolName:
-		return "Subagent Status"
-	case agent.AgentStopToolName:
-		return "Stop Subagent"
 	case tools.BashToolName:
 		return "Bash"
 	case tools.JobOutputToolName:
@@ -1984,4 +1895,44 @@ func prettifyToolName(name string) string {
 	default:
 		return humanizedToolName(name)
 	}
+}
+
+// elapsed returns how long the tool call has been (or was) running. Zero
+// when the start time is unknown (restored items).
+func (t *baseToolMessageItem) elapsed() time.Duration {
+	if t.startedAt.IsZero() {
+		return 0
+	}
+	end := t.finishedAt
+	if end.IsZero() {
+		end = time.Now()
+	}
+	return end.Sub(t.startedAt)
+}
+
+// markRestored clears startedAt for items rebuilt from session history:
+// the real start time is unknown there, and a constructor timestamp would
+// restart the timer from zero and misreport the elapsed time.
+func (t *baseToolMessageItem) markRestored() {
+	if !t.startedAt.IsZero() {
+		t.startedAt = time.Time{}
+		t.Bump()
+	}
+}
+
+// spinnerTimer returns the timer text shown next to the pending
+// spinner: the overall turn time while the tool is quick, its own
+// elapsed time once it has been running long enough to matter. Empty
+// when no turn is active and the start time is unknown, so renders of
+// restored sessions are unaffected.
+// toolTimerOwnTimeThreshold is how long a tool call must run before its own
+// elapsed time takes over the pending spinner's timer. Quick tools (view,
+// grep, edit) never cross it and keep showing the overall turn timer.
+const toolTimerOwnTimeThreshold = 10 * time.Second
+
+func (t *baseToolMessageItem) spinnerTimer(sessionID string) string {
+	if d := t.elapsed(); d >= toolTimerOwnTimeThreshold {
+		return common.FormatDuration(d)
+	}
+	return common.Elapsed(sessionID)
 }

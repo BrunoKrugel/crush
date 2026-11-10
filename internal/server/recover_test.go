@@ -1,12 +1,12 @@
 package server
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/stretchr/testify/require"
 )
@@ -32,7 +32,7 @@ func TestRecoverHandler_PanicReturns500(t *testing.T) {
 	require.NotEmpty(t, body)
 
 	var perr proto.Error
-	require.NoError(t, json.Unmarshal(body, &perr))
+	require.NoError(t, sonic.Unmarshal(body, &perr))
 	require.NotEmpty(t, perr.Message)
 }
 

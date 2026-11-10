@@ -21,11 +21,11 @@ const (
 
 func TestGetContextValue(t *testing.T) {
 	tests := []struct {
-		name         string
-		setup        func(ctx context.Context) context.Context
 		key          any
 		defaultValue any
 		want         any
+		setup        func(ctx context.Context) context.Context
+		name         string
 	}{
 		{
 			name: "returns string value",
@@ -163,8 +163,8 @@ func TestGetMessageFromContext(t *testing.T) {
 
 func TestGetSupportsImagesFromContext(t *testing.T) {
 	tests := []struct {
-		name string
 		ctx  context.Context
+		name string
 		want bool
 	}{
 		{

@@ -33,28 +33,18 @@ const (
 
 // Arguments represents a dialog for collecting command arguments.
 type Arguments struct {
-	com       *common.Common
-	title     string
-	arguments []commands.Argument
-	inputs    []textinput.Model
-	focused   int
-	spinner   spinner.Model
-	loading   bool
-
-	description  string
 	resultAction Action
-
-	help   help.Model
-	keyMap struct {
-		Confirm,
-		Next,
-		Previous,
-		ScrollUp,
-		ScrollDown,
-		Close key.Binding
-	}
-
-	viewport viewport.Model
+	com          *common.Common
+	help         help.Model
+	title        string
+	description  string
+	keyMap       struct{ Confirm, Next, Previous, ScrollUp, ScrollDown, Close key.Binding }
+	arguments    []commands.Argument
+	inputs       []textinput.Model
+	viewport     viewport.Model
+	spinner      spinner.Model
+	focused      int
+	loading      bool
 }
 
 var _ Dialog = (*Arguments)(nil)
@@ -216,6 +206,16 @@ func (a *Arguments) HandleMsg(msg tea.Msg) Action {
 					action.Args = args
 					return action
 				case ActionRunMCPPrompt:
+					action.Args = args
+					return action
+				case ActionInsertMCPPrompt:
+					action.Args = args
+					return action
+				case ActionSummarize:
+					action.Args = args
+					action.Instructions = args[CompactInstructionsArg]
+					return action
+				case ActionGoalMode:
 					action.Args = args
 					return action
 				}

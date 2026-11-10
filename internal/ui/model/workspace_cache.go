@@ -10,8 +10,9 @@ package model
 // yolo and ready/model caches synchronously so the first frame has values to
 // render; Init then refreshes them off-thread.)
 //
-//   - Reads (isAgentBusy, permModeCached, promptQueue, selectedLargeModel,
-//     lspInfo) always return the memoized value, stale or not.
+//   - Reads (isAgentBusy, isCurrentSessionBusy, yoloModeCached, promptQueue,
+//     selectedLargeModel, lspInfo) always return the memoized value, stale or
+//     not.
 //   - State edges (message created, agent finished/errored, prompt
 //     submitted, cancel, session switch, yolo toggle, model change, LSP
 //     events) invalidate or write through the caches and dispatch an
@@ -25,14 +26,14 @@ package model
 // Update, no model mutation inside commands).
 
 import (
+	"context"
+	"errors"
 	"slices"
 	"time"
 
-	"github.com/charmbracelet/crush/internal/message"
-
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/charmbracelet/crush/internal/permission"
+	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/workspace"
 )
 
@@ -44,10 +45,13 @@ var busyCacheTTL = 500 * time.Millisecond
 // state; the queue is otherwise refreshed on event edges.
 var promptQueueTTL = 2 * time.Second
 
-// ttlCache memoizes one boolean workspace probe result.
+// ttlCache memoizes one boolean workspace probe result. It unifies what used
+// to be three hand-rolled val/checkedAt field pairs so invalidation cannot
+// drift apart between them.
 type ttlCache struct {
-	val bool
-	at  time.Time
+	at      time.Time
+	session string
+	val     bool
 }
 
 // fresh reports whether the cached value is within its TTL.
@@ -55,10 +59,24 @@ func (c *ttlCache) fresh(ttl time.Duration) bool {
 	return !c.at.IsZero() && time.Since(c.at) < ttl
 }
 
-// set writes a known-good value through the cache.
+// freshFor is fresh scoped to a session: a value cached for another session
+// is never fresh.
+func (c *ttlCache) freshFor(ttl time.Duration, session string) bool {
+	return c.session == session && c.fresh(ttl)
+}
+
+// set writes a known-good global value through the cache.
 func (c *ttlCache) set(val bool) {
 	c.val = val
 	c.at = time.Now()
+	c.session = ""
+}
+
+// setForSession writes a known-good session-scoped value through the cache.
+func (c *ttlCache) setForSession(val bool, session string) {
+	c.val = val
+	c.at = time.Now()
+	c.session = session
 }
 
 // invalidate marks the value stale so the next Update-tail backstop
@@ -67,68 +85,31 @@ func (c *ttlCache) invalidate() {
 	c.at = time.Time{}
 }
 
-// modeTTLCache memoizes one permission-mode workspace probe result.
-type modeTTLCache struct {
-	val permission.PermissionMode
-	at  time.Time
-}
-
-// fresh reports whether the cached value is within its TTL.
-func (c *modeTTLCache) fresh(ttl time.Duration) bool {
-	return !c.at.IsZero() && time.Since(c.at) < ttl
-}
-
-// set writes a known-good value through the cache.
-func (c *modeTTLCache) set(val permission.PermissionMode) {
-	c.val = val
-	c.at = time.Now()
-}
-
-// invalidate marks the value stale so the next Update-tail backstop
-// re-probes; the last value keeps being served in the meantime.
-func (c *modeTTLCache) invalidate() {
-	c.at = time.Time{}
-}
-
 // busyStateMsg delivers the result of an off-thread busy/permission probe.
 type busyStateMsg struct {
-	// gen is the busy generation captured when the probe was dispatched.
-	// A result whose generation no longer matches m.busyFetchGen started
-	// before a newer state transition (optimistic send, invalidation,
-	// session switch, ...) and is discarded, then re-fetched, so the
-	// authoritative refresh is never lost to an older in-flight request.
-	gen       uint64
-	ready     bool
-	agentBusy bool
-	permMode  permission.PermissionMode
-	// forSession is the session sessionBusy was probed for.
-	forSession string
-	// sessionBusy reports whether forSession itself has a run in flight,
-	// unlike agentBusy, which any session or shell command sets.
+	forSession  string
+	model       workspace.AgentModel
+	gen         uint64
+	ready       bool
+	agentBusy   bool
+	yolo        bool
+	auto        bool
 	sessionBusy bool
-	// model is the coordinator's selected model, fetched by the same probe
-	// so the sidebar/landing model info renders from memoized state. Zero
-	// (and ignored) when ready is false.
-	model workspace.AgentModel
 }
 
 // promptQueueMsg delivers the queued prompts fetched off-thread.
 type promptQueueMsg struct {
-	// forSession is the session the fetch was scoped to; a result that
-	// raced a session switch is discarded and re-fetched.
 	forSession string
-	// gen is the queue generation captured at dispatch; like
-	// busyStateMsg.gen it guards against a stale in-flight result
-	// overwriting newer optimistic or invalidated queue state.
-	gen     uint64
-	prompts []string
+	prompts    []string
+	gen        uint64
 }
 
 // agentRunSubmittedMsg reports whether AgentRun accepted a prompt. A
 // rejected prompt gets no RunComplete, so err must end its turn.
 type agentRunSubmittedMsg struct {
-	sessionID string
 	err       error
+	sessionID string
+	gen       uint64
 }
 
 // agentModelChangedMsg reports that the coordinator's model was updated
@@ -156,7 +137,9 @@ func (m *UI) currentSessionID() string {
 // state.
 func (m *UI) invalidateBusyCaches() {
 	m.agentBusyCache.invalidate()
-	m.permModeCache.invalidate()
+	m.sessionBusyCache.invalidate()
+	m.yoloCache.invalidate()
+	m.autoCache.invalidate()
 	m.busyFetchGen++
 }
 
@@ -178,19 +161,23 @@ func (m *UI) dispatchBusyRefresh() tea.Cmd {
 	}
 	m.busyFetchInFlight = true
 	ws := m.com.Workspace
-	gen := m.busyFetchGen
 	sessionID := m.currentSessionID()
+	gen := m.busyFetchGen
 	return func() tea.Msg {
 		st := busyStateMsg{gen: gen, forSession: sessionID}
 		if ws.AgentIsReady() {
 			st.ready = true
 			st.agentBusy = ws.AgentIsBusy()
+			if sessionID != "" {
+				st.sessionBusy = ws.AgentIsSessionBusy(sessionID)
+			}
 			st.model = ws.AgentModel()
 			if sessionID != "" {
 				st.sessionBusy = ws.AgentIsSessionBusy(sessionID)
 			}
 		}
-		st.permMode = ws.PermissionMode()
+		st.yolo = ws.PermissionSkipRequests()
+		st.auto = ws.PermissionAutoMode()
 		return st
 	}
 }
@@ -209,38 +196,52 @@ func (m *UI) updateAgentModelCmd(pre tea.Cmd) tea.Cmd {
 // edges (todo spinner, pills). Runs on the Update goroutine.
 func (m *UI) applyBusyState(msg busyStateMsg) []tea.Cmd {
 	m.busyFetchInFlight = false
-	if msg.gen != m.busyFetchGen {
-		// This probe started before a newer state transition (optimistic
-		// send, invalidation, session switch, ...). Discard its result and
-		// re-dispatch so the required authoritative refresh is not lost
-		// merely because this older request was in flight.
+	// Discard a probe that is stale on either axis: its generation predates a
+	// newer state transition (optimistic send, invalidation, ...), or it was
+	// scoped to a session that is no longer current. An empty forSession is a
+	// global probe and matches any current session. Re-dispatch so the
+	// required authoritative refresh is not lost to this older in-flight
+	// request.
+	if msg.gen != m.busyFetchGen || (msg.forSession != "" && msg.forSession != m.currentSessionID()) {
 		if cmd := m.dispatchBusyRefresh(); cmd != nil {
 			return []tea.Cmd{cmd}
 		}
 		return nil
 	}
-	prevBusy := m.isAgentBusy()
-	prevMode := m.permModeCached()
+	prevBusy := m.isCurrentSessionBusy()
+	prevYolo := m.yoloModeCached()
+	prevAuto := m.autoModeCached()
 	m.agentBusyCache.set(msg.agentBusy)
-	m.permModeCache.set(msg.permMode)
+	m.sessionBusyCache.setForSession(msg.sessionBusy, msg.forSession)
+	m.yoloCache.set(msg.yolo)
+	// Auto is selected locally by ctrl+y. A probe that reports the
+	// opposite arrived before that write, or from a workspace that could
+	// not persist it. Applying it clears the badge the key just painted,
+	// so keep the local selection and let the next key change it.
+	if msg.auto == prevAuto {
+		m.autoCache.set(msg.auto)
+	}
 	m.agentReady = msg.ready
 	m.agentModel = msg.model
-	if prevMode != msg.permMode {
-		// A remote/async toggle changed the permission mode: update the
-		// editor prompt function so the prompt icon/style tracks the new
-		// mode. The cache is written above and the placeholder is refreshed
-		// by the Update tail.
-		m.setEditorPrompt(msg.permMode)
+	if prevYolo != msg.yolo || prevAuto != m.autoModeCached() {
+		// A remote/async toggle changed yolo mode: update the editor
+		// prompt function so the prompt icon/style tracks the new mode.
+		// Auto uses the local selection, not a disagreeing probe.
+		m.setEditorPrompt(msg.yolo, m.autoModeCached())
 	}
 
 	var cmds []tea.Cmd
-	busy := m.isAgentBusy()
-	if busy {
+	busy := m.isCurrentSessionBusy()
+	if m.isAgentBusy() {
 		// A session reload that raced an unpopulated busy cache (the
 		// zero-value read at boot) froze the animation clock even though
 		// the agent is working. The authoritative probe re-enables it so
 		// freshly rendered spinners tick. When the probe reports idle the
 		// reload gate stands, keeping ghost spinners still.
+		//
+		// Deliberately the global probe, not `busy` above: the animation
+		// clock is process-wide, so a run in any session must keep it
+		// ticking, while `busy` is scoped to the session being viewed.
 		m.chat.SetAnimationsAllowed(true)
 	}
 	if m.hasSession() && hasInProgressTodo(m.session.Todos) && busy && !m.todoIsSpinning {
@@ -311,13 +312,6 @@ func (m *UI) applyPromptQueue(msg promptQueueMsg) []tea.Cmd {
 	countChanged := len(msg.prompts) != m.promptQueue
 	m.promptQueueItems = msg.prompts
 	m.promptQueue = len(msg.prompts)
-	// A report waits in the queue until the model reads it, but its
-	// subagent is already done.
-	for _, prompt := range msg.prompts {
-		if report, ok := message.ParseSubAgentReportPrompt(prompt); ok {
-			m.markDispatchReported(report.Label)
-		}
-	}
 	if countChanged {
 		m.updateLayoutAndSize()
 	} else if itemsChanged {
@@ -335,7 +329,11 @@ func (m *UI) staleWorkspaceRefreshCmds() []tea.Cmd {
 		return nil
 	}
 	var cmds []tea.Cmd
-	if !m.agentBusyCache.fresh(busyCacheTTL) || !m.permModeCache.fresh(busyCacheTTL) {
+	busyStale := !m.agentBusyCache.fresh(busyCacheTTL) ||
+		!m.yoloCache.fresh(busyCacheTTL) ||
+		!m.autoCache.fresh(busyCacheTTL) ||
+		(m.hasSession() && !m.sessionBusyCache.freshFor(busyCacheTTL, m.session.ID))
+	if busyStale {
 		if cmd := m.dispatchBusyRefresh(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
@@ -358,16 +356,150 @@ func (m *UI) staleWorkspaceRefreshCmds() []tea.Cmd {
 	return cmds
 }
 
-// permModeCached reports the memoized permission mode. Toggles write
-// through the cache; the Update-tail backstop keeps it bounded-stale
-// otherwise.
-func (m *UI) permModeCached() permission.PermissionMode {
-	return m.permModeCache.val
+// permissionMode is one step of the ctrl+y cycle. Auto and yolo are
+// independent: enabling one always disables the other.
+type permissionMode int
+
+const (
+	permissionModeNormal permissionMode = iota
+	permissionModeAuto
+	permissionModeYolo
+)
+
+// toggleYoloMode flips permission auto-approval and writes the new value
+// through the yolo cache (no re-probe needed) and the editor prompt. Shared
+// by Shift+Tab so that cycle stays a yolo toggle. Returns the new mode.
+// Enabling yolo clears auto mode; disabling yolo leaves auto mode alone.
+func (m *UI) toggleYoloMode() bool {
+	yolo := !m.yoloModeCached()
+	m.writePermissionMode(yolo, m.autoModeCached() && !yolo)
+	return yolo
 }
 
-// yoloActive reports whether the memoized permission mode skips permission
-// prompts. Sysadmin skips them too, differing from yolo only in dropping the
-// exec-time block list, which the input-mode cycle has no stake in.
-func (m *UI) yoloActive() bool {
-	return m.permModeCached() != permission.PermissionModeNormal
+// cyclePermissionMode advances normal -> auto -> yolo -> normal. Both flags
+// are written through their caches so the key handler does not probe the
+// workspace. Auto never enables yolo, and yolo never enables auto.
+func (m *UI) cyclePermissionMode() permissionMode {
+	var next permissionMode
+	switch {
+	case !m.autoModeCached() && !m.yoloModeCached():
+		next = permissionModeAuto
+	case m.autoModeCached():
+		next = permissionModeYolo
+	default:
+		next = permissionModeNormal
+	}
+	m.writePermissionMode(next == permissionModeYolo, next == permissionModeAuto)
+	return next
+}
+
+// writePermissionMode sets skip and auto independently and writes both
+// values through their caches. Callers must not probe the workspace.
+func (m *UI) writePermissionMode(yolo, auto bool) {
+	m.com.Workspace.PermissionSetSkipRequests(yolo)
+	m.com.Workspace.PermissionSetAutoMode(auto)
+	m.yoloCache.set(yolo)
+	m.autoCache.set(auto)
+	// Supersede any in-flight busy/permission probe: its result carries the
+	// old generation and would otherwise overwrite the values we just wrote.
+	// Bump the generation (rather than invalidateBusyCaches, which would
+	// clear the fresh values) so applyBusyState's guard discards and
+	// re-dispatches the stale probe.
+	m.busyFetchGen++
+	m.setEditorPrompt(yolo, auto)
+	// Any explicit toggle hands YOLO ownership back to the user; the
+	// Shift+Tab cycle re-claims it right after its own call.
+	m.cycleYolo = false
+}
+
+// yoloModeCached reports the memoized permission-skip ("yolo") mode. Toggles
+// write through the cache; the Update-tail backstop keeps it bounded-stale
+// otherwise.
+func (m *UI) yoloModeCached() bool {
+	return m.yoloCache.val
+}
+
+// autoModeCached reports the memoized native auto-mode flag. The ctrl+y
+// cycle writes through the cache; the Update-tail backstop keeps it
+// bounded-stale otherwise.
+func (m *UI) autoModeCached() bool {
+	return m.autoCache.val
+}
+
+func (m *UI) activityFor(sessionID string) *sessionActivity {
+	if m.sessionActivities == nil {
+		m.sessionActivities = make(map[string]*sessionActivity)
+	}
+	if activity := m.sessionActivities[sessionID]; activity != nil {
+		return activity
+	}
+	activity := &sessionActivity{}
+	m.sessionActivities[sessionID] = activity
+	return activity
+}
+
+// sessionActivity retains only submissions and completion checks still pending.
+type sessionActivity struct {
+	completion *notify.Notification
+	pending    int
+	gen        uint64
+}
+
+func (m *UI) submissionFinished(sessionID string, gen uint64, err error, summary bool) tea.Cmd {
+	activity := m.activityFor(sessionID)
+	defer m.pruneActivity(sessionID)
+	if activity.pending > 0 {
+		activity.pending--
+	}
+	if m.pendingSubmissions > 0 {
+		m.pendingSubmissions--
+	}
+	if gen == activity.gen && err != nil {
+		activity.completion = nil
+		if sessionID == m.currentSessionID() {
+			if errors.Is(err, context.Canceled) {
+				// A canceled submission ends idle, not failed.
+				m.turnOutcome = tea.ProgramStateIdle
+			} else {
+				m.turnOutcome = tea.ProgramStateError
+			}
+		}
+	}
+	if gen == m.submissionGen && (err != nil || summary) {
+		m.turnStopPending = true
+	}
+	m.invalidateBusyCaches()
+	m.invalidatePromptQueue()
+	var completion tea.Cmd
+	if activity.pending == 0 && activity.completion != nil {
+		// The completion check reports the authoritative finish state; the
+		// turn stays "working" until it lands, unless the submission itself
+		// failed.
+		if !(gen == activity.gen && err != nil) {
+			m.turnOutcome = tea.ProgramStateWorking
+		}
+		completion = m.dispatchCompletionCheck(activity.completion)
+	}
+	return tea.Batch(completion, m.dispatchBusyRefresh(), m.dispatchPromptQueueRefresh())
+}
+
+func (m *UI) pruneActivity(sessionID string) {
+	if activity := m.sessionActivities[sessionID]; activity != nil && activity.pending == 0 && activity.completion == nil {
+		delete(m.sessionActivities, sessionID)
+	}
+}
+
+func (m *UI) dispatchCompletionCheck(n *notify.Notification) tea.Cmd {
+	busyGen, ws := m.busyFetchGen, m.com.Workspace
+	return func() tea.Msg {
+		return completionCheckedMsg{busyGen: busyGen, busy: ws.AgentIsSessionBusy(n.SessionID), notification: n}
+	}
+}
+
+// completionCheckedMsg carries a session-scoped idle probe for a successful
+// completion. Its generation prevents newer observed work being overwritten.
+type completionCheckedMsg struct {
+	notification *notify.Notification
+	busyGen      uint64
+	busy         bool
 }

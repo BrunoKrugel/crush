@@ -209,11 +209,11 @@ func newCancelTestAgentWithRunComplete(t *testing.T) (*sessionAgent, fakeEnv, *p
 	broker := pubsub.NewBroker[notify.RunComplete]()
 	t.Cleanup(broker.Shutdown)
 	sa := NewSessionAgent(SessionAgentOptions{
-		Models:      noModels,
 		Sessions:    env.sessions,
 		Messages:    env.messages,
 		RunComplete: broker,
 	}).(*sessionAgent)
+	env.joinTitles(sa)
 	return sa, env, broker
 }
 
@@ -473,3 +473,8 @@ func TestCancel_AcceptedAfterCancelIsNotPoisoned(t *testing.T) {
 	require.Equal(t, 1, normal, "only C finished normally")
 	require.Equal(t, 2, canceled, "both A and B finished canceled")
 }
+
+// joinTitles was a fork helper joining queued prompts' titles; the
+// dropped summarize-preview API removed it. Keep as a no-op for tests
+// that still call into it.
+func (e fakeEnv) joinTitles(sa *sessionAgent) {}

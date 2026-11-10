@@ -1,12 +1,12 @@
 package config
 
 import (
-	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,7 +18,7 @@ func readConfigJSON(t *testing.T, path string) map[string]any {
 	b, err := fs.ReadFile(os.DirFS(baseDir), fileName)
 	require.NoError(t, err)
 	var out map[string]any
-	require.NoError(t, json.Unmarshal(b, &out))
+	require.NoError(t, sonic.Unmarshal(b, &out))
 	return out
 }
 

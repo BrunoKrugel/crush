@@ -6,11 +6,11 @@ import (
 	"unicode/utf8"
 
 	"charm.land/bubbles/v2/key"
-	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/list"
+	"github.com/charmbracelet/crush/internal/ui/textarea"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/rivo/uniseg"
@@ -29,38 +29,30 @@ const (
 // It replaces the textarea temporarily, asking the user to switch to code
 // mode or request changes to the plan.
 type PlanHandoffInline struct {
-	com             *common.Common
-	selectedChoice  int
-	editing         bool
-	focused         bool
-	compositor      *lipgloss.Compositor
-	hoverX          int
-	hoverY          int
-	editor          textarea.Model
-	editorTextArea  image.Rectangle
-	selectionAnchor planHandoffSelectionPoint
-	selectionHead   planHandoffSelectionPoint
-	selectionSet    bool
-	selecting       bool
-
-	heightChanged bool
-
-	// OnConfirm receives whether the user chose coding with YOLO.
-	// The returned tea.Cmd is queued by the UI to perform the switch and
-	// start the coder agent.
-	OnConfirm func(yolo bool) tea.Cmd
-	// OnRequestChanges is called with the user's feedback when they submit it.
+	compositor       *lipgloss.Compositor
+	com              *common.Common
 	OnRequestChanges func(string) tea.Cmd
-
-	pendingCmd tea.Cmd // set during mouse confirmation; retrieved via PendingCmd
-
-	keyLeftRight key.Binding
-	keyEnter     key.Binding
-	keyNewline   key.Binding
-	keyCoding    key.Binding
-	keyYolo      key.Binding
-	keyNo        key.Binding
-	keyClose     key.Binding
+	OnConfirm        func(yolo bool) tea.Cmd
+	pendingCmd       tea.Cmd
+	keyClose         key.Binding
+	keyEnter         key.Binding
+	keyCoding        key.Binding
+	keyNewline       key.Binding
+	keyYolo          key.Binding
+	keyLeftRight     key.Binding
+	keyNo            key.Binding
+	editor           textarea.Model
+	editorTextArea   image.Rectangle
+	selectionAnchor  planHandoffSelectionPoint
+	selectionHead    planHandoffSelectionPoint
+	hoverY           int
+	hoverX           int
+	selectedChoice   int
+	heightChanged    bool
+	selecting        bool
+	selectionSet     bool
+	focused          bool
+	editing          bool
 }
 
 var (
@@ -79,8 +71,8 @@ const (
 
 type planHandoffChoiceLayout struct {
 	question string
-	buttons  []common.ButtonOpts
 	spacing  string
+	buttons  []common.ButtonOpts
 	height   int
 }
 
@@ -524,7 +516,7 @@ func (p *PlanHandoffInline) selectionPointAt(x, y int, clampToArea bool) (planHa
 	cursor = editor.Cursor()
 
 	offset := column
-	for i := 0; i < lineIndex; i++ {
+	for i := range lineIndex {
 		offset += utf8.RuneCountInString(lines[i]) + 1
 	}
 	return planHandoffSelectionPoint{

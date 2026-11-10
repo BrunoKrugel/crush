@@ -34,8 +34,8 @@ type controlServerOpts struct {
 
 // controlLog records the control commands a server received.
 type controlLog struct {
-	mu       sync.Mutex
 	commands []string
+	mu       sync.Mutex
 }
 
 func (l *controlLog) all() []string {

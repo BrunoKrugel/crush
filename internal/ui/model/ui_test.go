@@ -3,26 +3,26 @@ package model
 import (
 	"context"
 	"image"
+	"reflect"
 	"testing"
 
-	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/catwalk/v3/pkg/catwalk"
 	"github.com/charmbracelet/crush/internal/agent/notify"
+	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/message"
-	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/ui/attachments"
 	"github.com/charmbracelet/crush/internal/ui/chat"
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/dialog"
 	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/charmbracelet/crush/internal/ui/textarea"
 	"github.com/charmbracelet/crush/internal/ui/util"
 	"github.com/charmbracelet/crush/internal/workspace"
 	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 )
 
@@ -265,14 +265,20 @@ func newTestUIWithConfig(t *testing.T, cfg *config.Config) *UI {
 type testWorkspace struct {
 	workspace.Workspace
 	cfg               *config.Config
+	mcpStates         map[string]mcp.ClientInfo
 	setMainCalledWith string
-	updateCalls       int
-	agentReady        bool
-	agentBusy         bool
+	runSteering       []bool
 	runPrompts        []string
-	permMode          permission.PermissionMode
 	runHidden         []bool
 	compactCalls      []bool
+	previewCalls      []string
+	confirmCalls      []string
+	discardCalls      []string
+	updateCalls       int
+	agentBusy         bool
+	yolo              bool
+	auto              bool
+	agentReady        bool
 }
 
 func (w *testWorkspace) Config() *config.Config {
@@ -293,13 +299,13 @@ func (w *testWorkspace) UpdateAgentModel(context.Context) error {
 	return nil
 }
 
-func (w *testWorkspace) PermissionMode() permission.PermissionMode {
-	return w.permMode
-}
+func (w *testWorkspace) PermissionSkipRequests() bool { return w.yolo }
 
-func (w *testWorkspace) PermissionSetMode(mode permission.PermissionMode) {
-	w.permMode = mode
-}
+func (w *testWorkspace) PermissionSetSkipRequests(skip bool) { w.yolo = skip }
+
+func (w *testWorkspace) PermissionAutoMode() bool { return w.auto }
+
+func (w *testWorkspace) PermissionSetAutoMode(enabled bool) { w.auto = enabled }
 
 func (w *testWorkspace) AgentIsReady() bool {
 	return w.agentReady
@@ -319,6 +325,7 @@ func (w *testWorkspace) AgentReadyErr() error {
 func (w *testWorkspace) AgentRun(ctx context.Context, _ string, prompt string, _ ...message.Attachment) error {
 	w.runPrompts = append(w.runPrompts, prompt)
 	w.runHidden = append(w.runHidden, message.HiddenUserMessage(ctx))
+	w.runSteering = append(w.runSteering, message.OperatorSteering(ctx))
 	return nil
 }
 
@@ -338,22 +345,18 @@ func TestToggleInputMode(t *testing.T) {
 	t.Parallel()
 	ui, ws := newPlanUI(t, "sess-1")
 	ui.mode = uiInputModeCode
-	// The Shift+Tab cycle: code -> plan -> YOLO -> sysadmin -> code. Only
-	// the two input-mode changes switch agents, so the update count stops
-	// climbing once the cycle is only moving the permission mode.
 	for _, want := range []struct {
 		mode    uiInputMode
-		perm    permission.PermissionMode
+		yolo    bool
 		updates int
 	}{
-		{uiInputModePlan, permission.PermissionModeNormal, 1},
-		{uiInputModeCode, permission.PermissionModeYolo, 2},
-		{uiInputModeCode, permission.PermissionModeSysadmin, 2},
-		{uiInputModeCode, permission.PermissionModeNormal, 2},
+		{uiInputModePlan, false, 1},
+		{uiInputModeCode, true, 2},
+		{uiInputModeCode, false, 2},
 	} {
 		applyModeSwitchMsg(ui, ui.toggleInputMode())
 		require.Equal(t, want.mode, ui.mode)
-		require.Equal(t, want.perm, ws.permMode)
+		require.Equal(t, want.yolo, ws.yolo)
 		require.Equal(t, want.updates, ws.updateCalls)
 	}
 }
@@ -383,18 +386,6 @@ func newPlanUI(t *testing.T, sessionID string) (*UI, *testWorkspace) {
 		chat:     NewChat(com, config.ScrollbarDefault),
 	}
 	return u, ws
-}
-
-// seedYolo puts the workspace and the UI's memoized permission mode in the
-// same state the running UI keeps them in: every write goes through
-// setPermissionMode, so the cache never trails the workspace.
-func seedYolo(u *UI, ws *testWorkspace, on bool) {
-	mode := permission.PermissionModeNormal
-	if on {
-		mode = permission.PermissionModeYolo
-	}
-	ws.PermissionSetMode(mode)
-	u.permModeCache.set(mode)
 }
 
 // applyModeSwitchMsg runs a setInputMode command to completion the way the
@@ -772,7 +763,7 @@ func TestSetInputMode_TracksModeSwitching(t *testing.T) {
 	require.True(t, ok)
 	require.NoError(t, msg.err)
 	require.Equal(t, uiInputModeCode, msg.mode)
-	require.Equal(t, permission.PermissionModeNormal, msg.perm)
+	require.False(t, msg.yolo)
 }
 
 func TestHandlePlanHandoff_SetsPendingPlan(t *testing.T) {
@@ -882,11 +873,11 @@ func TestPlanHandoffExplicitPermissionMode(t *testing.T) {
 	t.Parallel()
 	for _, yolo := range []bool{false, true} {
 		u, ws := newPlanUI(t, "sess-1")
-		seedYolo(u, ws, !yolo)
+		ws.yolo = !yolo
 		u.openPlanHandoff()
 		inline := u.activeInline.(*dialog.PlanHandoffInline)
 		cmd := inline.OnConfirm(yolo)
-		require.Equal(t, yolo, ws.permMode != permission.PermissionModeNormal)
+		require.Equal(t, yolo, ws.yolo)
 		require.Empty(t, ws.runPrompts, "wait for the coder model to finish switching")
 		switched := cmd().(modeSwitchedMsg)
 		require.NoError(t, switched.err)
@@ -899,7 +890,7 @@ func TestPlanPromptIgnoresYOLO(t *testing.T) {
 	u, _ := newPlanUI(t, "sess-1")
 	u.textarea.SetWidth(40)
 	u.textarea.Focus()
-	u.setEditorPrompt(permission.PermissionModeYolo)
+	u.setEditorPrompt(true, false)
 	require.Contains(t, u.textarea.View(), "⏸")
 	require.NotContains(t, u.textarea.View(), " ! ")
 }
@@ -917,73 +908,172 @@ func TestGeneratedPlanContinuationIsHidden(t *testing.T) {
 		}
 	}
 	require.Equal(t, []bool{true, false}, ws.runHidden)
+	require.Equal(t, []bool{true, true}, ws.runSteering)
 	require.Equal(t, []string{"Implement the plan.", "Implement the plan."}, ws.runPrompts)
 }
 
-// A permissive mode the user chose himself is part of the ring like any
-// other: the cycle picks up where the badge says it is and closes.
-func TestToggleInputModeCycleCompletesFromExplicitYolo(t *testing.T) {
+func TestToggleInputModePreservesExistingYOLOOnEntry(t *testing.T) {
 	t.Parallel()
 	u, ws := newPlanUI(t, "sess-1")
 	u.mode = uiInputModeCode
-	seedYolo(u, ws, true)
-
-	for _, want := range []struct {
-		mode uiInputMode
-		perm permission.PermissionMode
-	}{
-		{uiInputModeCode, permission.PermissionModeSysadmin},
-		{uiInputModeCode, permission.PermissionModeNormal},
-		{uiInputModePlan, permission.PermissionModeNormal},
-		{uiInputModeCode, permission.PermissionModeYolo},
-	} {
-		applyModeSwitchMsg(u, u.toggleInputMode())
-		require.Equal(t, want.mode, u.mode)
-		require.Equal(t, want.perm, ws.permMode)
-	}
-}
-
-// Leaving plan mode pulls the user into YOLO coding, but a session already
-// on the sysadmin rung keeps it rather than being knocked down to YOLO.
-func TestToggleInputModeKeepsSysadminLeavingPlan(t *testing.T) {
-	t.Parallel()
-	u, ws := newPlanUI(t, "sess-1")
-	u.setPermissionMode(permission.PermissionModeSysadmin)
-
+	ws.yolo = true
 	applyModeSwitchMsg(u, u.toggleInputMode())
-	require.Equal(t, uiInputModeCode, u.mode)
-	require.Equal(t, permission.PermissionModeSysadmin, ws.permMode)
+	require.Equal(t, uiInputModePlan, u.mode)
+	require.True(t, ws.yolo)
 }
 
 func TestSwitchPlanToYolo(t *testing.T) {
 	t.Parallel()
 	for _, carriedYolo := range []bool{false, true} {
 		u, ws := newPlanUI(t, "sess-1")
-		seedYolo(u, ws, carriedYolo)
+		ws.yolo = carriedYolo
+		u.cycleYolo = carriedYolo
 
 		applyModeSwitchMsg(u, u.switchPlanToYolo())
 		require.Equal(t, uiInputModeCode, u.mode, "activating YOLO leaves plan mode")
-		require.Equal(t, permission.PermissionModeYolo, ws.permMode, "YOLO ends up enabled regardless of the carried state")
+		require.True(t, ws.yolo, "YOLO ends up enabled regardless of the carried state")
+		require.False(t, u.cycleYolo, "explicit activation must not be undone by the Shift+Tab cycle")
 		require.Equal(t, config.AgentCoder, ws.setMainCalledWith)
 	}
 }
 
-func TestStatusModeBadge(t *testing.T) {
+func (w *testWorkspace) MCPGetStates() map[string]mcp.ClientInfo {
+	return w.mcpStates
+}
+
+// TestRefreshMCPStates verifies that a fast MCP connection whose only
+// EventStateChanged fired before the TUI subscribed still ends up in
+// m.mcpStates once refreshMCPStates re-seeds from the authoritative
+// MCPGetStates(), instead of the sidebar showing "None" forever.
+func TestRefreshMCPStates(t *testing.T) {
 	t.Parallel()
-	u, _ := newPlanUI(t, "sess-1")
-	s := &Status{com: u.com}
-	for _, tc := range []struct {
-		name  string
-		mode  uiInputMode
-		perm  permission.PermissionMode
-		badge string
-	}{
-		{"code", uiInputModeCode, permission.PermissionModeNormal, ""},
-		{"yolo", uiInputModeCode, permission.PermissionModeYolo, "YOLO MODE"},
-		{"sysadmin", uiInputModeCode, permission.PermissionModeSysadmin, "SYSADMIN MODE"},
-		{"plan wins", uiInputModePlan, permission.PermissionModeSysadmin, "PLAN MODE"},
-	} {
-		s.SetMode(tc.mode, tc.perm)
-		require.Contains(t, ansi.Strip(s.modeBadge()), tc.badge, tc.name)
+
+	states := map[string]mcp.ClientInfo{
+		"example": {State: mcp.StateConnected},
 	}
+	ui := &UI{
+		com: &common.Common{
+			Workspace: &testWorkspace{mcpStates: states},
+		},
+	}
+	require.Empty(t, ui.mcpStates, "mcpStates should start empty, as if the connect event was missed")
+
+	msg := ui.refreshMCPStates()()
+	changed, ok := msg.(mcpStateChangedMsg)
+	require.True(t, ok, "refreshMCPStates should return a mcpStateChangedMsg")
+	require.Equal(t, states, changed.states)
+}
+
+// cmdStages runs a command to completion, flattening bubbletea's sequence
+// and batch wrappers, and returns the messages each leaf produced.
+func cmdStages(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if msg == nil {
+		return nil
+	}
+	// tea.Sequence yields an unexported []tea.Cmd wrapper, so slice kinds
+	// are handled by reflection rather than a type switch.
+	if rv := reflect.ValueOf(msg); rv.Kind() == reflect.Slice {
+		var out []tea.Msg
+		for i := range rv.Len() {
+			if c, ok := reflect.TypeAssert[tea.Cmd](rv.Index(i)); ok {
+				out = append(out, cmdStages(c)...)
+			}
+		}
+		return out
+	}
+	if c, ok := msg.(tea.Cmd); ok {
+		return cmdStages(c)
+	}
+	return []tea.Msg{msg}
+}
+
+// toggleDispatchWorkspace records toggle side effects so the dialog action
+// dispatch can be asserted without a live workspace.
+type toggleDispatchWorkspace struct {
+	workspace.Workspace
+	skillDisabled map[string]bool
+	mcpDisabled   map[string]bool
+}
+
+func (w *toggleDispatchWorkspace) SkillSetDisabled(_ context.Context, name string, disabled bool) error {
+	if w.skillDisabled == nil {
+		w.skillDisabled = map[string]bool{}
+	}
+	w.skillDisabled[name] = disabled
+	return nil
+}
+
+func (w *toggleDispatchWorkspace) SkillsDisabled(_ context.Context) ([]string, error) {
+	return nil, nil
+}
+
+func (w *toggleDispatchWorkspace) SkillsEnabled(_ context.Context) ([]string, error) {
+	return nil, nil
+}
+
+func (w *toggleDispatchWorkspace) MCPSetServerDisabled(_ context.Context, name string, disabled bool) error {
+	if w.mcpDisabled == nil {
+		w.mcpDisabled = map[string]bool{}
+	}
+	w.mcpDisabled[name] = disabled
+	return nil
+}
+
+func (w *toggleDispatchWorkspace) Config() *config.Config { return &config.Config{} }
+
+// TestDialogToggleActionsAreDispatched pins the routing of the two toggle
+// dialog actions through handleDialogMsg: the dialogs emit the actions, but
+// only the model turns them into workspace calls. A merge once dropped these
+// cases and left both toggles dead while the dialogs kept their optimistic
+// state, so the drift was invisible until a user toggled for real.
+func TestDialogToggleActionsAreDispatched(t *testing.T) {
+	t.Parallel()
+
+	t.Run("mcp toggle", func(t *testing.T) {
+		ws := &toggleDispatchWorkspace{}
+		u := newSidebarTestUI()
+		u.com.Workspace = ws
+		u.attachments = attachments.New(nil, attachments.Keymap{})
+		u.session = &session.Session{ID: "s1"}
+
+		u.dialog.OpenDialog(dialog.NewMCPToggles(u.com, []dialog.MCPToggleItem{
+			{Name: "datadog", Status: "connected"},
+		}))
+
+		cmd := u.handleDialogMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+		require.NotNil(t, cmd, "the toggle action must produce a command")
+		for _, c := range []tea.Cmd{cmd} {
+			if msg := c(); msg != nil {
+				_ = msg // the InfoMsg is the toast; the effect is what we assert
+			}
+		}
+		require.Equal(t, true, ws.mcpDisabled["datadog"],
+			"the MCP toggle's action must reach the workspace")
+	})
+
+	t.Run("skill toggle", func(t *testing.T) {
+		ws := &toggleDispatchWorkspace{}
+		u := newSidebarTestUI()
+		u.com.Workspace = ws
+		u.attachments = attachments.New(nil, attachments.Keymap{})
+		u.session = &session.Session{ID: "s1"}
+
+		u.dialog.OpenDialog(dialog.NewSkillsToggles(u.com, []dialog.SkillToggleItem{
+			{Name: "go-testing"},
+		}))
+
+		cmd := u.handleDialogMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+		require.NotNil(t, cmd, "the toggle action must produce a command")
+		// tea.Sequence's cmd returns a []tea.Cmd under the hood: run every
+		// stage in order so the apply lands before the assertion.
+		for _, stage := range cmdStages(cmd) {
+			_ = stage
+		}
+		require.Equal(t, true, ws.skillDisabled["go-testing"],
+			"the skill toggle's action must reach the workspace")
+	})
 }

@@ -107,6 +107,9 @@ type Event struct {
 	Reason string
 	// Trigger is why compaction ran (PreCompact, PostCompact).
 	Trigger string
+	// Transcript is the optional reasoning-blind transcript the caller
+	// attached to a permission request.
+	Transcript *string
 }
 
 // ToolCall identifies the tool call a tool event is about. Input is raw

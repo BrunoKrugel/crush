@@ -38,18 +38,6 @@ type scrollbarHideMsg struct {
 	seq int // sequence number to ignore stale messages
 }
 
-// sidebarScrollbarHideMsg is sent to hide the sidebar scrollbar after timeout.
-type sidebarScrollbarHideMsg struct {
-	seq int
-}
-
-// scrollbarHideCmd returns a command that sends a scrollbarHideMsg after the timeout.
-func scrollbarHideCmd(seq int) tea.Cmd {
-	return tea.Tick(scrollbarHideDuration, func(_ time.Time) tea.Msg {
-		return scrollbarHideMsg{seq: seq}
-	})
-}
-
 // resizeSettleDuration is how long after the last resize event the chat
 // waits before it starts warming the message cache it skipped mid-drag.
 const resizeSettleDuration = 120 * time.Millisecond
@@ -77,90 +65,45 @@ func chatWarmCmd(seq int, delay time.Duration) tea.Cmd {
 	})
 }
 
-// sidebarScrollbarHideCmd returns a command that sends a sidebarScrollbarHideMsg
-// after the timeout.
-func sidebarScrollbarHideCmd(seq int) tea.Cmd {
+// scrollbarHideCmd returns a command that sends a scrollbarHideMsg after the timeout.
+func scrollbarHideCmd(seq int) tea.Cmd {
 	return tea.Tick(scrollbarHideDuration, func(_ time.Time) tea.Msg {
-		return sidebarScrollbarHideMsg{seq: seq}
+		return scrollbarHideMsg{seq: seq}
 	})
 }
 
 // Chat represents the chat UI model that handles chat interactions and
 // messages.
 type Chat struct {
-	com      *common.Common
-	list     *list.List
-	idInxMap map[string]int // Map of message IDs to their indices in the list
-
-	// externalAnimation is set when something outside the list is animating
-	// and needs the shared clock, such as the header's subagent spinner.
-	externalAnimation bool
-
-	// animRunning is true while the shared animation clock has a tick
-	// outstanding. The clock stops itself when no visible item is spinning
-	// and is re-armed by EnsureAnimating once one is. animGen identifies
-	// the current clock: a tick carrying an older generation belongs to a
-	// clock that was superseded and is ignored, so a delayed tick can
-	// never run alongside a replacement. animArmedAt lets EnsureAnimating
-	// recover if a tick is ever lost.
-	animRunning bool
-	animGen     uint64
-	animArmedAt time.Time
-	// animNow is an injectable clock for tests (nil == real time).
-	animNow func() time.Time
-
-	// animAllowed gates the shared clock. setSessionMessages clears it when
-	// reloading a session whose agent is not busy so ghost spinners (an
-	// assistant message that never got a Finish part) stay still; the
-	// message handlers re-enable it when new work arrives.
-	animAllowed bool
-
-	// Mouse state
-	mouseDown     bool
-	mouseDownItem int // Item index where mouse was pressed
-	mouseDownX    int // X position in item content (character offset)
-	mouseDownY    int // Y position in item (line offset)
-	mouseDragItem int // Current item index being dragged over
-	mouseDragX    int // Current X in item content
-	mouseDragY    int // Current Y in item
-
-	// Click tracking for double/triple clicks
-	lastClickTime time.Time
-	lastClickX    int
-	lastClickY    int
-	clickCount    int
-
-	// Pending single click action (delayed to detect double-click)
-	pendingClickID int // Incremented on each click to invalidate old pending clicks
-
-	// follow is a flag to indicate whether the view should auto-scroll to
-	// bottom on new messages.
-	follow bool
-
-	// drawCache memoizes the decoded form of the last list.Render output so
-	// repeat frames with byte-identical content skip the per-cell ANSI
-	// reparse that uv.StyledString.Draw performs every call. See F9
-	// (docs/notes/2026-05-12-chat-rendering-perf.md §4.8). Bounded to one
-	// entry; invalidated implicitly by string inequality on the next Draw.
-	drawCache *chatDrawCache
-
-	// Scrollbar visibility state
-	scrollbarVisible bool
-	scrollbarHideSeq int    // current sequence number for hide timer
-	scrollbarMode    string // "default", "always", or "never"
-	// scrollbarHideArmed is the hide timeout already scheduled, or zero when
-	// none is outstanding. The tick is armed from the UI's Update tail rather
-	// than returned by the scroll calls, so a caller ignoring a command can
-	// no longer lose the auto-hide.
+	lastClickTime      time.Time
+	animArmedAt        time.Time
+	list               *list.List
+	idInxMap           map[string]int
+	drawCache          *chatDrawCache
+	animNow            func() time.Time
+	com                *common.Common
+	scrollbarMode      string
+	resizeSettleSeq    int
+	scrollbarHideSeq   int
+	mouseDownY         int
+	mouseDownX         int
+	mouseDragItem      int
+	mouseDragX         int
+	mouseDragY         int
+	mouseDownItem      int
+	lastClickX         int
+	lastClickY         int
+	clickCount         int
+	pendingClickID     int
 	scrollbarHideArmed int
-
-	// resizing suppresses the O(N) total-height scan while a resize is in
-	// flight (and during the incremental warm afterward), so a drag only
-	// reflows the visible items. resizeSettleSeq guards stale settle/warm
-	// timers; warmNext tracks warming progress through the message list.
-	resizing        bool
-	resizeSettleSeq int
-	warmNext        int
+	animGen            uint64
+	warmNext           int
+	animAllowed        bool
+	scrollbarVisible   bool
+	follow             bool
+	resizing           bool
+	mouseDown          bool
+	animRunning        bool
 }
 
 // scrollbarHideDuration is how long the scrollbar remains visible after scroll activity.
@@ -181,8 +124,8 @@ const scrollbarHideDuration = 2 * time.Second
 // ANSI re-parse on hit.
 type chatDrawCache struct {
 	rendered string
-	method   ansi.Method
 	buf      uv.ScreenBuffer
+	method   ansi.Method
 }
 
 // NewChat creates a new instance of [Chat] that handles chat interactions and
@@ -252,17 +195,12 @@ func (m *Chat) Draw(scr uv.Screen, area uv.Rectangle) {
 	}
 
 	rendered := m.list.Render()
-	// In follow mode the view stays pinned to the end. Re-anchor whenever
-	// the render moved the end: content growing past it (streaming), or
-	// shrinking away from it (an item removed, such as the prompt echo
-	// giving way to the stored prompt), which would otherwise leave the
-	// transcript lifted off the bottom until something else scrolls.
-	if m.follow {
-		idx, line := m.list.ScrollPosition()
+	// If we're in follow mode but the render revealed we're no longer at
+	// the bottom (e.g. streaming content grew an item), re-anchor and
+	// re-render so the view stays pinned to the end.
+	if m.follow && !m.list.AtBottom() {
 		m.list.ScrollToBottom()
-		if newIdx, newLine := m.list.ScrollPosition(); newIdx != idx || newLine != line {
-			rendered = m.list.Render()
-		}
+		rendered = m.list.Render()
 	}
 	method, ok := scr.WidthMethod().(ansi.Method)
 	if !ok {
@@ -490,24 +428,6 @@ func (m *Chat) AppendMessages(msgs ...chat.MessageItem) {
 	m.list.AppendItems(items...)
 }
 
-// LastPromptID returns the id of the last stored prompt in view, or "".
-func (m *Chat) LastPromptID() string {
-	for i := m.list.Len() - 1; i >= 0; i-- {
-		item, ok := m.list.ItemAt(i).(*chat.UserMessageItem)
-		if ok && item.ID() != chat.PendingUserID && item.Message().IsPrompt() {
-			return item.ID()
-		}
-	}
-	return ""
-}
-
-// containsMessage reports whether any of msgs carries the given id.
-func containsMessage(msgs []chat.MessageItem, id string) bool {
-	return slices.ContainsFunc(msgs, func(msg chat.MessageItem) bool {
-		return msg.ID() == id
-	})
-}
-
 // UpdateNestedToolIDs updates the ID map for nested tools within a container.
 // Call this after modifying nested tools to ensure animations work correctly.
 func (m *Chat) UpdateNestedToolIDs(containerID string) {
@@ -570,14 +490,6 @@ func (m *Chat) SetAnimationsAllowed(allowed bool) {
 // every message so any change that puts a spinner on screen (new message,
 // tool update, scroll, session load) starts the clock without per-call-site
 // wiring. It is the only place a tick is armed apart from Tick itself.
-// SetExternalAnimation records whether something outside the transcript is
-// animating, such as the header's subagent spinner. The clock is shared, and
-// its gate otherwise only looks at items currently on screen, so an animation
-// living in the chrome would never keep it running.
-func (m *Chat) SetExternalAnimation(animating bool) {
-	m.externalAnimation = animating
-}
-
 func (m *Chat) EnsureAnimating() tea.Cmd {
 	if !m.animAllowed {
 		m.animRunning = false
@@ -586,7 +498,7 @@ func (m *Chat) EnsureAnimating() tea.Cmd {
 	if m.animRunning && m.now().Sub(m.animArmedAt) < animClockLostAfter {
 		return nil
 	}
-	if !m.hasVisibleAnimation() && !m.externalAnimation {
+	if !m.hasVisibleAnimation() {
 		m.animRunning = false
 		return nil
 	}
@@ -1003,13 +915,13 @@ func (m *Chat) MessageItem(id string) chat.MessageItem {
 	return item
 }
 
-// MessageItemAt returns the message item at index i, or nil if i is out of
-// range or the item is not a [chat.MessageItem].
-func (m *Chat) MessageItemAt(i int) chat.MessageItem {
-	if i < 0 || i >= m.list.Len() {
+// ItemAt returns the message item at the given list index, or nil when
+// the index is out of bounds or holds a non-message item.
+func (m *Chat) ItemAt(index int) chat.MessageItem {
+	if index < 0 || index >= m.list.Len() {
 		return nil
 	}
-	item, ok := m.list.ItemAt(i).(chat.MessageItem)
+	item, ok := m.list.ItemAt(index).(chat.MessageItem)
 	if !ok {
 		return nil
 	}
@@ -1126,39 +1038,52 @@ func (m *Chat) HandleMouseDown(x, y int) (bool, tea.Cmd) {
 
 // HandleDelayedClick handles a delayed single-click action (like expansion).
 // It only executes if the click ID matches (i.e., no double-click occurred)
-// and no text selection was made (drag to select).
-func (m *Chat) HandleDelayedClick(msg DelayedClickMsg) bool {
+// and no text selection was made (drag to select). It returns whether the
+// click was handled and an optional command produced by the clicked item
+// (e.g. a clipboard copy from a click-to-copy affordance).
+func (m *Chat) HandleDelayedClick(msg DelayedClickMsg) (bool, tea.Cmd) {
 	// Ignore if this click was superseded by a newer click (double/triple).
 	if msg.ClickID != m.pendingClickID {
-		return false
+		return false, nil
 	}
 
 	// Don't expand if user dragged to select text.
 	if m.HasHighlight() {
-		return false
+		return false, nil
 	}
 
 	// Execute the click action (e.g., expansion).
 	selectedItem := m.list.SelectedItem()
-	if clickable, ok := selectedItem.(list.MouseClickable); ok {
-		handled := clickable.HandleMouseClick(ansi.MouseButton1, msg.X, msg.Y)
-		// Toggle expansion only when the item signalled it handled the
-		// click. Items like AssistantMessageItem only report handled when
-		// the click is on their expandable region, so this avoids
-		// toggling expansion for clicks outside the clickable area.
-		if handled {
-			if expandable, ok := selectedItem.(chat.Expandable); ok {
-				wasFollowing := m.follow
-				expandable.ToggleExpanded()
-				if wasFollowing {
-					m.ScrollToBottom()
-				}
-			}
-		}
-		return handled
+	var handled bool
+	var cmd tea.Cmd
+	if commandable, ok := selectedItem.(list.MouseClickCommandable); ok {
+		// Items that can produce click commands get first refusal. A
+		// non-nil command (e.g. copy-to-clipboard) replaces the generic
+		// expansion toggle below.
+		handled, cmd = commandable.HandleMouseClickCmd(ansi.MouseButton1, msg.X, msg.Y)
+	} else if clickable, ok := selectedItem.(list.MouseClickable); ok {
+		handled = clickable.HandleMouseClick(ansi.MouseButton1, msg.X, msg.Y)
+	} else {
+		return false, nil
 	}
 
-	return false
+	// Toggle expansion only when the item signalled it handled the
+	// click without producing a command of its own. Items like
+	// AssistantMessageItem only report handled when the click is on
+	// their expandable region, so this avoids toggling expansion for
+	// clicks outside the clickable area.
+	if handled && cmd == nil {
+		if expandable, ok := selectedItem.(chat.Expandable); ok {
+			wasFollowing := m.follow
+			if !expandable.ToggleExpanded() {
+				m.ScrollToIndex(m.list.Selected())
+			}
+			if wasFollowing {
+				m.ScrollToBottom()
+			}
+		}
+	}
+	return handled, cmd
 }
 
 // HandleMouseUp handles mouse up events for the chat component.
@@ -1458,4 +1383,35 @@ func abs(x int) int {
 		return -x
 	}
 	return x
+}
+
+// LastPromptID returns the id of the last stored prompt in view, or "".
+func (m *Chat) LastPromptID() string {
+	for i := m.list.Len() - 1; i >= 0; i-- {
+		item, ok := m.list.ItemAt(i).(*chat.UserMessageItem)
+		if ok && item.ID() != chat.PendingUserID && item.Message().IsPrompt() {
+			return item.ID()
+		}
+	}
+	return ""
+}
+
+// containsMessage reports whether any of msgs carries the given id.
+func containsMessage(msgs []chat.MessageItem, id string) bool {
+	return slices.ContainsFunc(msgs, func(msg chat.MessageItem) bool {
+		return msg.ID() == id
+	})
+}
+
+// MessageItemAt returns the chat item at transcript index i, or nil when
+// out of range. The fork subagents sidebar walks the transcript with it.
+func (m *Chat) MessageItemAt(i int) list.Item {
+	return m.list.ItemAt(i)
+}
+
+// SetExternalAnimation toggles whether an animation source outside this
+// chat's clock keeps frames alive (fork shells/testing used it). Kept as
+// a small shim over SetAnimationsAllowed.
+func (m *Chat) SetExternalAnimation(animating bool) {
+	m.SetAnimationsAllowed(animating)
 }

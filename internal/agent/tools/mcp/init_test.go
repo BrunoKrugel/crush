@@ -2,7 +2,7 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 	"io"
 	"maps"
 	"net/http"
@@ -12,6 +12,9 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"golang.org/x/oauth2"
+
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/env"
 	"github.com/charmbracelet/crush/internal/oauth"
@@ -422,8 +425,8 @@ func TestCreateSession_ResolutionFailureUpdatesState(t *testing.T) {
 	tests := []struct {
 		name            string
 		mcpName         string
-		cfg             config.MCPConfig
 		wantErrContains string
+		cfg             config.MCPConfig
 	}{
 		{
 			name:    "stdio env failure",
@@ -547,16 +550,16 @@ func TestReconcile(t *testing.T) {
 	// config the server last connected with (Config), and, for a server
 	// mid-connect, the config that attempt is connecting with (PendingConfig).
 	type server struct {
-		state   State
-		config  config.MCPConfig
 		pending *config.MCPConfig
+		config  config.MCPConfig
+		state   State
 	}
 
 	tests := []struct {
-		name    string
 		servers map[string]server
 		current config.MCPs
 		want    map[string]reinitAction
+		name    string
 	}{
 		{
 			name:    "new server starts",
@@ -711,6 +714,7 @@ func TestMCPConfigEqual(t *testing.T) {
 		},
 		{"disabled vs enabled", base, func() config.MCPConfig { m := base; m.Disabled = true; return m }(), false},
 		{"oauth flag", base, func() config.MCPConfig { m := base; m.OAuth = true; return m }(), false},
+		{"channel opt-in", base, func() config.MCPConfig { m := base; m.ChannelEnabled = true; return m }(), false},
 	}
 
 	for _, tc := range tests {
@@ -731,11 +735,14 @@ func TestMCPConfigEqualExhaustive(t *testing.T) {
 
 	// Fields intentionally excluded from the comparison.
 	excluded := map[string]bool{
-		"OAuthToken":   true, // internally managed, refreshed out-of-band.
-		"ChannelReply": true, // read live from config at reply time, not baked into the session.
+		"OAuthToken": true, // internally managed, refreshed out-of-band.
+		// Reply routing is read from live config on every turn
+		// (sendChannelReply looks it up per turn), so a change takes effect
+		// without rebuilding the session.
+		"ChannelReply": true,
 	}
 
-	typ := reflect.TypeOf(config.MCPConfig{})
+	typ := reflect.TypeFor[config.MCPConfig]()
 	for i := range typ.NumField() {
 		name := typ.Field(i).Name
 		if excluded[name] {
@@ -850,11 +857,11 @@ func TestCreateSession_Sessionless(t *testing.T) {
 				ID     any    `json:"id"`
 				Method string `json:"method"`
 			}
-			_ = json.Unmarshal(body, &req)
+			_ = sonic.Unmarshal(body, &req)
 
 			writeResult := func(result any) {
 				w.Header().Set("Content-Type", "application/json")
-				resp, _ := json.Marshal(map[string]any{
+				resp, _ := sonic.Marshal(map[string]any{
 					"jsonrpc": "2.0",
 					"id":      req.ID,
 					"result":  result,
@@ -923,4 +930,55 @@ func TestCreateSession_Sessionless(t *testing.T) {
 		require.Contains(t, err.Error(), "session not found")
 		require.GreaterOrEqual(t, listenTotal.Load(), int64(1), "expected the listen stream attempt")
 	})
+}
+
+// TestIsOAuthInitErrTokenEndpointRejections pins the detector's contract for
+// token-endpoint failures: a gateway that answers the refresh grant with a
+// bare HTTP 500 (no OAuth error code in the body) must still count as an
+// init-OAuth failure, because with an expired access token the refresh grant
+// was the only path forward — the token has to be cleared and a fresh
+// interactive auth demanded instead of leaving the server stuck in StateError.
+func TestIsOAuthInitErrTokenEndpointRejections(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		err  error
+		name string
+		want bool
+	}{
+		{
+			name: "bare 500 with no oauth error code",
+			err: fmt.Errorf("calling %q: sending %q: rejected by transport: %w",
+				"initialize", "initialize",
+				&oauth2.RetrieveError{
+					Response: &http.Response{StatusCode: 500, Status: "500 Internal Server Error"},
+					Body:     []byte("Internal Server Error"),
+				}),
+			want: true,
+		},
+		{
+			name: "wrapped plain-500 text without a typed error",
+			err:  fmt.Errorf("initialize failed: oauth2: cannot fetch token: 500 Internal Server Error"),
+			want: true,
+		},
+		{
+			name: "invalid_grant stays recognized",
+			err: &oauth2.RetrieveError{
+				Response:  &http.Response{StatusCode: 400, Status: "400 Bad Request"},
+				ErrorCode: "invalid_grant",
+			},
+			want: true,
+		},
+		{
+			name: "unrelated transport failure is not an oauth error",
+			err:  fmt.Errorf("connection refused"),
+			want: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.want, isOAuthInitErr(tc.err))
+		})
+	}
 }

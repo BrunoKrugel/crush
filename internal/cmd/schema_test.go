@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/invopop/jsonschema"
 	"github.com/stretchr/testify/require"
@@ -14,13 +15,13 @@ func TestSchemaNoBrokenRefs(t *testing.T) {
 	t.Parallel()
 
 	reflector := new(jsonschema.Reflector)
-	bts, err := json.Marshal(reflector.Reflect(&config.Config{}))
+	bts, err := sonic.Marshal(reflector.Reflect(&config.Config{}))
 	require.NoError(t, err)
 
 	var schema struct {
 		Defs map[string]json.RawMessage `json:"$defs"`
 	}
-	require.NoError(t, json.Unmarshal(bts, &schema))
+	require.NoError(t, sonic.Unmarshal(bts, &schema))
 	require.NotEmpty(t, schema.Defs, "schema should have definitions")
 
 	for name := range schema.Defs {
@@ -32,18 +33,18 @@ func TestSchemaProvidersHasAdditionalProperties(t *testing.T) {
 	t.Parallel()
 
 	reflector := new(jsonschema.Reflector)
-	bts, err := json.Marshal(reflector.Reflect(&config.Config{}))
+	bts, err := sonic.Marshal(reflector.Reflect(&config.Config{}))
 	require.NoError(t, err)
 
 	var schema struct {
 		Defs map[string]json.RawMessage `json:"$defs"`
 	}
-	require.NoError(t, json.Unmarshal(bts, &schema))
+	require.NoError(t, sonic.Unmarshal(bts, &schema))
 
 	var cfg struct {
 		Properties map[string]json.RawMessage `json:"properties"`
 	}
-	require.NoError(t, json.Unmarshal(schema.Defs["Config"], &cfg))
+	require.NoError(t, sonic.Unmarshal(schema.Defs["Config"], &cfg))
 
 	providersRaw, ok := cfg.Properties["providers"]
 	require.True(t, ok, "Config should have a providers property")
@@ -52,8 +53,40 @@ func TestSchemaProvidersHasAdditionalProperties(t *testing.T) {
 		Type                 string          `json:"type"`
 		AdditionalProperties json.RawMessage `json:"additionalProperties"`
 	}
-	require.NoError(t, json.Unmarshal(providersRaw, &providers))
+	require.NoError(t, sonic.Unmarshal(providersRaw, &providers))
 	require.Equal(t, "object", providers.Type)
 	require.True(t, strings.Contains(string(providers.AdditionalProperties), "ProviderConfig"),
 		"providers should use additionalProperties with a ProviderConfig ref, got: %s", string(providers.AdditionalProperties))
+}
+
+// TestSchemaConfigHasAgentsProperty pins the agents block into the
+// published JSON schema so editors and validators see it (#333).
+func TestSchemaConfigHasAgentsProperty(t *testing.T) {
+	t.Parallel()
+
+	reflector := new(jsonschema.Reflector)
+	bts, err := sonic.Marshal(reflector.Reflect(&config.Config{}))
+	require.NoError(t, err)
+
+	var schema struct {
+		Defs map[string]json.RawMessage `json:"$defs"`
+	}
+	require.NoError(t, sonic.Unmarshal(bts, &schema))
+
+	var cfg struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	require.NoError(t, sonic.Unmarshal(schema.Defs["Config"], &cfg))
+
+	agentsRaw, ok := cfg.Properties["agents"]
+	require.True(t, ok, "Config should have an agents property")
+
+	var agents struct {
+		Type                 string          `json:"type"`
+		AdditionalProperties json.RawMessage `json:"additionalProperties"`
+	}
+	require.NoError(t, sonic.Unmarshal(agentsRaw, &agents))
+	require.Equal(t, "object", agents.Type)
+	require.True(t, strings.Contains(string(agents.AdditionalProperties), "AgentDefinition"),
+		"agents should use additionalProperties with an AgentDefinition ref, got: %s", string(agents.AdditionalProperties))
 }

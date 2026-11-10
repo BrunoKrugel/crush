@@ -4,24 +4,57 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/list"
 	"github.com/charmbracelet/crush/internal/ui/styles"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/sahilm/fuzzy"
 )
 
+// CommandGroup represents a group of command items rendered under a section
+// header, like model groups in the model picker.
+type CommandGroup struct {
+	*list.Versioned
+	Title string
+	Items []*CommandItem
+	t     *styles.Styles
+}
+
+// NewCommandGroup creates a new CommandGroup.
+func NewCommandGroup(t *styles.Styles, title string, items ...*CommandItem) CommandGroup {
+	return CommandGroup{
+		Versioned: list.NewVersioned(),
+		Title:     title,
+		Items:     items,
+		t:         t,
+	}
+}
+
+// Finished implements list.Item. Command groups are immutable headers.
+func (c *CommandGroup) Finished() bool {
+	return true
+}
+
+// Render implements [list.Item].
+func (c *CommandGroup) Render(width int) string {
+	title := " " + c.Title + " "
+	title = ansi.Truncate(title, max(0, width-1), "…")
+	return common.Section(c.t, title, width)
+}
+
 // CommandItem wraps a uicmd.Command to implement the ListItem interface.
 type CommandItem struct {
+	action Action
+	t      *styles.Styles
 	*list.Versioned
+	cache       map[int]string
 	id          string
 	title       string
 	shortcut    string
 	description string
-	action      Action
 	aliases     []string
-	t           *styles.Styles
+	children    []*CommandItem
 	m           fuzzy.Match
-	cache       map[int]string
 	focused     bool
 	hideInfo    bool
 }
@@ -59,16 +92,33 @@ func (c *CommandItem) WithDescription(desc string) *CommandItem {
 	return c
 }
 
-// Filter implements ListItem.
+// WithChildren returns the CommandItem with child sub-menu items.
+func (c *CommandItem) WithChildren(children ...*CommandItem) *CommandItem {
+	c.children = children
+	return c
+}
+
+// HasChildren reports whether the item has a sub-menu.
+func (c *CommandItem) HasChildren() bool {
+	return len(c.children) > 0
+}
+
+// Filter implements ListItem. The shortcut is folded in so slash-command
+// shortcuts like "/clear" or "/compact" are findable by typing the command
+// name; without it the shortcut is display-only and the command appears to
+// vanish from the list as the user types.
 func (c *CommandItem) Filter() string {
-	base := c.title
+	parts := []string{c.title}
 	if len(c.aliases) > 0 {
-		base = c.title + " " + strings.Join(c.aliases, " ")
+		parts = append(parts, strings.Join(c.aliases, " "))
+	}
+	if c.shortcut != "" {
+		parts = append(parts, c.shortcut)
 	}
 	if c.description != "" {
-		base = base + " " + c.description
+		parts = append(parts, c.description)
 	}
-	return base
+	return strings.Join(parts, " ")
 }
 
 // ID implements ListItem.

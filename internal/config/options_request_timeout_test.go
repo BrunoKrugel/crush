@@ -1,21 +1,22 @@
 package config
 
 import (
-	"encoding/json"
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
-func ptr[T any](v T) *T { return &v }
+//go:fix inline
+func ptr[T any](v T) *T { return new(v) }
 
 func TestOptionsGetRequestTimeout(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
 		options  *Options
+		name     string
 		expected time.Duration
 	}{
 		{
@@ -30,17 +31,17 @@ func TestOptionsGetRequestTimeout(t *testing.T) {
 		},
 		{
 			name:     "disabled",
-			options:  &Options{RequestTimeout: ptr(0)},
+			options:  &Options{RequestTimeout: new(0)},
 			expected: 0,
 		},
 		{
 			name:     "negative disables too",
-			options:  &Options{RequestTimeout: ptr(-1)},
+			options:  &Options{RequestTimeout: new(-1)},
 			expected: 0,
 		},
 		{
 			name:     "seconds to duration",
-			options:  &Options{RequestTimeout: ptr(300)},
+			options:  &Options{RequestTimeout: new(300)},
 			expected: 5 * time.Minute,
 		},
 	}
@@ -57,7 +58,7 @@ func TestOptionsRequestTimeoutFromJSON(t *testing.T) {
 	t.Parallel()
 
 	var cfg Config
-	require.NoError(t, json.Unmarshal([]byte(`{"options":{"request_timeout":300}}`), &cfg))
+	require.NoError(t, sonic.Unmarshal([]byte(`{"options":{"request_timeout":300}}`), &cfg))
 	require.Equal(t, 300, *cfg.Options.RequestTimeout)
 	require.Equal(t, 5*time.Minute, cfg.Options.GetRequestTimeout())
 }

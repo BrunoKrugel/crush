@@ -13,10 +13,8 @@ import (
 // uses a terminal-based backend instead, so this is only a safety net. See
 // NativeSupported.
 type NativeBackend struct {
-	// icon is the notification icon data (PNG bytes).
-	icon []byte
-	// notifyFunc is the function used to send notifications (swappable for testing).
 	notifyFunc func(title, message string, icon any) error
+	icon       []byte
 }
 
 // NewNativeBackend creates a new native notification backend.

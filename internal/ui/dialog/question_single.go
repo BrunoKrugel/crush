@@ -17,11 +17,9 @@ import (
 // It embeds choiceList for shared navigation, fill-in, and
 // rendering scaffold.
 type SingleChoice struct {
-	choiceList
-
-	keyEnter key.Binding
-
 	lastResponse question.Answer
+	keyEnter     key.Binding
+	choiceList
 }
 
 // NewSingleChoice creates a new inline single-choice component.

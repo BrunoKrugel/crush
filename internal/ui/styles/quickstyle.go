@@ -6,12 +6,12 @@ import (
 
 	"charm.land/bubbles/v2/filepicker"
 	"charm.land/bubbles/v2/help"
-	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2/ansi"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/crush/internal/ui/diffview"
+	"github.com/charmbracelet/crush/internal/ui/textarea"
 	uv "github.com/charmbracelet/ultraviolet"
 )
 
@@ -126,37 +126,6 @@ const (
 // deriveDiffColors fills unset diff tokens: foregrounds default to the
 // success and destructive hues, and backgrounds blend the foreground
 // over bgBase.
-func (o *quickStyleOpts) deriveDiffColors() {
-	if o.diffInsertFg == nil {
-		o.diffInsertFg = o.success
-	}
-	if o.diffDeleteFg == nil {
-		o.diffDeleteFg = o.destructive
-	}
-	if o.diffInsertCodeBg == nil && o.diffInsertFg != nil && o.bgBase != nil {
-		o.diffInsertCodeBg = blendTint(o.diffInsertFg, o.bgBase, diffInsertCodeBlend)
-	}
-	if o.diffInsertGutterBg == nil && o.diffInsertFg != nil && o.bgBase != nil {
-		o.diffInsertGutterBg = blendTint(o.diffInsertFg, o.bgBase, diffInsertGutterBlend)
-	}
-	if o.diffDeleteCodeBg == nil && o.diffDeleteFg != nil && o.bgBase != nil {
-		o.diffDeleteCodeBg = blendTint(o.diffDeleteFg, o.bgBase, diffDeleteCodeBlend)
-	}
-	if o.diffDeleteGutterBg == nil && o.diffDeleteFg != nil && o.bgBase != nil {
-		o.diffDeleteGutterBg = blendTint(o.diffDeleteFg, o.bgBase, diffDeleteGutterBlend)
-	}
-}
-
-// blendTint blends fg over bg in CIELAB (via lipgloss.Blend1D) with the
-// given fraction of fg: 0 returns bg, 1 returns fg.
-func blendTint(fg, bg color.Color, fraction float64) color.Color {
-	const steps = 101
-	gradient := lipgloss.Blend1D(steps, fg, bg)
-	// Blend1D's first stop is pure fg, so the gradient index counts fg
-	// share down from 1.
-	i := min(int(math.Round((1-fraction)*(steps-1))), steps-1)
-	return gradient[i]
-}
 
 // minBadgeInkContrast is the WCAG contrast below which [badgeInk] looks for
 // a more legible ink: the 3:1 floor for bold and large text.
@@ -199,13 +168,46 @@ func legibleBadges(s Styles, o quickStyleOpts) Styles {
 	return s
 }
 
-// wcagContrast returns the WCAG 2 contrast ratio between two colors.
+func blendTint(fg, bg color.Color, fraction float64) color.Color {
+	const steps = 101
+	gradient := lipgloss.Blend1D(steps, fg, bg)
+	// Blend1D's first stop is pure fg, so the gradient index counts fg
+	// share down from 1.
+	i := min(int(math.Round((1-fraction)*(steps-1))), steps-1)
+	return gradient[i]
+}
+
+// quickStyle builds the default Styles (that is, the default theme, Charmtone
+// Pantera) from a palette of semi-semanticly-named colors.
+//
+// The idea here is that you can do most of the work on a theme with quickStyle,
+// then add overrides as needed.
+func (o *quickStyleOpts) deriveDiffColors() {
+	if o.diffInsertFg == nil {
+		o.diffInsertFg = o.success
+	}
+	if o.diffDeleteFg == nil {
+		o.diffDeleteFg = o.destructive
+	}
+	if o.diffInsertCodeBg == nil && o.diffInsertFg != nil && o.bgBase != nil {
+		o.diffInsertCodeBg = blendTint(o.diffInsertFg, o.bgBase, diffInsertCodeBlend)
+	}
+	if o.diffInsertGutterBg == nil && o.diffInsertFg != nil && o.bgBase != nil {
+		o.diffInsertGutterBg = blendTint(o.diffInsertFg, o.bgBase, diffInsertGutterBlend)
+	}
+	if o.diffDeleteCodeBg == nil && o.diffDeleteFg != nil && o.bgBase != nil {
+		o.diffDeleteCodeBg = blendTint(o.diffDeleteFg, o.bgBase, diffDeleteCodeBlend)
+	}
+	if o.diffDeleteGutterBg == nil && o.diffDeleteFg != nil && o.bgBase != nil {
+		o.diffDeleteGutterBg = blendTint(o.diffDeleteFg, o.bgBase, diffDeleteGutterBlend)
+	}
+}
+
 func wcagContrast(a, b color.Color) float64 {
 	la, lb := wcagLuminance(a), wcagLuminance(b)
 	return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
 }
 
-// wcagLuminance returns the WCAG 2 relative luminance of c.
 func wcagLuminance(c color.Color) float64 {
 	r, g, b, _ := c.RGBA()
 	channel := func(v uint32) float64 {
@@ -218,11 +220,6 @@ func wcagLuminance(c color.Color) float64 {
 	return 0.2126*channel(r) + 0.7152*channel(g) + 0.0722*channel(b)
 }
 
-// quickStyle builds the default Styles (that is, the default theme, Charmtone
-// Pantera) from a palette of semi-semanticly-named colors.
-//
-// The idea here is that you can do most of the work on a theme with quickStyle,
-// then add overrides as needed.
 func quickStyle(o quickStyleOpts) Styles {
 	o.deriveDiffColors()
 
@@ -243,10 +240,8 @@ func quickStyle(o quickStyleOpts) Styles {
 	// Populate color fields
 	s.WorkingGradFromColor = o.primary
 	s.WorkingGradToColor = o.secondary
-	s.WorkingLabelColor = o.fgBase
+	s.WorkingLabelColor = o.fgMostSubtle
 	s.WorkingTimerColor = o.fgMostSubtle
-	s.ThinkingLabelColor = o.fgMoreSubtle
-	s.CanceledLabelColor = o.fgMoreSubtle
 
 	s.TextInput = textinput.Styles{
 		Focused: textinput.StyleState{
@@ -277,7 +272,6 @@ func quickStyle(o quickStyleOpts) Styles {
 			CursorLineNumber: base.Foreground(o.fgMostSubtle),
 			Placeholder:      base.Foreground(o.fgMostSubtle),
 			Prompt:           base.Foreground(o.accent),
-			Selection:        base.Foreground(o.onPrimary).Background(o.secondary),
 		},
 		Blurred: textarea.StyleState{
 			Base:             base,
@@ -287,7 +281,6 @@ func quickStyle(o quickStyleOpts) Styles {
 			CursorLineNumber: base.Foreground(o.fgMoreSubtle),
 			Placeholder:      base.Foreground(o.fgMostSubtle),
 			Prompt:           base.Foreground(o.fgMoreSubtle),
-			Selection:        base.Foreground(o.onPrimary).Background(o.secondary),
 		},
 		Cursor: textarea.CursorStyle{
 			Color: o.secondary,
@@ -798,7 +791,7 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Header.Keystroke = muted
 	s.Header.KeystrokeTip = subtle
 	s.Header.WorkingDir = muted
-	s.Header.GitBranch = muted
+	s.Header.GitBranch = base.Foreground(o.secondary)
 	s.Header.Separator = subtle
 	s.Header.Wrapper = lipgloss.NewStyle().Foreground(o.fgBase)
 	s.Header.LogoGradCanvas = lipgloss.NewStyle()
@@ -820,7 +813,6 @@ func quickStyle(o quickStyleOpts) Styles {
 
 	s.Tool.ParamMain = subtle
 	s.Tool.ParamKey = subtle
-	s.Tool.Description = base
 
 	// Content rendering - prepared styles that accept width parameter
 	s.Tool.ContentLine = muted.Background(o.bgLeastVisible)
@@ -861,12 +853,9 @@ func quickStyle(o quickStyleOpts) Styles {
 	// Agent task styles
 	s.Tool.AgentTaskTag = base.Bold(true).Padding(0, 1).MarginLeft(2).Background(o.infoMoreSubtle).Foreground(o.onPrimary)
 	s.Tool.AgentPrompt = muted
-	s.Tool.AgentName = base.Foreground(o.infoMostSubtle)
-	s.Tool.AgentLabel = base.Foreground(o.fgMostSubtle)
-	s.Tool.AgentMessage = muted
 
 	// Agentic fetch styles
-	s.Tool.AgenticFetchPromptTag = base.Bold(true).Padding(0, 1).MarginLeft(2).Background(o.success).Foreground(badgeInk(o.success, o.separator, o.fgBase))
+	s.Tool.AgenticFetchPromptTag = base.Bold(true).Padding(0, 1).MarginLeft(2).Background(o.success).Foreground(o.separator)
 
 	// Todo styles
 	s.Tool.TodoRatio = base.Foreground(o.infoMostSubtle)
@@ -876,6 +865,17 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Tool.TodoStatusNote = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
 	s.Tool.TodoItem = lipgloss.NewStyle().Foreground(o.fgBase)
 	s.Tool.TodoJustStarted = lipgloss.NewStyle().Foreground(o.fgBase)
+
+	// Scheduled task (cron) styles
+	s.Tool.CronRecurringIcon = base.Foreground(o.info)
+	s.Tool.CronOneShotIcon = base.Foreground(o.fgMoreSubtle)
+	s.Tool.CronDeletedIcon = base.Foreground(o.destructive)
+	s.Tool.CronTaskID = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
+	s.Tool.CronSchedule = lipgloss.NewStyle().Foreground(o.infoMostSubtle)
+	s.Tool.CronNextRun = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
+	s.Tool.CronPrompt = lipgloss.NewStyle().Foreground(o.fgBase)
+	s.Tool.CronMeta = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
+	s.Tool.CronError = lipgloss.NewStyle().Foreground(o.error)
 
 	// MCP styles
 	s.Tool.MCPName = base.Foreground(o.info)
@@ -913,7 +913,7 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Button.Focused = lipgloss.NewStyle().Foreground(o.onPrimary).Background(o.button)
 	s.Button.Blurred = lipgloss.NewStyle().Foreground(o.fgBase).Background(o.buttonSubtle)
 	s.Button.Inactive = lipgloss.NewStyle().Foreground(o.fgBase).Background(o.buttonInactive)
-	s.Button.Hovered = lipgloss.NewStyle().Foreground(badgeInk(o.buttonHovered, o.onPrimary, o.fgBase)).Background(o.buttonHovered)
+	s.Button.Hovered = lipgloss.NewStyle().Foreground(o.onPrimary).Background(o.buttonHovered)
 	s.Button.Negative = lipgloss.NewStyle().Foreground(o.onPrimary).Background(o.error)
 
 	// Editor
@@ -928,10 +928,14 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Editor.PromptPlanIconBlurred = s.Editor.PromptPlanIconFocused.Foreground(o.bgBase).Background(o.fgMoreSubtle)
 	s.Editor.PromptPlanDotsFocused = lipgloss.NewStyle().MarginRight(1).Foreground(o.primary).SetString(":::")
 	s.Editor.PromptPlanDotsBlurred = s.Editor.PromptPlanDotsFocused.Foreground(o.fgMoreSubtle)
-	s.Editor.PromptYoloIconFocused = lipgloss.NewStyle().MarginRight(1).Foreground(badgeInk(o.busy, o.bgBase, o.fgBase)).Background(o.busy).Bold(true).SetString(" ! ")
+	s.Editor.PromptYoloIconFocused = lipgloss.NewStyle().MarginRight(1).Foreground(o.bgBase).Background(o.busy).Bold(true).SetString(" ! ")
 	s.Editor.PromptYoloIconBlurred = s.Editor.PromptYoloIconFocused.Foreground(o.bgBase).Background(o.fgMoreSubtle)
 	s.Editor.PromptYoloDotsFocused = lipgloss.NewStyle().MarginRight(1).Foreground(o.warningSubtle).SetString(":::")
 	s.Editor.PromptYoloDotsBlurred = s.Editor.PromptYoloDotsFocused.Foreground(o.fgMoreSubtle)
+	s.Editor.PromptAutoIconFocused = lipgloss.NewStyle().MarginRight(1).Foreground(o.onPrimary).Background(o.info).Bold(true).SetString(" A ")
+	s.Editor.PromptAutoIconBlurred = s.Editor.PromptAutoIconFocused.Foreground(o.bgBase).Background(o.fgMoreSubtle)
+	s.Editor.PromptAutoDotsFocused = lipgloss.NewStyle().MarginRight(1).Foreground(o.info).SetString(":::")
+	s.Editor.PromptAutoDotsBlurred = s.Editor.PromptAutoDotsFocused.Foreground(o.fgMoreSubtle)
 	s.Editor.PromptBangIconFocused = lipgloss.NewStyle().MarginRight(1).Foreground(o.onPrimary).Background(o.primary).Bold(true).SetString(" ! ")
 	s.Editor.PromptBangIconBlurred = s.Editor.PromptBangIconFocused.Foreground(o.bgBase).Background(o.fgMoreSubtle)
 	s.Editor.PromptBangDotsFocused = lipgloss.NewStyle().MarginRight(1).Foreground(o.primary).SetString(":::")
@@ -948,11 +952,12 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Editor.QuestionRadioOff = lipgloss.NewStyle().Foreground(o.fgSubtle).SetString(RadioOff)
 	s.Editor.QuestionCheckOn = lipgloss.NewStyle().Foreground(o.secondary).SetString(RadioOn)
 	s.Editor.QuestionCheckOff = lipgloss.NewStyle().Foreground(o.fgSubtle).SetString(RadioOff)
-	// Sysadmin
-	s.Editor.PromptSysadminIconFocused = lipgloss.NewStyle().MarginRight(1).Foreground(o.bgBase).Background(o.destructive).Bold(true).SetString(" # ")
-	s.Editor.PromptSysadminIconBlurred = s.Editor.PromptSysadminIconFocused.Foreground(o.bgBase).Background(o.fgMoreSubtle)
-	s.Editor.PromptSysadminDotsFocused = lipgloss.NewStyle().MarginRight(1).Foreground(o.destructive).SetString(":::")
-	s.Editor.PromptSysadminDotsBlurred = s.Editor.PromptSysadminDotsFocused.Foreground(o.fgMoreSubtle)
+
+	// Inline prompt tokens: @file mentions use the primary accent, /skill
+	// references the secondary, both bolded so they stand apart from prompt
+	// prose.
+	s.Editor.TokenFile = lipgloss.NewStyle().Foreground(o.primary).Bold(true)
+	s.Editor.TokenSkill = lipgloss.NewStyle().Foreground(o.secondary).Bold(true)
 
 	s.Radio.On = lipgloss.NewStyle().Foreground(o.fgSubtle).SetString(RadioOn)
 	s.Radio.Off = lipgloss.NewStyle().Foreground(o.fgSubtle).SetString(RadioOff)
@@ -1018,9 +1023,6 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Resource.ErrorIcon = s.Resource.OfflineIcon.Foreground(o.destructive)
 	s.Resource.OnlineIcon = s.Resource.OfflineIcon.Foreground(o.successMostSubtle)
 	s.Resource.OnlineText = lipgloss.NewStyle().Foreground(o.successMostSubtle)
-	// Same green as OnlineIcon but with no preset glyph, for callers that
-	// supply their own (e.g. an animated spinner).
-	s.Resource.WorkingIcon = lipgloss.NewStyle().Foreground(o.successMostSubtle)
 	s.Resource.NeedsAuthIcon = s.Resource.OfflineIcon.Foreground(o.attention)
 	s.Resource.DisabledIcon = lipgloss.NewStyle().Foreground(o.fgMoreSubtle).SetString("●")
 	s.Resource.AdditionalText = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
@@ -1047,6 +1049,7 @@ func quickStyle(o quickStyleOpts) Styles {
 	// Sidebar
 	s.Sidebar.SessionTitle = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
 	s.Sidebar.WorkingDir = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
+	s.Sidebar.AgentInspect = lipgloss.NewStyle().Foreground(o.secondary).Bold(true)
 
 	// ModelInfo
 	s.ModelInfo.Icon = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
@@ -1122,7 +1125,14 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Messages.AssistantInfoProvider = subtle
 	s.Messages.AssistantInfoDuration = subtle
 	s.Messages.SubduedHypercreditIcon = subtle
-	s.Messages.AssistantCanceled = lipgloss.NewStyle().Foreground(s.CanceledLabelColor).Italic(true)
+	s.Messages.AssistantCanceled = lipgloss.NewStyle().Foreground(o.fgSubtle).Italic(true)
+	s.Messages.AssistantCopyIcon = muted
+
+	// Channel message metadata styles.
+	s.Messages.ChannelInfoIcon = subtle
+	s.Messages.ChannelInfoSender = muted
+	s.Messages.ChannelInfoProvider = subtle
+	s.Messages.ChannelInfoTimestamp = subtle
 
 	// Plan section styles. The plan card is a bordered box with no background
 	// fill: the terminal background shows through, and only intentional chips
@@ -1133,10 +1143,31 @@ func quickStyle(o quickStyleOpts) Styles {
 		BorderForeground(o.plan).
 		Padding(1, 2)
 
+	// Plan section styles. The plan card is a bordered box with no background
+	// fill: the terminal background shows through, and only intentional chips
+	// (inline code, H1 badge) keep a background of their own.
+	s.Messages.PlanBox = lipgloss.NewStyle().
+		Foreground(o.fgBase).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(o.plan).
+		Padding(1, 2)
+
+	// Compaction section styles. A checkpoint is not a reply, and the box is
+	// how the transcript says so; info rather than plan's hue keeps the two
+	// cards distinguishable when a plan gets summarized later.
+	s.Messages.CompactionBox = lipgloss.NewStyle().
+		Foreground(o.fgBase).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(o.info).
+		Padding(1, 2)
+	s.Messages.CompactionHeader = lipgloss.NewStyle().
+		Foreground(o.info).Bold(true)
+	s.Messages.CompactionNote = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
+
 	// Thinking section styles
 	s.Messages.ThinkingBox = subtle.Background(o.bgLeastVisible)
 	s.Messages.ThinkingTruncationHint = muted
-	s.Messages.ThinkingFooterTitle = subtle
+	s.Messages.ThinkingFooterTitle = muted
 	s.Messages.ThinkingFooterDuration = subtle
 
 	// Text selection.
@@ -1168,7 +1199,6 @@ func quickStyle(o quickStyleOpts) Styles {
 	// Dialog.Quit
 	s.Dialog.Quit.Content = lipgloss.NewStyle().Foreground(o.fgBase)
 	s.Dialog.Quit.Hint = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
-	s.Dialog.Quit.Warning = lipgloss.NewStyle().Foreground(o.destructive)
 	s.Dialog.Quit.Frame = lipgloss.NewStyle().BorderForeground(o.primary).Border(lipgloss.RoundedBorder()).Padding(1, 2)
 	s.Dialog.View = base.Border(lipgloss.RoundedBorder()).BorderForeground(o.primary)
 	s.Dialog.PrimaryText = base.Padding(0, 1).Foreground(o.primary)
@@ -1184,10 +1214,10 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Dialog.NormalItem = base.Padding(0, 1).Foreground(o.fgBase)
 	s.Dialog.SelectedItem = base.Padding(0, 1).Background(o.primary).Foreground(o.onPrimary)
 	s.Dialog.InputPrompt = base.Margin(1, 1)
-	s.Dialog.PromptMessage = base.Foreground(o.fgSubtle).Padding(0, 1)
-	s.Dialog.PromptKey = base.Foreground(o.fgSubtle).Padding(0, 1)
-	s.Dialog.SSHMessage = base.Foreground(o.fgSubtle).Padding(0, 1)
-	s.Dialog.SSHKey = base.Foreground(o.fgSubtle).Padding(0, 1)
+	s.Dialog.PromptMessage = base.Foreground(o.fgSubtle).PaddingLeft(1)
+	s.Dialog.PromptKey = base.PaddingLeft(1)
+	s.Dialog.SSHMessage = base.PaddingLeft(1)
+	s.Dialog.SSHKey = base.PaddingLeft(1)
 
 	s.Dialog.List = base.Margin(0, 0, 1, 0)
 	s.Dialog.ContentPanel = base.Background(o.bgLessVisible).Foreground(o.fgBase).Padding(1, 2)
@@ -1246,37 +1276,37 @@ func quickStyle(o quickStyleOpts) Styles {
 
 	s.Status.Help = lipgloss.NewStyle().Padding(0, 1)
 	s.Status.ModeBadgePlan = lipgloss.NewStyle().Foreground(o.fgBase).Background(o.primary).Padding(0, 1).Bold(true).SetString("PLAN MODE")
-	s.Status.ModeBadgeYolo = lipgloss.NewStyle().Foreground(badgeInk(o.busy, o.bgBase, o.fgBase)).Background(o.busy).Padding(0, 1).Bold(true).SetString("YOLO MODE")
-	s.Status.ModeBadgeSysadmin = lipgloss.NewStyle().Foreground(badgeInk(o.destructive, o.bgBase, o.fgBase)).Background(o.destructive).Padding(0, 1).Bold(true).SetString("SYSADMIN MODE")
+	s.Status.ModeBadgeYolo = lipgloss.NewStyle().Foreground(o.bgBase).Background(o.busy).Padding(0, 1).Bold(true).SetString("YOLO MODE")
+	s.Status.ModeBadgeAuto = lipgloss.NewStyle().Foreground(o.onPrimary).Background(o.info).Padding(0, 1).Bold(true).SetString("AUTO")
 	s.Status.ModeBannerPlanBadge = s.Status.ModeBadgePlan
 	s.Status.ModeBannerPlan = lipgloss.NewStyle().Foreground(o.fgBase).Background(o.planMoreSubtle).Padding(0, 1)
 	s.Status.ModeBannerYoloBadge = s.Status.ModeBadgeYolo
-	s.Status.ModeBannerYolo = lipgloss.NewStyle().Foreground(badgeInk(o.yolo, o.bgBase, o.fgBase)).Background(o.yolo).Padding(0, 1)
-	s.Status.ModeBannerSysadminBadge = s.Status.ModeBadgeSysadmin
-	s.Status.ModeBannerSysadmin = lipgloss.NewStyle().Foreground(badgeInk(o.destructiveSubtle, o.bgBase, o.fgBase)).Background(o.destructiveSubtle).Padding(0, 1)
-	// The badges and toasts write a background role on a status fill;
-	// badgeInk swaps it for fgBase where that reads better (light themes).
-	s.Status.SuccessIndicator = base.Foreground(badgeInk(o.success, o.bgLessVisible, o.fgBase)).Background(o.success).Padding(0, 1).Bold(true).SetString("OKAY!")
+	s.Status.ModeBannerYolo = lipgloss.NewStyle().Foreground(o.bgBase).Background(o.yolo).Padding(0, 1)
+	s.Status.ModeBannerAutoBadge = s.Status.ModeBadgeAuto
+	s.Status.ModeBannerAuto = lipgloss.NewStyle().Foreground(o.fgBase).Background(o.infoMoreSubtle).Padding(0, 1)
+	s.Status.SuccessIndicator = base.Foreground(o.bgLessVisible).Background(o.success).Padding(0, 1).Bold(true).SetString("OKAY!")
 	s.Status.InfoIndicator = s.Status.SuccessIndicator
 	s.Status.UpdateIndicator = s.Status.SuccessIndicator.SetString("HEY!")
-	s.Status.WarnIndicator = s.Status.SuccessIndicator.Foreground(badgeInk(o.warning, o.bgMostVisible, o.fgBase)).Background(o.warning).SetString("WARNING")
-	s.Status.ErrorIndicator = s.Status.SuccessIndicator.Foreground(badgeInk(o.destructive, o.bgBase, o.fgBase)).Background(o.destructive).SetString("ERROR")
-	s.Status.SuccessMessage = base.Foreground(badgeInk(o.successMostSubtle, o.bgLessVisible, o.fgBase)).Background(o.successMostSubtle).Padding(0, 1)
+	s.Status.WarnIndicator = s.Status.SuccessIndicator.Foreground(o.bgMostVisible).Background(o.warning).SetString("WARNING")
+	s.Status.ErrorIndicator = s.Status.SuccessIndicator.Foreground(o.bgBase).Background(o.destructive).SetString("ERROR")
+	s.Status.SuccessMessage = base.Foreground(o.bgLessVisible).Background(o.successMostSubtle).Padding(0, 1)
 	s.Status.InfoMessage = s.Status.SuccessMessage
 	s.Status.UpdateMessage = s.Status.SuccessMessage
-	s.Status.WarnMessage = s.Status.SuccessMessage.Foreground(badgeInk(o.warningSubtle, o.bgMostVisible, o.fgBase)).Background(o.warningSubtle)
+	s.Status.WarnMessage = s.Status.SuccessMessage.Foreground(o.bgMostVisible).Background(o.warningSubtle)
 	s.Status.ErrorMessage = s.Status.SuccessMessage.Foreground(o.onPrimary).Background(o.error)
 
 	// Completions styles
 	s.Completions.Normal = base.Background(o.bgLessVisible).Foreground(o.fgBase)
 	s.Completions.Focused = base.Background(o.primary).Foreground(o.onPrimary)
 	s.Completions.Match = base.Underline(true)
+	s.Completions.Agent = base.Foreground(o.secondary).Bold(true)
 
 	// Attachments styles
-	attachmentIconStyle := base.Foreground(badgeInk(o.success, o.bgLessVisible, o.fgBase)).Background(o.success).Padding(0, 1)
+	attachmentIconStyle := base.Foreground(o.bgLessVisible).Background(o.success).Padding(0, 1)
 	s.Attachments.Image = attachmentIconStyle.SetString(ImageIcon)
 	s.Attachments.Text = attachmentIconStyle.SetString(TextIcon)
 	s.Attachments.Skill = attachmentIconStyle.SetString(SkillIcon)
+	s.Attachments.Prompt = attachmentIconStyle.SetString(PromptIcon)
 	s.Attachments.Normal = base.Padding(0, 1).Background(o.fgMoreSubtle).Foreground(o.fgBase)
 	// Remove and Deleting share the same slot on the right side of a chip
 	// and must keep the same geometry so toggling delete-mode doesn't
@@ -1290,7 +1320,10 @@ func quickStyle(o quickStyleOpts) Styles {
 	// Pills styles
 	s.Pills.Base = base.Padding(0, 1)
 	s.Pills.Focused = base.Padding(0, 1).BorderStyle(lipgloss.RoundedBorder()).BorderForeground(o.bgMostVisible)
-	s.Pills.QueueItemPrefix = lipgloss.NewStyle().Foreground(o.fgMoreSubtle).SetString("  •")
+	// No leading pad: these lists stack under the same pills row as the todo
+	// list, which starts at column 0.
+	s.Pills.QueueItemPrefix = lipgloss.NewStyle().Foreground(o.fgMoreSubtle).SetString("•")
+	s.Pills.CronItemPrefix = lipgloss.NewStyle().Foreground(o.fgMoreSubtle).SetString("⏱")
 	s.Pills.QueueItemText = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
 	s.Pills.QueueLabel = lipgloss.NewStyle().Foreground(o.fgBase)
 	s.Pills.QueueIconBase = lipgloss.NewStyle().Foreground(o.fgBase)

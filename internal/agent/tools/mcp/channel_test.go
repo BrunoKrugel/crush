@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -19,11 +20,11 @@ func TestParseChannelParams(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
+		meta    map[string]string
 		name    string
 		raw     string
-		wantOK  bool
 		content string
-		meta    map[string]string
+		wantOK  bool
 	}{
 		{
 			name:    "valid with meta",
@@ -124,7 +125,7 @@ func TestParseChannelParams(t *testing.T) {
 func TestParseChannelParamsOversizedContentRejected(t *testing.T) {
 	t.Parallel()
 	big := strings.Repeat("a", maxChannelContentBytes+1)
-	raw, err := json.Marshal(channelParams{Content: big})
+	raw, err := sonic.Marshal(channelParams{Content: big})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +139,7 @@ func TestParseChannelParamsMetaLimits(t *testing.T) {
 
 	// Oversized meta value: the entry is dropped, the payload survives.
 	bigVal := strings.Repeat("b", maxChannelMetaValueBytes+1)
-	raw, _ := json.Marshal(map[string]any{
+	raw, _ := sonic.Marshal(map[string]any{
 		"content": "hi",
 		"meta":    map[string]string{"big": bigVal, "small": "ok"},
 	})
@@ -155,10 +156,10 @@ func TestParseChannelParamsMetaLimits(t *testing.T) {
 
 	// Too many meta entries: capped at maxChannelMetaEntries.
 	meta := make(map[string]string)
-	for i := 0; i < maxChannelMetaEntries+10; i++ {
+	for i := range maxChannelMetaEntries + 10 {
 		meta["k"+strings.Repeat("x", i)] = "v"
 	}
-	raw2, _ := json.Marshal(map[string]any{"content": "hi", "meta": meta})
+	raw2, _ := sonic.Marshal(map[string]any{"content": "hi", "meta": meta})
 	got2, ok2 := parseChannelParams(raw2)
 	if !ok2 {
 		t.Fatal("payload should survive excess meta entries")
@@ -173,8 +174,8 @@ func TestParseChannelParamsMetaLimits(t *testing.T) {
 // no untrusted value broke out of its element or attribute.
 type parsedChannel struct {
 	XMLName xml.Name   `xml:"channel"`
-	Attrs   []xml.Attr `xml:",any,attr"`
 	Content string     `xml:",chardata"`
+	Attrs   []xml.Attr `xml:",any,attr"`
 }
 
 func parseRendered(t *testing.T, s string) parsedChannel {
@@ -290,16 +291,16 @@ func TestUpdateStatePropagatesChannel(t *testing.T) {
 func TestChannelEnabled(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		enabled []string
 		name    string
+		enabled []string
 		want    bool
 	}{
-		{[]string{"webhook"}, "webhook", true},
-		{[]string{"server:webhook"}, "webhook", true},
-		{[]string{"  server:webhook  "}, "webhook", true},
-		{[]string{"other"}, "webhook", false},
-		{nil, "webhook", false},
-		{[]string{"SERVER:webhook"}, "webhook", true},
+		{name: "webhook", enabled: []string{"webhook"}, want: true},
+		{name: "webhook", enabled: []string{"server:webhook"}, want: true},
+		{name: "webhook", enabled: []string{"  server:webhook  "}, want: true},
+		{name: "webhook", enabled: []string{"other"}, want: false},
+		{name: "webhook", enabled: nil, want: false},
+		{name: "webhook", enabled: []string{"SERVER:webhook"}, want: true},
 	}
 	for _, tt := range tests {
 		if got := ChannelEnabled(tt.enabled, tt.name); got != tt.want {
@@ -312,17 +313,17 @@ func TestChannelOptIn(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name       string
-		cfgEnabled bool
-		overrides  []string
 		server     string
+		overrides  []string
+		cfgEnabled bool
 		want       bool
 	}{
-		{"neither source", false, nil, "webhook", false},
-		{"config only", true, nil, "webhook", true},
-		{"override only", false, []string{"webhook"}, "webhook", true},
-		{"both sources", true, []string{"webhook"}, "webhook", true},
-		{"override for a different server", false, []string{"other"}, "webhook", false},
-		{"config-enabled with unrelated override", true, []string{"server:other"}, "webhook", true},
+		{name: "neither source", cfgEnabled: false, overrides: nil, server: "webhook", want: false},
+		{name: "config only", cfgEnabled: true, overrides: nil, server: "webhook", want: true},
+		{name: "override only", cfgEnabled: false, overrides: []string{"webhook"}, server: "webhook", want: true},
+		{name: "both sources", cfgEnabled: true, overrides: []string{"webhook"}, server: "webhook", want: true},
+		{name: "override for a different server", cfgEnabled: false, overrides: []string{"other"}, server: "webhook", want: false},
+		{name: "config-enabled with unrelated override", cfgEnabled: true, overrides: []string{"server:other"}, server: "webhook", want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -375,7 +376,7 @@ func (c *fakeConn) SessionID() string                            { return "fake"
 
 func channelNotification(t *testing.T, content string) *jsonrpc.Request {
 	t.Helper()
-	raw, err := json.Marshal(channelParams{Content: content})
+	raw, err := sonic.Marshal(channelParams{Content: content})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,8 +394,7 @@ func waitForEvent(t *testing.T, ch <-chan pubsub.Event[Event]) (Event, bool) {
 }
 
 func TestChannelConnGateOpenInjects(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sub := broker.Subscribe(ctx)
 
 	gate := newChannelGate()
@@ -435,8 +435,7 @@ func TestChannelConnGateOpenInjects(t *testing.T) {
 }
 
 func TestChannelConnGateClosedDropsEvents(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sub := broker.Subscribe(ctx)
 
 	gate := newChannelGate()
@@ -465,8 +464,7 @@ func TestChannelConnGateClosedDropsEvents(t *testing.T) {
 }
 
 func TestChannelConnMalformedPayloadDropped(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sub := broker.Subscribe(ctx)
 
 	gate := newChannelGate()
@@ -523,7 +521,7 @@ func TestPublishChannelMessageUsesMustDeliver(t *testing.T) {
 		}
 	}()
 
-	raw, _ := json.Marshal(channelParams{Content: "channel msg"})
+	raw, _ := sonic.Marshal(channelParams{Content: "channel msg"})
 	publishChannelMessage(ctx, "webhook", raw)
 
 	// The first drain picks up the fill event; the channel event is now in
@@ -556,8 +554,7 @@ func TestPublishChannelMessageUsesMustDeliver(t *testing.T) {
 // Connect window), then resolves the gate to open and verifies the buffered
 // message is published.
 func TestChannelConnBuffersDuringUndecidedGate(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sub := broker.Subscribe(ctx)
 
 	gate := newChannelGate() // starts undecided
@@ -608,8 +605,7 @@ func TestChannelConnBuffersDuringUndecidedGate(t *testing.T) {
 // are discarded (not published) when the gate resolves to closed — a
 // non-opted-in or non-capable server must never deliver its events.
 func TestChannelConnDiscardsBufferOnClosedGate(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	sub := broker.Subscribe(ctx)
 
 	gate := newChannelGate()
@@ -636,21 +632,20 @@ func TestChannelConnDiscardsBufferOnClosedGate(t *testing.T) {
 	}
 }
 
-// TestSubscribeEventsFiltersChannelMessages verifies that SubscribeEvents
-// strips EventChannelMessage events from the stream. The MCP broker is
-// process-global and channel events carry no workspace/session identity, so
-// forwarding them to every workspace's app event stream would be a
-// cross-workspace injection path. Channel delivery requires workspace-scoped
-// routing (deferred to a later PR); until then, SubscribeEvents must not
-// forward channel events.
-func TestSubscribeEventsFiltersChannelMessages(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+// TestSubscribeEventsForwardsChannelMessages verifies that SubscribeEvents
+// forwards EventChannelMessage events rather than filtering them out.
+//
+// This fork implements the workspace-scoped channel routing upstream defers:
+// channel events are routed to the correct workspace/session downstream
+// (internal/backend/channels.go, internal/server/events.go,
+// internal/workspace/client_workspace.go), so they must remain visible
+// through SubscribeEvents. The cross-workspace concern is handled at that
+// routing layer, not by filtering at the source.
+func TestSubscribeEventsForwardsChannelMessages(t *testing.T) {
+	ctx := t.Context()
 
-	filtered := SubscribeEvents(ctx)
+	events := SubscribeEvents(ctx)
 
-	// Publish a state change (should pass through) and a channel message
-	// (should be filtered out).
 	broker.Publish(pubsub.UpdatedEvent, Event{
 		Type: EventStateChanged,
 		Name: "srv",
@@ -658,26 +653,49 @@ func TestSubscribeEventsFiltersChannelMessages(t *testing.T) {
 	broker.Publish(pubsub.CreatedEvent, Event{
 		Type:           EventChannelMessage,
 		Name:           "webhook",
-		ChannelMessage: `<channel source="webhook">leak?</channel>`,
+		ChannelMessage: `<channel source="webhook">hi</channel>`,
+		ChannelMeta:    map[string]string{"sender": "123"},
 	})
 
-	// We should receive the state change but NOT the channel message.
 	gotState := false
+	gotChannel := false
 	deadline := time.After(time.Second)
-	for {
+	for !gotState || !gotChannel {
 		select {
-		case ev := <-filtered:
-			if ev.Payload.Type == EventChannelMessage {
-				t.Fatal("EventChannelMessage leaked through SubscribeEvents filter")
-			}
-			if ev.Payload.Type == EventStateChanged {
+		case ev := <-events:
+			switch ev.Payload.Type {
+			case EventStateChanged:
 				gotState = true
+			case EventChannelMessage:
+				gotChannel = true
+				if ev.Payload.ChannelMeta["sender"] != "123" {
+					t.Fatalf("channel meta not preserved: %+v", ev.Payload.ChannelMeta)
+				}
 			}
 		case <-deadline:
-			if !gotState {
-				t.Fatal("state change event was not received")
-			}
-			return
+			t.Fatalf("timed out waiting for events: state=%v channel=%v", gotState, gotChannel)
 		}
+	}
+}
+
+// --- Fork: channel opt-in, meta preservation, and channel propagation ---
+func TestPublishChannelMessagePreservesMetadata(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	events := SubscribeEvents(ctx)
+	publishChannelMessage(ctx, "signal", json.RawMessage(`{"content":"hello","meta":{"sender":"123"}}`))
+
+	select {
+	case event := <-events:
+		if event.Payload.Name != "signal" {
+			t.Fatalf("name = %q, want signal", event.Payload.Name)
+		}
+		if event.Payload.ChannelMeta["sender"] != "123" {
+			t.Fatalf("meta = %v", event.Payload.ChannelMeta)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for channel event")
 	}
 }

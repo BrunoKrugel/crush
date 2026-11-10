@@ -6,7 +6,6 @@ import (
 
 	"charm.land/catwalk/v3/pkg/catwalk"
 	"charm.land/fantasy"
-	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/stretchr/testify/require"
 )
@@ -32,7 +31,7 @@ func TestFallbackStepUsageKeepsProviderUsage(t *testing.T) {
 		TotalTokens:  15,
 	}
 	step := fantasy.StepResult{
-		Response: fantasy.Response{Usage: usage},
+		Usage: usage,
 	}
 
 	fallbackUsage, estimated := fallbackStepUsage(nil, step)
@@ -47,10 +46,8 @@ func TestFallbackStepUsageEstimatesPromptAndAssistantText(t *testing.T) {
 		fantasy.NewUserMessage("please explain the implementation details"),
 	}
 	step := fantasy.StepResult{
-		Response: fantasy.Response{
-			Content: fantasy.ResponseContent{
-				fantasy.TextContent{Text: "the implementation stores state safely"},
-			},
+		Content: fantasy.ResponseContent{
+			fantasy.TextContent{Text: "the implementation stores state safely"},
 		},
 	}
 
@@ -73,10 +70,8 @@ func TestFallbackStepUsageEstimatesReasoning(t *testing.T) {
 		},
 	}
 	step := fantasy.StepResult{
-		Response: fantasy.Response{
-			Content: fantasy.ResponseContent{
-				fantasy.ReasoningContent{Text: "second reason about the answer"},
-			},
+		Content: fantasy.ResponseContent{
+			fantasy.ReasoningContent{Text: "second reason about the answer"},
 		},
 	}
 
@@ -90,13 +85,11 @@ func TestFallbackStepUsageEstimatesToolCalls(t *testing.T) {
 	t.Parallel()
 
 	step := fantasy.StepResult{
-		Response: fantasy.Response{
-			Content: fantasy.ResponseContent{
-				fantasy.ToolCallContent{
-					ToolCallID: "tool-call-1",
-					ToolName:   "view",
-					Input:      `{"file_path":"/tmp/example.go"}`,
-				},
+		Content: fantasy.ResponseContent{
+			fantasy.ToolCallContent{
+				ToolCallID: "tool-call-1",
+				ToolName:   "view",
+				Input:      `{"file_path":"/tmp/example.go"}`,
 			},
 		},
 	}
@@ -150,14 +143,12 @@ func TestFallbackStepUsageSkipsClientToolResultsAsOutput(t *testing.T) {
 	t.Parallel()
 
 	step := fantasy.StepResult{
-		Response: fantasy.Response{
-			Content: fantasy.ResponseContent{
-				fantasy.ToolResultContent{
-					ToolCallID: "tool-call-1",
-					ToolName:   "bash",
-					Result: fantasy.ToolResultOutputContentText{
-						Text: "large client-executed payload that should not count as model output tokens",
-					},
+		Content: fantasy.ResponseContent{
+			fantasy.ToolResultContent{
+				ToolCallID: "tool-call-1",
+				ToolName:   "bash",
+				Result: fantasy.ToolResultOutputContentText{
+					Text: "large client-executed payload that should not count as model output tokens",
 				},
 			},
 		},
@@ -172,15 +163,13 @@ func TestFallbackStepUsageCountsProviderToolResultsAsOutput(t *testing.T) {
 	t.Parallel()
 
 	step := fantasy.StepResult{
-		Response: fantasy.Response{
-			Content: fantasy.ResponseContent{
-				fantasy.ToolResultContent{
-					ToolCallID:       "tool-call-1",
-					ToolName:         "web_search",
-					ProviderExecuted: true,
-					ClientMetadata:   "provider metadata",
-					Result:           fantasy.ToolResultOutputContentText{Text: "provider-executed result"},
-				},
+		Content: fantasy.ResponseContent{
+			fantasy.ToolResultContent{
+				ToolCallID:       "tool-call-1",
+				ToolName:         "web_search",
+				ProviderExecuted: true,
+				ClientMetadata:   "provider metadata",
+				Result:           fantasy.ToolResultOutputContentText{Text: "provider-executed result"},
 			},
 		},
 	}
@@ -333,21 +322,6 @@ func TestUpdateSessionUsageKeepsCountersForEstimatedZeroUsage(t *testing.T) {
 	require.Equal(t, 1.25, currentSession.Cost)
 	require.Equal(t, int64(123), currentSession.PromptTokens)
 	require.Equal(t, int64(456), currentSession.CompletionTokens)
-}
-
-func TestSummaryCompletionTokens(t *testing.T) {
-	t.Parallel()
-
-	summaryMessage := message.Message{
-		Parts: []message.ContentPart{
-			message.TextContent{Text: "summary text"},
-			message.ReasoningContent{Thinking: "reasoning text"},
-		},
-	}
-
-	require.Equal(t, int64(42), summaryCompletionTokens(fantasy.Usage{OutputTokens: 42}, summaryMessage))
-	require.Equal(t, approxTokenCount("summary text")+approxTokenCount("reasoning text"), summaryCompletionTokens(fantasy.Usage{}, summaryMessage))
-	require.Zero(t, summaryCompletionTokens(fantasy.Usage{}, message.Message{}))
 }
 
 func TestUpdateSessionUsageAddsProviderCost(t *testing.T) {

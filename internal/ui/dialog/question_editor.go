@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"charm.land/bubbles/v2/key"
-	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/charmbracelet/crush/internal/ui/textarea"
 	uv "github.com/charmbracelet/ultraviolet"
 )
 
@@ -17,7 +17,9 @@ import (
 // only placeholder and char limit vary.
 func newQuestionTextarea(sty *styles.Styles, placeholder string, charLimit int) textarea.Model {
 	ta := textarea.New()
-	ta.SetStyles(questionTextareaStyles(sty))
+	taStyles := sty.Editor.Textarea
+	taStyles.Cursor.Color = sty.Editor.QuestionCursorBar.GetForeground()
+	ta.SetStyles(taStyles)
 	ta.Placeholder = placeholder
 	ta.ShowLineNumbers = false
 	ta.CharLimit = charLimit
@@ -33,28 +35,19 @@ func newQuestionTextarea(sty *styles.Styles, placeholder string, charLimit int) 
 	return ta
 }
 
-// questionTextareaStyles returns the styles of a question textarea.
-func questionTextareaStyles(sty *styles.Styles) textarea.Styles {
-	taStyles := sty.Editor.Textarea
-	taStyles.Cursor.Color = sty.Editor.QuestionCursorBar.GetForeground()
-	return taStyles
-}
-
 // questionEditor owns the fill-in textarea, note editor, and notes
 // map shared across all question component types. Components embed
 // this struct and call its methods instead of reimplementing editor
 // logic.
 type questionEditor struct {
-	Styles *styles.Styles
-
+	Styles        *styles.Styles
+	notes         map[string]string
+	activeNoteKey string
+	keyNote       key.Binding
+	navUp         key.Binding
+	navDown       key.Binding
 	fillIn        textarea.Model
 	noteEditor    textarea.Model
-	activeNoteKey string // non-empty when a note editor is open
-	notes         map[string]string
-
-	keyNote key.Binding
-	navUp   key.Binding
-	navDown key.Binding
 }
 
 // newQuestionEditor creates a questionEditor with configured
@@ -198,7 +191,7 @@ func (e *questionEditor) drawNote(lines *[]contentLine, innerWidth int, bar, not
 
 	if saved, ok := e.notes[noteKey]; ok && saved != "" {
 		dimmed := noteStyle.Render(saved)
-		for _, ln := range strings.Split(dimmed, "\n") {
+		for ln := range strings.SplitSeq(dimmed, "\n") {
 			*lines = append(*lines, contentLine{text: bar + notePrefix + ln, cursorItem: isActive, choiceIdx: -1})
 		}
 	}

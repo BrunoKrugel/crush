@@ -1,12 +1,12 @@
 package apigen
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -15,19 +15,19 @@ type nested struct {
 }
 
 type sample struct {
-	ID         string            `json:"id"`
-	Count      int               `json:"count"`
-	Ratio      float64           `json:"ratio,omitempty"`
-	Active     bool              `json:"active,omitempty"`
-	Labels     []string          `json:"labels"`
-	Meta       map[string]string `json:"meta,omitempty"`
-	Nested     nested            `json:"nested"`
-	Ptr        *nested           `json:"ptr,omitempty"`
 	When       time.Time         `json:"when"`
-	Err        error             `json:"error,omitempty"`
 	Anything   any               `json:"anything,omitempty"`
+	Err        error             `json:"error,omitempty"`
+	Meta       map[string]string `json:"meta,omitempty"`
+	Ptr        *nested           `json:"ptr,omitempty"`
+	Nested     nested            `json:"nested"`
+	ID         string            `json:"id"`
 	Skipped    string            `json:"-"`
 	unexported string
+	Labels     []string `json:"labels"`
+	Ratio      float64  `json:"ratio,omitempty"`
+	Count      int      `json:"count"`
+	Active     bool     `json:"active,omitempty"`
 }
 
 func TestSchemaOfStruct(t *testing.T) {
@@ -58,8 +58,8 @@ func TestSchemaOfStruct(t *testing.T) {
 }
 
 type cyc struct {
-	Name  string `json:"name"`
 	Child *cyc   `json:"child,omitempty"`
+	Name  string `json:"name"`
 }
 
 func TestSchemaOfCycle(t *testing.T) {
@@ -201,7 +201,7 @@ func TestErrorSchemaShape(t *testing.T) {
 	t.Parallel()
 	// The shared error schema must stay aligned with the error JSON
 	// handlers actually write: {"error": "..."}.
-	data, err := json.Marshal(errorSchema)
+	data, err := sonic.Marshal(errorSchema)
 	require.NoError(t, err)
 	require.Contains(t, string(data), `"error"`)
 }

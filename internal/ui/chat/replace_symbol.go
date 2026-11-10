@@ -1,8 +1,7 @@
 package chat
 
 import (
-	"encoding/json"
-
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/fsext"
 	"github.com/charmbracelet/crush/internal/message"
@@ -37,7 +36,7 @@ func (r *ReplaceSymbolToolRenderContext) RenderTool(sty *styles.Styles, width in
 	}
 
 	var params tools.ReplaceSymbolParams
-	_ = json.Unmarshal([]byte(opts.ToolCall.Input), &params)
+	_ = sonic.Unmarshal([]byte(opts.ToolCall.Input), &params)
 
 	file := fsext.PrettyPath(params.FilePath)
 	header := toolHeader(sty, opts.Status, "Replace Symbol", width, opts, params.Symbol, file)
@@ -55,7 +54,7 @@ func (r *ReplaceSymbolToolRenderContext) RenderTool(sty *styles.Styles, width in
 
 	// Try to render as a diff using metadata.
 	var meta tools.ReplaceSymbolResponseMetadata
-	if err := json.Unmarshal([]byte(opts.Result.Metadata), &meta); err == nil && meta.OldContent != "" || meta.NewContent != "" {
+	if err := sonic.Unmarshal([]byte(opts.Result.Metadata), &meta); err == nil && meta.OldContent != "" || meta.NewContent != "" {
 		diff := toolOutputDiffContent(sty, file, meta.OldContent, meta.NewContent, width, opts.ExpandedContent)
 
 		// On error, show error above the diff.

@@ -1,13 +1,13 @@
 package projects
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
 	"sync"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 )
 
@@ -15,9 +15,9 @@ const projectsFileName = "projects.json"
 
 // Project represents a tracked project directory.
 type Project struct {
+	LastAccessed time.Time `json:"last_accessed"`
 	Path         string    `json:"path"`
 	DataDir      string    `json:"data_dir"`
-	LastAccessed time.Time `json:"last_accessed"`
 }
 
 // ProjectList holds the list of tracked projects.
@@ -26,6 +26,10 @@ type ProjectList struct {
 }
 
 var mu sync.Mutex
+
+// nowFunc returns the current time. Overridden in tests so that ordering
+// assertions do not depend on the host clock's resolution.
+var nowFunc = func() time.Time { return time.Now().UTC() }
 
 // projectsFilePath returns the path to the projects.json file.
 func projectsFilePath() string {
@@ -47,7 +51,7 @@ func Load() (*ProjectList, error) {
 	}
 
 	var list ProjectList
-	if err := json.Unmarshal(data, &list); err != nil {
+	if err := sonic.Unmarshal(data, &list); err != nil {
 		return nil, err
 	}
 
@@ -66,7 +70,7 @@ func Save(list *ProjectList) error {
 		return err
 	}
 
-	data, err := json.MarshalIndent(list, "", "  ")
+	data, err := sonic.MarshalIndent(list, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -81,15 +85,24 @@ func Register(workingDir, dataDir string) error {
 		return err
 	}
 
-	// The list is kept most-recent-first by moving each registration to the
-	// front, not by sorting on timestamps, which tie on coarse clocks.
+	// Drop any existing entry for this path, then put the freshly registered one
+	// at the front. Position, not the timestamp alone, is what makes this project
+	// the most recent: coarse system clocks (Windows ticks roughly every 15ms)
+	// hand out identical timestamps to back-to-back registrations.
 	list.Projects = slices.DeleteFunc(list.Projects, func(p Project) bool {
 		return p.Path == workingDir
 	})
-	list.Projects = slices.Insert(list.Projects, 0, Project{
+	list.Projects = append([]Project{{
 		Path:         workingDir,
 		DataDir:      dataDir,
-		LastAccessed: time.Now().UTC(),
+		LastAccessed: nowFunc(),
+	}}, list.Projects...)
+
+	// Sort by last accessed (most recent first). Stable, so projects sharing a
+	// timestamp keep the order established above instead of being reordered
+	// arbitrarily.
+	slices.SortStableFunc(list.Projects, func(a, b Project) int {
+		return b.LastAccessed.Compare(a.LastAccessed)
 	})
 
 	return Save(list)

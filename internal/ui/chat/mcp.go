@@ -1,10 +1,10 @@
 package chat
 
 import (
-	"encoding/json"
 	"fmt"
-	"strings"
 
+	"github.com/bytedance/sonic"
+	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/ui/styles"
 )
@@ -32,12 +32,12 @@ type MCPToolRenderContext struct{}
 // RenderTool implements the [ToolRenderer] interface.
 func (b *MCPToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *ToolRenderOpts) string {
 	cappedWidth := cappedMessageWidth(width)
-	toolNameParts := strings.SplitN(opts.ToolCall.Name, "_", 3)
-	if len(toolNameParts) != 3 {
+	server, tool, ok := tools.ParseMCPToolName(opts.ToolCall.Name)
+	if !ok {
 		return toolErrorContent(sty, &message.ToolResult{Content: "Invalid tool name"}, cappedWidth)
 	}
-	mcpName := humanizedToolName(toolNameParts[1])
-	toolName := humanizedToolName(toolNameParts[2])
+	mcpName := humanizedToolName(server)
+	toolName := humanizedToolName(tool)
 
 	mcpName = sty.Tool.MCPName.Render(mcpName)
 	toolName = sty.Tool.MCPToolName.Render(toolName)
@@ -49,13 +49,13 @@ func (b *MCPToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *T
 	}
 
 	var params map[string]any
-	if err := json.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
 		return toolErrorContent(sty, &message.ToolResult{Content: "Invalid parameters"}, cappedWidth)
 	}
 
 	var toolParams []string
 	if len(params) > 0 {
-		parsed, _ := json.Marshal(params)
+		parsed, _ := sonic.Marshal(params)
 		toolParams = append(toolParams, string(parsed))
 	}
 
@@ -73,6 +73,9 @@ func (b *MCPToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *T
 	}
 
 	bodyWidth := cappedWidth - toolBodyLeftPaddingTotal
-	body := renderToolResultTextContent(sty, opts.Result.Content, toolResultContentWidths{Body: bodyWidth, Diff: cappedWidth}, opts.ExpandedContent)
+	widths := toolResultContentWidths{Body: bodyWidth, Diff: cappedWidth}
+
+	// An MCP tool result can carry rich metadata: the
+	body := renderToolResultTextContent(sty, opts.Result.Content, widths, opts.ExpandedContent)
 	return joinToolParts(header, body)
 }

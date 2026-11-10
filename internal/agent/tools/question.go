@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/question"
 )
 
@@ -19,7 +20,7 @@ var questionDescription string
 
 // QuestionParams defines the parameters for the question tool.
 type QuestionParams struct {
-	Questions          []QuestionItem `json:"questions" description:"List of questions to present. Single item = no tabs, multiple = tabbed form."`
+	Questions          []QuestionItem `json:"questions" description:"List of questions to present. Single item = no tabs, multiple = tabbed form." items_description:"A single question"`
 	ConfirmTitle       string         `json:"confirm_title,omitempty" description:"Title for the confirmation tab. Required for multi-question batches."`
 	ConfirmDescription string         `json:"confirm_description,omitempty" description:"Description for the confirmation tab. Required for multi-question batches."`
 }
@@ -29,25 +30,25 @@ type QuestionParams struct {
 func (p *QuestionParams) UnmarshalJSON(data []byte) error {
 	type Alias QuestionParams
 	aux := &struct {
-		Questions json.RawMessage `json:"questions"`
 		*Alias
+		Questions json.RawMessage `json:"questions"`
 	}{
 		Alias: (*Alias)(p),
 	}
-	if err := json.Unmarshal(data, aux); err != nil {
+	if err := sonic.Unmarshal(data, aux); err != nil {
 		return err
 	}
 	if len(aux.Questions) == 0 {
 		return nil
 	}
 	// Try array first.
-	if err := json.Unmarshal(aux.Questions, &p.Questions); err != nil {
+	if err := sonic.Unmarshal(aux.Questions, &p.Questions); err != nil {
 		// Fall back to string-encoded JSON array.
 		var s string
-		if err2 := json.Unmarshal(aux.Questions, &s); err2 != nil {
+		if err2 := sonic.Unmarshal(aux.Questions, &s); err2 != nil {
 			return err
 		}
-		if err2 := json.Unmarshal([]byte(strings.TrimSpace(s)), &p.Questions); err2 != nil {
+		if err2 := sonic.Unmarshal([]byte(strings.TrimSpace(s)), &p.Questions); err2 != nil {
 			return fmt.Errorf("questions must be an array: %w", err2)
 		}
 	}
@@ -60,8 +61,8 @@ type QuestionItem struct {
 	Type        string           `json:"type" description:"The type of question: yes_no, single_choice, multi_choice, or free_text"`
 	Question    string           `json:"question" description:"The question text"`
 	Description string           `json:"description" description:"Required markdown description shown below the question"`
-	Choices     []QuestionChoice `json:"choices,omitempty" description:"List of choices"`
-	Options     []QuestionChoice `json:"options,omitempty"` // alias for Choices
+	Choices     []QuestionChoice `json:"choices,omitempty" description:"List of choices" items_description:"A single choice"`
+	Options     []QuestionChoice `json:"options,omitempty" description:"Alias for choices. Use choices instead." items_description:"A single choice"`
 }
 
 // GetChoices returns choices, preferring the Choices field over Options.
@@ -184,7 +185,7 @@ func formatAnswer(answer *question.Answer, _ question.Type) (fantasy.ToolRespons
 		// report both so the model sees the complete answer.
 		var parts []string
 		if len(answer.SelectedIDs) > 0 {
-			data, _ := json.Marshal(answer.SelectedIDs)
+			data, _ := sonic.Marshal(answer.SelectedIDs)
 			parts = append(parts, fmt.Sprintf("User selected: %s", string(data)))
 		}
 		if answer.FillInText != "" {

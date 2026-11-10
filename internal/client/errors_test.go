@@ -18,15 +18,13 @@ func TestCheckStatus_TypesActionableStatuses(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		status  int
-		body    string
-		accept  []int
-		wantErr error
-		// wantUntyped asserts the error carries no lifecycle meaning, so
-		// callers keep treating it as an ordinary failure.
-		wantUntyped bool
+		wantErr     error
+		name        string
+		body        string
 		wantMsg     string
+		accept      []int
+		status      int
+		wantUntyped bool
 	}{
 		{name: "ok by default", status: http.StatusOK},
 		{

@@ -67,8 +67,8 @@ var reservedMetaKeys = map[string]struct{}{
 
 // channelParams is the wire shape of notifications/claude/channel params.
 type channelParams struct {
-	Content string            `json:"content"`
 	Meta    map[string]string `json:"meta"`
+	Content string            `json:"content"`
 }
 
 // parseChannelParams validates and sanitises a raw notifications/claude/channel
@@ -168,7 +168,7 @@ func hasChannelCapability(res *mcp.InitializeResult) bool {
 func ChannelEnabled(enabled []string, name string) bool {
 	for _, e := range enabled {
 		e = strings.TrimSpace(e)
-		if e == name {
+		if strings.EqualFold(e, name) {
 			return true
 		}
 		if strings.EqualFold(e, "server:"+name) {
@@ -203,6 +203,11 @@ func publishChannelMessage(ctx context.Context, name string, raw json.RawMessage
 		Type:           EventChannelMessage,
 		Name:           name,
 		ChannelMessage: renderChannel(name, p),
+		// ChannelMeta carries the payload's meta attributes so workspace-side
+		// channel routing (reply routing, sender/group targeting) can act on
+		// them. Upstream drops the meta; our reply-routing feature depends on
+		// it, so it is preserved here.
+		ChannelMeta: p.Meta,
 	})
 }
 
@@ -226,9 +231,9 @@ const (
 // or buffered. During capability negotiation the gate is undecided and
 // messages are buffered; once resolved, the buffer is drained or discarded.
 type channelGate struct {
-	state   atomic.Int32 // channelGateState
-	mu      sync.Mutex
 	pending []json.RawMessage
+	mu      sync.Mutex
+	state   atomic.Int32
 }
 
 func newChannelGate() *channelGate {
@@ -293,15 +298,23 @@ func (g *channelGate) accept(raw json.RawMessage) json.RawMessage {
 // to observe a custom notification is the transport's own connection.
 type channelTransport struct {
 	inner mcp.Transport
-	name  string
 	gate  *channelGate
+	name  string
 }
 
-// Connect implements mcp.Transport.
 // unwrapTransport implements [transportWrapper].
 func (t *channelTransport) unwrapTransport() mcp.Transport { return t.inner }
 
+// Connect implements mcp.Transport. Streamable-HTTP transports get the
+// notification filter at the HTTP layer instead: the go-sdk only starts the
+// standalone SSE stream by type-asserting the connection it receives to its
+// internal client connection type, so a wrapped connection silently defeats
+// that check and the doorbell stream is never opened. See channel_sse.go.
 func (t *channelTransport) Connect(ctx context.Context) (mcp.Connection, error) {
+	if inner, ok := t.inner.(*mcp.StreamableClientTransport); ok {
+		installChannelSSEFilter(inner, t.name, t.gate)
+		return inner.Connect(ctx)
+	}
 	conn, err := t.inner.Connect(ctx)
 	if err != nil {
 		return nil, err
@@ -313,8 +326,8 @@ func (t *channelTransport) Connect(ctx context.Context) (mcp.Connection, error) 
 // the stream the SDK sees, dispatching them to the channel handler instead.
 type channelConn struct {
 	mcp.Connection
-	name string
 	gate *channelGate
+	name string
 }
 
 // Read intercepts notifications/claude/channel. Such messages are always

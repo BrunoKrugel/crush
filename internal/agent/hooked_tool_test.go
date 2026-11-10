@@ -14,10 +14,10 @@ import (
 // fakeTool records the context it was invoked with so tests can assert on
 // values stamped onto it by the hookedTool decorator.
 type fakeTool struct {
-	name   string
-	called bool
 	gotCtx context.Context
+	name   string
 	resp   fantasy.ToolResponse
+	called bool
 }
 
 func (f *fakeTool) Info() fantasy.ToolInfo {

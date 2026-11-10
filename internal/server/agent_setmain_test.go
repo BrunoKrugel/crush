@@ -3,12 +3,12 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +17,7 @@ var errUnknownAgentForTest = errors.New("main agent not found: bogus")
 
 func postAgentMain(t *testing.T, c *controllerV1, wsID, agentID string) *httptest.ResponseRecorder {
 	t.Helper()
-	body, err := json.Marshal(proto.AgentSetMainRequest{AgentID: agentID})
+	body, err := sonic.Marshal(proto.AgentSetMainRequest{AgentID: agentID})
 	require.NoError(t, err)
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/workspaces/"+wsID+"/agent/main", bytes.NewReader(body))
 	req.SetPathValue("id", wsID)

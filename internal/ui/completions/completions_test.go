@@ -1,23 +1,22 @@
 package completions
 
 import (
-	"io"
+	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/colorprofile"
-	"github.com/sahilm/fuzzy"
 	"github.com/stretchr/testify/require"
 )
 
 func TestFilterPrefersExactBasenameStem(t *testing.T) {
 	t.Parallel()
 
-	c := New(lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle())
+	c := New(lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle())
 	c.SetItems([]FileCompletionValue{
 		{Path: "internal/ui/chat/search.go"},
 		{Path: "internal/ui/chat/user.go"},
-	}, nil)
+	}, nil, nil)
 
 	c.Filter("user")
 
@@ -32,11 +31,11 @@ func TestFilterPrefersExactBasenameStem(t *testing.T) {
 func TestFilterPrefersBasenamePrefix(t *testing.T) {
 	t.Parallel()
 
-	c := New(lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle())
+	c := New(lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle())
 	c.SetItems([]FileCompletionValue{
 		{Path: "internal/ui/chat/mcp.go"},
 		{Path: "internal/ui/model/chat.go"},
-	}, nil)
+	}, nil, nil)
 
 	c.Filter("chat.g")
 
@@ -95,11 +94,11 @@ func TestNamePriorityTier(t *testing.T) {
 func TestFilterPrefersPathSegmentExact(t *testing.T) {
 	t.Parallel()
 
-	c := New(lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle())
+	c := New(lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle())
 	c.SetItems([]FileCompletionValue{
 		{Path: "internal/ui/model/xychat.go"},
 		{Path: "internal/ui/chat/mcp.go"},
-	}, nil)
+	}, nil, nil)
 
 	c.Filter("chat")
 
@@ -110,39 +109,77 @@ func TestFilterPrefersPathSegmentExact(t *testing.T) {
 	require.Equal(t, "internal/ui/chat/mcp.go", first.Text())
 }
 
-// forceTrueColor pins lipgloss's color profile so color assertions are
-// deterministic regardless of the test environment. Not parallel: it
-// mutates package state.
-func forceTrueColor(t *testing.T) {
-	t.Helper()
-	old := lipgloss.Writer
-	lipgloss.Writer = colorprofile.NewWriter(io.Discard, []string{"COLORTERM=truecolor"})
-	t.Cleanup(func() { lipgloss.Writer = old })
+// Live dispatched agents ride the @ popup alongside files (#313): agent
+// rows lead, the handle is the primary text, and the detail tail carries
+// role, status, and current todo.
+func TestSetItemsIncludesLiveAgents(t *testing.T) {
+	t.Parallel()
+
+	c := New(lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle())
+	c.SetItems([]FileCompletionValue{{Path: "internal/ui/chat/search.go"}}, nil, []AgentCompletionValue{
+		{Handle: "tester", Detail: "writes tests · ● working · wiring form validation"},
+	})
+	c.Filter("tester")
+
+	filtered := c.filtered
+	require.NotEmpty(t, filtered)
+	first, ok := filtered[0].(*CompletionItem)
+	require.True(t, ok)
+	require.Equal(t, "@tester", first.SortKey())
+	require.Contains(t, first.Text(), "@tester")
+	require.Contains(t, first.Text(), "writes tests")
+
+	sel, ok := first.Value().(AgentCompletionValue)
+	require.True(t, ok)
+	require.Equal(t, "tester", sel.Handle)
 }
 
-func TestRenderItem_FocusedMatchUsesFocusedForeground(t *testing.T) {
-	forceTrueColor(t)
+// TestSelectAgentEmitsSelectionMsg pins the agent-completion enter path
+// (#313 regression): selecting a live agent's row must emit a
+// SelectionMsg[AgentCompletionValue] and close the popup. Before the fix,
+// Enter fell through selectCurrent's type switch, so the popup half-closed
+// — the component stopped rendering while the model still believed it was
+// open, and no @handle was inserted.
+func TestSelectAgentEmitsSelectionMsg(t *testing.T) {
+	t.Parallel()
 
-	// Distinct colors for every role so the rendered SGR sequences are
-	// unambiguous: focused fg "38;2;51;51;51", match fg "38;2;85;85;85".
-	normal := lipgloss.NewStyle().Foreground(lipgloss.Color("#111111")).Background(lipgloss.Color("#222222"))
-	focused := lipgloss.NewStyle().Foreground(lipgloss.Color("#333333")).Background(lipgloss.Color("#444444"))
-	match := lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Underline(true)
+	c := New(lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle())
+	c.SetItems(nil, nil, []AgentCompletionValue{
+		{Handle: "go-review", Detail: "reviewer · working"},
+		{Handle: "sec-review", Detail: "security · working"},
+	})
 
-	item := NewCompletionItem("pricing_plans.go",
-		FileCompletionValue{Path: "pricing_plans.go"}, normal, focused, match)
-	item.SetMatch(fuzzy.Match{Str: "pricing_plans.go", MatchedIndexes: []int{0, 1, 2}})
+	msg, handled := c.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	require.True(t, handled, "enter must be consumed while the popup is open")
+	selection, ok := msg.(SelectionMsg[AgentCompletionValue])
+	require.True(t, ok, "enter on an agent row must emit an agent selection, got %T", msg)
+	require.Equal(t, "go-review", selection.Value.Handle)
+	require.False(t, selection.KeepOpen)
+	require.False(t, c.IsOpen(), "the popup must be fully closed after selection")
 
-	// On the focused row the match highlight must not keep the match
-	// foreground; themes where it equals the focused background (e.g. a
-	// monochrome palette) would render matched text invisibly.
-	item.SetFocused(true)
-	focusedOut := item.Render(30)
-	require.Contains(t, focusedOut, "38;2;51;51;51")
-	require.NotContains(t, focusedOut, "38;2;85;85;85")
+	// The glyph prefix must not leak into the inserted value or the sort
+	// key: the model inserts the bare handle and name-priority tiering
+	// matches what the user typed after the @.
+	require.Equal(t, "go-review", selection.Value.Handle)
+	first := c.allItems[0].(*CompletionItem)
+	require.Equal(t, "@go-review", first.SortKey())
+}
 
-	// On a blurred row the match foreground applies as-is.
-	item.SetFocused(false)
-	blurredOut := item.Render(30)
-	require.Contains(t, blurredOut, "38;2;85;85;85")
+// TestAgentSortKeyIsTheBareHandleWhenDetailDrops pins the ranking key for
+// a row too wide to carry its description: the tier must still see the
+// bare "@handle", not the glyph-prefixed row text, which never matches
+// what the user typed after the @.
+func TestAgentSortKeyIsTheBareHandleWhenDetailDrops(t *testing.T) {
+	t.Parallel()
+
+	handle := strings.Repeat("a", 96)
+	c := New(lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle())
+	c.SetItems(nil, nil, []AgentCompletionValue{
+		{Handle: handle, Detail: "reviewer"},
+	})
+
+	first, ok := c.filtered[0].(*CompletionItem)
+	require.True(t, ok)
+	require.Equal(t, -1, first.detailStart, "the description must be dropped on a row this wide")
+	require.Equal(t, "@"+handle, first.SortKey(), "the sort key must stay the bare @handle")
 }

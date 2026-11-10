@@ -3,7 +3,6 @@ package dialog
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 
@@ -40,8 +39,8 @@ type ActionSelectSession struct {
 // ActionSelectModel is a message indicating a model has been selected.
 type ActionSelectModel struct {
 	Provider       catwalk.Provider
-	Model          config.SelectedModel
 	ModelType      config.SelectedModelType
+	Model          config.SelectedModel
 	ReAuthenticate bool
 }
 
@@ -54,14 +53,43 @@ type (
 	ActionTogglePills             struct{}
 	ActionExternalEditor          struct{}
 	ActionToggleYoloMode          struct{}
-	ActionToggleSysadminMode      struct{}
 	ActionToggleNotifications     struct{}
 	ActionSelectNotificationStyle struct {
 		Style string
 	}
 	ActionToggleTransparentBackground struct{}
 	ActionToggleMouseSupport          struct{}
-	ActionSwitchTheme                 struct {
+	// ActionFork asks the workspace to branch a conversation from a
+	// message: the new session continues the old one up to that point.
+	// ActionForkSession asks the UI to open the fork dialog for the
+	// current session, forking at its last user message.
+	ActionForkSession struct {
+		SessionID string
+	}
+	ActionFork struct {
+		// SessionID is the session to fork from.
+		SessionID string
+		// MessageID is the fork point: the last message the fork keeps.
+		MessageID string
+		// Title names the forked session; empty derives one.
+		Title string
+		// Worktree asks for a fresh git worktree for the fork.
+		Worktree bool
+	}
+	// ActionGoalMode starts goal mode on a session: the agent keeps
+	// working toward the goal — judged after every turn — until the
+	// goal is met, its turn budget runs out, or the goal is stopped.
+	// The palette entry collects the goal first; Args carries what the
+	// arguments dialog collected.
+	ActionGoalMode struct {
+		// Args holds the collected goal text and turn budget.
+		Args map[string]string
+		// SessionID is the session the goal runs on.
+		SessionID string
+		// Arguments describes the fields the arguments dialog collects.
+		Arguments []commands.Argument
+	}
+	ActionSwitchTheme struct {
 		Theme string
 	}
 	ActionPreviewTheme struct {
@@ -96,8 +124,14 @@ type (
 		Name string
 	}
 	ActionInitializeProject struct{}
-	ActionSummarize         struct {
-		SessionID string
+	// ActionSummarize compacts a session. Arguments describes what to
+	// collect first, a non-nil Args marks that the values arrived, and
+	// Instructions carries the user's emphasis for the checkpoint.
+	ActionSummarize struct {
+		Args         map[string]string
+		SessionID    string
+		Instructions string
+		Arguments    []commands.Argument
 	}
 	// ActionSelectReasoningEffort is a message indicating a reasoning effort
 	// has been selected.
@@ -130,10 +164,10 @@ type (
 	}
 	// ActionRunCustomCommand is a message to run a custom command.
 	ActionRunCustomCommand struct {
+		Args      map[string]string
+		Skill     *skills.Skill
 		Content   string
 		Arguments []commands.Argument
-		Args      map[string]string // Actual argument values
-		Skill     *skills.Skill     // Set when this is a skill command
 	}
 	// ActionAttachSkill is sent when a skill is selected from the commands
 	// dialog to be attached to the conversation as a markdown attachment.
@@ -143,17 +177,27 @@ type (
 	}
 	// ActionRunMCPPrompt is a message to run a custom command.
 	ActionRunMCPPrompt struct {
+		Args        map[string]string
 		Title       string
 		Description string
 		PromptID    string
 		ClientID    string
 		Arguments   []commands.Argument
-		Args        map[string]string // Actual argument values
 	}
 	// ActionEnableDockerMCP is a message to enable Docker MCP.
 	ActionEnableDockerMCP struct{}
 	// ActionDisableDockerMCP is a message to disable Docker MCP.
 	ActionDisableDockerMCP struct{}
+	// ActionMCPReconnect reconnects (restarts) a single MCP server by name.
+	// This re-resolves env vars (including OAuth/OIDC token refresh commands)
+	// and is the mechanism for refreshing expired credentials.
+	ActionMCPReconnect struct {
+		ServerName string
+	}
+	// ActionReloadModelDiscovery triggers model re-discovery for custom
+	// providers from the model selection dialog, picking up models that
+	// appeared after startup (e.g. an `ollama pull`) without a restart.
+	ActionReloadModelDiscovery struct{}
 )
 
 // Messages for MCP OAuth authentication dialog.
@@ -163,8 +207,8 @@ type (
 	// using the provided context, which the dialog will cancel if the
 	// user closes it.
 	ActionMCPAuthStarted struct {
-		Name string
 		Ctx  context.Context
+		Name string
 	}
 
 	// ActionMCPAuthComplete is sent when MCP authentication succeeds.
@@ -174,8 +218,8 @@ type (
 
 	// ActionMCPAuthErrored is sent when MCP authentication fails.
 	ActionMCPAuthErrored struct {
-		Name  string
 		Error error
+		Name  string
 	}
 )
 
@@ -186,6 +230,19 @@ type (
 	}
 )
 
+// CompactInstructionsArg is the palette instructions argument ID used by
+// the compact and preview commands.
+const CompactInstructionsArg = "instructions"
+
+// The goal mode's argument IDs: the goal itself, and the optional turn
+// budget it may consume.
+const (
+	// GoalTextArg is the goal the agent works toward.
+	GoalTextArg = "goal"
+	// GoalBudgetArg is the number of turns the goal may consume.
+	GoalBudgetArg = "budget"
+)
+
 // Messages for OAuth2 device flow dialog.
 type (
 	// ActionInitiateOAuth is sent when the device auth is initiated
@@ -193,8 +250,8 @@ type (
 	ActionInitiateOAuth struct {
 		DeviceCode      string
 		UserCode        string
-		ExpiresIn       int
 		VerificationURL string
+		ExpiresIn       int
 		Interval        int
 	}
 
@@ -208,6 +265,9 @@ type (
 		Error error
 	}
 
+	// ActionDisconnectMemory removes the stored Honcho sign-in.
+	ActionDisconnectMemory struct{}
+
 	// ActionCloseOAuth closes the OAuth dialog and runs the given cleanup
 	// command, cancelling any in-flight authorization. It exists so a
 	// dismissed dialog does not leave a poller or loopback listener
@@ -220,14 +280,27 @@ type (
 	// authenticate a provider that supports both OAuth and API keys.
 	ActionSelectAuthMethod struct {
 		Provider  catwalk.Provider
-		Model     config.SelectedModel
 		ModelType config.SelectedModelType
+		Model     config.SelectedModel
 		UseOAuth  bool
 	}
 )
 
 // ActionCmd represents an action that carries a [tea.Cmd] to be passed to the
 // Bubble Tea program loop.
+// ActionInsertMCPPrompt is a message to attach an MCP prompt to the prompt
+// currently being composed, rather than running it as a whole turn the way
+// ActionRunMCPPrompt does. It is produced by the inline "/" completion, where
+// the user is mid-sentence and the prompt is one ingredient of their message.
+type ActionInsertMCPPrompt struct {
+	Args       map[string]string
+	Name       string
+	MCPName    string
+	PromptID   string
+	Arguments  []commands.Argument
+	StartIndex int
+}
+
 type ActionCmd struct {
 	Cmd tea.Cmd
 }
@@ -250,7 +323,7 @@ func (a ActionFilePickerSelected) Cmd() tea.Cmd {
 		if err != nil {
 			return util.InfoMsg{
 				Type: util.InfoTypeError,
-				Msg:  fmt.Sprintf("unable to read the image: %v", err),
+				Msg:  fmt.Sprintf("unable to read the file: %v", err),
 			}
 		}
 		if isFileLarge {
@@ -264,13 +337,21 @@ func (a ActionFilePickerSelected) Cmd() tea.Cmd {
 		if err != nil {
 			return util.InfoMsg{
 				Type: util.InfoTypeError,
-				Msg:  fmt.Sprintf("unable to read the image: %v", err),
+				Msg:  fmt.Sprintf("unable to read the file: %v", err),
 			}
 		}
 
-		mimeBufferSize := min(512, len(content))
-		mimeType := http.DetectContentType(content[:mimeBufferSize])
 		fileName := filepath.Base(path)
+		mimeType, ok := common.SniffAttachmentMIME(content)
+		if !ok {
+			// Allowed by extension but the content sniffs as binary —
+			// attaching would inline byte soup or send a file part
+			// providers reject.
+			return util.InfoMsg{
+				Type: util.InfoTypeWarn,
+				Msg:  fmt.Sprintf("%s looks binary (%s), not attaching", fileName, mimeType),
+			}
+		}
 
 		return message.Attachment{
 			FilePath: path,

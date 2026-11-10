@@ -27,21 +27,21 @@ const (
 // ShellItem renders a bang-mode shell command result in the chat with a
 // vertical bar on the left and plain-text output.
 type ShellItem struct {
-	*list.Versioned
+	sty *styles.Styles
 	*highlightableMessageItem
 	*cachedMessageItem
 	*focusableMessageItem
-
+	*list.Versioned
+	anim            *anim.Anim
 	id              string
 	command         string
 	output          strings.Builder
+	hyperlinks      []hyperlinkSpan
+	xOffset         int
+	maxLineWidth    int
 	exitCode        int
 	expandedContent bool
-	xOffset         int
-	maxLineWidth    int // computed during render, used to clamp xOffset
-	sty             *styles.Styles
 	pending         bool
-	anim            *anim.Anim
 }
 
 var (
@@ -164,7 +164,22 @@ func (s *ShellItem) Render(width int) string {
 
 // HandleMouseClick implements MouseClickable so clicks select this item.
 func (s *ShellItem) HandleMouseClick(btn ansi.MouseButton, x, y int) bool {
-	return btn == ansi.MouseLeft
+	handled, _ := s.HandleMouseClickCmd(btn, x, y)
+	return handled
+}
+
+// HandleMouseClickCmd implements [list.MouseClickCommandable]. A plain
+// click on a hyperlink span in the shell output opens the URL in the
+// browser; other left clicks report handled with a nil command so the
+// item keeps its existing select-on-click behavior.
+func (s *ShellItem) HandleMouseClickCmd(btn ansi.MouseButton, x, y int) (bool, tea.Cmd) {
+	if btn != ansi.MouseLeft {
+		return false, nil
+	}
+	if url := spanAt(s.hyperlinks, y, x-MessageLeftPaddingTotal); url != "" {
+		return true, openURL(url)
+	}
+	return true, nil
 }
 
 // HandleKeyEvent implements KeyEventHandler for copy and horizontal scrolling.
@@ -180,7 +195,7 @@ func (s *ShellItem) HandleKeyEvent(key tea.KeyMsg) (bool, tea.Cmd) {
 			return true, nil
 		}
 	case "shift+right", "L":
-		s.xOffset = min(s.xOffset+shellHScrollStep, s.maxLineWidth)
+		s.xOffset = min(s.xOffset+shellHScrollStep, max(s.maxLineWidth, s.xOffset))
 		s.Bump()
 		return true, nil
 	}
@@ -189,7 +204,10 @@ func (s *ShellItem) HandleKeyEvent(key tea.KeyMsg) (bool, tea.Cmd) {
 
 // ScrollHorizontal adjusts the horizontal scroll offset by delta columns.
 func (s *ShellItem) ScrollHorizontal(delta int) {
-	s.xOffset = min(max(0, s.xOffset+delta), s.maxLineWidth)
+	s.xOffset = max(0, s.xOffset+delta)
+	if s.maxLineWidth > 0 {
+		s.xOffset = min(s.xOffset, s.maxLineWidth)
+	}
 	s.Bump()
 }
 
@@ -201,6 +219,19 @@ func (s *ShellItem) ToggleExpanded() bool {
 }
 
 func (s *ShellItem) RawRender(width int) string {
+	out := s.renderShell(width)
+	// Index hyperlink spans after the horizontal-scroll cut so the click
+	// hit-test matches the visible text. Links cut mid-way by scrolling
+	// simply drop out of the index (the opening sequence is gone), which
+	// degrades to non-clickable rather than a corrupt hit-zone.
+	s.hyperlinks = parseHyperlinkSpans(out)
+	return out
+}
+
+// renderShell assembles the shell item's rendered output. Kept separate
+// from RawRender so hyperlink indexing applies uniformly at every return
+// point.
+func (s *ShellItem) renderShell(width int) string {
 	cappedWidth := cappedMessageWidth(width)
 
 	cmd := strings.ReplaceAll(s.command, "\n", " ")
@@ -263,11 +294,9 @@ func (s *ShellItem) RawRender(width int) string {
 		}
 	}
 
-	// Normalize CRLF before stripping cursor controls so a bare CR still
-	// resets its line when followed by an erase sequence.
-	raw = strings.ReplaceAll(raw, "\r\n", "\n")
 	raw = common.StripCursorControl(raw)
 	output := common.RemapANSI16(raw, s.sty.ANSI)
+	output = hyperlinkizeURLs(output)
 	lines := strings.Split(output, "\n")
 
 	// Compute max line width for scroll clamping.
@@ -279,9 +308,6 @@ func (s *ShellItem) RawRender(width int) string {
 		}
 	}
 	s.maxLineWidth = max(0, maxW-cappedWidth)
-	// A wider item or collapsed output can leave the offset past the
-	// widest line, which would scroll every line out of view.
-	s.xOffset = min(s.xOffset, s.maxLineWidth)
 
 	var body strings.Builder
 
@@ -334,8 +360,7 @@ func firstLines(s string, count int) string {
 		}
 		end += next
 		if i == count-1 {
-			// Remove both bytes if the delimiter is CRLF.
-			return strings.TrimSuffix(s[:end], "\r")
+			return s[:end]
 		}
 		end++
 	}

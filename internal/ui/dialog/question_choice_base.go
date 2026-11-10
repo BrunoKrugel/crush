@@ -38,29 +38,26 @@ func questionIconPrompt(sty *styles.Styles, focused bool) string {
 // Used by clampBounds to keep the fill-in visible during wheel
 // scrolling without scanning lines on every event.
 type choiceList struct {
-	questionEditor
-	Request question.Question
-
-	cursorIdx        int
-	scrollOffset     int // lines scrolled past the top of the viewport
-	focused          bool
-	lastWidth        int
 	choiceCompositor *lipgloss.Compositor
-	suppressScroll   bool // skip scroll clamping after mouse click
-	wheelActive      bool // wheel-scroll mode: skip cursor snap until next keyboard nav
-	hoverX, hoverY   int  // current mouse position for hover highlight
-	hoveredChoice    int  // choice index under mouse, or -1
-	mouseActive      bool // true when last interaction was mouse (hover mode)
-
-	// Cached layout for wheel-scroll bounds checking.
-	lastLines    []contentLine // last rendered lines from drawContent
-	lastViewport int           // last viewport height from drawContent
-	fillInTop    int           // first fill-in row index, or -1
-	fillInBottom int           // last fill-in row index, or -1
-
-	keyUp    key.Binding
-	keyDown  key.Binding
-	keyClose key.Binding
+	questionEditor
+	Request        question.Question
+	keyClose       key.Binding
+	keyDown        key.Binding
+	keyUp          key.Binding
+	lastLines      []contentLine
+	hoverY         int
+	hoverX         int
+	hoveredChoice  int
+	lastWidth      int
+	lastViewport   int
+	fillInTop      int
+	fillInBottom   int
+	scrollOffset   int
+	cursorIdx      int
+	wheelActive    bool
+	suppressScroll bool
+	mouseActive    bool
+	focused        bool
 }
 
 // numberKeyIndex returns the zero-based choice index for a number
@@ -216,10 +213,10 @@ func (c *choiceList) handleNavKey(msg tea.KeyPressMsg) bool {
 }
 
 // noteKey returns the map key for the currently focused item's
-// note. Choices use their ID; the question itself uses [question.QuestionNoteKey].
+// note. Choices use their ID; the question itself uses "_question".
 func (c *choiceList) noteKey() string {
 	if c.isFillIn() || c.cursorIdx >= len(c.Request.Choices) {
-		return question.QuestionNoteKey
+		return "_question"
 	}
 	return c.Request.Choices[c.cursorIdx].ID
 }
@@ -623,11 +620,7 @@ func (c *choiceList) clampToBounds(lines []contentLine, viewport int) {
 // description) comes back into view.
 func (c *choiceList) clampScroll(lines []contentLine, viewport int) {
 	if c.suppressScroll {
-		// Skip the snap to the cursor, but not the bounds: the click
-		// that suppressed it may have shrunk the content (a blurred
-		// fill-in collapses to one row).
 		c.suppressScroll = false
-		c.clampToBounds(lines, viewport)
 		return
 	}
 	// After wheel scroll, only enforce bounds instead of snapping

@@ -24,14 +24,14 @@ const (
 // redirect target while the user completes authorization in their
 // browser, then exchanges the resulting code for tokens.
 type BrowserFlow struct {
-	authURL     string
-	pkce        PKCE
-	state       string
-	redirectURI string
-	startURL    string
 	listener    net.Listener
 	server      *http.Server
 	result      chan *http.Request
+	pkce        PKCE
+	authURL     string
+	state       string
+	redirectURI string
+	startURL    string
 }
 
 // StartBrowserFlow opens the loopback callback listener and returns the

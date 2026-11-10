@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"encoding/xml"
 	"fmt"
 	"image"
 	"strings"
@@ -79,20 +80,12 @@ type SendMsg struct {
 }
 
 type highlightableMessageItem struct {
-	// version is the parent item's version counter. SetHighlight
-	// bumps it on every observable change so the F6 list memo and
-	// any frozen entry get invalidated when a selection drag enters
-	// or leaves the item.
-	version *list.Versioned
-
-	startLine int
-	startCol  int
-	endLine   int
-	endCol    int
-	// sty supplies the selection style. It is read when highlighting, not
-	// copied when the item is built, so a theme switch recolors selections
-	// in existing items too.
-	sty *styles.Styles
+	version     *list.Versioned
+	highlighter list.Highlighter
+	startLine   int
+	startCol    int
+	endLine     int
+	endCol      int
 }
 
 var _ list.Highlightable = (*highlightableMessageItem)(nil)
@@ -108,7 +101,7 @@ func (h *highlightableMessageItem) renderHighlighted(content string, width, heig
 		return content
 	}
 	area := image.Rect(0, 0, width, height)
-	return list.Highlight(content, area, h.startLine, h.startCol, h.endLine, h.endCol, list.ToHighlighter(h.sty.TextSelection))
+	return list.Highlight(content, area, h.startLine, h.startCol, h.endLine, h.endCol, h.highlighter)
 }
 
 // SetHighlight implements list.Highlightable.
@@ -140,12 +133,12 @@ func (h *highlightableMessageItem) Highlight() (startLine int, startCol int, end
 
 func defaultHighlighter(sty *styles.Styles, v *list.Versioned) *highlightableMessageItem {
 	return &highlightableMessageItem{
-		version:   v,
-		startLine: -1,
-		startCol:  -1,
-		endLine:   -1,
-		endCol:    -1,
-		sty:       sty,
+		version:     v,
+		startLine:   -1,
+		startCol:    -1,
+		endLine:     -1,
+		endCol:      -1,
+		highlighter: list.ToHighlighter(sty.TextSelection),
 	}
 }
 
@@ -166,11 +159,6 @@ type animRestyler interface {
 // next render uses the current styles. It also bumps each item's
 // version so the F6 list-level memo invalidates frozen entries on
 // the next render.
-//
-// Tools nested in an Agent or AgenticFetch item are not list entries of
-// their own, so their caches are cleared through the parent; otherwise the
-// parent's re-render would reuse their cached, old-colored output. (Their
-// spinners are restyled by the parent's restyleAnim.)
 func ClearItemCaches(items []MessageItem) {
 	for _, item := range items {
 		if cc, ok := item.(cacheClearable); ok {
@@ -178,16 +166,6 @@ func ClearItemCaches(items []MessageItem) {
 		}
 		if ar, ok := item.(animRestyler); ok {
 			ar.restyleAnim()
-		}
-		if c, ok := item.(NestedToolContainer); ok {
-			for _, nested := range c.NestedTools() {
-				if cc, ok := nested.(cacheClearable); ok {
-					cc.clearCache()
-				}
-				if v, ok := nested.(interface{ Bump() }); ok {
-					v.Bump()
-				}
-			}
 		}
 		if v, ok := item.(interface{ Bump() }); ok {
 			v.Bump()
@@ -202,23 +180,10 @@ func ClearItemCaches(items []MessageItem) {
 // THOUGHT(kujtim): we should consider if its efficient to store the render for different widths
 // the issue with that could be memory usage
 type cachedMessageItem struct {
-	// rendered is the cached rendered string
-	rendered string
-	// width and height are the dimensions of the cached render
-	width  int
-	height int
-
-	// prefixedRendered caches the per-line-prefixed Render output (the
-	// result of splitting RawRender by newlines and prepending a focus
-	// or selection prefix to every line). Items rebuild this every
-	// frame today; caching it keyed by (prefixedWidth, prefixedKey)
-	// turns Render into a pointer return when item state is stable.
-	//
-	// Invalidation lives in clearCache; callers must additionally
-	// bypass this cache whenever the prefixed output would not be
-	// stable (spinner ticks, active highlight ranges) by not calling
-	// setCachedPrefixedRender for those frames.
+	rendered         string
 	prefixedRendered string
+	width            int
+	height           int
 	prefixedWidth    int
 	prefixedKey      uint64
 }
@@ -280,6 +245,13 @@ func newFocusableMessageItem(v *list.Versioned) *focusableMessageItem {
 	return &focusableMessageItem{version: v}
 }
 
+// isFocused reports the current focus state. It tolerates a nil receiver
+// so helpers can query partially-constructed items (tests build them
+// without the focus rail).
+func (f *focusableMessageItem) isFocused() bool {
+	return f != nil && f.focused
+}
+
 // SetFocused implements MessageItem.
 func (f *focusableMessageItem) SetFocused(focused bool) {
 	if f.focused == focused {
@@ -324,6 +296,22 @@ type AssistantInfoItem struct {
 	sty                 *styles.Styles
 	cfg                 *config.Config
 	lastUserMessageTime time.Time
+
+	// sourceAgent names the sub-agent whose transcript this line belongs
+	// to, set by the model while a child session is on screen in the
+	// inspect view (#415). Empty on the parent's own lines.
+	sourceAgent string
+}
+
+// SetSourceAgent labels this metadata line with the inspected sub-agent's
+// name and drops any cached render so the tag appears immediately.
+func (a *AssistantInfoItem) SetSourceAgent(name string) {
+	if a.sourceAgent == name {
+		return
+	}
+	a.sourceAgent = name
+	a.clearCache()
+	a.Bump()
 }
 
 // NewAssistantInfoItem creates a new AssistantInfoItem.
@@ -426,11 +414,17 @@ func (a *AssistantInfoItem) renderContent(width int) string {
 		modelFormatted = fmt.Sprintf("%s %s %s", modelFormatted, arrow, routedModel)
 	}
 	savings := prismSavingsSuffix(a.sty, a.message)
+	// An inspected sub-agent's line carries its handle next to the
+	// model, so the transcript reads as that agent's work (#415).
+	agentTag := ""
+	if a.sourceAgent != "" {
+		agentTag = a.sty.Messages.AssistantInfoProvider.Render(styles.AgentIcon+" "+a.sourceAgent) + " "
+	}
 	if !isFinalTurn {
 		if savings != "" {
-			return fmt.Sprintf("%s %s %s", icon, modelFormatted, savings)
+			return fmt.Sprintf("%s %s%s %s", icon, agentTag, modelFormatted, savings)
 		}
-		return fmt.Sprintf("%s %s", icon, modelFormatted)
+		return fmt.Sprintf("%s %s%s", icon, agentTag, modelFormatted)
 	}
 	providerName := a.message.Provider
 	if providerConfig, ok := a.cfg.Providers.Get(a.message.Provider); ok {
@@ -439,11 +433,121 @@ func (a *AssistantInfoItem) renderContent(width int) string {
 	provider := a.sty.Messages.AssistantInfoProvider.Render(fmt.Sprintf("via %s", providerName))
 	duration := time.Unix(finishData.Time, 0).Sub(a.lastUserMessageTime)
 	infoMsg := a.sty.Messages.AssistantInfoDuration.Render(fmt.Sprintf("in %s", duration))
-	assistant := fmt.Sprintf("%s %s %s %s", icon, modelFormatted, provider, infoMsg)
+	assistant := fmt.Sprintf("%s %s%s %s %s", icon, agentTag, modelFormatted, provider, infoMsg)
 	if savings != "" {
 		assistant = fmt.Sprintf("%s %s", assistant, savings)
 	}
 	return common.Section(a.sty, assistant, width)
+}
+
+// ChannelInfoID returns a stable ID for channel-info items.
+func ChannelInfoID(messageID string) string {
+	return fmt.Sprintf("%s:channel-info", messageID)
+}
+
+// ChannelInfoItem renders sender/channel/timestamp metadata for a
+// channel-originated user message. It is emitted as a separate list item
+// below the message body, mirroring how AssistantInfoItem appears below
+// assistant messages.
+type ChannelInfoItem struct {
+	*list.Versioned
+	*cachedMessageItem
+	message *message.Message
+	sty     *styles.Styles
+	id      string
+}
+
+// NewChannelInfoItem creates a new ChannelInfoItem.
+func NewChannelInfoItem(sty *styles.Styles, msg *message.Message) MessageItem {
+	return &ChannelInfoItem{
+		Versioned:         list.NewVersioned(),
+		cachedMessageItem: &cachedMessageItem{},
+		id:                ChannelInfoID(msg.ID),
+		message:           msg,
+		sty:               sty,
+	}
+}
+
+// Finished implements list.Item. Channel metadata is immutable once
+// rendered, so the entry is always safe to freeze.
+func (c *ChannelInfoItem) Finished() bool {
+	return true
+}
+
+// ID implements MessageItem.
+func (c *ChannelInfoItem) ID() string {
+	return c.id
+}
+
+// RawRender implements MessageItem.
+func (c *ChannelInfoItem) RawRender(width int) string {
+	innerWidth := max(0, width-MessageLeftPaddingTotal)
+	content, _, ok := c.getCachedRender(innerWidth)
+	if !ok {
+		content = c.renderContent(innerWidth)
+		height := lipgloss.Height(content)
+		c.setCachedRender(content, innerWidth, height)
+	}
+	return content
+}
+
+// Render implements MessageItem.
+func (c *ChannelInfoItem) Render(width int) string {
+	if cached, ok := c.getCachedPrefixedRender(width, 0); ok {
+		return cached
+	}
+	prefix := c.sty.Messages.SectionHeader.Render()
+	lines := strings.Split(c.RawRender(width), "\n")
+	for i, line := range lines {
+		lines[i] = prefix + line
+	}
+	out := strings.Join(lines, "\n")
+	c.setCachedPrefixedRender(out, width, 0)
+	return out
+}
+
+func (c *ChannelInfoItem) renderContent(width int) string {
+	raw := strings.TrimSpace(c.message.Content().Text)
+	var ch channelMessage
+	if err := xml.Unmarshal([]byte(raw), &ch); err != nil {
+		return ""
+	}
+
+	parts := make([]string, 0, 3)
+
+	sender := ch.SenderName
+	if sender == "" {
+		sender = ch.Sender
+	}
+	if sender != "" {
+		parts = append(parts, c.sty.Messages.ChannelInfoSender.Render(sender))
+	}
+
+	if ch.Source != "" {
+		parts = append(parts, c.sty.Messages.ChannelInfoProvider.Render(fmt.Sprintf("via %s", ch.Source)))
+	}
+
+	ts := ch.Time
+	if ts == "" && c.message.CreatedAt > 0 {
+		ts = time.Unix(c.message.CreatedAt, 0).Format(time.TimeOnly)
+	}
+	if ts != "" {
+		parts = append(parts, c.sty.Messages.ChannelInfoTimestamp.Render(fmt.Sprintf("at %s", ts)))
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+
+	icon := c.sty.Messages.ChannelInfoIcon.Render(styles.ChannelIcon)
+	metaStr := fmt.Sprintf("%s %s", icon, strings.Join(parts, " "))
+	return common.Section(c.sty, metaStr, width)
+}
+
+// IsChannelMessage reports whether the given message content is a
+// channel-originated message (i.e. starts with the <channel XML tag).
+func IsChannelMessage(msg *message.Message) bool {
+	return strings.HasPrefix(strings.TrimSpace(msg.Content().Text), "<channel")
 }
 
 // cappedMessageWidth returns the maximum width for message content for readability.
@@ -489,22 +593,21 @@ func ExtractMessageItems(sty *styles.Styles, msg *message.Message, toolResults m
 		if msg.Content().Hidden {
 			return nil
 		}
-		// Reconstruct shell command and subagent report items from their
-		// parts. Both are carried on user-role messages but neither is
-		// something the user typed, so they render as their own items.
+		// Reconstruct shell command items from ShellCommand parts.
 		var items []MessageItem
 		for _, part := range msg.Parts {
-			switch p := part.(type) {
-			case message.ShellCommand:
-				items = append(items, NewShellItem(sty, p.Command, p.Output, p.ExitCode))
-			case message.SubAgentReport:
-				items = append(items, NewSubAgentReportItem(sty, p.Label, p.Model, p.Output, p.Failed))
+			if sc, ok := part.(message.ShellCommand); ok {
+				items = append(items, NewShellItem(sty, sc.Command, sc.Output, sc.ExitCode))
 			}
 		}
 		if len(items) > 0 {
 			return items
 		}
-		return []MessageItem{NewUserMessageItem(sty, msg, newAttachmentRenderer(sty))}
+		items = []MessageItem{NewUserMessageItem(sty, msg, newAttachmentRenderer(sty))}
+		if IsChannelMessage(msg) {
+			items = append(items, NewChannelInfoItem(sty, msg))
+		}
+		return items
 	case message.Assistant:
 		var items []MessageItem
 		if ShouldRenderAssistantMessage(msg) {

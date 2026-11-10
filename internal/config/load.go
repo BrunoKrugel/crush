@@ -1545,3 +1545,35 @@ func ProjectSkillsDir(workingDir string) []string {
 }
 
 func isAppleTerminal() bool { return os.Getenv("TERM_PROGRAM") == "Apple_Terminal" }
+
+// itself when the user wrote a literal key, so the failure path wrote the
+// key to the crush log in clear text (CodeQL go/clear-text-logging, high).
+// The error is still logged for base_url, matching how configureProviders
+// treats API keys versus endpoints. Also clear failed fields, see above.
+func (c *Config) resolveEmbeddings(resolver VariableResolver) {
+	if c.Embeddings == nil {
+		return
+	}
+
+	if v := c.Embeddings.APIKey; v != "" {
+		resolved, err := resolver.ResolveValue(v)
+		if err != nil {
+			// No "error" attribute: it embeds the unresolved template.
+			slog.Warn("Ignoring embeddings API key that failed to resolve.")
+			resolved = ""
+		}
+		c.Embeddings.APIKey = resolved
+	}
+
+	if v := c.Embeddings.BaseURL; v != "" {
+		resolved, err := resolver.ResolveValue(v)
+		if err != nil {
+			slog.Warn("Ignoring embeddings base URL that failed to resolve.", "error", err)
+			resolved = ""
+		}
+		c.Embeddings.BaseURL = resolved
+	}
+}
+
+// TypeGoogle is the anthropic-compatible type id the fork used for Google.
+const TypeGoogle catwalk.Type = "google"

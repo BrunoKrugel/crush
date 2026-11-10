@@ -25,6 +25,14 @@ func (w *sessionMouseWorkspace) ListSessions(context.Context) ([]session.Session
 	return w.sessions, nil
 }
 
+func (w *sessionMouseWorkspace) ListChildSessions(context.Context, string) ([]session.Session, error) {
+	return nil, nil
+}
+
+func (w *sessionMouseWorkspace) ParseAgentToolSessionID(string) (string, string, bool) {
+	return "", "", false
+}
+
 func (w *sessionMouseWorkspace) AgentIsReady() bool {
 	return false
 }
@@ -142,7 +150,7 @@ func TestSessionMouseDoubleClickExpires(t *testing.T) {
 	})
 
 	require.Nil(t, dialog.HandleMsg(click))
-	dialog.lastClickTime = time.Now().Add(-sessionDoubleClickThreshold - time.Millisecond)
+	dialog.lastClickTime = time.Now().Add(-dialogDoubleClickThreshold - time.Millisecond)
 	require.Nil(t, dialog.HandleMsg(click))
 	require.Equal(t, "s2", dialog.selectedSessionItem().ID())
 }
@@ -181,8 +189,8 @@ func TestSessionMouseClickIgnoresUnsupportedClicks(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name   string
 		point  func(image.Rectangle) image.Point
+		name   string
 		button tea.MouseButton
 		mode   sessionsMode
 	}{

@@ -2,7 +2,6 @@ package grok
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/oauth"
 )
 
@@ -64,7 +64,7 @@ func RequestDeviceCode(ctx context.Context) (*DeviceCode, error) {
 	}
 
 	var dc DeviceCode
-	if err := json.Unmarshal(body, &dc); err != nil {
+	if err := sonic.Unmarshal(body, &dc); err != nil {
 		return nil, fmt.Errorf("decode device code response: %w", err)
 	}
 	if dc.DeviceCode == "" || dc.UserCode == "" {
@@ -131,6 +131,6 @@ func oauthErrorCode(body string) string {
 	var e struct {
 		Error string `json:"error"`
 	}
-	_ = json.Unmarshal([]byte(body), &e)
+	_ = sonic.Unmarshal([]byte(body), &e)
 	return e.Error
 }
