@@ -13,7 +13,7 @@ import (
 // free-form map argument, which must render as an object parameter.
 func TestMCPPromptTools_Info(t *testing.T) {
 	cfg := config.NewTestStore(&config.Config{})
-	perms := permission.NewPermissionService(cfg.WorkingDir(), false, nil)
+	perms := permission.NewPermissionService(cfg.WorkingDir(), nil, nil)
 
 	list := NewListMCPPromptsTool(cfg, perms).Info()
 	require.Equal(t, ListMCPPromptsToolName, list.Name)
