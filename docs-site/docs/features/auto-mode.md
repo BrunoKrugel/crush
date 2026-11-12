@@ -107,4 +107,4 @@ setting the same way it follows yolo.
 
 Shell hooks can still veto. `PrePermission` runs in the same slot and can
 allow or deny before the classifier's verdict is the last word. See
-[Hooks](/features/hooks#prepermission).
+[Hooks](/features/hooks#permissionrequest).
