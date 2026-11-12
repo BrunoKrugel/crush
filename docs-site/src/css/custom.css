@@ -174,9 +174,31 @@ kbd {
 
 /* --------------------------------------------------------------- Chrome */
 
+/*
+ * The frosted-glass effect lives on ::before rather than on .navbar itself.
+ * A backdrop-filter on .navbar would make it the containing block for the
+ * fixed-position mobile sidebar drawer (which Infima renders inside <nav>),
+ * squashing the drawer and its backdrop into the navbar strip — the "black
+ * box" that made the mobile menu unusable. As a child pseudo-element the
+ * blur still frosts the page behind the bar without trapping fixed layers.
+ */
 .navbar {
-  backdrop-filter: blur(12px);
+  position: relative;
+  background-color: transparent;
+}
+
+.navbar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
   background-color: var(--surface-overlay);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+
+.navbar > :not(.navbar-sidebar) {
+  position: relative;
 }
 
 .navbar__title {
