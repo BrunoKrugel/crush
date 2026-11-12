@@ -1,0 +1,226 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-agents/handles-and-inspect" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.2"><title data-rh=true>Handles and inspect mode | Crush</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true name=twitter:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true property=og:url content=https://brunokrugel.github.io/crush/agents/handles-and-inspect /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="Handles and inspect mode | Crush"/><meta data-rh=true name=description content="Reference for @handles, agent cards, the @ completions, message_agent, the agent block, inspect mode, and the sub-agent sessions tree."/><meta data-rh=true property=og:description content="Reference for @handles, agent cards, the @ completions, message_agent, the agent block, inspect mode, and the sub-agent sessions tree."/><link data-rh=true rel=icon href=/crush/img/favicon.ico /><link data-rh=true rel=canonical href=https://brunokrugel.github.io/crush/agents/handles-and-inspect /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/agents/handles-and-inspect hreflang=en /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/agents/handles-and-inspect hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://brunokrugel.github.io/crush/agents/handles-and-inspect","name":"Handles and inspect","position":1}]}</script><link rel=apple-touch-icon href=/crush/img/touchicon_180.png><link rel=stylesheet href=/crush/assets/css/styles.e14b0f2f.css /><script src=/crush/assets/js/runtime~main.b8734afa.js defer></script><script src=/crush/assets/js/main.b8358137.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-7c2")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/crush/><b class="navbar__title text--truncate">Crush</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/crush/introduction>Docs</a><a class="navbar__item navbar__link" href=/crush/configuration/crushrc>Configuration</a><a class="navbar__item navbar__link" href=/crush/reference/cli>Reference</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/introduction><span class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/fork><span class=linkLabel_WmDU>What this fork adds</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/getting-started/installation><span class=categoryLinkLabel_W154>Getting started</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/installation><span class=linkLabel_WmDU>Installation</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/quickstart><span class=linkLabel_WmDU>Quickstart</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/providers-and-api-keys><span class=linkLabel_WmDU>Providers and API keys</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/configuration/crushrc><span class=categoryLinkLabel_W154>Configuration</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/crushrc><span class=linkLabel_WmDU>crushrc (Bash)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/command-reference><span class=linkLabel_WmDU>Command reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/json><span class=linkLabel_WmDU>crush.json (JSON)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/providers><span class=linkLabel_WmDU>Providers and models</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/permissions><span class=linkLabel_WmDU>Permissions and safety</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/context-and-ignore><span class=linkLabel_WmDU>Context and ignore files</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/environment><span class=linkLabel_WmDU>Environment and startup</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/features/lsp><span class=categoryLinkLabel_W154>Features</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/lsp><span class=linkLabel_WmDU>Language servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/mcp><span class=linkLabel_WmDU>MCP servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/channels><span class=linkLabel_WmDU>Channels</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/skills><span class=linkLabel_WmDU>Skills</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/hooks><span class=linkLabel_WmDU>Hooks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/auto-mode><span class=linkLabel_WmDU>Auto mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/scheduled-tasks><span class=linkLabel_WmDU>Scheduled tasks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/semantic-search><span class=linkLabel_WmDU>Semantic search</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/sessions><span class=linkLabel_WmDU>Sessions and projects</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/memory><span class=linkLabel_WmDU>Memory</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/forking><span class=linkLabel_WmDU>Forking</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/goal-mode><span class=linkLabel_WmDU>Goal mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/server-and-workspaces><span class=linkLabel_WmDU>Server and workspaces</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/notifications><span class=linkLabel_WmDU>Desktop notifications</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/crush/agents/overview><span class=categoryLinkLabel_W154>Multi-agent</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/overview><span class=linkLabel_WmDU>Overview</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/tutorial><span class=linkLabel_WmDU>Tutorial</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/crush/agents/handles-and-inspect><span class=linkLabel_WmDU>Handles and inspect</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/todo-enforcement><span class=linkLabel_WmDU>Todo enforcement</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/configuration><span class=linkLabel_WmDU>Configuration</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/team><span class=linkLabel_WmDU>Team</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/architecture><span class=linkLabel_WmDU>Architecture</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/a2a-protocol><span class=linkLabel_WmDU>A2A protocol</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/design-decisions><span class=linkLabel_WmDU>Design decisions</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/reference/cli><span class=categoryLinkLabel_W154>Reference</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/cli><span class=linkLabel_WmDU>CLI reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/tools><span class=linkLabel_WmDU>Tool reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/keybindings><span class=linkLabel_WmDU>Keybindings</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/environment-variables><span class=linkLabel_WmDU>Environment variables</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/logging><span class=linkLabel_WmDU>Logging</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/crush/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Multi-agent</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>Handles and inspect</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Handles and inspect mode</h1></header>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p>@handles, agent cards, inspect mode, and the sessions tree are additions in the
+this fork.</div></div>
+<p>This is the reference for every surface that shows or reaches a
+<a class="" href=/crush/agents/overview>dispatched agent</a>. For a guided tour, see
+<a class="" href=/crush/agents/tutorial>Your first parallel task</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=handles>Handles<a href=#handles class=hash-link aria-label="Direct link to Handles" title="Direct link to Handles" translate=no>​</a></h2>
+<p>A dispatched agent's handle is the <code>handle</code> the main agent passed to
+<code>dispatch_agent</code>, else a slug of its <code>role</code>, else <code>agent</code>. Slugging drops a
+leading <code>@</code>, lower-cases, collapses each run of characters other than <code>a-z</code> and
+<code>0-9</code> into one <code>-</code>, and trims dashes: <code>@Team Lead</code> becomes <code>team-lead</code>.</p>
+<p>Handles are unique among <strong>running</strong> agents across the Crush process. A
+handle that is already held by a live agent, or that is one of the reserved
+names <code>coder</code>, <code>plan</code>, <code>task</code>, <code>worker</code> and <code>all</code>, gets a numeric suffix:
+<code>tester-2</code>, then <code>tester-3</code>. Assignment is atomic, so agents dispatched
+together never collide. A handle is at most 32 bytes; a longer slug is cut,
+and the cut makes room for the suffix.</p>
+<p>A handle lives as long as its run. When the agent finishes, its handle is free
+for the next dispatch — a second <code>tester</code> after the first completed is plain
+<code>tester</code> again. The finished agent's block and card keep the handle they were
+given.</p>
+<p>The handle shows in the agent block's header, the @ completions, the dispatch
+result's <code>handle</code> field, and as the name on the agent's A2A card.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=leading-handle-steering>Leading @handle: steering<a href=#leading-handle-steering class=hash-link aria-label="Direct link to Leading @handle: steering" title="Direct link to Leading @handle: steering" translate=no>​</a></h2>
+<p>A message whose first token is a handle goes to that agent, not the main agent:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">@tester skip the benchmarks; just the table tests</span><br/></div></code></pre></div></div>
+<p>The handle must open the first line (leading spaces are ignored) and end at
+whitespace, the end of the message, or one of <code>: , . ? !</code> when that character
+is itself followed by whitespace or the end — <code>@tester: stop</code> and
+<code>@tester, stop</code> both route, with the punctuation dropped. Handle tokens are
+letters, digits, <code>-</code>, and <code>_</code>, matched case-insensitively.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>You send<th>What happens<tbody><tr><td>A running agent's handle, then text<td>Queued for that agent. Your message and its reply show on its block; nothing lands in the main conversation.<tr><td>A finished agent's handle, then text<td>Refused: <code>agent @tester finished (completed); task sessions are never continuable — dispatch a new agent instead</code>. The text stays in the editor.<tr><td>An external agent's handle, then text<td>Refused: <code>steering external agents is not supported yet</code>. Cancel and re-dispatch instead.<tr><td>A handle-shaped token alone<td>Warning: <code>Nothing to send @handle — write the message after the handle, e.g. "@tester stop writing Rust".</code><tr><td>Anything else, including an unknown handle<td>An ordinary prompt to the main agent.</table>
+<p>Handles resolve against the agents dispatched from your current session's
+tree. A queued message is folded into the agent's turn at its next model step,
+or runs as its immediate follow-up turn, in the order you sent it. If the run
+ends before the agent reads it, the dispatch result lists it under
+<code>undelivered_steers</code>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=mid-sentence-mentions-agent-cards>Mid-sentence mentions: agent cards<a href=#mid-sentence-mentions-agent-cards class=hash-link aria-label="Direct link to Mid-sentence mentions: agent cards" title="Direct link to Mid-sentence mentions: agent cards" translate=no>​</a></h2>
+<p>A handle anywhere after the first token is a <strong>mention</strong>. Mentions never route:
+the main agent gets your message unchanged, plus one agent card per distinct
+agent mentioned.</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">Is @tester covering the empty-input case, or should @docs-writer note it?</span><br/></div></code></pre></div></div>
+<p>A card is a Markdown attachment, <code>agent-&lt;handle>.md</code>. A live agent's card
+carries its handle, role, status, current todo, and session ID, and says how to
+steer it. A finished agent's card is marked read-only and adds its key findings
+and diff summary.</p>
+<p>A mention must start a word and end the same way a leading handle does, so
+<code>@tester?</code> and <code>@tester,</code> attach a card while <code>@tester's</code> is prose. Unknown
+handles stay plain text.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=-completions>@ completions<a href=#-completions class=hash-link aria-label="Direct link to @ completions" title="Direct link to @ completions" translate=no>​</a></h2>
+<p>Typing <kbd>@</kbd> lists live dispatched agents first, above files and MCP
+resources:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">@tester        tester · ● · working · Writing edge-case tests</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">@docs-writer   docs writer · ○ · queued</span><br/></div></code></pre></div></div>
+<p>Each row shows the role, a status dot (● working, ○ queued), and the current
+todo. Finished agents never appear. Selecting a row inserts <code>@&lt;handle></code>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=handles-and-file-mentions>Handles and @file mentions<a href=#handles-and-file-mentions class=hash-link aria-label="Direct link to Handles and @file mentions" title="Direct link to Handles and @file mentions" translate=no>​</a></h2>
+<p>Handles never contain <code>.</code> or <code>/</code>, so <code>@main.go</code> and <code>@internal/ui</code> are always
+files. A bare token such as <code>@Makefile</code> is a handle candidate only if an agent
+has that handle; otherwise it is an ordinary file mention or plain text.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-message_agent-tool>The <code>message_agent</code> tool<a href=#the-message_agent-tool class=hash-link aria-label="Direct link to the-message_agent-tool" title="Direct link to the-message_agent-tool" translate=no>​</a></h2>
+<p><code>message_agent</code> is the main agent's version of a leading @handle: ask it to
+"tell @tester to skip the benchmarks" and it calls the tool with exactly one
+of <code>handle</code> or <code>session_id</code>, plus a <code>message</code>. The message is queued the same
+way, the tool returns once it's queued, and the reply appears on the agent's
+block. Unknown, finished and external agents are refused. Only the main agent
+has the tool, and only for agents dispatched from its own session.</p>
+<p><code>message_agent</code>, <code>cancel_dispatch</code>, <code>apply_dispatch</code> and <code>dismiss_dispatch</code> act
+only on agents dispatched from the calling session: another session's handle,
+dispatch ID or session ID is refused exactly like an unknown one
+(<a href=https://github.com/joestump-agent/crush/issues/399 target=_blank rel="noopener noreferrer" class="">#399</a>,
+<a href=https://github.com/joestump-agent/crush/issues/559 target=_blank rel="noopener noreferrer" class="">#559</a>).</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-agent-block>The agent block<a href=#the-agent-block class=hash-link aria-label="Direct link to The agent block" title="Direct link to The agent block" translate=no>​</a></h2>
+<p>Each <code>dispatch_agent</code> call renders as an agent block in the main chat. Its
+header reads like <code>tester · working · 2m14s · 14.2K tokens · 2/5 todos</code>: handle,
+state (<code>queued</code>, <code>working</code>, <code>complete</code>, <code>failed</code>, <code>killed</code> — shown as
+<code>canceled</code> when you stopped it yourself), elapsed time, tokens, and todo
+progress. Below it come the task prompt, the current todo (<code>→ …</code>), the
+messages you've sent with the agent's replies, and its tool calls.</p>
+<p>When the agent finishes, the block becomes a durable record that never clears:
+<code>Killed</code> (rendered as <code>Canceled</code> with the reason <code>canceled by user</code> when you
+stopped it with <kbd>ctrl+x</kbd>) or <code>Error</code> with a reason if the run didn't
+complete, then <strong>Findings</strong> (its final message) and <strong>Diff</strong> (per-file stat
+and diff, cut off at 250 lines). Focus the block and press <kbd>space</kbd> to
+expand clipped sections. The terminal state is stamped on the parent's
+<code>dispatch_agent</code> tool result when the result is delivered, so a reloaded or
+restarted session renders the finished block from that record.</p>
+<p><code>agent</code>-tool blocks can be inspected too, but have no handle and can't be
+steered or canceled — <kbd>ctrl+x</kbd> is dispatch-only.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=inspect-mode>Inspect mode<a href=#inspect-mode class=hash-link aria-label="Direct link to Inspect mode" title="Direct link to Inspect mode" translate=no>​</a></h2>
+<p>Inspect mode shows a sub-agent's full transcript — reasoning, tool calls,
+results, todo nudges — in the chat window while the main session stays active.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Key<th>Not inspecting<th>Inspecting<tbody><tr><td><kbd>ctrl+]</kbd><td>Open the selected agent block, or the first live agent if none is selected<td>Cycle to the next live agent<tr><td><kbd>esc</kbd> or <kbd>ctrl+[</kbd><td>Unchanged (<kbd>esc</kbd> keeps its chat meaning)<td>Back to the chat, scroll restored. Works on every terminal; <kbd>esc</kbd> never cancels the main agent from here<tr><td><kbd>ctrl+x</kbd><td>Cancel the selected live dispatch block<td>Cancel the dispatch you are viewing</table>
+<ul>
+<li class="">The keys work from the editor or the chat; an open dialog takes them first.
+With no live agents, Crush reports <code>No live sub-agents to inspect</code>.</li>
+<li class="">The cycle ring is a snapshot of live agent blocks taken on entry; agents
+dispatched later join on the next entry.</li>
+<li class="">A live transcript follows the stream.</li>
+<li class="">The editor placeholder reads
+<code>Inspecting @handle (2/3) · esc returns · editor read-only</code>, with
+the counter only when several agents are live. Yolo mode replaces it with
+<code>Go crazy</code>.</li>
+<li class=""><strong>Viewed is not active, and the editor is read-only.</strong> While you inspect,
+typing, paste and submit are all ignored — nothing can land in the main
+conversation you cannot see. <code>/compact</code>, the sidebar, todo pills, and
+history stay with the main session. Its new messages don't render while you
+inspect; the transcript reloads when you return. The sidebar carries a
+highlighted banner naming the inspected agent and its live status, and each
+response's metadata line in the transcript shows the agent's handle.</li>
+<li class="">Switching sessions or <kbd>ctrl+n</kbd> leaves inspect mode.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=sessions-tree>Sessions tree<a href=#sessions-tree class=hash-link aria-label="Direct link to Sessions tree" title="Direct link to Sessions tree" translate=no>​</a></h2>
+<p>In the session picker (<kbd>ctrl+s</kbd>), a session with sub-agent sessions
+shows <code>▸N</code> before its timestamp. The tree loads right after the picker
+opens: until it lands, <kbd>ctrl+]</kbd> reports "Loading sub-agent
+sessions…", and a failed load warns once while leaving the picker usable.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Key<th>Session list<th>Sub-agent list<tbody><tr><td><kbd>enter</kbd><td>Open the session<td>Open the sub-agent in inspect mode<tr><td><kbd>ctrl+]</kbd><td>List its sub-agents (<code>Sessions ▸ &lt;title></code>)<td>—<tr><td><kbd>esc</kbd><td>Close the picker<td>Back to the session list<tr><td><kbd>ctrl+r</kbd> / <kbd>ctrl+x</kbd><td>Rename / delete<td>Disabled</table>
+<p>The list holds every agent-tool task session: dispatched agents, <code>agent</code>
+sub-agents, and <code>agentic_fetch</code> runs, but not title-generation helpers. If the
+sub-agent's parent isn't the active session, Crush loads the parent first, so
+prompts go to the session the transcript belongs to. Sub-agent sessions open
+read-only and can't be continued; dispatch a new agent instead. Neither
+<code>crush -s &lt;id></code> nor <code>crush run --continue</code> will make a task session the active
+one.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=clientserver-mode>Client/server mode<a href=#clientserver-mode class=hash-link aria-label="Direct link to Client/server mode" title="Direct link to Client/server mode" translate=no>​</a></h2>
+<p>In <a class="" href=/crush/features/server-and-workspaces#dispatched-agents-against-a-server>client/server mode</a>
+(<code>CRUSH_CLIENT_SERVER=1</code>), every surface on this page works as it does in
+process. The TUI follows the server's dispatched agents over A2A, through the
+server's proxy to the workspace's agent host:</p>
+<ul>
+<li class="">the agent block updates live;</li>
+<li class="">the @ completions list running agents;</li>
+<li class="">a leading <code>@handle</code> steers the agent;</li>
+<li class="">mentions attach a card;</li>
+<li class=""><kbd>ctrl+x</kbd> cancels an agent.</li>
+</ul>
+<p>A finished agent's card carries its findings once the run has stamped its
+result on the dispatch card. Until then it carries the agent's final status
+text.</div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/brunokrugel/crush/edit/fork/docs-site/docs/agents/handles-and-inspect.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"><span class=theme-last-updated>Last updated<!-- --> on <b><time datetime=2026-11-10T12:40:44.000Z itemprop=dateModified>Nov 10, 2026</time></b></span></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/crush/agents/tutorial><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>Tutorial</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/crush/agents/todo-enforcement><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>Todo enforcement</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#handles class="table-of-contents__link toc-highlight">Handles</a><li><a href=#leading-handle-steering class="table-of-contents__link toc-highlight">Leading @handle: steering</a><li><a href=#mid-sentence-mentions-agent-cards class="table-of-contents__link toc-highlight">Mid-sentence mentions: agent cards</a><li><a href=#-completions class="table-of-contents__link toc-highlight">@ completions</a><li><a href=#handles-and-file-mentions class="table-of-contents__link toc-highlight">Handles and @file mentions</a><li><a href=#the-message_agent-tool class="table-of-contents__link toc-highlight">The <code>message_agent</code> tool</a><li><a href=#the-agent-block class="table-of-contents__link toc-highlight">The agent block</a><li><a href=#inspect-mode class="table-of-contents__link toc-highlight">Inspect mode</a><li><a href=#sessions-tree class="table-of-contents__link toc-highlight">Sessions tree</a><li><a href=#clientserver-mode class="table-of-contents__link toc-highlight">Client/server mode</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer footer--dark"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Docs</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/getting-started/installation>Installation</a><li class=footer__item><a class=footer__link-item href=/crush/getting-started/quickstart>Quickstart</a><li class=footer__item><a class=footer__link-item href=/crush/configuration/crushrc>Configuration</a><li class=footer__item><a class=footer__link-item href=/crush/reference/cli>CLI reference</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Features</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/features/mcp>MCP</a><li class=footer__item><a class=footer__link-item href=/crush/features/channels>Channels</a><li class=footer__item><a class=footer__link-item href=/crush/features/skills>Skills</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Project</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class=footer__link-item>This fork<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/crush target=_blank rel="noopener noreferrer" class=footer__link-item>Upstream Crush<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/catwalk target=_blank rel="noopener noreferrer" class=footer__link-item>Catwalk<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://charm.land target=_blank rel="noopener noreferrer" class=footer__link-item>Charm<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Crush is a Charm project, licensed FSL-1.1-MIT. Docs for the brunokrugel/crush fork, built with Docusaurus.</div></div></div></footer></div></body>

@@ -1,0 +1,338 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-reference/keybindings" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.2"><title data-rh=true>Keybindings | Crush</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true name=twitter:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true property=og:url content=https://brunokrugel.github.io/crush/reference/keybindings /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="Keybindings | Crush"/><meta data-rh=true name=description content="Every keyboard shortcut in the Crush TUI."/><meta data-rh=true property=og:description content="Every keyboard shortcut in the Crush TUI."/><link data-rh=true rel=icon href=/crush/img/favicon.ico /><link data-rh=true rel=canonical href=https://brunokrugel.github.io/crush/reference/keybindings /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/reference/keybindings hreflang=en /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/reference/keybindings hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://brunokrugel.github.io/crush/reference/keybindings","name":"Keybindings","position":1}]}</script><link rel=apple-touch-icon href=/crush/img/touchicon_180.png><link rel=stylesheet href=/crush/assets/css/styles.e14b0f2f.css /><script src=/crush/assets/js/runtime~main.b8734afa.js defer></script><script src=/crush/assets/js/main.b8358137.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-7c2")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/crush/><b class="navbar__title text--truncate">Crush</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/crush/introduction>Docs</a><a class="navbar__item navbar__link" href=/crush/configuration/crushrc>Configuration</a><a class="navbar__item navbar__link" href=/crush/reference/cli>Reference</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/introduction><span class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/fork><span class=linkLabel_WmDU>What this fork adds</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/getting-started/installation><span class=categoryLinkLabel_W154>Getting started</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/installation><span class=linkLabel_WmDU>Installation</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/quickstart><span class=linkLabel_WmDU>Quickstart</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/providers-and-api-keys><span class=linkLabel_WmDU>Providers and API keys</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/configuration/crushrc><span class=categoryLinkLabel_W154>Configuration</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/crushrc><span class=linkLabel_WmDU>crushrc (Bash)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/command-reference><span class=linkLabel_WmDU>Command reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/json><span class=linkLabel_WmDU>crush.json (JSON)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/providers><span class=linkLabel_WmDU>Providers and models</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/permissions><span class=linkLabel_WmDU>Permissions and safety</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/context-and-ignore><span class=linkLabel_WmDU>Context and ignore files</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/environment><span class=linkLabel_WmDU>Environment and startup</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/features/lsp><span class=categoryLinkLabel_W154>Features</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/lsp><span class=linkLabel_WmDU>Language servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/mcp><span class=linkLabel_WmDU>MCP servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/channels><span class=linkLabel_WmDU>Channels</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/skills><span class=linkLabel_WmDU>Skills</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/hooks><span class=linkLabel_WmDU>Hooks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/auto-mode><span class=linkLabel_WmDU>Auto mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/scheduled-tasks><span class=linkLabel_WmDU>Scheduled tasks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/semantic-search><span class=linkLabel_WmDU>Semantic search</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/sessions><span class=linkLabel_WmDU>Sessions and projects</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/memory><span class=linkLabel_WmDU>Memory</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/forking><span class=linkLabel_WmDU>Forking</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/goal-mode><span class=linkLabel_WmDU>Goal mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/server-and-workspaces><span class=linkLabel_WmDU>Server and workspaces</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/notifications><span class=linkLabel_WmDU>Desktop notifications</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/agents/overview><span class=categoryLinkLabel_W154>Multi-agent</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/overview><span class=linkLabel_WmDU>Overview</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/tutorial><span class=linkLabel_WmDU>Tutorial</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/handles-and-inspect><span class=linkLabel_WmDU>Handles and inspect</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/todo-enforcement><span class=linkLabel_WmDU>Todo enforcement</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/configuration><span class=linkLabel_WmDU>Configuration</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/team><span class=linkLabel_WmDU>Team</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/architecture><span class=linkLabel_WmDU>Architecture</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/a2a-protocol><span class=linkLabel_WmDU>A2A protocol</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/design-decisions><span class=linkLabel_WmDU>Design decisions</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/crush/reference/cli><span class=categoryLinkLabel_W154>Reference</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/cli><span class=linkLabel_WmDU>CLI reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/tools><span class=linkLabel_WmDU>Tool reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/crush/reference/keybindings><span class=linkLabel_WmDU>Keybindings</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/environment-variables><span class=linkLabel_WmDU>Environment variables</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/logging><span class=linkLabel_WmDU>Logging</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/crush/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Reference</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>Keybindings</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Keybindings</h1></header>
+<p>Press <kbd>ctrl+g</kbd> in the app for the live help, which always reflects the
+running build.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=global>Global<a href=#global class=hash-link aria-label="Direct link to Global" title="Direct link to Global" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Keys<th>Does<tbody><tr><td><kbd>ctrl+c</kbd><td>Quit<tr><td><kbd>ctrl+g</kbd><td>More help<tr><td><kbd>ctrl+p</kbd><td>Command palette<tr><td><kbd>ctrl+m</kbd> / <kbd>ctrl+l</kbd><td>Model picker<tr><td><kbd>ctrl+s</kbd><td>Session picker<tr><td><kbd>ctrl+z</kbd><td>Suspend<tr><td><kbd>tab</kbd><td>Change focus<tr><td><kbd>ctrl+y</kbd><td>Cycle the permission mode: normal → <a class="" href=/crush/features/auto-mode>auto mode</a> → <a class="" href=/crush/configuration/permissions#yolo-mode>yolo</a></table>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p><kbd>tab</kbd> is three-state here — chat, editor, sidebar — because the fork
+makes the <a class="" href=/crush/fork#sidebar-and-header>sidebar focusable</a>. The command
+palette groups its system commands into sections (Sessions, Models,
+Settings, Application), scrolls with the mouse wheel, and a double click
+runs the command under the pointer.</div></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=editor>Editor<a href=#editor class=hash-link aria-label="Direct link to Editor" title="Direct link to Editor" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Keys<th>Does<tbody><tr><td><kbd>enter</kbd><td>Send<tr><td><kbd>shift+enter</kbd> / <kbd>ctrl+j</kbd><td>Newline<tr><td><kbd>ctrl+o</kbd><td>Open your <code>$EDITOR</code> for the prompt<tr><td><kbd>@</kbd><td>Mention a file, or a live dispatched agent by <code>@handle</code><tr><td><kbd>/</kbd><td>Commands<tr><td><kbd>ctrl+f</kbd><td>Add a file<tr><td><kbd>ctrl+v</kbd> / <kbd>super+v</kbd><td>Paste an image from the clipboard<tr><td><kbd>ctrl+r</kbd> then a digit<td>Delete the attachment at that index<tr><td><kbd>ctrl+r</kbd> <kbd>r</kbd><td>Delete all attachments<tr><td><kbd>esc</kbd><td>Cancel delete mode<tr><td><kbd>↑</kbd> / <kbd>↓</kbd><td>Prompt history</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=chat>Chat<a href=#chat class=hash-link aria-label="Direct link to Chat" title="Direct link to Chat" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Keys<th>Does<tbody><tr><td><kbd>ctrl+n</kbd><td>New session<tr><td><kbd>ctrl+f</kbd><td>Add an attachment<tr><td><kbd>esc</kbd><td>Cancel the running turn<tr><td><kbd>tab</kbd><td>Change focus<tr><td><kbd>ctrl+d</kbd><td>Toggle details<tr><td><kbd>ctrl+t</kbd><td>Toggle the pills panel (tasks, <a class="" href=/crush/features/scheduled-tasks>scheduled tasks</a>)</table>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p>The scheduled-tasks pill is fork-only, and <kbd>ctrl+t</kbd> expands <em>every</em>
+pills section rather than only the first.</div></div>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=navigation>Navigation<a href=#navigation class=hash-link aria-label="Direct link to Navigation" title="Direct link to Navigation" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Keys<th>Does<tbody><tr><td><kbd>↑</kbd> / <kbd>↓</kbd><td>Scroll<tr><td><kbd>shift+↑</kbd> / <kbd>K</kbd><td>Up one item<tr><td><kbd>shift+↓</kbd> / <kbd>J</kbd><td>Down one item<tr><td><kbd>u</kbd> / <kbd>d</kbd><td>Half page up / down<tr><td><kbd>b</kbd> / <kbd>pgup</kbd><td>Page up<tr><td><kbd>f</kbd> / <kbd>space</kbd> / <kbd>pgdn</kbd><td>Page down<tr><td><kbd>g</kbd> / <kbd>home</kbd><td>Home<tr><td><kbd>G</kbd> / <kbd>end</kbd><td>End<tr><td><kbd>ctrl+end</kbd><td>End and follow<tr><td><kbd>h</kbd> / <kbd>←</kbd><td>Focus chat<tr><td><kbd>l</kbd> / <kbd>→</kbd><td>Focus sidebar (fork: the sidebar takes focus, scrolls with the mouse, and hides irrelevant help while focused)<tr><td><kbd>shift+←</kbd> / <kbd>H</kbd><td>Scroll left<tr><td><kbd>shift+→</kbd> / <kbd>L</kbd><td>Scroll right</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=selection>Selection<a href=#selection class=hash-link aria-label="Direct link to Selection" title="Direct link to Selection" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Keys<th>Does<tbody><tr><td><kbd>c</kbd> / <kbd>y</kbd><td>Copy<tr><td><kbd>space</kbd><td>Expand / collapse the focused item<tr><td><kbd>esc</kbd><td>Clear selection</table>
+<p>Finished assistant and user messages also carry a click-to-copy icon, and plain
+clicks on hyperlinks open them in your browser.</p>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p>Both the click-to-copy icon and click-to-open hyperlinks are fork additions.</div></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=inspect-mode>Inspect mode<a href=#inspect-mode class=hash-link aria-label="Direct link to Inspect mode" title="Direct link to Inspect mode" translate=no>​</a></h2>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p>Inspect mode is part of <a class="" href=/crush/agents/overview>multi-agent dispatch</a>. See
+<a class="" href=/crush/agents/handles-and-inspect>Handles and inspect</a>.</div></div>
+<p>Read a sub-agent's full transcript — reasoning, tool calls, results — in the
+chat window while the parent stays the active session. These keys work from
+both the editor and the chat; an open dialog keeps its own keys.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Keys<th>Does<tbody><tr><td><kbd>ctrl+]</kbd><td>On a focused agent block, open that agent's transcript. With no block focused, open the first live agent. While inspecting, cycle to the next live agent<tr><td><kbd>ctrl+[</kbd><td>Return to the chat, with the scroll position restored<tr><td><kbd>ctrl+x</kbd><td>Cancel the selected live dispatch card, or the dispatch you are inspecting. Runs end killed with reason "canceled by user"; the workspace is kept. Shown in the <kbd>ctrl+g</kbd> help only while a live dispatch is targeted<tr><td><kbd>esc</kbd><td>Return to the chat (same as <kbd>ctrl+[</kbd>)<tr><td><kbd>ctrl+]</kbd> in the session picker<td>Open the selected session's sub-agent list. See <a class="" href=/crush/features/sessions#sub-agent-sessions>Sessions</a></table>
+<p>A live agent's transcript follows its stream. Prompts you type while
+inspecting go to the parent session, never to the agent — to steer a running
+agent, start the prompt with its <code>@handle</code>. The cycle covers the agents that
+were live when you entered; agents dispatched later join on your next entry.
+The drill and back keys appear in the status-bar help and the <kbd>ctrl+g</kbd>
+help whenever they apply: <kbd>ctrl+]</kbd> while an agent block is selected,
+and <kbd>esc</kbd> (plus <kbd>ctrl+]</kbd> "next agent" when several agents are
+live) while inspecting.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=initialization-prompt>Initialization prompt<a href=#initialization-prompt class=hash-link aria-label="Direct link to Initialization prompt" title="Direct link to Initialization prompt" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Keys<th>Does<tbody><tr><td><kbd>y</kbd><td>Yes<tr><td><kbd>n</kbd> / <kbd>esc</kbd><td>No<tr><td><kbd>tab</kbd> / <kbd>←</kbd> / <kbd>→</kbd><td>Switch<tr><td><kbd>enter</kbd><td>Select</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=composer-completions>Composer completions<a href=#composer-completions class=hash-link aria-label="Direct link to Composer completions" title="Direct link to Composer completions" translate=no>​</a></h2>
+<p>Typing certain characters opens an inline completion list:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Trigger<th>Completes<tbody><tr><td><kbd>@</kbd><td>Files in the project, and live <a class="" href=/crush/agents/handles-and-inspect>dispatched agents</a> by handle, each shown with its role, status, and current todo<tr><td><kbd>/</kbd><td>Commands, <a class="" href=/crush/features/skills#user-invocable-skills>user-invocable skills</a>, and MCP prompts</table>
+<p>A prompt that <em>starts</em> with a live agent's <code>@handle</code> is delivered to that agent
+instead of the main agent; a <code>@handle</code> later in the prompt attaches the agent's
+status card. A handle-shaped token (no <code>.</code> or <code>/</code>) that matches a dispatched
+agent wins over a file of the same name.</p>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p>Skill, MCP-prompt, and agent completions, <code>@handle</code> routing, the token
+highlighting that makes them visually distinct, and the atomic-backspace
+behaviour below are all fork additions. Upstream completes files and commands
+only.</div></div>
+<p>Completion list size is tunable:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">option ui completions-max-depth </span><span class="token number">4</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">option ui completions-max-items </span><span class="token number">200</span><br/></div></code></pre></div></div>
+<p>Backspace over a completed token deletes the whole token — and drops its
+attachment, if it had one — rather than eating one character at a time.</div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/brunokrugel/crush/edit/fork/docs-site/docs/reference/keybindings.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"><span class=theme-last-updated>Last updated<!-- --> on <b><time datetime=2026-11-10T12:40:44.000Z itemprop=dateModified>Nov 10, 2026</time></b></span></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/crush/reference/tools><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>Tool reference</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/crush/reference/environment-variables><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>Environment variables</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#global class="table-of-contents__link toc-highlight">Global</a><li><a href=#editor class="table-of-contents__link toc-highlight">Editor</a><li><a href=#chat class="table-of-contents__link toc-highlight">Chat</a><ul><li><a href=#navigation class="table-of-contents__link toc-highlight">Navigation</a><li><a href=#selection class="table-of-contents__link toc-highlight">Selection</a></ul><li><a href=#inspect-mode class="table-of-contents__link toc-highlight">Inspect mode</a><li><a href=#initialization-prompt class="table-of-contents__link toc-highlight">Initialization prompt</a><li><a href=#composer-completions class="table-of-contents__link toc-highlight">Composer completions</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer footer--dark"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Docs</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/getting-started/installation>Installation</a><li class=footer__item><a class=footer__link-item href=/crush/getting-started/quickstart>Quickstart</a><li class=footer__item><a class=footer__link-item href=/crush/configuration/crushrc>Configuration</a><li class=footer__item><a class=footer__link-item href=/crush/reference/cli>CLI reference</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Features</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/features/mcp>MCP</a><li class=footer__item><a class=footer__link-item href=/crush/features/channels>Channels</a><li class=footer__item><a class=footer__link-item href=/crush/features/skills>Skills</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Project</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class=footer__link-item>This fork<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/crush target=_blank rel="noopener noreferrer" class=footer__link-item>Upstream Crush<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/catwalk target=_blank rel="noopener noreferrer" class=footer__link-item>Catwalk<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://charm.land target=_blank rel="noopener noreferrer" class=footer__link-item>Charm<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Crush is a Charm project, licensed FSL-1.1-MIT. Docs for the brunokrugel/crush fork, built with Docusaurus.</div></div></div></footer></div></body>

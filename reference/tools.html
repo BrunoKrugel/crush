@@ -1,0 +1,334 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-reference/tools" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.2"><title data-rh=true>Tool reference | Crush</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true name=twitter:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true property=og:url content=https://brunokrugel.github.io/crush/reference/tools /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="Tool reference | Crush"/><meta data-rh=true name=description content="Every tool the agent can call, what it does, and how to allow or deny it."/><meta data-rh=true property=og:description content="Every tool the agent can call, what it does, and how to allow or deny it."/><link data-rh=true rel=icon href=/crush/img/favicon.ico /><link data-rh=true rel=canonical href=https://brunokrugel.github.io/crush/reference/tools /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/reference/tools hreflang=en /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/reference/tools hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://brunokrugel.github.io/crush/reference/tools","name":"Tool reference","position":1}]}</script><link rel=apple-touch-icon href=/crush/img/touchicon_180.png><link rel=stylesheet href=/crush/assets/css/styles.e14b0f2f.css /><script src=/crush/assets/js/runtime~main.b8734afa.js defer></script><script src=/crush/assets/js/main.b8358137.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-7c2")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/crush/><b class="navbar__title text--truncate">Crush</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/crush/introduction>Docs</a><a class="navbar__item navbar__link" href=/crush/configuration/crushrc>Configuration</a><a class="navbar__item navbar__link" href=/crush/reference/cli>Reference</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/introduction><span class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/fork><span class=linkLabel_WmDU>What this fork adds</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/getting-started/installation><span class=categoryLinkLabel_W154>Getting started</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/installation><span class=linkLabel_WmDU>Installation</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/quickstart><span class=linkLabel_WmDU>Quickstart</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/providers-and-api-keys><span class=linkLabel_WmDU>Providers and API keys</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/configuration/crushrc><span class=categoryLinkLabel_W154>Configuration</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/crushrc><span class=linkLabel_WmDU>crushrc (Bash)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/command-reference><span class=linkLabel_WmDU>Command reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/json><span class=linkLabel_WmDU>crush.json (JSON)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/providers><span class=linkLabel_WmDU>Providers and models</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/permissions><span class=linkLabel_WmDU>Permissions and safety</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/context-and-ignore><span class=linkLabel_WmDU>Context and ignore files</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/environment><span class=linkLabel_WmDU>Environment and startup</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/features/lsp><span class=categoryLinkLabel_W154>Features</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/lsp><span class=linkLabel_WmDU>Language servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/mcp><span class=linkLabel_WmDU>MCP servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/channels><span class=linkLabel_WmDU>Channels</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/skills><span class=linkLabel_WmDU>Skills</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/hooks><span class=linkLabel_WmDU>Hooks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/auto-mode><span class=linkLabel_WmDU>Auto mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/scheduled-tasks><span class=linkLabel_WmDU>Scheduled tasks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/semantic-search><span class=linkLabel_WmDU>Semantic search</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/sessions><span class=linkLabel_WmDU>Sessions and projects</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/memory><span class=linkLabel_WmDU>Memory</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/forking><span class=linkLabel_WmDU>Forking</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/goal-mode><span class=linkLabel_WmDU>Goal mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/server-and-workspaces><span class=linkLabel_WmDU>Server and workspaces</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/notifications><span class=linkLabel_WmDU>Desktop notifications</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/agents/overview><span class=categoryLinkLabel_W154>Multi-agent</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/overview><span class=linkLabel_WmDU>Overview</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/tutorial><span class=linkLabel_WmDU>Tutorial</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/handles-and-inspect><span class=linkLabel_WmDU>Handles and inspect</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/todo-enforcement><span class=linkLabel_WmDU>Todo enforcement</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/configuration><span class=linkLabel_WmDU>Configuration</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/team><span class=linkLabel_WmDU>Team</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/architecture><span class=linkLabel_WmDU>Architecture</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/a2a-protocol><span class=linkLabel_WmDU>A2A protocol</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/design-decisions><span class=linkLabel_WmDU>Design decisions</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/crush/reference/cli><span class=categoryLinkLabel_W154>Reference</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/cli><span class=linkLabel_WmDU>CLI reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/crush/reference/tools><span class=linkLabel_WmDU>Tool reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/keybindings><span class=linkLabel_WmDU>Keybindings</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/environment-variables><span class=linkLabel_WmDU>Environment variables</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/logging><span class=linkLabel_WmDU>Logging</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/crush/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Reference</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>Tool reference</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Tool reference</h1></header>
+<p>These are the names you use with
+<a class="" href=/crush/configuration/permissions><code>permissions allow</code> / <code>permissions deny</code></a>, and the
+names <a class="" href=/crush/features/hooks>hook matchers</a> test against.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=files>Files<a href=#files class=hash-link aria-label="Direct link to Files" title="Direct link to Files" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Tool<th>Does<tbody><tr><td><code>view</code><td>Read a file by path with line numbers; supports offset and line limit<tr><td><code>edit</code><td>Exact find-and-replace in one file; can also create or delete content<tr><td><code>multiedit</code><td>Several find-and-replace edits to one file in a single operation, applied sequentially. Preferred over repeated <code>edit</code> on the same file<tr><td><code>write</code><td>Create or overwrite a file, auto-creating parent directories. Cannot append</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=search>Search<a href=#search class=hash-link aria-label="Direct link to Search" title="Direct link to Search" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Tool<th>Does<tbody><tr><td><code>glob</code><td>Find files by name pattern, sorted by modification time<tr><td><code>grep</code><td>Search file contents by regex or literal, sorted by modification time<tr><td><code>ls</code><td>List files and directories as a tree, skipping hidden and system dirs<tr><td><code>sourcegraph</code><td>Search code across public GitHub repos via Sourcegraph — regex, language, repo, and file filters<tr><td><code>semantic_search</code><td>Vector search over the local index by meaning. Registered only when an embeddings provider is configured — see <a class="" href=/crush/features/semantic-search>Semantic search</a><tr><td><code>semantic_index</code><td>Build or refresh that index. Incremental; unchanged files are skipped</table>
+<p>The <code>glob</code>, <code>grep</code>, and <code>ls</code> result limits are tunable under the top-level
+<code>tools</code> key in <a class="" href=/crush/configuration/json><code>crush.json</code></a>.</p>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p><code>semantic_search</code> and <code>semantic_index</code> are additions in the
+this fork.</div></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=shell-and-job-control>Shell and job control<a href=#shell-and-job-control class=hash-link aria-label="Direct link to Shell and job control" title="Direct link to Shell and job control" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Tool<th>Does<tbody><tr><td><code>bash</code><td>Run shell commands. Long-running commands automatically move to the background and return a shell ID<tr><td><code>job_output</code><td>Get stdout/stderr from a background shell by ID; <code>wait=true</code> blocks until it finishes<tr><td><code>job_kill</code><td>Terminate a background shell</table>
+<p><code>bash</code> runs through Crush's embedded POSIX shell
+(<a href=https://mvdan.cc/sh target=_blank rel="noopener noreferrer" class=""><code>mvdan.cc/sh</code></a>), so it behaves identically on every
+platform — Windows included. <a class="" href=/crush/features/skills#jq><code>jq</code> is a built-in</a>; no
+external binary needed.</p>
+<p>A <a class="" href=/crush/configuration/permissions#blocked-commands>blocklist</a> sits in front of the
+<code>bash</code> tool's permission flow. The fork adds
+<a class="" href=/crush/configuration/permissions#blocked-commands><code>allowed_commands</code></a> to punch
+named holes in it.</p>
+<div class="theme-admonition theme-admonition-note admonition_xJq3 alert alert--secondary"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M6.3 5.69a.942.942 0 0 1-.28-.7c0-.28.09-.52.28-.7.19-.18.42-.28.7-.28.28 0 .52.09.7.28.18.19.28.42.28.7 0 .28-.09.52-.28.7a1 1 0 0 1-.7.3c-.28 0-.52-.11-.7-.3zM8 7.99c-.02-.25-.11-.48-.31-.69-.2-.19-.42-.3-.69-.31H6c-.27.02-.48.13-.69.31-.2.2-.3.44-.31.69h1v3c.02.27.11.5.31.69.2.2.42.31.69.31h1c.27 0 .48-.11.69-.31.2-.19.3-.42.31-.69H8V7.98v.01zM7 2.3c-3.14 0-5.7 2.54-5.7 5.68 0 3.14 2.56 5.7 5.7 5.7s5.7-2.55 5.7-5.7c0-3.15-2.56-5.69-5.7-5.69v.01zM7 .98c3.86 0 7 3.14 7 7s-3.14 7-7 7-7-3.12-7-7 3.14-7 7-7z"/></svg></span>Upstream, not fork</div><div class=admonitionContent_BuS1><p>Background jobs — <code>bash</code> backgrounding long-running commands, plus <code>job_output</code>
+and <code>job_kill</code> — are upstream Crush, not a fork addition. Bugs in them belong
+<a href=https://github.com/charmbracelet/crush/issues target=_blank rel="noopener noreferrer" class="">upstream</a>.</div></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=network>Network<a href=#network class=hash-link aria-label="Direct link to Network" title="Direct link to Network" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Tool<th>Does<tbody><tr><td><code>fetch</code><td>Fetch raw content from a URL as text, markdown, or HTML. No AI processing<tr><td><code>download</code><td>Download a URL straight to a local file — binary-safe and streaming<tr><td><code>agentic_fetch</code><td>Fetch or search using an AI sub-agent that can extract, summarise, and answer questions. Slower and costlier than <code>fetch</code></table>
+<p>Two more exist for <strong>sub-agents only</strong> and are not on the top-level agent's
+list: <code>web_search</code> (DuckDuckGo — titles, URLs, snippets) and <code>web_fetch</code> (a URL
+as markdown, with pages over 50KB saved to a temp file for <code>grep</code>/<code>view</code>).</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=language-servers>Language servers<a href=#language-servers class=hash-link aria-label="Direct link to Language servers" title="Direct link to Language servers" translate=no>​</a></h2>
+<p>Registered when you have configured at least one LSP, or <code>auto-lsp</code> is on
+(the default). See <a class="" href=/crush/features/lsp>Language servers</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Tool<th>Does<tbody><tr><td><code>lsp_diagnostics</code><td>Errors, warnings, and hints for a file or the project<tr><td><code>lsp_definition</code><td>Find where a symbol is defined<tr><td><code>lsp_references</code><td>Find every reference to a symbol<tr><td><code>lsp_symbols</code><td>Structured outline of a file<tr><td><code>lsp_call_hierarchy</code><td>Incoming or outgoing calls for a symbol<tr><td><code>lsp_rename</code><td>True semantic rename across all files<tr><td><code>lsp_replace_symbol</code><td>Replace, insert, or delete a whole symbol by name<tr><td><code>lsp_restart</code><td>Restart one or all LSP clients</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=mcp>MCP<a href=#mcp class=hash-link aria-label="Direct link to MCP" title="Direct link to MCP" translate=no>​</a></h2>
+<p>Registered when at least one MCP server is configured. See
+<a class="" href=/crush/features/mcp#prompts-and-resources>MCP</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Tool<th>Does<tbody><tr><td><code>list_mcp_resources</code><td>List resource URIs and templates from a server<tr><td><code>read_mcp_resource</code><td>Read a resource by URI<tr><td><code>list_mcp_prompts</code><td>List a server's prompts<tr><td><code>call_mcp_prompt</code><td>Invoke a prompt and get its rendered content</table>
+<p>Tools exposed <em>by</em> MCP servers arrive as <code>mcp_&lt;server>_&lt;tool></code>.</p>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p><code>list_mcp_prompts</code> and <code>call_mcp_prompt</code> are additions in the
+this fork. See
+<a class="" href=/crush/features/mcp#prompts-and-resources>MCP prompts</a>.</div></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=scheduling>Scheduling<a href=#scheduling class=hash-link aria-label="Direct link to Scheduling" title="Direct link to Scheduling" translate=no>​</a></h2>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p>See <a class="" href=/crush/features/scheduled-tasks>Scheduled tasks</a>.</div></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Tool<th>Does<tbody><tr><td><code>CronCreate</code><td>Schedule a prompt on a cron expression<tr><td><code>CronList</code><td>List the session's scheduled tasks<tr><td><code>CronDelete</code><td>Cancel a task by ID</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=session-and-introspection>Session and introspection<a href=#session-and-introspection class=hash-link aria-label="Direct link to Session and introspection" title="Direct link to Session and introspection" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Tool<th>Does<tbody><tr><td><code>todos</code><td>A structured task list for multi-step work; each task is pending, in progress, or completed. In the fork, an agent that works without one is nudged to start one — see <a class="" href=/crush/agents/todo-enforcement>Todo enforcement</a><tr><td><code>question</code><td>Ask you a structured question and wait for the answer. Interactive sessions only; never available to sub-agents. A <a href=#what-dispatched-agents-get class="">dispatched agent</a> gets it while the session is interactive<tr><td><code>crush_info</code><td>Crush's live runtime state: active model and provider, LSP/MCP status, skills, hooks, permissions, disabled tools<tr><td><code>crush_logs</code><td>Read Crush's internal application logs — useful when debugging Crush itself<tr><td><code>agent</code><td>Launch a sub-agent with <code>glob</code>, <code>grep</code>, <code>ls</code>, and <code>view</code>, for searches that need several tries</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=dispatched-agents>Dispatched agents<a href=#dispatched-agents class=hash-link aria-label="Direct link to Dispatched agents" title="Direct link to Dispatched agents" translate=no>​</a></h2>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p>See <a class="" href=/crush/agents/overview>Multi-agent dispatch</a>.</div></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Tool<th>Does<tbody><tr><td><code>dispatch_agent</code><td>Start an independent agent in its own git worktree, on a fresh <code>crush-dispatch-*</code> branch cut from a committed revision. It runs in the background and the tool returns a running handle at once; the result — findings plus a diff summary — arrives as a follow-up turn when it finishes. Parameters: <code>prompt</code> (required); <code>agent</code> (an enabled dispatch agent definition — <code>worker</code>, or one you added; default <code>options.dispatch.default_agent</code>); <code>model</code> (<code>large</code> or <code>small</code>; default the selected agent's slot, refused for an agent pinned to an explicit model); <code>skills</code> (default: the agent's list); <code>branch</code> (base revision; default the current branch); <code>handle</code>; <code>role</code>. Fails at the concurrency cap with <code>dispatch at capacity</code><tr><td><code>message_agent</code><td>Steer a running dispatched agent: the message lands as its next input, and the reply appears on the agent's block in the chat, not as the tool's result. Exactly one of <code>handle</code> or <code>session_id</code>, plus <code>message</code>. Finished and external agents refuse<tr><td><code>cancel_dispatch</code><td>Stop one running dispatched agent. Exactly one of <code>dispatch_id</code> or <code>handle</code>. The run ends killed with reason <code>canceled by user</code>, the parent receives the salvageable diff, and the workspace is kept<tr><td><code>apply_dispatch</code><td>Bring a finished dispatch's work into your checkout and remove its workspace. Exactly one of <code>dispatch_id</code> or <code>handle</code>, plus <code>mode</code>: <code>merge</code> (default, a <code>--no-ff</code> merge commit), <code>squash</code> (lands <strong>staged, not committed</strong>) or <code>cherry-pick</code>. Uncommitted work in the worktree is committed on the dispatch branch first. Refuses, changing nothing, while the dispatch runs, when your checkout is dirty or mid-merge, on a conflict (paths listed, merge aborted), and for an external dispatch. Asks permission first<tr><td><code>dismiss_dispatch</code><td>Discard a finished dispatch: delete the worktree, the branch and the registry entry, freeing its handle. Exactly one of <code>dispatch_id</code> or <code>handle</code>. Refuses while the dispatch runs and for an external dispatch. Asks permission first. No undo</table>
+<p>All five are main-agent tools, offered only while the session is interactive:
+sub-agents and dispatched agents never get them, so delegation is one level
+deep, and <code>crush run</code> does not offer them at all. They are on by default and
+disappear together when no dispatch agent is enabled. Deny them, or disable
+the <code>worker</code>, to turn dispatch off:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">permissions deny dispatch_agent message_agent cancel_dispatch apply_dispatch dismiss_dispatch</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token comment" style="color:rgb(98, 114, 164)"># or</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">agent </span><span class="token builtin class-name" style="color:rgb(189, 147, 249)">set</span><span class="token plain"> worker </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--disabled</span><span class="token plain"> </span><span class="token boolean">true</span><br/></div></code></pre></div></div>
+<p><code>dispatch_agent</code> needs a git repository — anywhere else it returns
+<code>dispatch unavailable</code>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-sub-agents-get>What sub-agents get<a href=#what-sub-agents-get class=hash-link aria-label="Direct link to What sub-agents get" title="Direct link to What sub-agents get" translate=no>​</a></h2>
+<p>Sub-agents (<code>agent</code>, <code>agentic_fetch</code>) run with a restricted tool set and are
+<strong>not</strong> intercepted by <code>PreToolUse</code> hooks, so a single delegated turn doesn't
+fire your hooks N times. The outer sub-agent tool call itself <em>is</em> hooked.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-dispatched-agents-get>What dispatched agents get<a href=#what-dispatched-agents-get class=hash-link aria-label="Direct link to What dispatched agents get" title="Direct link to What dispatched agents get" translate=no>​</a></h2>
+<p>A dispatched agent's tools come from its
+<a class="" href=/crush/agents/configuration#agent-definitions>agent definition</a>, filtered by
+your deny list. The built-in <code>worker</code> allows <code>@read</code> (<code>glob</code>, <code>grep</code>, <code>ls</code>,
+<code>view</code>, and the <code>lsp_definition</code>, <code>lsp_symbols</code> and <code>lsp_call_hierarchy</code>
+lookups when language servers are on), <code>@write</code> (<code>bash</code>, <code>edit</code>,
+<code>multiedit</code>, <code>write</code>, <code>todos</code>), plus <code>job_output</code>, <code>job_kill</code> and
+<code>lsp_diagnostics</code>. <code>fetch</code>, <code>download</code>, <code>lsp_references</code>, <code>lsp_rename</code>,
+<code>lsp_replace_symbol</code>, <code>lsp_restart</code> and <code>crush_logs</code> can be added to its
+<code>tools.allow</code>; MCP tools come from its <code>mcp.allow</code>, empty by default. Every
+path-based tool is rooted at the agent's worktree.</p>
+<p>While the session is interactive it also gets <code>question</code>: each question
+pauses the dispatched run and appears in your question prompt labeled with the
+agent's <code>@handle</code>, and the run resumes with your answer.</p>
+<p>It never gets <code>agent</code>, <code>agentic_fetch</code>, <code>semantic_search</code>, <code>sourcegraph</code> or
+the five dispatch tools. Unlike <code>agent</code> sub-agents, a dispatched agent's own
+tool calls <strong>are</strong> intercepted by your <code>PreToolUse</code> hooks, with the dispatched
+session's ID in the payload, and <code>permissions deny</code> removes any tool from it —
+a dispatch is refused outright only when the deny list removes all of <code>bash</code>,
+<code>edit</code>, <code>multiedit</code> and <code>write</code>. The outer <code>dispatch_agent</code> call is hooked
+like any top-level tool call.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=checking-whats-live>Checking what's live<a href=#checking-whats-live class=hash-link aria-label="Direct link to Checking what's live" title="Direct link to Checking what's live" translate=no>​</a></h2>
+<p>Ask the agent — <code>crush_info</code> reports the tools actually registered in the
+current session, along with which are allowed, denied, and disabled.</div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/brunokrugel/crush/edit/fork/docs-site/docs/reference/tools.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"><span class=theme-last-updated>Last updated<!-- --> on <b><time datetime=2026-11-10T12:40:44.000Z itemprop=dateModified>Nov 10, 2026</time></b></span></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/crush/reference/cli><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>CLI reference</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/crush/reference/keybindings><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>Keybindings</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#files class="table-of-contents__link toc-highlight">Files</a><li><a href=#search class="table-of-contents__link toc-highlight">Search</a><li><a href=#shell-and-job-control class="table-of-contents__link toc-highlight">Shell and job control</a><li><a href=#network class="table-of-contents__link toc-highlight">Network</a><li><a href=#language-servers class="table-of-contents__link toc-highlight">Language servers</a><li><a href=#mcp class="table-of-contents__link toc-highlight">MCP</a><li><a href=#scheduling class="table-of-contents__link toc-highlight">Scheduling</a><li><a href=#session-and-introspection class="table-of-contents__link toc-highlight">Session and introspection</a><li><a href=#dispatched-agents class="table-of-contents__link toc-highlight">Dispatched agents</a><li><a href=#what-sub-agents-get class="table-of-contents__link toc-highlight">What sub-agents get</a><li><a href=#what-dispatched-agents-get class="table-of-contents__link toc-highlight">What dispatched agents get</a><li><a href=#checking-whats-live class="table-of-contents__link toc-highlight">Checking what's live</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer footer--dark"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Docs</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/getting-started/installation>Installation</a><li class=footer__item><a class=footer__link-item href=/crush/getting-started/quickstart>Quickstart</a><li class=footer__item><a class=footer__link-item href=/crush/configuration/crushrc>Configuration</a><li class=footer__item><a class=footer__link-item href=/crush/reference/cli>CLI reference</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Features</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/features/mcp>MCP</a><li class=footer__item><a class=footer__link-item href=/crush/features/channels>Channels</a><li class=footer__item><a class=footer__link-item href=/crush/features/skills>Skills</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Project</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class=footer__link-item>This fork<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/crush target=_blank rel="noopener noreferrer" class=footer__link-item>Upstream Crush<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/catwalk target=_blank rel="noopener noreferrer" class=footer__link-item>Catwalk<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://charm.land target=_blank rel="noopener noreferrer" class=footer__link-item>Charm<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Crush is a Charm project, licensed FSL-1.1-MIT. Docs for the brunokrugel/crush fork, built with Docusaurus.</div></div></div></footer></div></body>

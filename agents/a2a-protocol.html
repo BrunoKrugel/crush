@@ -1,0 +1,881 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-agents/a2a-protocol" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.2"><title data-rh=true>A2A wire reference | Crush</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true name=twitter:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true property=og:url content=https://brunokrugel.github.io/crush/agents/a2a-protocol /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="A2A wire reference | Crush"/><meta data-rh=true name=description content="What the per-process A2A host exposes — the Agent Card, endpoints, the JSON-RPC methods Crush calls, the event stream and its todo metadata, the SQLite task store, the security model, the TCP listener and external agents."/><meta data-rh=true property=og:description content="What the per-process A2A host exposes — the Agent Card, endpoints, the JSON-RPC methods Crush calls, the event stream and its todo metadata, the SQLite task store, the security model, the TCP listener and external agents."/><link data-rh=true rel=icon href=/crush/img/favicon.ico /><link data-rh=true rel=canonical href=https://brunokrugel.github.io/crush/agents/a2a-protocol /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/agents/a2a-protocol hreflang=en /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/agents/a2a-protocol hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://brunokrugel.github.io/crush/agents/a2a-protocol","name":"A2A protocol","position":1}]}</script><link rel=apple-touch-icon href=/crush/img/touchicon_180.png><link rel=stylesheet href=/crush/assets/css/styles.e14b0f2f.css /><script src=/crush/assets/js/runtime~main.b8734afa.js defer></script><script src=/crush/assets/js/main.b8358137.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-7c2")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/crush/><b class="navbar__title text--truncate">Crush</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/crush/introduction>Docs</a><a class="navbar__item navbar__link" href=/crush/configuration/crushrc>Configuration</a><a class="navbar__item navbar__link" href=/crush/reference/cli>Reference</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/introduction><span class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/fork><span class=linkLabel_WmDU>What this fork adds</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/getting-started/installation><span class=categoryLinkLabel_W154>Getting started</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/installation><span class=linkLabel_WmDU>Installation</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/quickstart><span class=linkLabel_WmDU>Quickstart</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/providers-and-api-keys><span class=linkLabel_WmDU>Providers and API keys</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/configuration/crushrc><span class=categoryLinkLabel_W154>Configuration</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/crushrc><span class=linkLabel_WmDU>crushrc (Bash)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/command-reference><span class=linkLabel_WmDU>Command reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/json><span class=linkLabel_WmDU>crush.json (JSON)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/providers><span class=linkLabel_WmDU>Providers and models</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/permissions><span class=linkLabel_WmDU>Permissions and safety</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/context-and-ignore><span class=linkLabel_WmDU>Context and ignore files</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/environment><span class=linkLabel_WmDU>Environment and startup</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/features/lsp><span class=categoryLinkLabel_W154>Features</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/lsp><span class=linkLabel_WmDU>Language servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/mcp><span class=linkLabel_WmDU>MCP servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/channels><span class=linkLabel_WmDU>Channels</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/skills><span class=linkLabel_WmDU>Skills</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/hooks><span class=linkLabel_WmDU>Hooks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/auto-mode><span class=linkLabel_WmDU>Auto mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/scheduled-tasks><span class=linkLabel_WmDU>Scheduled tasks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/semantic-search><span class=linkLabel_WmDU>Semantic search</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/sessions><span class=linkLabel_WmDU>Sessions and projects</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/memory><span class=linkLabel_WmDU>Memory</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/forking><span class=linkLabel_WmDU>Forking</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/goal-mode><span class=linkLabel_WmDU>Goal mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/server-and-workspaces><span class=linkLabel_WmDU>Server and workspaces</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/notifications><span class=linkLabel_WmDU>Desktop notifications</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/crush/agents/overview><span class=categoryLinkLabel_W154>Multi-agent</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/overview><span class=linkLabel_WmDU>Overview</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/tutorial><span class=linkLabel_WmDU>Tutorial</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/handles-and-inspect><span class=linkLabel_WmDU>Handles and inspect</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/todo-enforcement><span class=linkLabel_WmDU>Todo enforcement</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/configuration><span class=linkLabel_WmDU>Configuration</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/team><span class=linkLabel_WmDU>Team</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/architecture><span class=linkLabel_WmDU>Architecture</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/crush/agents/a2a-protocol><span class=linkLabel_WmDU>A2A protocol</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/design-decisions><span class=linkLabel_WmDU>Design decisions</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/reference/cli><span class=categoryLinkLabel_W154>Reference</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/cli><span class=linkLabel_WmDU>CLI reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/tools><span class=linkLabel_WmDU>Tool reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/keybindings><span class=linkLabel_WmDU>Keybindings</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/environment-variables><span class=linkLabel_WmDU>Environment variables</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/logging><span class=linkLabel_WmDU>Logging</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/crush/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Multi-agent</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>A2A protocol</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>A2A wire reference</h1></header>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p>The A2A layer is an addition in this fork.</div></div>
+<p>Every dispatched agent is served over the
+<a href=https://a2a-protocol.org target=_blank rel="noopener noreferrer" class="">A2A protocol</a> while it runs, and every agent
+definition has a route on the same host. This page documents exactly what is
+on the wire, so you can debug it, read logs against it, or build against it.
+How the host fits into a dispatch is on <a class="" href=/crush/agents/architecture>Architecture</a>;
+what a team can do with it is on <a class="" href=/crush/agents/team>Working with other agents</a>.</p>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Who can call it</div><div class=admonitionContent_BuS1><p>Crush's own coordinator is the only client that can drive a run. The
+opt-in <a href=#tcp-listener class="">TCP listener</a> requires TLS and authenticates every
+call, but it exposes no local dispatch or sub-agent run yet. A dispatch's
+route exists only while that dispatch runs; a definition's route is permanent
+and rejects every task until an entry point serves a turn on it.</div></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=at-a-glance>At a glance<a href=#at-a-glance class=hash-link aria-label="Direct link to At a glance" title="Direct link to At a glance" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Item<th>Today<tbody><tr><td>SDK<td><a href=https://github.com/a2aproject/a2a-go target=_blank rel="noopener noreferrer" class=""><code>github.com/a2aproject/a2a-go/v2</code></a> v2.5.0<tr><td>Protocol version<td><code>1.0</code>, stamped on the card's interface<tr><td>Binding<td>JSON-RPC 2.0 over HTTP; streaming responses are Server-Sent Events<tr><td>Listener<td>One host per process on a unix socket: <code>&lt;data dir>/a2a/&lt;pid>.sock</code>, socket mode <code>0600</code> in a <code>0700</code> directory the host verifies before binding, or <code>$TMPDIR/crush-a2a-&lt;uid>/&lt;pid>-&lt;hash>.sock</code> when that path would exceed the 104-byte socket limit. Optionally also TLS on TCP; see <a href=#tcp-listener class="">TCP listener</a><tr><td>Lifetime<td>The host starts with the process and serves every definition's route for its lifetime; a dispatch's route lasts from just after provisioning until the run returns, with a 5-second graceful shutdown<tr><td>Discovery<td>In memory: a dispatch's endpoint and card are stamped on its registry entry, and the definition cards are kept in the host's listing. Every route also serves its card at <code>GET /agents/&lt;id>/.well-known/agent-card.json</code>; see <a href=#fetching-a-card class="">Fetching a card</a><tr><td>Task store<td>SQLite: the <code>a2a_tasks</code> table of the session database, shared by every route, so tasks survive a restart. Each dispatch also leaves a durable record in <code>a2a_dispatches</code>, reconciled at startup<tr><td>Authentication<td>The host's per-process bearer token; on the TCP listener, a verified client certificate when <code>client_ca</code> is set</table>
+<p>Method names below are the A2A 1.0 names the SDK uses. Older A2A material
+calls <code>SendStreamingMessage</code> <code>message/stream</code>, and <code>CancelTask</code>
+<code>tasks/cancel</code>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=agent-card>Agent Card<a href=#agent-card class=hash-link aria-label="Direct link to Agent Card" title="Direct link to Agent Card" translate=no>​</a></h2>
+<p>The coordinator builds a card for each dispatch and stamps it on the
+registry entry, and one for each enabled agent definition, kept in the
+host's listing. Every route serves its card at
+<code>GET /agents/&lt;id>/.well-known/agent-card.json</code>
+(<a href=https://github.com/joestump-agent/crush/issues/580 target=_blank rel="noopener noreferrer" class="">#580</a>); see
+<a href=#fetching-a-card class="">Fetching a card</a>. The coordinator itself never fetches
+one — it reads the same object from the registry entry. A dispatch's card:</p>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"name"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"tester"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"description"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"tester"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"version"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"devel"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"supportedInterfaces"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"url"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"http://crush-a2a/agents/dispatch-1"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"protocolBinding"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"JSONRPC"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"protocolVersion"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"1.0"</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"capabilities"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"streaming"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token boolean">true</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"defaultInputModes"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token string" style="color:rgb(255, 121, 198)">"text/plain"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"defaultOutputModes"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token string" style="color:rgb(255, 121, 198)">"text/plain"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"skills"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"id"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"crush-hooks"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"name"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"crush-hooks"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"description"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Write and debug Crush hooks."</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"tags"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token string" style="color:rgb(255, 121, 198)">"crush-skill"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Field<th>Source<tbody><tr><td><code>name</code><td>The dispatch's assigned <code>@handle</code>, without the <code>@</code>. A definition card carries the definition's <code>name</code> (<code>Coder</code>, <code>Worker</code>, …).<tr><td><code>description</code><td>The dispatch's <code>role</code>, which may be empty. A definition card carries the definition's <code>description</code>.<tr><td><code>version</code><td>The Crush build version.<tr><td><code>supportedInterfaces[0]</code><td>The routed endpoint, <code>http://crush-a2a/agents/&lt;dispatch id></code>, JSON-RPC binding, protocol <code>1.0</code>. Always first.<tr><td><code>supportedInterfaces[1]</code><td>Only while the <a href=#tcp-listener class="">TCP listener</a> runs and has an address to advertise: <code>https://&lt;host:port>/agents/&lt;dispatch id></code>, same binding and protocol.<tr><td><code>capabilities</code><td><code>streaming: true</code> and the declared <code>extensions</code>: <code>todos/v1</code>, <code>usage/v1</code>, <code>questions/v1</code>, <code>answers/v1</code>, <code>permissions/v1</code>, <code>permission-decisions/v1</code>, <code>undelivered-steers/v1</code> and <code>steer-refusals/v1</code>, each with its JSON Schema in its params. No push notifications, no extended card.<tr><td><code>defaultInputModes</code>, <code>defaultOutputModes</code><td><code>text/plain</code> both ways.<tr><td><code>skills</code><td>One entry per Crush skill the dispatch was given: every discovered skill when the dispatch named none. <code>id</code> and <code>name</code> are the skill name, and every entry carries the single tag <code>crush-skill</code>. Empty on a definition card.</table>
+<p>The card declares the <code>crush-bearer</code> security scheme (see
+<a href=#security-model class="">Security model</a>) and, when the TCP listener requires
+client certificates, a <code>crush-mtls</code> scheme as the alternative. It declares
+no <code>provider</code>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=fetching-a-card>Fetching a card<a href=#fetching-a-card class=hash-link aria-label="Direct link to Fetching a card" title="Direct link to Fetching a card" translate=no>​</a></h3>
+<p>Each route — a running dispatch's, or an agent definition's — serves its
+card at the A2A well-known path under the route:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token comment" style="color:rgb(98, 114, 164)"># On the socket: a bare GET, as any A2A client sends it. No token, no</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token comment" style="color:rgb(98, 114, 164)"># Content-Type; the Host must be the crush-a2a label.</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token function" style="color:rgb(80, 250, 123)">curl</span><span class="token plain"> --unix-socket </span><span class="token string" style="color:rgb(255, 121, 198)">"</span><span class="token string variable" style="color:rgb(189, 147, 249);font-style:italic">$DATA_DIR</span><span class="token string" style="color:rgb(255, 121, 198)">/a2a/</span><span class="token string variable" style="color:rgb(189, 147, 249);font-style:italic">$PID</span><span class="token string" style="color:rgb(255, 121, 198)">.sock"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  http://crush-a2a/agents/coder/.well-known/agent-card.json</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token comment" style="color:rgb(98, 114, 164)"># Over the TCP listener: the gate authenticates first, with the client</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token comment" style="color:rgb(98, 114, 164)"># certificate (shown) or the host's bearer token.</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token function" style="color:rgb(80, 250, 123)">curl</span><span class="token plain"> </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--cacert</span><span class="token plain"> ca.pem </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--cert</span><span class="token plain"> bob.pem </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--key</span><span class="token plain"> bob-key.pem </span><span class="token punctuation" style="color:rgb(248, 248, 242)">\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  https://alice.example.internal:7443/agents/coder/.well-known/agent-card.json</span><br/></div></code></pre></div></div>
+<p>What comes back depends on the listener the request arrived on:</p>
+<ul>
+<li class=""><strong>On the socket</strong>, the card as built: the object the registry entry and
+the <a href=#agent-index class="">agent index</a> carry, with the socket interface first
+and the HTTPS interface second while the TCP listener runs.</li>
+<li class=""><strong>Over TCP</strong>, a copy with one interface: the route at the origin the
+caller dialed, <code>https://&lt;Host>/agents/&lt;id></code>. The socket label is dropped,
+because no remote client can dial it and an SDK client takes the first
+interface it supports. The caller's own origin stands in for the
+advertised address, so a card read through another certificate name —
+or from a listener with no address to advertise — still names a URL its
+reader can reach; Crush's own <a href=#external-agents class="">external-agent</a>
+resolver refuses a card whose JSON-RPC service is on another origin than
+the card's. Everything else on the card is unchanged.</li>
+</ul>
+<p>The card is discovery metadata, which the A2A spec has clients fetch with a
+bare, uncredentialed <code>GET</code>, so the card path checks no credential of its
+own. On the socket, the <code>0600</code> socket is the reach restriction — as it
+already is for a definition route's JSON-RPC, which the socket serves
+without a token. Over TCP, the listener's gate still demands a verified
+client certificate or the bearer token before the route is looked up, so a
+bare GET there is <code>401</code>, like every other uncredentialed request. A
+listener without <code>client_ca</code> can therefore serve no remote card fetch: the
+token never leaves the process.</p>
+<p>The card path answers <code>GET</code> alone — anything else is <code>405</code> with
+<code>Allow: GET</code> — and only for a route that exists: an unknown id is <code>404</code>, as
+is every other sub-path of a route. The <code>Origin</code>, <code>Host</code> and <code>A2A-Version</code>
+checks below apply to a card GET too; only the <code>Content-Type</code> gate is
+skipped, since a GET carries no body.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=endpoints>Endpoints<a href=#endpoints class=hash-link aria-label="Direct link to Endpoints" title="Direct link to Endpoints" translate=no>​</a></h2>
+<p>Every dispatch answers on the process-wide host under its own path. The
+URL's host label, <code>crush-a2a</code>, never leaves the process: the client's
+dialer maps it onto the unix socket.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Request<th>Path<th>Behaviour<tbody><tr><td><code>POST</code><td><code>/agents/&lt;dispatch id></code><td>JSON-RPC 2.0. <code>SendStreamingMessage</code> and <code>SubscribeToTask</code> answer as an SSE stream; every other method answers with one JSON response.<tr><td><code>POST</code><td><code>/agents/&lt;definition id></code><td>One route per enabled agent definition (<code>coder</code>, <code>plan</code>, <code>task</code>, <code>worker</code>, yours). Same handler, but no run is bound to it: a message is rejected with <code>no running agent for context &lt;id>; task sessions are not continuable</code> until an entry point serves a turn on the route. Over TCP it still requires a credential first.<tr><td><code>GET</code><td><code>/agents/&lt;id>/.well-known/agent-card.json</code><td>The route's Agent Card, for a dispatch or a definition route: see <a href=#fetching-a-card class="">Fetching a card</a>. Any other method is <code>405</code> with <code>Allow: GET</code>.<tr><td><code>GET</code><td><code>/agents</code><td>The agent index: see <a href=#agent-index class="">below</a>. Socket only.<tr><td>anything else<td>any<td><code>404</code>: an unknown id, and every other sub-path of a route. The host has no card of its own at <code>/.well-known/agent-card.json</code>.</table>
+<p>Middleware in front of the route table rejects a request before any
+dispatch work runs: <code>403</code> when an <code>Origin</code> header is present, <code>415</code>
+unless <code>Content-Type</code> parses to <code>application/json</code> — a card <code>GET</code> excepted,
+since it carries no body — and <code>400</code> unless the <code>Host</code> is <code>crush-a2a</code> on
+the socket or one the TCP listener answers to.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=agent-index>Agent index<a href=#agent-index class=hash-link aria-label="Direct link to Agent index" title="Direct link to Agent index" translate=no>​</a></h3>
+<p>The host lists the dispatches it serves at <code>GET /agents</code>. This is how
+a UI meets dispatched agents over the wire rather than through the
+dispatch registry. Sub-agent turns are not listed. The index lives with
+the process: a restart starts it empty, and a finished dispatch's
+durable record stays in its session.</p>
+<ul>
+<li class=""><strong>A snapshot.</strong> With <code>Accept: application/json</code>, the answer is a JSON
+array of descriptors, oldest first.</li>
+<li class=""><strong>A stream.</strong> With <code>Accept: text/event-stream</code>, the answer is an SSE
+stream. Its first <code>data:</code> event is <code>{"snapshot": [...]}</code>, and every
+change after it is <code>{"upsert": {...}}</code>, one descriptor at a time. An
+idle stream carries a comment every 30 seconds. A stream that falls 256
+events behind, or whose reader stops taking writes for 10 seconds, is
+closed rather than holding up the agent or the host's shutdown. The
+watcher reconnects to a fresh snapshot.</li>
+</ul>
+<p>A descriptor carries:</p>
+<ul>
+<li class="">the dispatch ID, its endpoint, and its Agent Card;</li>
+<li class="">its handle and role;</li>
+<li class="">its <code>context_id</code> (the child session) and <code>parent_session_id</code>;</li>
+<li class="">its <code>task_id</code>;</li>
+<li class="">its <code>state</code>: <code>working</code>, <code>completed</code>, <code>failed</code> or <code>canceled</code>, and empty
+before the task exists;</li>
+<li class="">the latest <code>status_text</code>;</li>
+<li class="">the latest <code>todos/v1</code> value as <code>progress</code>, and the latest <code>usage/v1</code>
+value as <code>usage</code>;</li>
+<li class=""><code>served</code>, and <code>started_at</code>, <code>updated_at</code> and <code>finished_at</code>;</li>
+<li class="">a <code>revision</code> that increases with every change on the index, so a
+watcher keeps the newer of two copies and repeats no update after a
+reconnect.</li>
+</ul>
+<p>The descriptor follows the dispatch's own task only. The executor names
+that task when the dispatch's turn starts, so the tasks that steers open
+on the same context never move it, and a write that changes nothing a
+reader sees is not published. A dispatch whose route has gone down stays
+listed with <code>served: false</code> and its last state, so its <code>@handle</code> still
+resolves; the oldest are dropped beyond 500 ended dispatches.</p>
+<p>The index takes the host's checks without the content-type gate: <code>GET</code>
+only (<code>405</code> otherwise), <code>403</code> with an <code>Origin</code>, <code>400</code> unless the <code>Host</code>
+is <code>crush-a2a</code>, and the host's bearer token from the host's own user
+(<code>401</code> otherwise).</p>
+<p>In client/server mode the TUI runs in another process. It reaches the index,
+and each dispatch's route, through the server's proxy at
+<code>/v1/workspaces/{id}/a2a/agents</code>; see
+<a class="" href=/crush/features/server-and-workspaces#dispatched-agents-against-a-server>Dispatched agents against a server</a>.
+The server adds the host's token itself and refuses any request with an
+<code>Origin</code>. The request keeps its <code>Content-Type</code> and version headers, so the
+host judges those as the client sent them.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=tcp-listener>TCP listener<a href=#tcp-listener class=hash-link aria-label="Direct link to TCP listener" title="Direct link to TCP listener" translate=no>​</a></h2>
+<p>The host can also listen on TCP. This is the transport groundwork for
+agents on other hosts or in other sandboxes: an authenticated remote caller
+reaches every route, but no run is served to it yet (see
+<a href=#local-runs-stay-local class="">Local runs stay local</a>). It is off unless you set
+a listen address, and it only speaks TLS.
+A certificate recipe and the team workflow are on
+<a class="" href=/crush/agents/team>Working with other agents</a>. A listen address without both a
+certificate and a key fails the load with
+<code>a2a.listen requires tls_cert and tls_key; plain TCP is not supported</code>.</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token comment" style="color:rgb(98, 114, 164)"># crushrc</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">option a2a-listen </span><span class="token number">127.0</span><span class="token plain">.0.1:7443</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">option a2a-tls-cert ~/.config/crush/certs/a2a.pem</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">option a2a-tls-key ~/.config/crush/certs/a2a-key.pem</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">option a2a-client-ca ~/.config/crush/certs/clients-ca.pem   </span><span class="token comment" style="color:rgb(98, 114, 164)"># optional: require client certificates</span><br/></div></code></pre></div></div>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"options"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"a2a"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"listen"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"127.0.0.1:7443"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"tls_cert"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"~/.config/crush/certs/a2a.pem"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"tls_key"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"~/.config/crush/certs/a2a-key.pem"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"client_ca"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"~/.config/crush/certs/clients-ca.pem"</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Key<th><code>crushrc</code><th>Meaning<tbody><tr><td><code>options.a2a.listen</code><td><code>option a2a-listen</code><td><code>host:port</code> to listen on. An empty host or <code>0.0.0.0</code> listens on every interface.<tr><td><code>options.a2a.tls_cert</code><td><code>option a2a-tls-cert</code><td>PEM server certificate (chain).<tr><td><code>options.a2a.tls_key</code><td><code>option a2a-tls-key</code><td>PEM private key for the certificate.<tr><td><code>options.a2a.client_ca</code><td><code>option a2a-client-ca</code><td>Optional PEM CA certificates. When set, every client must present a certificate signed by one of them (mutual TLS).</table>
+<p>The three file paths must be absolute or start with <code>~/</code>. A relative path
+fails the load: the listener usually lives in your global config, and a
+relative path would resolve against whichever project Crush runs in. At load
+the certificate and key must also load as a pair, and <code>client_ca</code> must hold
+at least one PEM certificate, or the load fails and names the key.
+Certificate provisioning, including ACME, is up to you.</p>
+<p>How the listener behaves:</p>
+<ul>
+<li class=""><strong>Authentication first.</strong> TCP has no peer credentials, so a TCP call is
+never treated as the host's own user. Every request must arrive on a
+connection whose client certificate was verified against <code>client_ca</code>, or
+carry the host's bearer token. Anything else gets a <code>401</code> before its body
+is read or its route is looked up, so every path answers alike. The
+rejection is logged at warning level with the peer's address, never the
+credential it offered. Failed TLS handshakes are logged too.</li>
+<li class=""><strong>Without <code>client_ca</code>.</strong> The bearer token is then the only way in, and it
+never leaves the process. No remote client can authenticate, and Crush
+logs a warning at startup when such a listener is reachable beyond
+loopback.</li>
+<li class=""><strong>Same routes, same middleware.</strong> An authenticated request reaches the
+same <code>/agents/&lt;id></code> routes the socket serves, with the same <code>Origin</code>,
+<code>Content-Type</code> and version checks. The <a href=#agent-index class="">agent index</a> is the
+exception: it lists every dispatch the host serves, so only the socket
+answers <code>GET /agents</code>. TLS 1.2 is the minimum. The handshake and request
+headers must complete within 30 seconds. A request body is capped at
+32 MiB, enough for a message carrying several full-size attachments. An
+idle keep-alive connection is closed after two minutes. Plain HTTP to the
+port fails at the TLS layer and never reaches a route.</li>
+<li class=""><strong>Host check.</strong> The <code>Host</code> header must be the listen address (as
+configured, or with the port the kernel picked for <code>:0</code>) or a DNS or IP
+name in the server certificate's subject alternative names, at any port.
+Anything else is a <code>400</code>.</li>
+<li class=""><strong>Identity.</strong> A certificate holder is identified by the fingerprint of
+the <code>client_ca</code> certificate that verified it plus the certificate's
+subject, and its tasks are stored under that identity. Holders of
+certificates with the same subject from the same CA share their tasks;
+anyone else's are invisible to them, even from a CA that reuses another
+CA's name.</li>
+<li class=""><strong>Cards.</strong> While the listener runs, every card lists its HTTPS interface
+second, after the socket one: <code>https://&lt;host:port>/agents/&lt;id></code>. The host is
+the configured one. With a wildcard listen address it is the server
+certificate's first DNS name that is not itself a wildcard, else its first
+IP address. With neither, the cards list no HTTPS interface and Crush logs
+a warning. With <code>client_ca</code> the card also declares the <code>crush-mtls</code>
+scheme. Crush's own dispatch client keeps dialing the socket. An
+authenticated caller can fetch any route's card at
+<code>/agents/&lt;id>/.well-known/agent-card.json</code>; the copy it gets lists one
+interface, the route at the origin the caller dialed, so a client that
+takes the first interface it supports lands on this listener. See
+<a href=#fetching-a-card class="">Fetching a card</a>.</li>
+<li class=""><strong>Lifetime.</strong> The listener starts with the host and shuts down with it,
+alongside the socket. Connections that have not sent a request are closed
+at once, and a request still running at the shutdown deadline is cut. If
+the listener cannot start, for example because the port is taken, Crush
+logs the error and keeps serving the socket alone; cards then list no
+HTTPS interface. Changing the settings takes a restart.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=local-runs-stay-local>Local runs stay local<a href=#local-runs-stay-local class=hash-link aria-label="Direct link to Local runs stay local" title="Direct link to Local runs stay local" translate=no>​</a></h3>
+<p>The TCP listener exposes no local dispatch or sub-agent run. Every run
+Crush starts in this process belongs to the local user, and a TCP call
+that names its context gets the same rejection as an unknown context:
+<code>no running agent for context &lt;id></code>. It can neither message, steer, answer
+nor cancel it, even with a valid credential. Agents that remote clients can
+call arrive with the peer registry
+(<a href=https://github.com/joestump-agent/crush/issues/334 target=_blank rel="noopener noreferrer" class="">#334</a>).</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=methods>Methods<a href=#methods class=hash-link aria-label="Direct link to Methods" title="Direct link to Methods" translate=no>​</a></h2>
+<p>The SDK's default request handler serves the whole A2A method set. Crush's
+client calls four of them: <code>SendStreamingMessage</code> for the dispatch, its
+steers and its answers, <code>CancelTask</code> for kills, and — when a stream drops
+mid-run — the two resume methods.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Method<th>Crush calls it<th>What the server does<tbody><tr><td><code>SendStreamingMessage</code><td>Yes: the dispatch, steers, and one per answered question<td>Runs the turn, delivers the steer, or resumes the parked run, and streams the events below.<tr><td><code>SendMessage</code><td>No<td>Runs the turn and returns the final result in one response.<tr><td><code>GetTask</code>, <code>ListTasks</code><td><code>GetTask</code> on resume<td>Answer from the SQLite task store, scoped to the caller's identity.<tr><td><code>CancelTask</code><td>Yes — wander kills, user cancels, and questions no answer is coming for<td>Calls the agent's <code>Cancel</code> and emits <code>TASK_STATE_CANCELED</code>, the request's reason as the status message.<tr><td><code>SubscribeToTask</code><td>On resume<td>Re-attaches to a live task's stream.<tr><td>Push-notification config methods<td>No<td>Return "push notifications not supported".<tr><td><code>GetExtendedAgentCard</code><td>No<td>Returns "extended card not configured".</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-request>The request<a href=#the-request class=hash-link aria-label="Direct link to The request" title="Direct link to The request" translate=no>​</a></h3>
+<p>The coordinator sends one user message whose only part is the dispatch
+prompt. It sets <code>contextId</code> to the dispatch's task session ID and leaves
+<code>taskId</code> unset, so the server assigns one task per run.</p>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"jsonrpc"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"2.0"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"id"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"5d0c…"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"method"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"SendStreamingMessage"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"params"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"message"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"messageId"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"9a41…"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"role"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"ROLE_USER"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"contextId"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"task-session…"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"parts"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"text"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Add table-driven tests for pkg/x…"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+<p>The <code>contextId</code> is the Crush task session: the server rejects any message
+whose context does not name the session its dispatch serves, including
+one whose run has ended — task sessions are not continuable. The
+<code>taskId</code> identifies one run: each turn is a new task, and the terminal
+status echoes it as the run ID.</p>
+<p>The executor joins every text part of the message with newlines. Any
+other kind of part is carried as an attachment — a steer delivers it to
+the running agent through the same attachment pipeline a typed prompt
+takes; the dispatch's own single-part message has none.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=steering>Steering<a href=#steering class=hash-link aria-label="Direct link to Steering" title="Direct link to Steering" translate=no>​</a></h3>
+<p>The first message on a context is the dispatch's own turn. Every later
+message on that context is a <strong>steer</strong>: the server hands it to the
+running agent through the same queue the in-process front doors use
+(<code>@handle</code>, <code>message_agent</code>) — it never starts a turn, and the persisted
+message is marked as a steer. <code>referenceTasks</code> may name the task being
+steered; they are advisory and never validated.</p>
+<p>The steer is its own task, terminal on the queue's verdict:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Outcome<th>State<th>Status message<tbody><tr><td>The running agent consumed the message — folded into its active turn or picked up as its follow-up turn<td><code>TASK_STATE_COMPLETED</code><td><code>delivered</code><tr><td>The queue dropped it without running: the run ended — failed, canceled or killed — while the steer sat queued<td><code>TASK_STATE_FAILED</code><td><code>agent finished before the message was consumed</code><tr><td>The run is live but its session is not taking messages yet: the run is starting, or between its turn and a context compaction<td><code>TASK_STATE_REJECTED</code><td><code>agent is not ready for messages yet; send the message again in a moment</code>, with <code>{"reason": "not_ready"}</code> under the <code>steer-refusals/v1</code> extension in the status metadata<tr><td>The run has ended — task sessions are not continuable<td><code>TASK_STATE_REJECTED</code><td><code>agent is no longer running; task sessions are not continuable</code></table>
+<p>The steer's reply streams on the dispatch's own surfaces — the parent's
+dispatch block, <code>@handle</code> inspection — never on the steer's task.</p>
+<p>A steer is accepted once it is queued, and that is when <code>message_agent</code>
+returns ("queued"). A run that ends before reading a queued steer drops it:
+the dispatch's terminal status names every steer the agent accepted but
+never read under the <code>undelivered-steers/v1</code> extension
+(<code>{"steers": [...]}</code>), and the parent's result lists them as
+<code>undelivered_steers</code>. A steer the agent read — folded into a step or
+run as a follow-up turn — is never listed, even if the run then
+fails.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=questions>Questions<a href=#questions class=hash-link aria-label="Direct link to Questions" title="Direct link to Questions" translate=no>​</a></h3>
+<p>A dispatched agent can ask the parent's user a question. It gets the
+<code>question</code> tool when the parent session is interactive at dispatch time,
+and the tool asks through the dispatch's own question service, never the
+parent's:</p>
+<ol>
+<li class="">
+<p><strong>The pause.</strong> The agent's question parks the run: the agent stays
+blocked inside its tool call, and the stream ends with
+<code>TASK_STATE_INPUT_REQUIRED</code>. The status message carries the question
+texts as a text part and the whole request as a data part — the
+declared <code>questions/v1</code> extension, named in the message's
+<code>extensions</code>:</p>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"statusUpdate"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"status"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"state"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"TASK_STATE_INPUT_REQUIRED"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"message"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">        </span><span class="token property">"role"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"ROLE_AGENT"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">        </span><span class="token property">"extensions"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token string" style="color:rgb(255, 121, 198)">"https://crush.charm.land/ext/questions/v1"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">        </span><span class="token property">"parts"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">          </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"text"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Which database?"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">          </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"data"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"id"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"…"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"session_id"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"…"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"tool_call_id"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"…"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">            </span><span class="token property">"questions"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">              </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"id"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"…"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"type"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"free_text"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"question"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Which database?"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">                </span><span class="token property">"description"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"The schema differs per engine."</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">            </span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">        </span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+</li>
+<li class="">
+<p><strong>The question.</strong> The parent's coordinator shows it in your question
+prompt, each question prefixed with the dispatch's <code>@handle</code>.
+Dispatched questions take turns: one is on screen at a time. With no
+interactive user — a non-interactive parent, or a transport with no
+question handler — every question is answered at once with
+<code>no interactive user; proceed with your best judgment</code>, and the agent
+carries on. Dismissing the prompt answers
+<code>the user declined to answer; proceed with your best judgment</code>.</p>
+</li>
+<li class="">
+<p><strong>The answer.</strong> The client sends a user message with the parked
+task's <code>taskId</code>, whose data part is the declared <code>answers/v1</code>
+extension: <code>{"answers": [...]}</code>, one answer per question ID. A
+message with no answers data counts its text as a free-text answer to
+every question. The task goes back to <code>TASK_STATE_WORKING</code>, the same
+run resumes — no new turn starts — and the new stream runs to the
+terminal state or the next question.</p>
+</li>
+</ol>
+<p>An answer and a steer are told apart explicitly. A message whose <code>taskId</code>
+names a task in <code>TASK_STATE_INPUT_REQUIRED</code> is an answer; with no
+question or permission request pending on that task it is
+<code>TASK_STATE_REJECTED</code> ("no question or permission request is pending on
+this task") and starts nothing. Every other message on the
+context is a turn or a steer, as above, so a steer sent while a question
+is open is still only a steer, and the question stays open.</p>
+<p>While a run is parked there is no execution, so neither the SDK's
+inactivity guard nor the executor's backstop runs, but <code>hard_timeout</code>
+and <code>stall_window</code> keep counting. A kill ends the wait on your answer:
+the client cancels the parked task with the kill reason, the parked tool
+call returns an error, and the task ends <code>TASK_STATE_CANCELED</code>. A
+<code>CancelTask</code> on a parked task does the same.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=permission-prompts>Permission prompts<a href=#permission-prompts class=hash-link aria-label="Direct link to Permission prompts" title="Direct link to Permission prompts" translate=no>​</a></h3>
+<p>A dispatched agent's tool calls ask for permission through the dispatch's
+own scoped permission service. Yolo and the
+allowlists resolve inside that service, so only a request that needs a
+person ever reaches the protocol. Such a request parks the run exactly like
+a question:</p>
+<ol>
+<li class="">
+<p><strong>The pause.</strong> The stream ends with <code>TASK_STATE_INPUT_REQUIRED</code>. The
+status message carries a one-line summary as a text part and the
+request as a data part, the declared <code>permissions/v1</code> extension, named
+in the message's <code>extensions</code>:</p>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"role"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"ROLE_AGENT"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"extensions"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token string" style="color:rgb(255, 121, 198)">"https://crush.charm.land/ext/permissions/v1"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"parts"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"text"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Permission required: bash: Execute command: make test"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"data"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"id"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"…"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"session_id"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"…"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"tool_call_id"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"…"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"tool_name"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"bash"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"description"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Execute command: make test"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"action"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"execute"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"params"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"command"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"make test"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"path"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"/…/worktree"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+</li>
+<li class="">
+<p><strong>The decision.</strong> The parent's coordinator requests it on the parent's
+own permission service, for the dispatch's own session, with the
+dispatch's <code>@handle</code> in front of the description. That service applies your live yolo setting and the grants
+you made for the session before it shows the dialog. The tool's params
+decode back to the tool's own type, so the dialog renders a dispatched
+request like a local one; an MCP tool's raw input stays a string. The
+dialog shows the request's path, the dispatch's worktree, while it
+shows the description only for some tools. With no handler on the client, the request is
+denied.</p>
+</li>
+<li class="">
+<p><strong>The answer.</strong> The client sends a user message with the parked task's
+<code>taskId</code>, whose data part is the declared <code>permission-decisions/v1</code>
+extension: <code>{"allow": true}</code> or <code>{"allow": false}</code>. Only an explicit
+allow grants the request; a message with no decodable decision denies
+it. The same run resumes, and the tool call runs or returns a denial.</p>
+</li>
+</ol>
+<p>Requests from parallel tool calls park one at a time: the scoped
+service publishes the next request only once the parked one is decided,
+and the run resumes and parks again on it. A kill
+while a request is parked ends the wait the same way it does for a
+question. A <code>CancelTask</code> on a task parked on a request ends the task
+<code>TASK_STATE_CANCELED</code>, and the parked tool call gets a denial or the
+canceled run's context error, whichever lands first; it never runs.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=event-stream>Event stream<a href=#event-stream class=hash-link aria-label="Direct link to Event stream" title="Direct link to Event stream" translate=no>​</a></h2>
+<p>Each SSE <code>data:</code> line is a JSON-RPC response whose <code>result</code> holds exactly
+one of <code>task</code>, <code>statusUpdate</code> or <code>artifactUpdate</code>. A successful dispatch
+streams:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#<th>Event<th>State<th>Content<tbody><tr><td>1<td><code>task</code><td><code>TASK_STATE_SUBMITTED</code><td>The new task, with its IDs.<tr><td>2<td><code>statusUpdate</code><td><code>TASK_STATE_WORKING</code><td>No message. The run has started.<tr><td>3<td><code>statusUpdate</code> × 0..n<td><code>TASK_STATE_WORKING</code><td>One per todo-list change: the current todo as message text, the typed progress under the declared <code>todos/v1</code> extension's metadata key, and the usage so far under <code>usage/v1</code>.<tr><td>4<td><code>artifactUpdate</code> × 1..n<td>—<td>The work product: the diff as chunked <code>text/x-diff</code> parts (artifact <code>diff</code>), then the typed outcome as a data part (artifact <code>dispatch-result</code>).<tr><td>5<td><code>statusUpdate</code><td><code>TASK_STATE_COMPLETED</code><td>The agent's final text as an agent message.</table>
+<p>A question the agent asks ends a stream early, with
+<code>TASK_STATE_INPUT_REQUIRED</code> after row 3; the answer's stream starts at
+row 2 on the same task. See <a href=#questions class="">Questions</a>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=todo-progress-events>Todo progress events<a href=#todo-progress-events class=hash-link aria-label="Direct link to Todo progress events" title="Direct link to Todo progress events" translate=no>​</a></h3>
+<p>A progress event looks like this:</p>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"statusUpdate"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"taskId"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"…"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"contextId"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"…"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"status"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"state"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"TASK_STATE_WORKING"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"message"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">        </span><span class="token property">"role"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"ROLE_AGENT"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">        </span><span class="token property">"parts"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"text"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Writing table-driven tests"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"metadata"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"https://crush.charm.land/ext/todos/v1"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">        </span><span class="token property">"current"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Writing table-driven tests"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">        </span><span class="token property">"completed"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token number">1</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">        </span><span class="token property">"total"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token number">2</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">        </span><span class="token property">"todos"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">          </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"content"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Read pkg/x"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"status"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"completed"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"activeForm"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Reading pkg/x"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">          </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"content"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Write tests"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"status"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"in_progress"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"activeForm"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Writing table-driven tests"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">        </span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+<ul>
+<li class=""><strong>Message text.</strong> The first <code>in_progress</code> todo's <code>activeForm</code>, else its
+<code>content</code>. With nothing in progress, the text is <code>N/M completed</code>.</li>
+<li class=""><strong>The <code>todos/v1</code> extension value.</strong> A <code>TodoProgress</code> object: <code>current</code>
+(the in-progress todo's active form or content, empty when none),
+<code>completed</code> and <code>total</code> counts, and <code>todos</code> — every todo with <code>status</code>
+set to <code>pending</code>, <code>in_progress</code> or <code>completed</code>. The card declares the
+extension under <code>capabilities.extensions</code>, with its JSON Schema in the
+extension's params. Metadata keys that are not declared extensions are
+dropped by the client, never fatal.</li>
+<li class=""><strong>When an event is sent.</strong> Only when the list actually changed and is
+not empty. Saves that change only usage stay silent.</li>
+<li class=""><strong>Loss.</strong> Delivery is lossy under back-pressure, through a 16-slot
+buffer per subscriber. A dropped snapshot is superseded by the next one.</li>
+<li class=""><strong>Ordering.</strong> Progress events and the terminal status are yielded from
+one goroutine, so no progress event follows a terminal one.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=usage-and-trace-context>Usage and trace context<a href=#usage-and-trace-context class=hash-link aria-label="Direct link to Usage and trace context" title="Direct link to Usage and trace context" translate=no>​</a></h3>
+<p>Every post-run terminal status — <code>TASK_STATE_COMPLETED</code>, both
+<code>TASK_STATE_FAILED</code> paths and an out-of-band <code>TASK_STATE_CANCELED</code> —
+carries the declared <code>usage/v1</code> extension's metadata key. Each todo
+progress event carries it too, with the usage so far, so a watcher's
+token count moves while the agent works:</p>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"https://crush.charm.land/ext/usage/v1"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"model"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"claude-opus-5"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"provider"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"anthropic"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"promptTokens"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token number">1200</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"completionTokens"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token number">340</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"cost"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token number">0.042</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"traceId"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"4bf92f3577b34da6a3ce929d0e0e4736"</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+<ul>
+<li class=""><strong>The totals.</strong> The child session's cumulative token counts and cost at
+terminal time, plus the model and provider that served the dispatch.
+Todo progress events carry the totals so far, for watchers only: the
+parent is charged a terminal status's usage alone. A parent-requested
+cancel carries none, because the totals are not final.</li>
+<li class=""><strong>The trace id.</strong> The parent stamps a W3C <code>traceparent</code> header on the
+dispatch call (a client interceptor sends it, the server propagator
+lifts it), and the executor echoes its trace-id segment back in
+<code>traceId</code>, so server-side dispatch logs and the parent's client call
+share one correlation id. When the parent sent none, the server mints
+one for its own logs.</li>
+<li class=""><strong>Failure.</strong> If the totals cannot be read, the status ships without
+metadata and the run's outcome is untouched; the parent leaves its
+recorded cost unchanged rather than guessing.</li>
+<li class=""><strong>Limitation.</strong> Usage rides status-update events only: a terminal state
+recovered through <code>tasks/get</code> or <code>tasks/resubscribe</code> (the resume path)
+carries no metadata.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-artifacts>The artifacts<a href=#the-artifacts class=hash-link aria-label="Direct link to The artifacts" title="Direct link to The artifacts" translate=no>​</a></h3>
+<p>Two artifacts carry the work product.</p>
+<p><strong><code>diff</code>.</strong> Emitted only after a successful run, and only when the diff
+is non-empty and could be captured. It is the workspace's diff against the
+merge-base of its base and <code>HEAD</code>, falling back to the base SHA recorded at
+provision. It covers committed, uncommitted and untracked files. The diff
+streams as <code>text/x-diff</code> chunks of at most 256 KiB, named <code>dispatch.diff</code>:
+the first chunk creates the artifact, the rest append, and the last closes
+it, so no message can exceed the transport's line limits however large the
+diff grows. It is sent in full: the coordinator's line and byte cuts are
+applied later, when it builds <code>diff_summary</code>.</p>
+<p><strong><code>dispatch-result</code>.</strong> Emitted on every completed run, with or without a
+diff. One data part carries the typed outcome: <code>diffBytes</code>,
+<code>filesChanged</code>, and <code>diffError</code> when the diff could not be captured. A
+diff error does not fail the run: the task still completes, and the error
+rides the result.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=other-endings>Other endings<a href=#other-endings class=hash-link aria-label="Direct link to Other endings" title="Direct link to Other endings" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Ending<th>What is streamed<tbody><tr><td>Message has no text<td><code>TASK_STATE_REJECTED</code>, "message has no text to run". Crush's client refuses an empty prompt before sending, so only another client can hit this.<tr><td>Run returns an error<td><code>TASK_STATE_FAILED</code> with the error text.<tr><td>Agent was busy, or a cancel landed at start<td><code>TASK_STATE_FAILED</code>, "agent session did not start a turn (busy or canceled)". The prompt is still queued on the session, and the running agent reads it.<tr><td><code>CancelTask</code><td><code>TASK_STATE_CANCELED</code>, the request's reason as the status message.<tr><td>The agent asks a question<td><code>TASK_STATE_INPUT_REQUIRED</code> with the question; not an end. The answer resumes the run on the same task.<tr><td>An answer on a task with nothing pending<td><code>TASK_STATE_REJECTED</code>, "no question or permission request is pending on this task".</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=how-the-client-maps-the-outcome>How the client maps the outcome<a href=#how-the-client-maps-the-outcome class=hash-link aria-label="Direct link to How the client maps the outcome" title="Direct link to How the client maps the outcome" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Stream outcome<th><code>DispatchResult</code><tbody><tr><td><code>TASK_STATE_COMPLETED</code><td><code>completed</code>. <code>key_findings</code> is the message text. <code>diff_summary</code> comes from the <code>diff</code> artifact: <code>(no changes)</code> when it is empty, <code>(diff unavailable: …)</code> when the result artifact carries a <code>diffError</code>.<tr><td><code>TASK_STATE_FAILED</code>, <code>TASK_STATE_REJECTED</code><td><code>failed</code>. <code>error</code> is the message text.<tr><td><code>TASK_STATE_CANCELED</code><td>A status message that is a kill reason maps through the kill assembly: <code>killed</code>, with that reason. Anything else is <code>failed</code>, with <code>error</code> "dispatch canceled: …".<tr><td>Stream error the resume cannot recover<td><code>failed</code>, with <code>error</code> "a2a: dispatch stream: …".<tr><td>Stream ends with no terminal state<td><code>failed</code>, with "…ended without a terminal state".</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dropped-streams>Dropped streams<a href=#dropped-streams class=hash-link aria-label="Direct link to Dropped streams" title="Direct link to Dropped streams" translate=no>​</a></h3>
+<p>The stream's first event names the task, and the coordinator records that
+ID on the dispatch registry entry. When the connection drops before a
+terminal state, the task is still running — or already finished — on the
+server, so the client resumes instead of failing the dispatch:</p>
+<ul>
+<li class="">Up to three attempts, 250ms, 1s and 4s apart. Each calls
+<code>SubscribeToTask</code>, which replays the stored task snapshot — the
+authoritative state of the artifacts received before the cut, so a
+partial diff can never double — and then the live events.</li>
+<li class="">When the execution has already ended, <code>SubscribeToTask</code> answers
+"task not found" and the client calls <code>GetTask</code> instead: a terminal
+state folds and lands, a task parked in <code>TASK_STATE_INPUT_REQUIRED</code>
+hands its question on to be answered, and any other state retries.</li>
+<li class="">A terminal state wins wherever it comes from, and the replayed
+snapshot never counts as progress, so a Working event is never
+counted twice.</li>
+<li class="">When every attempt is exhausted the dispatch fails with the original
+stream error, and the orphaned run is canceled before teardown.</li>
+</ul>
+<p>A terminal <code>task</code> snapshot is accepted when no terminal status event
+arrived. <code>Working</code> events are counted, not re-published: the agent block
+renders from the in-process todo collector.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=kills>Kills<a href=#kills class=hash-link aria-label="Direct link to Kills" title="Direct link to Kills" translate=no>​</a></h3>
+<p>Every kill — the wander watchdog's hard timeout and stall kill, the todo
+ladder's kill rung, and the user's cancel — records its reason on the
+run's kill state, then sends one <code>CancelTask</code> carrying it:</p>
+<ul>
+<li class="">The reason rides the request's metadata under <code>crush.dispatch.cancel_reason</code>.</li>
+<li class="">The send is asynchronous: the SDK resolves a <code>tasks/cancel</code> only when
+the run ends, so the kill site returns to its loop immediately and the
+canceler's events land on the execution's own queue.</li>
+<li class="">The executor decodes the metadata and puts the reason on the terminal
+<code>TASK_STATE_CANCELED</code> status message — it reaches the parent on the
+live stream and lands in the task store, so an out-of-process kill
+reads the same as an in-process one.</li>
+<li class="">The parent maps a <code>TASK_STATE_CANCELED</code> whose status message is a kill
+reason onto <code>killed</code> through the kill assembly.</li>
+<li class="">The direct in-process cancel remains as the fallback for the paths no
+<code>tasks/cancel</code> can serve: an unserved dispatch, a kill that lands
+before the stream has named the task ID, or a cancel that errors. First
+reason wins; a late kill after natural completion is discarded.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=durable-state>Durable state<a href=#durable-state class=hash-link aria-label="Direct link to Durable state" title="Direct link to Durable state" translate=no>​</a></h2>
+<p>Served tasks live in the <code>a2a_tasks</code> table of the session database, through
+a SQLite implementation of the SDK's task store, so <code>GetTask</code> and the resume
+path read the same state after a restart. Every dispatch also leaves one
+durable record in <code>a2a_dispatches</code>: written at start, updated with the
+terminal result, and stamped delivered when the parent's delivery turn
+succeeds. On startup, before the UI loads a session, the reconciler fails
+every task and dispatch record whose owning process died — the dispatch error
+names the preserved workspace — and re-delivers every terminal result the
+parent never received, stamping it on the parent's persisted <code>dispatch_agent</code>
+tool result. That stamp is what a reloaded agent block renders.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=not-implemented>Not implemented<a href=#not-implemented class=hash-link aria-label="Direct link to Not implemented" title="Direct link to Not implemented" translate=no>​</a></h2>
+<ul>
+<li class=""><strong><code>auth-required</code>.</strong> a2a-go v2.5.0 treats it as non-final, so an answer on
+the same task is refused while the execution stays active. Permission
+prompts use <code>input-required</code> instead; see
+<a href=#permission-prompts class="">Permission prompts</a>.</li>
+<li class=""><strong>Runs for remote callers.</strong> A TCP caller reaches every route and is
+rejected by every one; see <a href=#local-runs-stay-local class="">Local runs stay local</a>.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=security-model>Security model<a href=#security-model class=hash-link aria-label="Direct link to Security model" title="Direct link to Security model" translate=no>​</a></h2>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Bearer-authenticated, socket-reachable</div><div class=admonitionContent_BuS1><p>Every served call must carry the host's bearer token, declared on the
+card as a <code>crush-bearer</code> HTTP bearer <code>securitySchemes</code> entry. The dispatch
+client attaches it automatically; anything else is rejected with the
+JSON-RPC unauthenticated error before the handler runs. The reach
+restriction is the socket, layered under the credential:<ul>
+<li class=""><strong>The credential.</strong> Each host mints 32 bytes of <code>crypto/rand</code> at bind
+time and holds it only in memory — never persisted, never logged. The
+check is constant-time. Where the platform reports socket peer
+credentials, the peer must also be the host's own OS user, and tasks
+are stored under that identity.</li>
+<li class=""><strong>Who can reach it.</strong> Only processes running as the same OS user: the
+socket is <code>0600</code> inside a <code>0700</code> directory, <code>&lt;data dir>/a2a/</code>. When
+that path would overflow the unix socket length limit, the host falls
+back to <code>crush-a2a-&lt;uid>/</code> under <code>$XDG_RUNTIME_DIR</code>, or under the temp
+directory when that is unset. Either directory is verified before the
+bind (<a href=https://github.com/joestump-agent/crush/issues/558 target=_blank rel="noopener noreferrer" class="">#558</a>): a
+symlink or non-directory at its path, or a directory owned by another
+user, is refused with an error naming the path and the failed check,
+and a directory left wider than <code>0700</code> is tightened. The socket is
+then made <code>0600</code> without following symlinks. Other local users cannot
+connect to the socket. The host listens on TCP only when you configure
+the <a href=#tcp-listener class="">TCP listener</a>, and then only with TLS
+(<a href=https://github.com/joestump-agent/crush/issues/358 target=_blank rel="noopener noreferrer" class="">#358</a>).</li>
+<li class=""><strong>TCP callers.</strong> A TCP connection carries no peer credentials, so a TCP
+call is never treated as the local user: it needs the bearer token or,
+with <code>client_ca</code>, a client certificate the handshake verified, checked
+before its body is read. Its <code>Host</code> must be the listen address or a name
+in the server certificate. Even authenticated, it reaches no local run
+(<a href=#local-runs-stay-local class="">Local runs stay local</a>).</li>
+<li class=""><strong>Browsers.</strong> The host rejects cross-origin requests (<code>403</code>), non-JSON
+bodies including the CORS-simple <code>text/plain</code> POST (<code>415</code>), and a
+<code>Host</code> other than the internal <code>crush-a2a</code> label on the socket, or one
+the TCP listener does not answer to (<code>400</code>), so a web page cannot fold a
+prompt into a running dispatch.</li>
+<li class=""><strong>The card.</strong> A route's Agent Card is discovery metadata, which A2A
+clients fetch with a bare <code>GET</code>. On the socket it is served without the
+token — the <code>0600</code> socket is the reach restriction, as for a definition
+route's JSON-RPC. Over TCP the gate still demands a client certificate or
+the token first. The <code>Origin</code> and <code>Host</code> checks apply to it as to every
+request. See <a href=#fetching-a-card class="">Fetching a card</a>.</li>
+</ul><p>A same-user process can no longer steer a dispatch: without the token,
+which only the host process holds, every call is rejected.<p>To turn dispatch off, run <code>permissions deny dispatch_agent</code>.</div></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=external-agents>External agents<a href=#external-agents class=hash-link aria-label="Direct link to External agents" title="Direct link to External agents" translate=no>​</a></h2>
+<p>A <code>runtime: a2a</code> dispatch agent is the one case where Crush is the client of
+someone else's A2A server. The wire
+differs from a served dispatch in these ways:</p>
+<ul>
+<li class="">The card comes from <code>GET</code> on the configured URL, with no <code>Authorization</code>
+header, and must offer <code>JSONRPC</code> on the card URL's own origin.</li>
+<li class="">Every call after that carries <code>Authorization: Bearer &lt;token></code> when the
+definition sets <code>auth</code>, and goes only to that origin.</li>
+<li class="">The prompt is a <code>SendStreamingMessage</code> with no <code>contextId</code> and no
+activated extensions, and its response headers must arrive within 30
+seconds. A card that declares <code>streaming: false</code> gets a blocking
+<code>SendMessage</code> instead, bounded by the idle timeout. Extension metadata on
+the stream is ignored.</li>
+<li class="">A bare <code>Message</code> reply completes the dispatch. Artifacts are read as text,
+never as the <code>diff</code> and <code>dispatch-result</code> artifacts.</li>
+<li class="">The first task ID must be 256 or fewer printable characters, or the stream
+is refused.</li>
+<li class=""><code>INPUT_REQUIRED</code> and <code>AUTH_REQUIRED</code> are answered with <code>CancelTask</code>, never
+forwarded to the user.</li>
+<li class="">A kill, or a stream silent past <code>transport.idle_timeout</code> (5 minutes unless
+configured), ends the stream. Once the remote has named its task, Crush
+sends a best-effort <code>CancelTask</code> carrying the reason under
+<code>crush.dispatch.cancel_reason</code>; before that, there is no task to cancel.</li>
+<li class="">Response bodies stop at 16 MiB and one server-sent event at 4 MiB.</li>
+</ul>
+<p>Configuration and the trust model are in
+<a class="" href=/crush/agents/configuration#external-agents>External agents</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-is-next>What is next<a href=#what-is-next class=hash-link aria-label="Direct link to What is next" title="Direct link to What is next" translate=no>​</a></h2>
+<p>Everything the 2026-10-04 re-base planned for the protocol has shipped: one
+path through the client with no direct-run fallback, <code>contextId</code> as the
+session and <code>taskId</code> as the run, steering as a message on the context,
+questions and permissions as <code>input-required</code> pauses, kills as
+<code>tasks/cancel</code>, declared extensions, the chunked diff artifact and typed
+result, usage and trace metadata, the SQLite task store with startup
+reconciliation, the TLS listener, and the a2a-go TCK in CI. The reasoning
+is in <a class="" href=/crush/agents/design-decisions>Design decisions</a>.</p>
+<p>What remains is the peer registry
+(<a href=https://github.com/joestump-agent/crush/issues/334 target=_blank rel="noopener noreferrer" class="">#334</a>): the piece that
+lets a remote, authenticated caller reach a run on this host and that
+publishes the definition cards it can dial. Until it lands, a Crush host is a
+secure dead end for other agents, and the way to work with another agent is
+to <a class="" href=/crush/agents/configuration#external-agents>consume it</a>.</div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/brunokrugel/crush/edit/fork/docs-site/docs/agents/a2a-protocol.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"><span class=theme-last-updated>Last updated<!-- --> on <b><time datetime=2026-11-10T12:40:44.000Z itemprop=dateModified>Nov 10, 2026</time></b></span></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/crush/agents/architecture><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>Architecture</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/crush/agents/troubleshooting><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>Troubleshooting</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#at-a-glance class="table-of-contents__link toc-highlight">At a glance</a><li><a href=#agent-card class="table-of-contents__link toc-highlight">Agent Card</a><ul><li><a href=#fetching-a-card class="table-of-contents__link toc-highlight">Fetching a card</a></ul><li><a href=#endpoints class="table-of-contents__link toc-highlight">Endpoints</a><ul><li><a href=#agent-index class="table-of-contents__link toc-highlight">Agent index</a></ul><li><a href=#tcp-listener class="table-of-contents__link toc-highlight">TCP listener</a><ul><li><a href=#local-runs-stay-local class="table-of-contents__link toc-highlight">Local runs stay local</a></ul><li><a href=#methods class="table-of-contents__link toc-highlight">Methods</a><ul><li><a href=#the-request class="table-of-contents__link toc-highlight">The request</a><li><a href=#steering class="table-of-contents__link toc-highlight">Steering</a><li><a href=#questions class="table-of-contents__link toc-highlight">Questions</a><li><a href=#permission-prompts class="table-of-contents__link toc-highlight">Permission prompts</a></ul><li><a href=#event-stream class="table-of-contents__link toc-highlight">Event stream</a><ul><li><a href=#todo-progress-events class="table-of-contents__link toc-highlight">Todo progress events</a><li><a href=#usage-and-trace-context class="table-of-contents__link toc-highlight">Usage and trace context</a><li><a href=#the-artifacts class="table-of-contents__link toc-highlight">The artifacts</a><li><a href=#other-endings class="table-of-contents__link toc-highlight">Other endings</a><li><a href=#how-the-client-maps-the-outcome class="table-of-contents__link toc-highlight">How the client maps the outcome</a><li><a href=#dropped-streams class="table-of-contents__link toc-highlight">Dropped streams</a><li><a href=#kills class="table-of-contents__link toc-highlight">Kills</a></ul><li><a href=#durable-state class="table-of-contents__link toc-highlight">Durable state</a><li><a href=#not-implemented class="table-of-contents__link toc-highlight">Not implemented</a><li><a href=#security-model class="table-of-contents__link toc-highlight">Security model</a><li><a href=#external-agents class="table-of-contents__link toc-highlight">External agents</a><li><a href=#what-is-next class="table-of-contents__link toc-highlight">What is next</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer footer--dark"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Docs</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/getting-started/installation>Installation</a><li class=footer__item><a class=footer__link-item href=/crush/getting-started/quickstart>Quickstart</a><li class=footer__item><a class=footer__link-item href=/crush/configuration/crushrc>Configuration</a><li class=footer__item><a class=footer__link-item href=/crush/reference/cli>CLI reference</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Features</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/features/mcp>MCP</a><li class=footer__item><a class=footer__link-item href=/crush/features/channels>Channels</a><li class=footer__item><a class=footer__link-item href=/crush/features/skills>Skills</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Project</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class=footer__link-item>This fork<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/crush target=_blank rel="noopener noreferrer" class=footer__link-item>Upstream Crush<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/catwalk target=_blank rel="noopener noreferrer" class=footer__link-item>Catwalk<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://charm.land target=_blank rel="noopener noreferrer" class=footer__link-item>Charm<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Crush is a Charm project, licensed FSL-1.1-MIT. Docs for the brunokrugel/crush fork, built with Docusaurus.</div></div></div></footer></div></body>

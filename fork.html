@@ -1,0 +1,469 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-fork" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.2"><title data-rh=true>What this fork adds | Crush</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true name=twitter:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true property=og:url content=https://brunokrugel.github.io/crush/fork /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="What this fork adds | Crush"/><meta data-rh=true name=description content="Every feature, improvement, and fix that brunokrugel/crush carries on top of charmbracelet/crush — via merged upstream pull requests and fork branches."/><meta data-rh=true property=og:description content="Every feature, improvement, and fix that brunokrugel/crush carries on top of charmbracelet/crush — via merged upstream pull requests and fork branches."/><link data-rh=true rel=icon href=/crush/img/favicon.ico /><link data-rh=true rel=canonical href=https://brunokrugel.github.io/crush/fork /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/fork hreflang=en /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/fork hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://brunokrugel.github.io/crush/fork","name":"What this fork adds","position":1}]}</script><link rel=apple-touch-icon href=/crush/img/touchicon_180.png><link rel=stylesheet href=/crush/assets/css/styles.e14b0f2f.css /><script src=/crush/assets/js/runtime~main.b8734afa.js defer></script><script src=/crush/assets/js/main.b8358137.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-7c2")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/crush/><b class="navbar__title text--truncate">Crush</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/crush/introduction>Docs</a><a class="navbar__item navbar__link" href=/crush/configuration/crushrc>Configuration</a><a class="navbar__item navbar__link" href=/crush/reference/cli>Reference</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/introduction><span class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class="menu__link menu__link--active" aria-current=page href=/crush/fork><span class=linkLabel_WmDU>What this fork adds</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/getting-started/installation><span class=categoryLinkLabel_W154>Getting started</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/installation><span class=linkLabel_WmDU>Installation</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/quickstart><span class=linkLabel_WmDU>Quickstart</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/providers-and-api-keys><span class=linkLabel_WmDU>Providers and API keys</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/configuration/crushrc><span class=categoryLinkLabel_W154>Configuration</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/crushrc><span class=linkLabel_WmDU>crushrc (Bash)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/command-reference><span class=linkLabel_WmDU>Command reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/json><span class=linkLabel_WmDU>crush.json (JSON)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/providers><span class=linkLabel_WmDU>Providers and models</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/permissions><span class=linkLabel_WmDU>Permissions and safety</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/context-and-ignore><span class=linkLabel_WmDU>Context and ignore files</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/environment><span class=linkLabel_WmDU>Environment and startup</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/features/lsp><span class=categoryLinkLabel_W154>Features</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/lsp><span class=linkLabel_WmDU>Language servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/mcp><span class=linkLabel_WmDU>MCP servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/channels><span class=linkLabel_WmDU>Channels</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/skills><span class=linkLabel_WmDU>Skills</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/hooks><span class=linkLabel_WmDU>Hooks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/auto-mode><span class=linkLabel_WmDU>Auto mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/scheduled-tasks><span class=linkLabel_WmDU>Scheduled tasks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/semantic-search><span class=linkLabel_WmDU>Semantic search</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/sessions><span class=linkLabel_WmDU>Sessions and projects</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/memory><span class=linkLabel_WmDU>Memory</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/forking><span class=linkLabel_WmDU>Forking</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/goal-mode><span class=linkLabel_WmDU>Goal mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/server-and-workspaces><span class=linkLabel_WmDU>Server and workspaces</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/notifications><span class=linkLabel_WmDU>Desktop notifications</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/agents/overview><span class=categoryLinkLabel_W154>Multi-agent</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/overview><span class=linkLabel_WmDU>Overview</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/tutorial><span class=linkLabel_WmDU>Tutorial</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/handles-and-inspect><span class=linkLabel_WmDU>Handles and inspect</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/todo-enforcement><span class=linkLabel_WmDU>Todo enforcement</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/configuration><span class=linkLabel_WmDU>Configuration</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/team><span class=linkLabel_WmDU>Team</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/architecture><span class=linkLabel_WmDU>Architecture</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/a2a-protocol><span class=linkLabel_WmDU>A2A protocol</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/design-decisions><span class=linkLabel_WmDU>Design decisions</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/reference/cli><span class=categoryLinkLabel_W154>Reference</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/cli><span class=linkLabel_WmDU>CLI reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/tools><span class=linkLabel_WmDU>Tool reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/keybindings><span class=linkLabel_WmDU>Keybindings</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/environment-variables><span class=linkLabel_WmDU>Environment variables</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/logging><span class=linkLabel_WmDU>Logging</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/crush/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>What this fork adds</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>What this fork adds</h1></header>
+<p>These docs cover
+<strong><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class=""><code>brunokrugel/crush</code></a></strong>, a fork that
+tracks <a href=https://github.com/charmbracelet/crush target=_blank rel="noopener noreferrer" class=""><code>charmbracelet/crush</code></a> upstream
+and carries a curated set of changes on top: upstream pull requests that are
+still open there, plus feature branches from other forks. This page is the
+inventory of what it adds beyond upstream <code>main</code>.</p>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>How this fork is built</div><div class=admonitionContent_BuS1><p>None of the additions below are bespoke. They are merges of upstream pull
+requests (numbered as such) and of published feature branches, each pullable
+into the <code>fork</code> branch with two commands. When upstream eventually merges its
+own copy of these changes, the duplicate history drops out cleanly.</div></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=credits>Credits<a href=#credits class=hash-link aria-label="Direct link to Credits" title="Direct link to Credits" translate=no>​</a></h2>
+<p>The work in this fork is not the work of one person. It is pulled from
+upstream pull requests and from the other Crush forks, all landing on the
+same branch and improving each other there. Every row in the tables below
+names the source it came from; this is the summary.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Source<th>What it contributed<tbody><tr><td><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class=""><code>brunokrugel/crush</code></a><td>This fork. The integration work, the snapshots implementation, the Sonic JSON codec, and the merged upstream pull requests.<tr><td><a href=https://github.com/joestump-agent/crush target=_blank rel="noopener noreferrer" class=""><code>joestump-agent/crush</code></a><td>Multi-agent dispatch, semantic search, channel reply routing, and most of the TUI polish — click-to-copy, clickable links, the highlighted composer, text attachments, and the Skills, MCP and Channels dialogs.<tr><td><a href=https://github.com/taigrr/crush target=_blank rel="noopener noreferrer" class=""><code>taigrr/crush</code></a><td>Conversation forking, goal mode, and the original snapshot design this fork reimplemented.<tr><td><a href=https://github.com/gurnben/crush target=_blank rel="noopener noreferrer" class=""><code>gurnben/crush</code></a><td>Context compaction with checkpoints, via its <code>feat/context-compaction</code> branch.<tr><td><a href=https://github.com/charmbracelet/crush target=_blank rel="noopener noreferrer" class=""><code>charmbracelet/crush</code></a><td>Upstream. Everything the fork does not change, and the pull requests merged in ahead of upstream merging them itself.</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=major-features>Major features<a href=#major-features class=hash-link aria-label="Direct link to Major features" title="Direct link to Major features" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Feature<th>What it is<th>Source<tbody><tr><td><strong><a class="" href=/crush/features/scheduled-tasks>Scheduled tasks</a></strong><td><code>CronCreate</code>, <code>CronList</code>, and <code>CronDelete</code> tools that re-run a prompt on a cron schedule, with a scheduler, one-shot support, and a command-palette entry showing what is queued.<td>upstream PR #3466<tr><td><strong><a class="" href=/crush/features/memory>Memory</a></strong><td>Cross-session memory via <a href=https://honcho.dev target=_blank rel="noopener noreferrer" class="">Honcho</a>: Crush sends turns, completed replies, and redacted tool summaries, and later sessions get recall back. Connect or disconnect from the command palette or <code>crush login honcho</code>; sub-agents read memory but never write it. Off by default and free when off; this fork targets a self-hosted instance.<td>upstream PR #3954 (draft)<tr><td><strong><a class="" href=/crush/features/forking>Forking</a></strong><td>Branch a conversation from any message into a new session that keeps the history up to that point, with the snapshot's files restored in place or in a fresh worktree. The source session is left untouched. Fork from the palette (at the last prompt) or press <kbd>f</kbd> on a user message in the transcript to fork at that exact point; remote clients fork through <code>POST /v1/workspaces/{id}/sessions/{sid}/fork</code>.<td><code>taigrr/crush</code> (reimplemented)<tr><td><strong><a class="" href=/crush/features/snapshots>Snapshots</a></strong><td>A git-backed filesystem checkpoint captured in the background at every user message into a private store under <code>.crush/git</code> — browse them in the <strong>Snapshots</strong> palette entry, restore any point (the current tree is captured first, so a restore is itself undoable), copy a snapshot's diff, and bound how many a session keeps with <code>snapshots.keep</code>, with <code>.gitignore</code> and exclusion support and content-addressed reuse so unchanged files cost nothing.<td><code>brunokrugel/crush</code>, after <code>taigrr/crush</code><tr><td><strong><a class="" href=/crush/features/goal-mode>Goal mode</a></strong><td><code>/goal &lt;text></code> starts an autonomous, turn-budgeted loop on the current session: after each turn a cheap small-model evaluator checks whether the goal is met, and while it is not — and the budget (25 turns, hard-capped) allows — a continuation directive is injected and another turn runs. It reuses the fork's todo-nudge ladder and its watchdogs instead of adding a second enforcement layer, and the continuation supersedes the nudge so a turn never gets two injections. An active goal shows as a <code>GOAL</code> badge (with the turn budget) in the header.<td><code>taigrr/crush</code> (reimplemented; PLAN.md #5)<tr><td><strong><a class="" href=/crush/features/auto-mode>Auto mode</a></strong><td>An opt-in safety classifier that grants, denies, or escalates a tool call that would otherwise prompt. User-level only: a repository cannot grant itself auto mode. No classifier model means rules-only. A classifier error escalates.<td><code>gurnben/crush</code>, upstream PR #3874<tr><td><strong><a class="" href=/crush/features/sessions>Context compaction with checkpoints</a></strong><td>Automatic compaction ledgers for long-running sessions, with preview/accept/discard checkpoints, an undo path, and inline checkpoint handoff in the TUI; recorded session memory rides beside every summary instead of replacing it, and the checkpoint accepts an emphasis instruction.<td><code>gurnben/crush:feat/context-compaction</code>, upstream PR #4059 (28 commits)<tr><td><strong><a class="" href=/crush/agents/overview>Multi-agent dispatch</a></strong><td>A <code>dispatch_agent</code> tool that starts independent agents in the background, each in its own git worktree on a fresh <code>crush-dispatch-*</code> branch, while the main agent keeps working. Steer a running agent with a leading <code>@handle</code> (the model uses <code>message_agent</code>), read its live transcript in inspect mode, cancel it with <kbd>ctrl+x</kbd> or <code>cancel_dispatch</code>, and settle its work with <code>apply_dispatch</code> (merge, squash or cherry-pick) or <code>dismiss_dispatch</code> — Crush never merges on its own. Every agent is an agent definition: override <code>coder</code>, <code>plan</code>, <code>task</code> and <code>worker</code> or add your own with the <code>agent</code> builtin in <code>crushrc</code>. <code>crush dispatch list</code> and <code>prune</code> manage workspaces from the shell. On by default inside a git repository.<td><code>joestump-agent/crush</code><tr><td><strong><a class="" href=/crush/features/semantic-search>Semantic search</a></strong><td>A local vector index over the repo — chunked by symbol, embedded through any OpenAI-compatible endpoint, stored in the project's own SQLite via <code>sqlite-vec</code>. Adds the <code>semantic_search</code> and <code>semantic_index</code> tools and a symbol-extraction package.<td><code>joestump-agent/crush</code><tr><td><strong><a class="" href=/crush/features/channels>Channel reply routing</a></strong><td>The channel <em>push</em> mechanism is upstream. This fork adds the <code>channel_enabled</code> config key, a <code>channel_reply</code> tool, server-side routing that delivers each event exactly once per workspace, auto-creation of a session for an inbound event, and replies that go back only to the channel they came from.<td><code>joestump-agent/crush</code><tr><td><strong><a class="" href=/crush/features/notifications>Herdr compat</a></strong><td>Overhauled agent state reporting and pane integration for the herdr multiplexer, including compaction state reporting.<td>upstream PR #3541<tr><td><strong><a class="" href=/crush/features/mcp>Lazy MCP loading</a></strong><td>MCP tool schemas stay out of the model's context until explicitly pulled with <code>mcp_search</code>; per-server tri-state settings in the MCP dialog, plus <code>list_mcp_prompts</code> and <code>call_mcp_prompt</code> tools and prompts offered in the inline <code>/</code> completions.<td>upstream PR #3983, <code>brunokrugel/crush</code><tr><td><strong><a class="" href=/crush/features/skills>Skill scoping and caching</a></strong><td>Deduplicated symlinked skills, skill discovery cached across prompt builds, repo-scoped enable/disable toggles over the global config.<td>upstream PRs #3830, #3813, plus the skill-toggle upstream work<tr><td><strong>Session-scoped prompts</strong><td>Permission and question prompts are scoped to the session the client is actually viewing: clients report their current session, pending prompts re-publish when a client switches to the session that raised them, and sub-agent prompts surface on the top-level session.<td>upstream PRs #4044, <code>brunokrugel/crush</code><tr><td><strong>Turn and paste UX</strong><td>The turn spinner runs from the moment a prompt is sent (not when the first assistant message lands), a setup failure still publishes RunComplete, copied file paths paste as text rather than attaching, and <kbd>ctrl+shift+v</kbd> pastes the clipboard as text on every model.<td>upstream PRs #4046, #4070, #4071, <code>brunokrugel/crush</code></table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=quality-of-life-improvements>Quality-of-life improvements<a href=#quality-of-life-improvements class=hash-link aria-label="Direct link to Quality-of-life improvements" title="Direct link to Quality-of-life improvements" translate=no>​</a></h2>
+<p>Smaller things you notice in the terminal rather than in a config file.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=chat>Chat<a href=#chat class=hash-link aria-label="Direct link to Chat" title="Direct link to Chat" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Improvement<th>Detail<th>Source<tbody><tr><td>Click-to-copy<td>Finished assistant <em>and</em> user messages carry a right-aligned <code>⎘</code> icon that copies the message. Shown on focus, pinned to the item's right edge.<td><code>joestump-agent/crush</code><tr><td>Clickable hyperlinks<td>A plain click on a link in the transcript opens it in your browser.<td><code>joestump-agent/crush</code><tr><td>Channel message styling<td>Channel-originated messages render with a <code>sender / via / at</code> metadata line below the body, so you can tell a webhook from a human.<td><code>joestump-agent/crush</code><tr><td>Text copy performance<td>Faster text copy path in the message renderer.<td>merged PR #3945<tr><td>Tool-call elapsed time<td>Each running tool call shows its own elapsed timer instead of an aggregate one.<td>merged PR #3600</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=composer>Composer<a href=#composer class=hash-link aria-label="Direct link to Composer" title="Direct link to Composer" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Improvement<th>Detail<th>Source<tbody><tr><td>Syntax-highlighted composer<td>A vendored textarea with a highlighter, so <code>@file</code>, <code>/skill</code>, and MCP-prompt tokens are visibly distinct as you type.<td><code>joestump-agent/crush</code><tr><td>Atomic token editing<td>Backspace over a completed token deletes the whole token — and drops its attachment, if it had one — instead of eating one character at a time.<td><code>joestump-agent/crush</code><tr><td>Text-file attachments<td>Attach JSON, YAML, Markdown, and source files, not just images. One shared text predicate everywhere, with binary sniffing to reject the rest.<td><code>joestump-agent/crush</code><tr><td>Attachment chips<td>A clickable remove button on each chip, correct hit zones, and chips that survive sending.<td><code>joestump-agent/crush</code><tr><td><code>/skill</code> completions<td>Skills complete inline from <code>/</code>, alongside commands and MCP prompts.<td><code>joestump-agent/crush</code><tr><td>Paste as text<td>A copied file path pastes as text; auto-attach applies only to image paths, and <kbd>ctrl+shift+v</kbd> always pastes the clipboard as text.<td><code>brunokrugel/crush</code></table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dialogs-and-palette>Dialogs and palette<a href=#dialogs-and-palette class=hash-link aria-label="Direct link to Dialogs and palette" title="Direct link to Dialogs and palette" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Improvement<th>Detail<th>Source<tbody><tr><td><strong>Toggle Skills dialog</strong><td>Palette entry <strong>Toggle Skills</strong> — every discovered skill with its error state, toggled per repository or globally.<td>merged PR #3994, <code>brunokrugel/crush</code><tr><td><strong>Toggle MCPs dialog</strong><td>Palette entry <strong>Toggle MCPs</strong> — per-server tri-state (enabled / lazy / disabled) for this repository or the global config.<td>upstream PR #3983, <code>brunokrugel/crush</code><tr><td><strong>Channels dialog</strong><td>Palette entry <strong>Channels</strong> — see and manage active channels.<td><code>joestump-agent/crush</code><tr><td><strong>Snapshots dialog</strong><td>Palette entry <strong>Snapshots</strong> — the session's snapshots newest first: <kbd>enter</kbd> restores (with a pre-restore safety capture), <kbd>d</kbd> copies the diff.<td><code>brunokrugel/crush</code><tr><td>Hierarchical sub-menus<td>The command palette nests related commands instead of one flat list, with <code>back</code>/<code>backspace</code> navigation.<td><code>joestump-agent/crush</code><tr><td>Model discovery reload<td>Re-run provider/model discovery from the <code>/models</code> dialog without restarting.<td><code>joestump-agent/crush</code></table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=sidebar-and-header>Sidebar and header<a href=#sidebar-and-header class=hash-link aria-label="Direct link to Sidebar and header" title="Direct link to Sidebar and header" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Improvement<th>Detail<th>Source<tbody><tr><td>Focusable sidebar<td>Three-state <kbd>tab</kbd> focus, mouse scrolling, a scrollbar instead of a focus border, and irrelevant keybindings hidden while it is focused.<td><code>joestump-agent/crush</code><tr><td>Channels column<td>Active channels shown on the landing page and in the sidebar.<td><code>joestump-agent/crush</code><tr><td>MCP sidebar seeding<td>A periodic re-seed of MCP client states in the TUI, so a server whose only state event fired before the TUI subscribed no longer sticks on "None".<td>merged PR #3289<tr><td><code>user@host:cwd</code> header<td>On by default, mirroring the familiar shell prompt — useful when you have sessions open on several machines.<td><code>joestump-agent/crush</code><tr><td>Pills panel<td><kbd>ctrl+t</kbd> expands <em>every</em> section, and scheduled tasks get their own pill with a stopwatch glyph that distinguishes recurring from one-shot.<td><code>joestump-agent/crush</code></table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=configuration>Configuration<a href=#configuration class=hash-link aria-label="Direct link to Configuration" title="Direct link to Configuration" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Improvement<th>Detail<th>Source<tbody><tr><td><code>allowed_commands</code><td>Re-allow specific commands the <a class="" href=/crush/configuration/permissions#blocked-commands>blocklist</a> normally denies, without disabling the blocklist. Still subject to permission approval.<td><code>joestump-agent/crush</code><tr><td><code>channel_enabled</code><td>Turn an MCP server into a channel from <code>crush.json</code>, rather than only via the <code>--channels</code> flag.<td><code>joestump-agent/crush</code><tr><td><code>oauth_client_id_metadata</code><td>OAuth Client ID Metadata Documents (SEP-991): the URL is sent as the <code>client_id</code> for servers that advertise <code>client_id_metadata_document_supported</code> but have no registration endpoint (Home Assistant). Crush's own document is hosted on this docs site.<td><code>brunokrugel/crush</code><tr><td><code>embeddings</code> block<td>Configure the semantic-search embedding provider from <code>crush.json</code> or <code>crushrc</code>.<td><code>joestump-agent/crush</code><tr><td>Config reload on reconnect<td>Reconnecting an MCP server re-reads config from disk, so an edit takes effect without a restart.<td><code>joestump-agent/crush</code><tr><td>SIGHUP reloads the server<td>A running <code>crush server</code> reloads its config on SIGHUP instead of stopping — the service-manager way to apply an edit without dropping sessions.<td>upstream branch <code>fix/shutdown-records-work</code><tr><td>Current time in the prompt<td>The system prompt carries the current time, which is what makes relative scheduling ("every weekday at 9") work.<td><code>joestump-agent/crush</code></table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=performance>Performance<a href=#performance class=hash-link aria-label="Direct link to Performance" title="Direct link to Performance" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Improvement<th>Detail<th>Source<tbody><tr><td>Sonic JSON codec<td>Both halves of the JSON wire path run through <a href=https://github.com/bytedance/sonic target=_blank rel="noopener noreferrer" class=""><code>bytedance/sonic</code></a>'s JIT-compiled codec: every <code>Unmarshal</code>/<code>Marshal</code> call in the tree, plus the HTTP handlers (server, A2A, proto), the CLI's session output, and the streaming message deltas and session-row decodes. <code>encoding/json</code> remains only where sonic has no equivalent (<code>RawMessage</code>, the <code>Marshaler</code>/<code>Unmarshaler</code> interfaces sonic dispatches through, and streaming decode).<td><code>brunokrugel/crush</code></table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=fixes-this-fork-carries>Fixes this fork carries<a href=#fixes-this-fork-carries class=hash-link aria-label="Direct link to Fixes this fork carries" title="Direct link to Fixes this fork carries" translate=no>​</a></h2>
+<p>Fixes to <strong>upstream</strong> behaviour that live here and are not upstream. Fixes to
+the fork's own features are part of those features and are not listed
+separately.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Fix<th>Symptom it removes<tbody><tr><td>Forked child output tears the TUI<td>On macOS under memory pressure, the malloc stack logger prints into the fork-to-exec window of every forked child, corrupting the TUI. fd 2 is detached to <code>/dev/null</code> while the TUI runs; Go's stderr and crash reports keep the terminal.<tr><td>Quitting abandons work in flight<td>Closing the terminal window or stopping the server through a service manager killed the process outright: active runs never wound down, and the next visit to the session showed a step that still looked like it was running. External stop signals now go through the ordinary workspace shutdown, so runs record their terminal state, and a shutdown while work is genuinely still running says so in the log.<tr><td>Cancelled turn streams keep running<td>Cancelling a turn left the provider stream running to its natural end whenever the request timeout was off, and a turn whose stream only ever sent keepalives ran until the (disabled) timeout. Cancelling now stops the stream immediately even with the timeout off, a keepalive-only stream ends at the stall budget, and a cancelled turn finishes cleanly.<tr><td>Oversized images rejected by the provider<td>A screenshot past the provider's per-image limits failed the whole request. Oversized images are now rescaled into the limits instead.<tr><td>Yolo banner inverted when truncated<td>The allow-all-permissions banner led with "runs any commands…", so a cut banner read as the opposite of the truth. It now leads with the limit, so a cut banner still says the safe thing.<tr><td>Todo pill frozen on a stale step<td>The todo ladder treated <em>creating</em> a todo list as lifetime activity, so a model that made the list and then worked on later steps without updating it left the todo pill on the first step for the whole run. Mutating work now makes the list stale and re-arms the reminder, while read-only calls leave its freshness alone.<tr><td>Bounded MCP init waits<td>A wedged MCP server could blank the whole app at startup. Tool lists now wait for init, with a bound.<tr><td>Per-server MCP lifecycle serialized<td>Concurrent connect/disconnect on one server raced; an error on one session tore down others.<tr><td>stdio process groups reaped<td>Killed stdio MCP servers left orphan processes behind.<tr><td>MCP OAuth persistence<td>Tokens did not actually survive a restart; the store now does atomic writes and validates state.<tr><td>In-process run dispatch serialized<td>Two turns could run concurrently in one session.<tr><td>Provider base URL resolved before validation<td>A custom provider with an expanded <code>base_url</code> failed validation that should have passed.<tr><td>Empty paste routes to the clipboard image<td>An empty bracketed paste dropped the image instead of attaching it — and now warns instead of silently failing on a model that cannot take images.<tr><td>Command filter matches shortcuts<td>Typing a command's shortcut in the <code>/</code> menu filtered it out.<tr><td>Tied project timestamps ordered by recency<td>Projects registered in the same instant sorted arbitrarily.<tr><td>Backspace in the commands filter<td>Backspace was swallowed in the top-level commands filter.<tr><td>Sub-agent permissions<td>Non-interactive permission propagation applied only to the main agent, so a subagent's runs prompted from scratch.<tr><td>Sentry known-sessionless<td><code>https://mcp.sentry.dev/mcp</code> ships pre-registered in <code>knownSessionlessMCPs</code>; known sessionless servers skip the subscriptions stream that stalls them.</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=proposed-but-not-yet-merged>Proposed but not yet merged<a href=#proposed-but-not-yet-merged class=hash-link aria-label="Direct link to Proposed but not yet merged" title="Direct link to Proposed but not yet merged" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>PR<th>What it would add<tbody><tr><td>upstream PR #2584<td>Let the user configure the agent's model size (large/small flexing per agent definition). Open and conflicted against upstream; not carried here yet.</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-this-fork-does-not-have>What this fork does NOT have<a href=#what-this-fork-does-not-have class=hash-link aria-label="Direct link to What this fork does NOT have" title="Direct link to What this fork does NOT have" translate=no>​</a></h2>
+<p>Anything not in the table above is plain upstream Crush or one of the merged
+branches named above. In particular <strong>A2UI was removed entirely</strong> — the earlier
+<code>brunokrugel/crush</code> A2UI plumbing is gone: no <code>a2tea</code> dependency, no renderer
+for cards, lists, buttons, forms, or dashboards drawn inline, no prompt
+section inviting surfaces, no <code>disable_a2ui</code> config option, and no MCP
+capability advertisement. Inline <code>&lt;a2ui-json></code> blocks in a reply render as
+plain text.</div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/brunokrugel/crush/edit/fork/docs-site/docs/fork.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"><span class=theme-last-updated>Last updated<!-- --> on <b><time datetime=2026-11-10T12:40:44.000Z itemprop=dateModified>Nov 10, 2026</time></b></span></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/crush/introduction><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>Introduction</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/crush/getting-started/installation><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>Installation</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#credits class="table-of-contents__link toc-highlight">Credits</a><li><a href=#major-features class="table-of-contents__link toc-highlight">Major features</a><li><a href=#quality-of-life-improvements class="table-of-contents__link toc-highlight">Quality-of-life improvements</a><ul><li><a href=#chat class="table-of-contents__link toc-highlight">Chat</a><li><a href=#composer class="table-of-contents__link toc-highlight">Composer</a><li><a href=#dialogs-and-palette class="table-of-contents__link toc-highlight">Dialogs and palette</a><li><a href=#sidebar-and-header class="table-of-contents__link toc-highlight">Sidebar and header</a><li><a href=#configuration class="table-of-contents__link toc-highlight">Configuration</a><li><a href=#performance class="table-of-contents__link toc-highlight">Performance</a></ul><li><a href=#fixes-this-fork-carries class="table-of-contents__link toc-highlight">Fixes this fork carries</a><li><a href=#proposed-but-not-yet-merged class="table-of-contents__link toc-highlight">Proposed but not yet merged</a><li><a href=#what-this-fork-does-not-have class="table-of-contents__link toc-highlight">What this fork does NOT have</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer footer--dark"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Docs</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/getting-started/installation>Installation</a><li class=footer__item><a class=footer__link-item href=/crush/getting-started/quickstart>Quickstart</a><li class=footer__item><a class=footer__link-item href=/crush/configuration/crushrc>Configuration</a><li class=footer__item><a class=footer__link-item href=/crush/reference/cli>CLI reference</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Features</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/features/mcp>MCP</a><li class=footer__item><a class=footer__link-item href=/crush/features/channels>Channels</a><li class=footer__item><a class=footer__link-item href=/crush/features/skills>Skills</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Project</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class=footer__link-item>This fork<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/crush target=_blank rel="noopener noreferrer" class=footer__link-item>Upstream Crush<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/catwalk target=_blank rel="noopener noreferrer" class=footer__link-item>Catwalk<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://charm.land target=_blank rel="noopener noreferrer" class=footer__link-item>Charm<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Crush is a Charm project, licensed FSL-1.1-MIT. Docs for the brunokrugel/crush fork, built with Docusaurus.</div></div></div></footer></div></body>

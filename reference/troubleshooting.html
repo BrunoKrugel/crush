@@ -1,0 +1,195 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-reference/troubleshooting" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.2"><title data-rh=true>Troubleshooting | Crush</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true name=twitter:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true property=og:url content=https://brunokrugel.github.io/crush/reference/troubleshooting /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="Troubleshooting | Crush"/><meta data-rh=true name=description content="The things that go wrong most often, and what to check first."/><meta data-rh=true property=og:description content="The things that go wrong most often, and what to check first."/><link data-rh=true rel=icon href=/crush/img/favicon.ico /><link data-rh=true rel=canonical href=https://brunokrugel.github.io/crush/reference/troubleshooting /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/reference/troubleshooting hreflang=en /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/reference/troubleshooting hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://brunokrugel.github.io/crush/reference/troubleshooting","name":"Troubleshooting","position":1}]}</script><link rel=apple-touch-icon href=/crush/img/touchicon_180.png><link rel=stylesheet href=/crush/assets/css/styles.e14b0f2f.css /><script src=/crush/assets/js/runtime~main.b8734afa.js defer></script><script src=/crush/assets/js/main.b8358137.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-7c2")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/crush/><b class="navbar__title text--truncate">Crush</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/crush/introduction>Docs</a><a class="navbar__item navbar__link" href=/crush/configuration/crushrc>Configuration</a><a class="navbar__item navbar__link" href=/crush/reference/cli>Reference</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/introduction><span class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/fork><span class=linkLabel_WmDU>What this fork adds</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/getting-started/installation><span class=categoryLinkLabel_W154>Getting started</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/installation><span class=linkLabel_WmDU>Installation</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/quickstart><span class=linkLabel_WmDU>Quickstart</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/providers-and-api-keys><span class=linkLabel_WmDU>Providers and API keys</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/configuration/crushrc><span class=categoryLinkLabel_W154>Configuration</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/crushrc><span class=linkLabel_WmDU>crushrc (Bash)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/command-reference><span class=linkLabel_WmDU>Command reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/json><span class=linkLabel_WmDU>crush.json (JSON)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/providers><span class=linkLabel_WmDU>Providers and models</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/permissions><span class=linkLabel_WmDU>Permissions and safety</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/context-and-ignore><span class=linkLabel_WmDU>Context and ignore files</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/environment><span class=linkLabel_WmDU>Environment and startup</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/features/lsp><span class=categoryLinkLabel_W154>Features</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/lsp><span class=linkLabel_WmDU>Language servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/mcp><span class=linkLabel_WmDU>MCP servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/channels><span class=linkLabel_WmDU>Channels</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/skills><span class=linkLabel_WmDU>Skills</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/hooks><span class=linkLabel_WmDU>Hooks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/auto-mode><span class=linkLabel_WmDU>Auto mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/scheduled-tasks><span class=linkLabel_WmDU>Scheduled tasks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/semantic-search><span class=linkLabel_WmDU>Semantic search</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/sessions><span class=linkLabel_WmDU>Sessions and projects</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/memory><span class=linkLabel_WmDU>Memory</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/forking><span class=linkLabel_WmDU>Forking</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/goal-mode><span class=linkLabel_WmDU>Goal mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/server-and-workspaces><span class=linkLabel_WmDU>Server and workspaces</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/notifications><span class=linkLabel_WmDU>Desktop notifications</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/agents/overview><span class=categoryLinkLabel_W154>Multi-agent</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/overview><span class=linkLabel_WmDU>Overview</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/tutorial><span class=linkLabel_WmDU>Tutorial</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/handles-and-inspect><span class=linkLabel_WmDU>Handles and inspect</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/todo-enforcement><span class=linkLabel_WmDU>Todo enforcement</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/configuration><span class=linkLabel_WmDU>Configuration</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/team><span class=linkLabel_WmDU>Team</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/architecture><span class=linkLabel_WmDU>Architecture</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/a2a-protocol><span class=linkLabel_WmDU>A2A protocol</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/design-decisions><span class=linkLabel_WmDU>Design decisions</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/crush/reference/cli><span class=categoryLinkLabel_W154>Reference</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/cli><span class=linkLabel_WmDU>CLI reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/tools><span class=linkLabel_WmDU>Tool reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/keybindings><span class=linkLabel_WmDU>Keybindings</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/environment-variables><span class=linkLabel_WmDU>Environment variables</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/logging><span class=linkLabel_WmDU>Logging</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/crush/reference/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/crush/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Reference</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>Troubleshooting</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Troubleshooting</h1></header>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=copy-and-paste-isnt-working>Copy and paste isn't working<a href=#copy-and-paste-isnt-working class=hash-link aria-label="Direct link to Copy and paste isn't working" title="Direct link to Copy and paste isn't working" translate=no>​</a></h2>
+<p>Unix-like systems need an external clipboard helper:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Environment<th>Tool<tbody><tr><td>macOS<td>Native support<tr><td>Windows<td>Native support<tr><td>Linux/BSD + Wayland<td><code>wl-copy</code> and <code>wl-paste</code><tr><td>Linux/BSD + X11<td><code>xclip</code> or <code>xsel</code></table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=my-config-isnt-being-picked-up>My config isn't being picked up<a href=#my-config-isnt-being-picked-up class=hash-link aria-label="Direct link to My config isn't being picked up" title="Direct link to My config isn't being picked up" translate=no>​</a></h2>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">crush </span><span class="token function" style="color:rgb(80, 250, 123)">dirs</span><br/></div></code></pre></div></div>
+<p>That prints the config and data directories Crush actually resolved. Common
+causes:</p>
+<ul>
+<li class="">A <code>crushrc</code> in a <strong>data</strong> directory. Crush deliberately does not execute one
+from <code>~/.local/share/crush</code> or <code>%LOCALAPPDATA%\crush</code> — those hold state.</li>
+<li class=""><code>XDG_CONFIG_HOME</code> pointing somewhere unexpected.</li>
+<li class="">Both a <code>crushrc</code> and a <code>crush.json</code> in the same folder. They merge, <code>crushrc</code>
+wins, and Crush logs a warning — check <a class="" href=/crush/reference/logging>the logs</a>.</li>
+<li class="">A project-level config overriding your global one. Project beats global by
+design.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=a-hook-seems-to-do-nothing>A hook seems to do nothing<a href=#a-hook-seems-to-do-nothing class=hash-link aria-label="Direct link to A hook seems to do nothing" title="Direct link to A hook seems to do nothing" translate=no>​</a></h2>
+<ul>
+<li class="">A hook that exits with anything other than <code>2</code> or <code>49</code> is treated as a
+<strong>non-blocking error</strong>: it is logged and ignored, and the tool call proceeds.
+Check <a class="" href=/crush/reference/logging>the logs</a>.</li>
+<li class=""><code>command</code> is resolved relative to your <strong>working directory</strong>, not the config
+file. A relative path in a global config will not resolve — use an absolute
+path.</li>
+<li class="">Shebang'd scripts need the interpreter on <code>PATH</code>. Crush falls back to a <code>PATH</code>
+lookup of the base name and logs it at debug level.</li>
+<li class="">Sub-agent tool calls are not hooked by design. See
+<a class="" href=/crush/features/hooks#pretooluse>scope</a>. Dispatched agents' tool calls <strong>are</strong>
+hooked, with the dispatched session's ID in the payload.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=an-mcp-server-wont-start>An MCP server won't start<a href=#an-mcp-server-wont-start class=hash-link aria-label="Direct link to An MCP server won't start" title="Direct link to An MCP server won't start" translate=no>​</a></h2>
+<ul>
+<li class="">MCP init is bounded, so a wedged server cannot blank the app. Failures are
+reported in the sidebar with their error.</li>
+<li class="">Check that the <code>command</code> exists and that <code>args</code> are separate entries, not one
+space-joined string.</li>
+<li class="">For HTTP servers, an <code>Authorization</code> header whose value resolves to an empty
+string is <strong>dropped</strong> — if your token env var is unset, the request goes out
+unauthenticated. Check with <code>[ -n "$GH_PAT" ] && echo set || echo empty</code>.</li>
+<li class="">Raise <code>--timeout</code> for servers that are slow to boot.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=a-channel-server-is-configured-but-silent>A channel server is configured but silent<a href=#a-channel-server-is-configured-but-silent class=hash-link aria-label="Direct link to A channel server is configured but silent" title="Direct link to A channel server is configured but silent" translate=no>​</a></h2>
+<p>Listing a server under <code>mcp</code> is not enough — channels are gated behind an
+explicit opt-in. You need <strong>both</strong>:</p>
+<ol>
+<li class=""><code>--channels server:&lt;name></code> or <code>"channel_enabled": true</code>, and</li>
+<li class="">the server declaring the <code>claude/channel</code> capability at <code>initialize</code>.</li>
+</ol>
+<p>Servers that are live channels are marked <code>channel</code> in the MCP list, which is
+the quickest way to confirm the opt-in took. See
+<a class="" href=/crush/features/channels#opting-in>Channels</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-model-cant-see-a-tool>The model can't see a tool<a href=#the-model-cant-see-a-tool class=hash-link aria-label="Direct link to The model can't see a tool" title="Direct link to The model can't see a tool" translate=no>​</a></h2>
+<p>Three separate things hide a tool:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Cause<th>Fix<tbody><tr><td><code>permissions deny &lt;tool></code><td>Remove it — a denied tool is invisible to the model<tr><td>Per-server <code>--disabled-tools</code> / <code>--enabled-tools</code><td>Adjust the MCP server config<tr><td>The tool is conditionally registered<td>LSP tools need an LSP or <code>auto-lsp</code>; MCP resource/prompt tools need a configured server; <code>question</code> is interactive-only; <code>dispatch_agent</code> and <code>message_agent</code> are main-agent only, and a <a class="" href=/crush/reference/tools#what-dispatched-agents-get>dispatched agent</a> gets a fixed set</table>
+<p><code>crush_info</code> reports what is actually registered right now — ask the agent.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=a-bash-command-is-blocked>A bash command is blocked<a href=#a-bash-command-is-blocked class=hash-link aria-label="Direct link to A bash command is blocked" title="Direct link to A bash command is blocked" translate=no>​</a></h2>
+<p>The <code>bash</code> tool blocks a set of dangerous commands by default. Two distinct
+knobs:</p>
+<ul>
+<li class=""><code>allowed_commands</code> / <code>--allow-commands</code> removes commands from the
+<strong>exact-command</strong> blocklist. It does <em>not</em> unlock package-manager argument
+blocks like <code>apt install</code>.</li>
+<li class=""><code>allow_all_commands</code> / <code>--allow-all-commands</code> removes everything, including
+those.</li>
+</ul>
+<p>And note that allowing a command does <strong>not</strong> auto-approve it — you still get
+the permission prompt unless you are in yolo mode. See
+<a class="" href=/crush/configuration/permissions#blocked-commands>Permissions</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=a-skill-isnt-showing-up>A skill isn't showing up<a href=#a-skill-isnt-showing-up class=hash-link aria-label="Direct link to A skill isn't showing up" title="Direct link to A skill isn't showing up" translate=no>​</a></h2>
+<ul>
+<li class="">The <code>name</code> must be lowercase alphanumeric with single hyphens.</li>
+<li class=""><code>disable-model-invocation: true</code> hides it from the model on purpose; it is
+still user-invocable.</li>
+<li class=""><code>option disable-skill &lt;name></code> hides it entirely.</li>
+<li class="">The <code>/skills</code> dialog lists every discovered skill and reports parse failures
+with the error and its source, rather than dropping them silently.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=lsp-diagnostics-are-stale>LSP diagnostics are stale<a href=#lsp-diagnostics-are-stale class=hash-link aria-label="Direct link to LSP diagnostics are stale" title="Direct link to LSP diagnostics are stale" translate=no>​</a></h2>
+<p>Ask the agent to restart the server (<code>lsp_restart</code>), and turn on
+<code>option debug-lsp true</code> if it keeps happening.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=two-clients-disagree-about-yolo-mode>Two clients disagree about yolo mode<a href=#two-clients-disagree-about-yolo-mode class=hash-link aria-label="Direct link to Two clients disagree about yolo mode" title="Direct link to Two clients disagree about yolo mode" translate=no>​</a></h2>
+<p><code>--yolo</code> and <code>--debug</code> are <strong>first-wins</strong> in a shared workspace. The first
+client to create a workspace fixes them; a later client at the same <code>--cwd</code>
+does not change them. A debug log line records the mismatch. See
+<a class="" href=/crush/features/server-and-workspaces#first-wins-flags>first-wins flags</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=dispatched-agents-misbehave>Dispatched agents misbehave<a href=#dispatched-agents-misbehave class=hash-link aria-label="Direct link to Dispatched agents misbehave" title="Direct link to Dispatched agents misbehave" translate=no>​</a></h2>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p><a class="" href=/crush/agents/overview>Multi-agent dispatch</a> has its own
+<a class="" href=/crush/agents/troubleshooting>troubleshooting page</a>. The most common symptoms:</div></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Symptom<th>Short answer<tbody><tr><td><code>dispatch unavailable: … is not a git repository</code><td>Dispatch needs a git repository. The failure is remembered until Crush restarts<tr><td>A dispatched agent's work vanished<td>Exit keeps dispatch work: only dispatches you applied or dismissed, or ones that produced no work, are removed with their branches, and a crash is reconciled at the next launch the same way. The worktrees live under <code>&lt;data dir>/worktrees/&lt;repo-key>/</code>, not in your checkout — <code>crush dispatch list</code> finds them. If work still vanished, it was removed by hand or with <code>crush dispatch prune --force</code>; committed work may survive as unreachable commits<tr><td>An agent shows <strong>Killed</strong><td>The wander kill stopped it: ignored todo nudges, stalled todos, a hard timeout, or a tool loop. See <a class="" href=/crush/agents/todo-enforcement>Todo enforcement</a><tr><td><code>dispatch at capacity: …</code><td>At most <code>options.dispatch.max_concurrent</code> (4) run at once. Wait, cancel one, or <code>option dispatch-max-concurrent 8</code><tr><td>The main agent keeps getting todo reminders<td>The todo ladder nudges every agent with a <code>todos</code> tool and kills only dispatched ones. <code>option todo-nudge false</code> turns the nudges off<tr><td><code>@tester …</code> went to the main agent<td>The handle must be the very first token (optionally followed by <code>: , . ? !</code>) and match an agent dispatched from this session; see <a class="" href=/crush/agents/handles-and-inspect#handles>Handles</a><tr><td>No <code>dispatch_agent</code> tool<td>It is interactive-only: <code>crush run</code> never offers it. Or the <code>worker</code> is disabled, or the tools are denied<tr><td>A dispatched agent ran a command a hook should have blocked<td>Dispatched agents' tool calls are hooked; check the matcher against the tool name in the hook payload<tr><td><code>dispatch to external agent "…" failed: …</code><td>See <a class="" href=/crush/agents/troubleshooting#external-agents>External agents</a></table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=reporting-a-bug>Reporting a bug<a href=#reporting-a-bug class=hash-link aria-label="Direct link to Reporting a bug" title="Direct link to Reporting a bug" translate=no>​</a></h2>
+<ul>
+<li class="">Upstream Crush behaviour →
+<a href=https://github.com/charmbracelet/crush/issues target=_blank rel="noopener noreferrer" class="">charmbracelet/crush/issues</a></li>
+<li class="">A <a class="" href=/crush/introduction#about-this-fork>fork addition</a> →
+<a href=https://github.com/brunokrugel/crush/issues target=_blank rel="noopener noreferrer" class="">brunokrugel/crush/issues</a></li>
+<li class="">A missing or stale provider/model →
+<a href=https://github.com/charmbracelet/catwalk target=_blank rel="noopener noreferrer" class="">Catwalk</a></li>
+</ul>
+<p>Include the output of <code>crush logs --tail 200</code> and, if config is involved,
+<code>crush dirs</code>.</div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/brunokrugel/crush/edit/fork/docs-site/docs/reference/troubleshooting.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"><span class=theme-last-updated>Last updated<!-- --> on <b><time datetime=2026-11-10T12:40:44.000Z itemprop=dateModified>Nov 10, 2026</time></b></span></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/crush/reference/logging><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>Logging</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#copy-and-paste-isnt-working class="table-of-contents__link toc-highlight">Copy and paste isn't working</a><li><a href=#my-config-isnt-being-picked-up class="table-of-contents__link toc-highlight">My config isn't being picked up</a><li><a href=#a-hook-seems-to-do-nothing class="table-of-contents__link toc-highlight">A hook seems to do nothing</a><li><a href=#an-mcp-server-wont-start class="table-of-contents__link toc-highlight">An MCP server won't start</a><li><a href=#a-channel-server-is-configured-but-silent class="table-of-contents__link toc-highlight">A channel server is configured but silent</a><li><a href=#the-model-cant-see-a-tool class="table-of-contents__link toc-highlight">The model can't see a tool</a><li><a href=#a-bash-command-is-blocked class="table-of-contents__link toc-highlight">A bash command is blocked</a><li><a href=#a-skill-isnt-showing-up class="table-of-contents__link toc-highlight">A skill isn't showing up</a><li><a href=#lsp-diagnostics-are-stale class="table-of-contents__link toc-highlight">LSP diagnostics are stale</a><li><a href=#two-clients-disagree-about-yolo-mode class="table-of-contents__link toc-highlight">Two clients disagree about yolo mode</a><li><a href=#dispatched-agents-misbehave class="table-of-contents__link toc-highlight">Dispatched agents misbehave</a><li><a href=#reporting-a-bug class="table-of-contents__link toc-highlight">Reporting a bug</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer footer--dark"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Docs</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/getting-started/installation>Installation</a><li class=footer__item><a class=footer__link-item href=/crush/getting-started/quickstart>Quickstart</a><li class=footer__item><a class=footer__link-item href=/crush/configuration/crushrc>Configuration</a><li class=footer__item><a class=footer__link-item href=/crush/reference/cli>CLI reference</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Features</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/features/mcp>MCP</a><li class=footer__item><a class=footer__link-item href=/crush/features/channels>Channels</a><li class=footer__item><a class=footer__link-item href=/crush/features/skills>Skills</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Project</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class=footer__link-item>This fork<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/crush target=_blank rel="noopener noreferrer" class=footer__link-item>Upstream Crush<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/catwalk target=_blank rel="noopener noreferrer" class=footer__link-item>Catwalk<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://charm.land target=_blank rel="noopener noreferrer" class=footer__link-item>Charm<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Crush is a Charm project, licensed FSL-1.1-MIT. Docs for the brunokrugel/crush fork, built with Docusaurus.</div></div></div></footer></div></body>

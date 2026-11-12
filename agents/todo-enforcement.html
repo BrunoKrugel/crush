@@ -1,0 +1,340 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-agents/todo-enforcement" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.2"><title data-rh=true>Todo enforcement and wander kill | Crush</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true name=twitter:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true property=og:url content=https://brunokrugel.github.io/crush/agents/todo-enforcement /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="Todo enforcement and wander kill | Crush"/><meta data-rh=true name=description content="How Crush nudges agents that work without a todo list, the opt-in hard gate, and the wander kill that stops dispatched agents that ignore both."/><meta data-rh=true property=og:description content="How Crush nudges agents that work without a todo list, the opt-in hard gate, and the wander kill that stops dispatched agents that ignore both."/><link data-rh=true rel=icon href=/crush/img/favicon.ico /><link data-rh=true rel=canonical href=https://brunokrugel.github.io/crush/agents/todo-enforcement /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/agents/todo-enforcement hreflang=en /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/agents/todo-enforcement hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://brunokrugel.github.io/crush/agents/todo-enforcement","name":"Todo enforcement","position":1}]}</script><link rel=apple-touch-icon href=/crush/img/touchicon_180.png><link rel=stylesheet href=/crush/assets/css/styles.e14b0f2f.css /><script src=/crush/assets/js/runtime~main.b8734afa.js defer></script><script src=/crush/assets/js/main.b8358137.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-7c2")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/crush/><b class="navbar__title text--truncate">Crush</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/crush/introduction>Docs</a><a class="navbar__item navbar__link" href=/crush/configuration/crushrc>Configuration</a><a class="navbar__item navbar__link" href=/crush/reference/cli>Reference</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/introduction><span class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/fork><span class=linkLabel_WmDU>What this fork adds</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/getting-started/installation><span class=categoryLinkLabel_W154>Getting started</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/installation><span class=linkLabel_WmDU>Installation</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/quickstart><span class=linkLabel_WmDU>Quickstart</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/providers-and-api-keys><span class=linkLabel_WmDU>Providers and API keys</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/configuration/crushrc><span class=categoryLinkLabel_W154>Configuration</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/crushrc><span class=linkLabel_WmDU>crushrc (Bash)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/command-reference><span class=linkLabel_WmDU>Command reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/json><span class=linkLabel_WmDU>crush.json (JSON)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/providers><span class=linkLabel_WmDU>Providers and models</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/permissions><span class=linkLabel_WmDU>Permissions and safety</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/context-and-ignore><span class=linkLabel_WmDU>Context and ignore files</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/environment><span class=linkLabel_WmDU>Environment and startup</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/features/lsp><span class=categoryLinkLabel_W154>Features</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/lsp><span class=linkLabel_WmDU>Language servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/mcp><span class=linkLabel_WmDU>MCP servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/channels><span class=linkLabel_WmDU>Channels</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/skills><span class=linkLabel_WmDU>Skills</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/hooks><span class=linkLabel_WmDU>Hooks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/auto-mode><span class=linkLabel_WmDU>Auto mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/scheduled-tasks><span class=linkLabel_WmDU>Scheduled tasks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/semantic-search><span class=linkLabel_WmDU>Semantic search</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/sessions><span class=linkLabel_WmDU>Sessions and projects</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/memory><span class=linkLabel_WmDU>Memory</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/forking><span class=linkLabel_WmDU>Forking</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/goal-mode><span class=linkLabel_WmDU>Goal mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/server-and-workspaces><span class=linkLabel_WmDU>Server and workspaces</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/notifications><span class=linkLabel_WmDU>Desktop notifications</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/crush/agents/overview><span class=categoryLinkLabel_W154>Multi-agent</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/overview><span class=linkLabel_WmDU>Overview</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/tutorial><span class=linkLabel_WmDU>Tutorial</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/handles-and-inspect><span class=linkLabel_WmDU>Handles and inspect</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/crush/agents/todo-enforcement><span class=linkLabel_WmDU>Todo enforcement</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/configuration><span class=linkLabel_WmDU>Configuration</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/team><span class=linkLabel_WmDU>Team</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/architecture><span class=linkLabel_WmDU>Architecture</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/a2a-protocol><span class=linkLabel_WmDU>A2A protocol</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/design-decisions><span class=linkLabel_WmDU>Design decisions</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/reference/cli><span class=categoryLinkLabel_W154>Reference</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/cli><span class=linkLabel_WmDU>CLI reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/tools><span class=linkLabel_WmDU>Tool reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/keybindings><span class=linkLabel_WmDU>Keybindings</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/environment-variables><span class=linkLabel_WmDU>Environment variables</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/logging><span class=linkLabel_WmDU>Logging</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/crush/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Multi-agent</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>Todo enforcement</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Todo enforcement and wander kill</h1></header>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p>The todo enforcement ladder and wander kill exist only in this fork. Upstream
+Crush adds a soft reminder that the todo list is empty, and tells the model it
+may ignore it. Nothing upstream escalates.</div></div>
+<p>Every progress surface for an agent reads its session's todo list: the
+current-todo line and <code>done/total</code> ratio on the
+<a class="" href=/crush/agents/handles-and-inspect>agent block</a>, the status next to a handle in the
+<code>@</code> completions, and the progress events on the <a class="" href=/crush/agents/a2a-protocol>A2A stream</a>.
+An agent that never writes a todo list shows none of these. You see a spinner
+and nothing else.</p>
+<p>The ladder fixes that in three steps. It nudges first, can gate mutating tools
+if you turn that on, and kills a <strong>dispatched</strong> run that keeps ignoring it. It
+is on by default and configured under <code>options.todo_enforcement</code> (the
+<code>option todo-*</code> and <code>option dispatch-*</code> keys in <code>crushrc</code>) and per agent in a
+definition's <code>todos</code> and <code>kill</code> blocks. See the
+<a class="" href=/crush/agents/configuration#todo-enforcement-settings>configuration reference</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=who-it-applies-to>Who it applies to<a href=#who-it-applies-to class=hash-link aria-label="Direct link to Who it applies to" title="Direct link to Who it applies to" translate=no>​</a></h2>
+<p>An agent gets the ladder only if its tool set includes <code>todos</code>: every rung
+asks the model to call that tool, so an agent that cannot gets no nudges and
+no gate. The kill rung is wired only for dispatched runs, because only a
+dispatched run has a parent that can re-dispatch it; every other agent tops
+out at the escalating nudge.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Agent<th>Has <code>todos</code><th>Nudges<th>Hard gate<th>Can be killed<tbody><tr><td>Coder (the main agent)<td>Yes<td>Yes<td>When on<td><strong>No</strong> — nudged, never canceled<tr><td>Plan (plan mode)<td>No<td>No<td>No<td>No<tr><td>Task (the <code>agent</code> tool's sub-agent)<td>No<td>No<td>No<td>No<tr><td><a class="" href=/crush/agents/overview>Dispatched agents</a> on the <code>worker</code> definition, or any dispatch agent whose tools include <code>todos</code><td>Yes<td>Yes<td>When on<td>Yes, for every reason below<tr><td>A dispatch agent you define without <code>todos</code> (<code>--tools @read</code>)<td>No<td>No<td>No<td>Only by the watchdog: <code>stalled todos</code> cannot fire, <code>hard timeout</code> and <code>tool loop</code> can<tr><td><code>agentic_fetch</code>, <a class="" href=/crush/agents/configuration#external-agents>external agents</a><td>No<td>No<td>No<td>External: <code>hard timeout</code> and <code>idle timeout</code> only</table>
+<p>Denying <code>todos</code> with <code>permissions deny todos</code> removes the ladder from every
+agent.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-ladder>The ladder<a href=#the-ladder class=hash-link aria-label="Direct link to The ladder" title="Direct link to The ladder" translate=no>​</a></h2>
+<p>The ladder counts tool calls in <strong>windows</strong>. A run is one turn: your prompt and
+everything the agent does until it stops. A window <em>trips</em> when the run has no
+todo activity and either of these is true:</p>
+<ul>
+<li class=""><code>nudge_threshold</code> tool calls (default <strong>4</strong>) have been made since the run
+started or since the last nudge, or</li>
+<li class="">any <strong>mutating</strong> tool call has been made since then. One call is enough.</li>
+</ul>
+<p>Each trip moves the run one rung up, and the counters reset, so the next rung
+needs a whole new window.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Rung<th>When<th>What happens<tbody><tr><td>0. Prompt mandate<td>Dispatched agents only, from the start<td>The dispatch system prompt tells the agent to record its plan with <code>todos</code> before its first mutating call<tr><td>1. Nudge<td>First trip<td>A nudge is added before the model's next step<tr><td>2. Escalating nudge<td>Each further trip, up to the cap<td>A sterner nudge that warns of escalation<tr><td>3. Kill (<code>ignored nudges</code>)<td>Dispatched runs only: the trip after <code>kill_after_nudges</code> nudges have been given<td>The run is canceled</table>
+<p>How many nudges a run gets depends on whether the kill is wired:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Run<th><code>kill_after_nudges</code><th>Nudges before the ladder stops<tbody><tr><td>Dispatched<td><code>2</code> (default)<td>Nudge, escalating nudge, then the kill on the third trip<tr><td>Dispatched<td><code>1</code><td>Nudge, then the kill on the second trip. The escalating nudge is never sent<tr><td>Dispatched<td><code>N</code> ≥ 3<td><code>N</code> nudges — the first is the plain one, the rest escalate — then the kill. Values are honored as written, not clamped<tr><td>Dispatched<td><code>0</code> or <code>off</code><td>Nudge, escalating nudge, then nothing more for the rest of the run<tr><td>Main agent<td>any<td>Nudge, escalating nudge, then nothing more. <code>kill_after_nudges</code> has no effect</table>
+<p>With the defaults (<code>nudge_threshold: 4</code>, <code>kill_after_nudges: 2</code>), a
+dispatched run with no todos is nudged after 4 tool calls, nudged again after
+4 more, and killed after 4 more. A mutating call trips a window on its own,
+so three file writes in a row without todos go through all three rungs.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-nudge-text>The nudge text<a href=#the-nudge-text class=hash-link aria-label="Direct link to The nudge text" title="Direct link to The nudge text" translate=no>​</a></h3>
+<p>The nudges are fixed strings:</p>
+<blockquote>
+<p>You have made tool calls without recording a todo list. Call the todos tool
+now to write down your plan and keep it current as you work; your progress
+surfaces depend on it.</p>
+</blockquote>
+<blockquote>
+<p>You are still working without a todo list after being reminded. Call the
+todos tool immediately, before any further tool calls. Ignoring this again
+will escalate.</p>
+</blockquote>
+<p>Each nudge is saved on the session as a <strong>user-role message</strong>. It appears in
+the transcript like something you typed, and it stays in the history for later
+turns.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-counts-as-todo-activity>What counts as todo activity<a href=#what-counts-as-todo-activity class=hash-link aria-label="Direct link to What counts as todo activity" title="Direct link to What counts as todo activity" translate=no>​</a></h2>
+<p>The ladder stands down for the rest of the run as soon as either of these is
+true:</p>
+<ul>
+<li class="">the agent calls the <code>todos</code> tool. The call counts the moment the model makes
+it, whatever the result;</li>
+<li class="">the session <strong>already had a todo list</strong> when the turn started. Any todos
+count, including a list where every item is completed.</li>
+</ul>
+<p>Every other tool call counts toward the window: read-only calls, failed calls
+and calls you denied.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-counts-as-mutating>What counts as mutating<a href=#what-counts-as-mutating class=hash-link aria-label="Direct link to What counts as mutating" title="Direct link to What counts as mutating" translate=no>​</a></h3>
+<p>The same classification drives the nudge counter and the hard gate:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Tool<th>Mutating?<tbody><tr><td><code>write</code>, <code>edit</code>, <code>multiedit</code>, <code>download</code>, <code>lsp_rename</code>, <code>lsp_replace_symbol</code><td>Always<tr><td><code>bash</code><td>Unless the command parses as read-only (<code>git status</code>, <code>ls</code>, <code>cat</code>, <code>grep</code> and the like). An unparseable command counts as mutating<tr><td>MCP tools<td>Unless the server marks the tool with a read-only hint<tr><td>Everything else (<code>view</code>, <code>glob</code>, <code>grep</code>, <code>ls</code>, <code>lsp_*</code> lookups, <code>fetch</code>, <code>question</code>, …)<td>Never</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=hard-gate>Hard gate<a href=#hard-gate class=hash-link aria-label="Direct link to Hard gate" title="Direct link to Hard gate" translate=no>​</a></h2>
+<p>Off by default. With <code>hard_gate: true</code> (<code>option todo-hard-gate on</code>), the
+mutating tools refuse to run until the session has a todo list. The model
+gets this tool error:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">no todo list exists for this session; call the todos tool to record your plan before mutating anything (todo enforcement hard gate)</span><br/></div></code></pre></div></div>
+<p>The gate reads the session on every call, so once the agent writes its todos,
+its next mutating call goes through. The gate does not depend on <code>enabled</code>:
+<code>enabled: false, hard_gate: true</code> gives you the gate with no nudges, and
+therefore no <code>ignored nudges</code> kill, because that rung only exists inside the
+nudging.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=wander-kill>Wander kill<a href=#wander-kill class=hash-link aria-label="Direct link to Wander kill" title="Direct link to Wander kill" translate=no>​</a></h2>
+<p>A wander kill cancels a dispatched run deterministically and records why.
+The kill travels as an A2A <code>tasks/cancel</code> carrying the reason, so the block
+and the result show it within a few seconds, whatever the transport.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Reason (<code>killed_reason</code>)<th>Trips when<th>Setting<tbody><tr><td><code>ignored nudges</code><td>The window after the last allowed nudge completes with no todo activity<td><code>kill_after_nudges</code><tr><td><code>stalled todos</code><td>The todo list has not changed for <code>stall_window</code> while the run keeps going. The watchdog arms as soon as the run has a todo list<td><code>stall_window</code><tr><td><code>hard timeout</code><td>The run has lasted <code>hard_timeout</code>, waiting on a question or a permission included<td><code>hard_timeout</code><tr><td><code>tool loop</code><td>In the last 10 steps, the same tool call with the same input and output appears more than 5 times<td>Not configurable<tr><td><code>canceled by user</code><td>You pressed <kbd>ctrl+x</kbd>, or the main agent called <code>cancel_dispatch</code><td>—<tr><td><code>crush exited</code><td>Crush shut down while the run was live<td>—<tr><td><code>idle timeout</code><td>An external agent's stream stayed silent past <code>transport.idle_timeout</code><td>External agents only</table>
+<p><code>stall_window</code> and <code>hard_timeout</code> are durations — bare seconds, a string such
+as <code>"30m"</code>, or <code>"off"</code> — and default to off. They are watchdogs that run
+alongside a dispatched run and do not depend on <code>enabled</code>. A separate
+A2A-level backstop, <code>inactivity_timeout</code> (seconds, JSON only, default off),
+ends a served run that yields <strong>no events at all</strong> for that long; it ends the
+run <code>failed</code> with the reason rather than <code>killed</code>, since it catches runs the
+watchdogs cannot see.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-the-main-agent-receives>What the main agent receives<a href=#what-the-main-agent-receives class=hash-link aria-label="Direct link to What the main agent receives" title="Direct link to What the main agent receives" translate=no>​</a></h3>
+<p>When a dispatched agent is killed, the main agent gets a hidden follow-up turn.
+It says the workspace is preserved and asks the main agent to re-dispatch or
+dismiss, followed by the result:</p>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"dispatch_id"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"7f3c…"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"handle"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"tester"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"agent"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"worker"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"branch"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"crush-dispatch-7f3c…"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"workspace_path"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"/home/you/project/.crush/worktrees/2d805a3d4cdf/crush-dispatch-7f3c…"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"session_id"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"…"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"status"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"killed"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"key_findings"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"&lt;the agent's last assistant message>"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"diff_summary"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"&lt;per-file stat, then the diff, cut at 250 lines>"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"killed_reason"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"ignored nudges"</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+<p>The agent block shows a <strong>Killed</strong> line with the reason, then the findings and
+the diff. The workspace and branch stay for salvage until you apply or
+dismiss them.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=examples>Examples<a href=#examples class=hash-link aria-label="Direct link to Examples" title="Direct link to Examples" translate=no>​</a></h2>
+<p>Each pair sets the same thing. The <code>crushrc</code> keys write
+<code>options.todo_enforcement</code>; the two formats merge when both files exist.</p>
+<p>Keep the nudges, turn the kill off:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">option todo-kill-after-nudges off</span><br/></div></code></pre></div></div>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"$schema"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"https://charm.land/crush.json"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"options"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"todo_enforcement"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"kill_after_nudges"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"off"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+<p>Nudge less often during read-heavy work, and give a dispatched agent a hard
+stop at half an hour:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">option todo-nudge-threshold </span><span class="token number">8</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">option dispatch-timeout 30m</span><br/></div></code></pre></div></div>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"$schema"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"https://charm.land/crush.json"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"options"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"todo_enforcement"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"nudge_threshold"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token number">8</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"hard_timeout"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"30m"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+<p>Strict: no nudges, but mutating tools are blocked until a todo list exists:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">option todo-nudge </span><span class="token boolean">false</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">option todo-hard-gate on</span><br/></div></code></pre></div></div>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"$schema"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"https://charm.land/crush.json"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"options"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"todo_enforcement"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"enabled"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token boolean">false</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"hard_gate"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token boolean">true</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+<p>Off entirely. With <code>enabled</code> and <code>hard_gate</code> both false, the ladder does not
+run (the watchdogs still honor <code>stall_window</code> and <code>hard_timeout</code> if set):</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">option todo-nudge </span><span class="token boolean">false</span><br/></div></code></pre></div></div>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"$schema"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"https://charm.land/crush.json"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"options"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"todo_enforcement"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"enabled"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token boolean">false</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+<p>Per agent, on the definition — a patient worker and a quiet task agent:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">agent </span><span class="token builtin class-name" style="color:rgb(189, 147, 249)">set</span><span class="token plain"> worker --nudge-after </span><span class="token number">8</span><span class="token plain"> --kill-after-nudges </span><span class="token number">3</span><span class="token plain"> </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--stall</span><span class="token plain"> 10m</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">agent </span><span class="token builtin class-name" style="color:rgb(189, 147, 249)">set</span><span class="token plain"> task </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--nudge</span><span class="token plain"> </span><span class="token boolean">false</span><br/></div></code></pre></div></div>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"$schema"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"https://charm.land/crush.json"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"agents"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"worker"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"todos"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"nudge_after_tool_calls"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token number">8</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"kill"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"after_ignored_nudges"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token number">3</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"stall"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"10m"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"task"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"todos"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"nudge"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token boolean">false</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+<p>The definition's <code>todos</code> and <code>kill</code> blocks layer over <code>options.todo_enforcement</code>
+field by field; <code>agents.&lt;id>.todo_enforcement</code> is accepted as a legacy alias
+for the pair. See <a class="" href=/crush/agents/configuration#per-agent-overrides>Per-agent overrides</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=diagnosing-a-kill>Diagnosing a kill<a href=#diagnosing-a-kill class=hash-link aria-label="Direct link to Diagnosing a kill" title="Direct link to Diagnosing a kill" translate=no>​</a></h2>
+<p>A kill writes a warning to the <a class="" href=/crush/reference/logging>log</a>:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Log line<th>Source<tbody><tr><td><code>Todo enforcement killed the run</code> with <code>reason</code><td>The <code>ignored nudges</code> rung<tr><td><code>Dispatch run killed by watchdog</code> with <code>reason</code><td><code>stalled todos</code> or <code>hard timeout</code></table>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">crush logs </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--tail</span><span class="token plain"> </span><span class="token number">500</span><span class="token plain"> </span><span class="token operator">|</span><span class="token plain"> </span><span class="token function" style="color:rgb(80, 250, 123)">grep</span><span class="token plain"> </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">-i</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">'killed'</span><br/></div></code></pre></div></div>
+<p>More symptoms are covered in
+<a class="" href=/crush/agents/troubleshooting>Multi-agent troubleshooting</a>.</div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/brunokrugel/crush/edit/fork/docs-site/docs/agents/todo-enforcement.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"><span class=theme-last-updated>Last updated<!-- --> on <b><time datetime=2026-11-10T12:40:44.000Z itemprop=dateModified>Nov 10, 2026</time></b></span></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/crush/agents/handles-and-inspect><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>Handles and inspect</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/crush/agents/configuration><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>Configuration</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#who-it-applies-to class="table-of-contents__link toc-highlight">Who it applies to</a><li><a href=#the-ladder class="table-of-contents__link toc-highlight">The ladder</a><ul><li><a href=#the-nudge-text class="table-of-contents__link toc-highlight">The nudge text</a></ul><li><a href=#what-counts-as-todo-activity class="table-of-contents__link toc-highlight">What counts as todo activity</a><ul><li><a href=#what-counts-as-mutating class="table-of-contents__link toc-highlight">What counts as mutating</a></ul><li><a href=#hard-gate class="table-of-contents__link toc-highlight">Hard gate</a><li><a href=#wander-kill class="table-of-contents__link toc-highlight">Wander kill</a><ul><li><a href=#what-the-main-agent-receives class="table-of-contents__link toc-highlight">What the main agent receives</a></ul><li><a href=#examples class="table-of-contents__link toc-highlight">Examples</a><li><a href=#diagnosing-a-kill class="table-of-contents__link toc-highlight">Diagnosing a kill</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer footer--dark"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Docs</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/getting-started/installation>Installation</a><li class=footer__item><a class=footer__link-item href=/crush/getting-started/quickstart>Quickstart</a><li class=footer__item><a class=footer__link-item href=/crush/configuration/crushrc>Configuration</a><li class=footer__item><a class=footer__link-item href=/crush/reference/cli>CLI reference</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Features</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/features/mcp>MCP</a><li class=footer__item><a class=footer__link-item href=/crush/features/channels>Channels</a><li class=footer__item><a class=footer__link-item href=/crush/features/skills>Skills</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Project</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class=footer__link-item>This fork<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/crush target=_blank rel="noopener noreferrer" class=footer__link-item>Upstream Crush<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/catwalk target=_blank rel="noopener noreferrer" class=footer__link-item>Catwalk<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://charm.land target=_blank rel="noopener noreferrer" class=footer__link-item>Charm<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Crush is a Charm project, licensed FSL-1.1-MIT. Docs for the brunokrugel/crush fork, built with Docusaurus.</div></div></div></footer></div></body>

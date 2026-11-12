@@ -1,0 +1,398 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-agents/design-decisions" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.2"><title data-rh=true>Design decisions | Crush</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true name=twitter:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true property=og:url content=https://brunokrugel.github.io/crush/agents/design-decisions /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="Design decisions | Crush"/><meta data-rh=true name=description content="The decision record for multi-agent dispatch and A2A — every dated decision, the reasoning behind the 2026-10-04 re-base, its tracking tickets, and the decisions it superseded."/><meta data-rh=true property=og:description content="The decision record for multi-agent dispatch and A2A — every dated decision, the reasoning behind the 2026-10-04 re-base, its tracking tickets, and the decisions it superseded."/><link data-rh=true rel=icon href=/crush/img/favicon.ico /><link data-rh=true rel=canonical href=https://brunokrugel.github.io/crush/agents/design-decisions /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/agents/design-decisions hreflang=en /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/agents/design-decisions hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://brunokrugel.github.io/crush/agents/design-decisions","name":"Design decisions","position":1}]}</script><link rel=apple-touch-icon href=/crush/img/touchicon_180.png><link rel=stylesheet href=/crush/assets/css/styles.e14b0f2f.css /><script src=/crush/assets/js/runtime~main.b8734afa.js defer></script><script src=/crush/assets/js/main.b8358137.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-7c2")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/crush/><b class="navbar__title text--truncate">Crush</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/crush/introduction>Docs</a><a class="navbar__item navbar__link" href=/crush/configuration/crushrc>Configuration</a><a class="navbar__item navbar__link" href=/crush/reference/cli>Reference</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/introduction><span class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/fork><span class=linkLabel_WmDU>What this fork adds</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/getting-started/installation><span class=categoryLinkLabel_W154>Getting started</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/installation><span class=linkLabel_WmDU>Installation</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/quickstart><span class=linkLabel_WmDU>Quickstart</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/providers-and-api-keys><span class=linkLabel_WmDU>Providers and API keys</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/configuration/crushrc><span class=categoryLinkLabel_W154>Configuration</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/crushrc><span class=linkLabel_WmDU>crushrc (Bash)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/command-reference><span class=linkLabel_WmDU>Command reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/json><span class=linkLabel_WmDU>crush.json (JSON)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/providers><span class=linkLabel_WmDU>Providers and models</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/permissions><span class=linkLabel_WmDU>Permissions and safety</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/context-and-ignore><span class=linkLabel_WmDU>Context and ignore files</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/environment><span class=linkLabel_WmDU>Environment and startup</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/features/lsp><span class=categoryLinkLabel_W154>Features</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/lsp><span class=linkLabel_WmDU>Language servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/mcp><span class=linkLabel_WmDU>MCP servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/channels><span class=linkLabel_WmDU>Channels</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/skills><span class=linkLabel_WmDU>Skills</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/hooks><span class=linkLabel_WmDU>Hooks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/auto-mode><span class=linkLabel_WmDU>Auto mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/scheduled-tasks><span class=linkLabel_WmDU>Scheduled tasks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/semantic-search><span class=linkLabel_WmDU>Semantic search</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/sessions><span class=linkLabel_WmDU>Sessions and projects</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/memory><span class=linkLabel_WmDU>Memory</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/forking><span class=linkLabel_WmDU>Forking</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/goal-mode><span class=linkLabel_WmDU>Goal mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/server-and-workspaces><span class=linkLabel_WmDU>Server and workspaces</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/notifications><span class=linkLabel_WmDU>Desktop notifications</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/crush/agents/overview><span class=categoryLinkLabel_W154>Multi-agent</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/overview><span class=linkLabel_WmDU>Overview</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/tutorial><span class=linkLabel_WmDU>Tutorial</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/handles-and-inspect><span class=linkLabel_WmDU>Handles and inspect</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/todo-enforcement><span class=linkLabel_WmDU>Todo enforcement</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/configuration><span class=linkLabel_WmDU>Configuration</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/team><span class=linkLabel_WmDU>Team</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/architecture><span class=linkLabel_WmDU>Architecture</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/a2a-protocol><span class=linkLabel_WmDU>A2A protocol</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/crush/agents/design-decisions><span class=linkLabel_WmDU>Design decisions</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/reference/cli><span class=categoryLinkLabel_W154>Reference</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/cli><span class=linkLabel_WmDU>CLI reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/tools><span class=linkLabel_WmDU>Tool reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/keybindings><span class=linkLabel_WmDU>Keybindings</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/environment-variables><span class=linkLabel_WmDU>Environment variables</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/logging><span class=linkLabel_WmDU>Logging</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/crush/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Multi-agent</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>Design decisions</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Design decisions</h1></header>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p>Multi-agent dispatch and the A2A layer are additions in the
+this fork.</div></div>
+<p>This page is the decision record for dispatched agents. It is written for
+users who want to know why things work the way they do, and for
+contributors picking up the work. It merges the decision logs of two design
+documents:</p>
+<ul>
+<li class=""><strong>The A2A coordination PRD.</strong> This covers the protocol, transport,
+security and persistence. It is the plan behind the
+<a href=https://github.com/joestump-agent/crush/issues/67 target=_blank rel="noopener noreferrer" class="">A2A Coordination epic (#67)</a>.</li>
+<li class=""><strong>The sub-agent interaction model.</strong> This covers the agent block,
+handles, inspect mode, todo enforcement and cleanup. It is the plan
+behind the
+<a href=https://github.com/joestump-agent/crush/issues/61 target=_blank rel="noopener noreferrer" class="">Worktree Dispatch epic (#61)</a>.</li>
+</ul>
+<p>The first implementation landed in PRs
+<a href=https://github.com/joestump-agent/crush/pull/317 target=_blank rel="noopener noreferrer" class="">#317</a> to
+<a href=https://github.com/joestump-agent/crush/pull/339 target=_blank rel="noopener noreferrer" class="">#339</a>. The review of
+that stack, on 2026-10-04, re-based both documents: <strong>A2A is the runtime
+contract, not a dispatch shim</strong>. Every 2026-10-04 decision below has since
+shipped; the one open follow-up is the peer registry
+(<a href=https://github.com/joestump-agent/crush/issues/334 target=_blank rel="noopener noreferrer" class="">#334</a>), which is what
+lets one Crush run a task on another. What ships today is on
+<a class="" href=/crush/agents/architecture>Architecture</a>; the re-base was tracked on
+<a href=https://github.com/joestump-agent/crush/issues/341 target=_blank rel="noopener noreferrer" class="">#341</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=decision-log>Decision log<a href=#decision-log class=hash-link aria-label="Direct link to Decision log" title="Direct link to Decision log" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Date<th>Decision<th>Source<th>Status<tbody><tr><td>2026-07-13<td>Adopt A2A through the official a2a-go SDK. MCP stays the agent-to-tool protocol.<td>A2A PRD<td>Shipped (SDK v2.5.0)<tr><td>2026-07-13<td>Phase 1 is in-process: one loopback A2A server per dispatch, with in-memory discovery.<td>A2A PRD<td>Shipped; superseded 2026-10-04<tr><td>2026-07-13<td>Dispatch progress streams to the Sidekick dashboard.<td>A2A PRD<td>Superseded 2026-10-02<tr><td>2026-10-02<td>Sidekick is gone. The agent block in the parent chat is the only sub-agent surface.<td>Both<td>Shipped (<a href=https://github.com/joestump-agent/crush/pull/290 target=_blank rel="noopener noreferrer" class="">#290</a>)<tr><td>2026-10-02<td>A leading <code>@handle</code> routes to the agent. Mid-sentence mentions go to the parent, with agent-card attachments.<td>Interaction<td>Shipped (<a href=https://github.com/joestump-agent/crush/issues/313 target=_blank rel="noopener noreferrer" class="">#313</a>)<tr><td>2026-10-02<td>Navigation is <code>ctrl+]</code> to enter or cycle and <code>ctrl+[</code> to go back, with Esc untouched.<td>Interaction<td>Superseded 2026-10-04<tr><td>2026-10-02<td>Sub-agent sessions are inspect-only and never continuable.<td>Interaction<td>Revised 2026-10-04<tr><td>2026-10-02<td>Mid-run message injection, handles and send-down ship in v1.<td>Interaction<td>Shipped (<a href=https://github.com/joestump-agent/crush/issues/312 target=_blank rel="noopener noreferrer" class="">#312</a>)<tr><td>2026-10-02<td>Wander kill is deterministic and configurable, and workspace state is preserved for salvage.<td>Interaction<td>Shipped (<a href=https://github.com/joestump-agent/crush/issues/316 target=_blank rel="noopener noreferrer" class="">#316</a>); scope revised 2026-10-04<tr><td>2026-10-04<td><strong>A2A is the runtime contract.</strong> One path through the A2A client, and no direct-run fallback.<td>Both<td>Shipped (<a href=https://github.com/joestump-agent/crush/issues/347 target=_blank rel="noopener noreferrer" class="">#347</a>)<tr><td>2026-10-04<td><strong>Transport.</strong> One host per Crush process on a 0600 unix socket. TCP is opt-in and requires TLS and auth.<td>A2A PRD<td>Shipped: host (<a href=https://github.com/joestump-agent/crush/issues/346 target=_blank rel="noopener noreferrer" class="">#346</a>), auth (<a href=https://github.com/joestump-agent/crush/issues/357 target=_blank rel="noopener noreferrer" class="">#357</a>), TLS-only TCP listener with client certificates (<a href=https://github.com/joestump-agent/crush/issues/358 target=_blank rel="noopener noreferrer" class="">#358</a>)<tr><td>2026-10-04<td><strong>Agent definitions.</strong> Built-ins stay backwards compatible but can be overridden, extended, or replaced by an external card. crushrc first.<td>Both<td>Shipped: data model <a href=https://github.com/joestump-agent/crush/issues/333 target=_blank rel="noopener noreferrer" class="">#333</a>, crushrc <a href=https://github.com/joestump-agent/crush/issues/431 target=_blank rel="noopener noreferrer" class="">#431</a>, runtime honors definitions <a href=https://github.com/joestump-agent/crush/issues/432 target=_blank rel="noopener noreferrer" class="">#432</a>, <code>agent</code> parameter <a href=https://github.com/joestump-agent/crush/issues/433 target=_blank rel="noopener noreferrer" class="">#433</a>, external cards for dispatch agents <a href=https://github.com/joestump-agent/crush/issues/434 target=_blank rel="noopener noreferrer" class="">#434</a><tr><td>2026-10-04<td><strong>Extensions.</strong> Metadata is allowed but must be declared on the card and statically typed.<td>A2A PRD<td>Shipped (<a href=https://github.com/joestump-agent/crush/issues/359 target=_blank rel="noopener noreferrer" class="">#359</a>)<tr><td>2026-10-04<td><strong>Kill is <code>tasks/cancel</code> with a reason.</strong> Exactly one terminal event per task.<td>A2A PRD<td>Shipped (<a href=https://github.com/joestump-agent/crush/issues/342 target=_blank rel="noopener noreferrer" class="">#342</a>, <a href=https://github.com/joestump-agent/crush/issues/348 target=_blank rel="noopener noreferrer" class="">#348</a>)<tr><td>2026-10-04<td><strong>Kill scope.</strong> Nudges apply to agents that have the todos tool. Kill applies only to dispatched agents.<td>Both<td>Shipped (<a href=https://github.com/joestump-agent/crush/issues/393 target=_blank rel="noopener noreferrer" class="">#393</a>, <a href=https://github.com/joestump-agent/crush/issues/394 target=_blank rel="noopener noreferrer" class="">#394</a>)<tr><td>2026-10-04<td><strong>Per-agent thresholds</strong> live on the definition, with global options as defaults.<td>Both<td>Shipped (<a href=https://github.com/joestump-agent/crush/issues/402 target=_blank rel="noopener noreferrer" class="">#402</a>); the <code>todo_enforcement</code> alias stays accepted<tr><td>2026-10-04<td><strong>Cleanup.</strong> Work is preserved for salvage, with explicit apply and dismiss, ownership leases, and nothing discarded at exit.<td>Both<td>Shipped: leases and exit preservation (<a href=https://github.com/joestump-agent/crush/issues/365 target=_blank rel="noopener noreferrer" class="">#365</a>, <a href=https://github.com/joestump-agent/crush/issues/367 target=_blank rel="noopener noreferrer" class="">#367</a>), apply and dismiss tools (<a href=https://github.com/joestump-agent/crush/issues/368 target=_blank rel="noopener noreferrer" class="">#368</a>), <code>crush dispatch</code> (<a href=https://github.com/joestump-agent/crush/issues/369 target=_blank rel="noopener noreferrer" class="">#369</a>)<tr><td>2026-10-04<td><strong>Handle lifetime is run lifetime.</strong> Handles are scoped to the session tree.<td>Both<td>Shipped (<a href=https://github.com/joestump-agent/crush/issues/399 target=_blank rel="noopener noreferrer" class="">#399</a>): released at run end, 32-byte cap, reserved names<tr><td>2026-10-04<td><strong>Not continuable, for now.</strong> Delegation depth is one level.<td>Both<td>Shipped; the <code>--session</code> and <code>run --continue</code> gaps closed in <a href=https://github.com/joestump-agent/crush/issues/413 target=_blank rel="noopener noreferrer" class="">#413</a><tr><td>2026-10-04<td><strong>Navigation.</strong> <code>ctrl+]</code> enters and cycles. Esc and <code>ctrl+[</code> always leave inspect mode, and Esc never cancels from it.<td>Interaction<td>Shipped (<a href=https://github.com/joestump-agent/crush/issues/404 target=_blank rel="noopener noreferrer" class="">#404</a>)<tr><td>2026-10-04<td><strong>Durable task state</strong> in a SQLite task store.<td>A2A PRD<td>Shipped: the store (<a href=https://github.com/joestump-agent/crush/issues/354 target=_blank rel="noopener noreferrer" class="">#354</a>) and startup reconcile (<a href=https://github.com/joestump-agent/crush/issues/355 target=_blank rel="noopener noreferrer" class="">#355</a>)<tr><td>2026-10-04<td><strong>Steering, kill and progress are A2A operations.</strong><td>Interaction<td>Shipped: typed progress (<a href=https://github.com/joestump-agent/crush/issues/359 target=_blank rel="noopener noreferrer" class="">#359</a>), steering (<a href=https://github.com/joestump-agent/crush/issues/351 target=_blank rel="noopener noreferrer" class="">#351</a>), kill (<a href=https://github.com/joestump-agent/crush/issues/348 target=_blank rel="noopener noreferrer" class="">#348</a>), the TUI as an A2A client (<a href=https://github.com/joestump-agent/crush/issues/421 target=_blank rel="noopener noreferrer" class="">#421</a>)</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-2026-10-04-decisions>The 2026-10-04 decisions<a href=#the-2026-10-04-decisions class=hash-link aria-label="Direct link to The 2026-10-04 decisions" title="Direct link to The 2026-10-04 decisions" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=a2a-is-the-runtime-contract>A2A is the runtime contract<a href=#a2a-is-the-runtime-contract class=hash-link aria-label="Direct link to A2A is the runtime contract" title="Direct link to A2A is the runtime contract" translate=no>​</a></h3>
+<p>The first cut put a protocol boundary around one call: the dispatch prompt
+and its terminal result. Everything else crossed through shared memory. The
+direct path and the A2A path then diverged on kill reasons, loop
+attribution and diff errors, and the SDK's 3-minute client timeout failed
+every long dispatch. With a single path through the A2A client — the path
+that ships — kill, timeout and steering cannot diverge. Process isolation
+(<a href=https://github.com/joestump-agent/crush/issues/72 target=_blank rel="noopener noreferrer" class="">#72</a>), remote workers
+(<a href=https://github.com/joestump-agent/crush/issues/73 target=_blank rel="noopener noreferrer" class="">#73</a>) and third-party
+agents (<a href=https://github.com/joestump-agent/crush/issues/74 target=_blank rel="noopener noreferrer" class="">#74</a>) become a
+choice of transport rather than a re-plumb.
+Tracking: <a href=https://github.com/joestump-agent/crush/issues/347 target=_blank rel="noopener noreferrer" class="">#347</a>, <a href=https://github.com/joestump-agent/crush/issues/343 target=_blank rel="noopener noreferrer" class="">#343</a>, <a href=https://github.com/joestump-agent/crush/issues/392 target=_blank rel="noopener noreferrer" class="">#392</a>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=one-host-per-process-on-a-unix-socket>One host per process, on a unix socket<a href=#one-host-per-process-on-a-unix-socket class=hash-link aria-label="Direct link to One host per process, on a unix socket" title="Direct link to One host per process, on a unix socket" translate=no>​</a></h3>
+<p>Each dispatch used to open an unauthenticated JSON-RPC listener on
+<code>127.0.0.1</code>, which any local process, or a web page, could use to drive a
+write-capable agent. Now one host per process listens on a 0600 unix
+socket in a 0700 directory, so the operating system puts access control
+in place and no network listener opens at all, and middleware rejects
+cross-origin, non-JSON and wrong-<code>Host</code> requests before any dispatch
+work runs. One host per process gives one place to route, authenticate
+and observe. TCP remains available for remote and third-party agents,
+but plain TCP is refused: it needs TLS, auth interceptors and
+<code>securitySchemes</code> on the card.
+Tracking: shipped in <a href=https://github.com/joestump-agent/crush/issues/346 target=_blank rel="noopener noreferrer" class="">#346</a>, <a href=https://github.com/joestump-agent/crush/issues/357 target=_blank rel="noopener noreferrer" class="">#357</a> and <a href=https://github.com/joestump-agent/crush/issues/358 target=_blank rel="noopener noreferrer" class="">#358</a>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=agents-are-definitions>Agents are definitions<a href=#agents-are-definitions class=hash-link aria-label="Direct link to Agents are definitions" title="Direct link to Agents are definitions" translate=no>​</a></h3>
+<p>Before the re-base a dispatched agent was the hard-coded <code>task</code> preset with
+write tools forced on. The only model choice was large or small, and agent
+config could not be loaded at all. Making every agent a definition — an
+Agent Card plus a runtime spec — lets users override built-ins field by
+field and add their own. The built-ins are <code>coder</code>, <code>plan</code>, <code>task</code>, and a new <code>worker</code> for
+dispatch. A <code>runtime: a2a</code> definition swaps in an external agent behind the
+same client, and its artifacts are always treated as untrusted
+(<a href=https://github.com/joestump-agent/crush/issues/434 target=_blank rel="noopener noreferrer" class="">#434</a>: its credential
+is pinned to the card's origin, its output is marked untrusted, and its input
+and permission requests are refused). crushrc is
+the primary format, with JSON kept for compatibility. The <code>crush.json</code> data
+model and its validation landed in
+<a href=https://github.com/joestump-agent/crush/issues/333 target=_blank rel="noopener noreferrer" class="">#333</a>; the runtime has
+honored definitions since #432, and the host publishes one card per
+definition.
+Tracking: <a href=https://github.com/joestump-agent/crush/issues/333 target=_blank rel="noopener noreferrer" class="">#333</a>, <a href=https://github.com/joestump-agent/crush/issues/431 target=_blank rel="noopener noreferrer" class="">#431</a>, <a href=https://github.com/joestump-agent/crush/issues/432 target=_blank rel="noopener noreferrer" class="">#432</a>, <a href=https://github.com/joestump-agent/crush/issues/433 target=_blank rel="noopener noreferrer" class="">#433</a>, <a href=https://github.com/joestump-agent/crush/issues/434 target=_blank rel="noopener noreferrer" class="">#434</a>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=extensions-are-declared-and-statically-typed>Extensions are declared and statically typed<a href=#extensions-are-declared-and-statically-typed class=hash-link aria-label="Direct link to Extensions are declared and statically typed" title="Direct link to Extensions are declared and statically typed" translate=no>​</a></h3>
+<p>The A2A epic originally ruled out custom extensions, yet todo progress
+already traveled in an undeclared metadata key. Instead of pretending
+otherwise, each kind of Crush metadata gets an extension URI, a Go type and
+a JSON schema. Cards list what they emit and accept, and undeclared keys
+are dropped. Two extensions ship today: <code>todos/v1</code> carries dispatch todo
+progress (<a href=https://github.com/joestump-agent/crush/issues/359 target=_blank rel="noopener noreferrer" class="">#359</a>), and
+<code>usage/v1</code> carries the child session's token totals, cost, model and trace
+id on every post-run terminal status
+(<a href=https://github.com/joestump-agent/crush/issues/364 target=_blank rel="noopener noreferrer" class="">#364</a>). The planned
+extension is <code>delegation/v1</code>, carrying origin, chain, depth and budget; it
+subsumes <a href=https://github.com/joestump-agent/crush/issues/332 target=_blank rel="noopener noreferrer" class="">#332</a> and
+<a href=https://github.com/joestump-agent/crush/issues/336 target=_blank rel="noopener noreferrer" class="">#336</a>.</p>
+<p>Tracking: <a href=https://github.com/joestump-agent/crush/issues/364 target=_blank rel="noopener noreferrer" class="">#364</a>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=kill-is-taskscancel-with-a-reason>Kill is <code>tasks/cancel</code> with a reason<a href=#kill-is-taskscancel-with-a-reason class=hash-link aria-label="Direct link to kill-is-taskscancel-with-a-reason" title="Direct link to kill-is-taskscancel-with-a-reason" translate=no>​</a></h3>
+<p>Kills used to cancel the agent behind the executor's back. The executor
+then emitted no terminal event and the SDK stream hung, which a probe
+confirmed. Every kill now goes through <code>CancelTask</code> with a reason: wander
+kill, user cancel and parent shutdown. The executor guarantees exactly one
+terminal event per task: <code>Completed</code>, <code>Failed</code> or <code>Canceled{reason}</code>. That
+way the kill reason reaches the parent on every transport, and the SDK's
+inactivity timeout (<code>inactivity_timeout</code>) catches whatever the in-process
+watchdogs miss.
+Tracking: <a href=https://github.com/joestump-agent/crush/issues/342 target=_blank rel="noopener noreferrer" class="">#342</a>, <a href=https://github.com/joestump-agent/crush/issues/348 target=_blank rel="noopener noreferrer" class="">#348</a>, <a href=https://github.com/joestump-agent/crush/issues/345 target=_blank rel="noopener noreferrer" class="">#345</a>, <a href=https://github.com/joestump-agent/crush/issues/360 target=_blank rel="noopener noreferrer" class="">#360</a>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=kill-scope-and-per-agent-thresholds>Kill scope and per-agent thresholds<a href=#kill-scope-and-per-agent-thresholds class=hash-link aria-label="Direct link to Kill scope and per-agent thresholds" title="Direct link to Kill scope and per-agent thresholds" translate=no>​</a></h3>
+<p>A kill is only safe where something can recover from it. A dispatched
+agent's parent can re-dispatch, but killing the main agent or plan mode
+just cancels your turn. So nudges apply to every agent that has the todos
+tool, agents without it are not nudged, and the kill applies only to
+dispatched agents. Thresholds live on each agent definition, with the
+global options as defaults, settable from crushrc.
+Tracking: <a href=https://github.com/joestump-agent/crush/issues/393 target=_blank rel="noopener noreferrer" class="">#393</a>, <a href=https://github.com/joestump-agent/crush/issues/394 target=_blank rel="noopener noreferrer" class="">#394</a>, <a href=https://github.com/joestump-agent/crush/issues/402 target=_blank rel="noopener noreferrer" class="">#402</a>, <a href=https://github.com/joestump-agent/crush/issues/403 target=_blank rel="noopener noreferrer" class="">#403</a>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=preserve-work-clean-up-explicitly>Preserve work, clean up explicitly<a href=#preserve-work-clean-up-explicitly class=hash-link aria-label="Direct link to Preserve work, clean up explicitly" title="Direct link to Preserve work, clean up explicitly" translate=no>​</a></h3>
+<p>The original exit sweep force-removed every dispatch worktree. That
+included completed work nobody reviewed, killed work the parent was just
+told is preserved, and, as reproduced in review, another Crush instance's
+live worktrees. Under the new rule nothing a human might want is discarded
+automatically. Work leaves only through <code>apply_dispatch</code>,
+<code>dismiss_dispatch</code> or <code>crush dispatch prune</code>. Each workspace carries an
+ownership lease, so instances never reap each other, and startup
+reconciliation handles crashes.
+Tracking: <a href=https://github.com/joestump-agent/crush/issues/365 target=_blank rel="noopener noreferrer" class="">#365</a>, <a href=https://github.com/joestump-agent/crush/issues/367 target=_blank rel="noopener noreferrer" class="">#367</a>, <a href=https://github.com/joestump-agent/crush/issues/368 target=_blank rel="noopener noreferrer" class="">#368</a>, <a href=https://github.com/joestump-agent/crush/issues/369 target=_blank rel="noopener noreferrer" class="">#369</a>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=handle-lifetime-is-run-lifetime>Handle lifetime is run lifetime<a href=#handle-lifetime-is-run-lifetime class=hash-link aria-label="Direct link to Handle lifetime is run lifetime" title="Direct link to Handle lifetime is run lifetime" translate=no>​</a></h3>
+<p>Handles used to be held until the exit sweep, so suffixes piled up
+(<code>tester-2</code>, <code>tester-3</code>) and any session's model could steer another
+session's agent. Releasing a handle when its run ends, and scoping handles
+to the dispatching session's tree, keeps <code>@handle</code> meaning "the live agent
+I am working with". A finished agent's block and card keep the handle they
+were given; the name itself is free for the next dispatch.
+Tracking: <a href=https://github.com/joestump-agent/crush/issues/399 target=_blank rel="noopener noreferrer" class="">#399</a>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=not-continuable-one-level-of-delegation>Not continuable; one level of delegation<a href=#not-continuable-one-level-of-delegation class=hash-link aria-label="Direct link to Not continuable; one level of delegation" title="Direct link to Not continuable; one level of delegation" translate=no>​</a></h3>
+<p>A task session records one dispatch's run, and its result has already been
+delivered, so continuing it would contradict the record. No picker,
+<code>--session</code> or <code>run --continue</code> path can make one active, and a finished
+agent refuses messages with "dispatch a new agent". Delegation
+stays one level deep. Larger topologies come from clustering Crush
+instances (<a href=https://github.com/joestump-agent/crush/issues/331 target=_blank rel="noopener noreferrer" class="">#331</a>),
+not from recursion inside one session.
+Tracking: <a href=https://github.com/joestump-agent/crush/issues/413 target=_blank rel="noopener noreferrer" class="">#413</a>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=esc-always-leaves-inspect-mode>Esc always leaves inspect mode<a href=#esc-always-leaves-inspect-mode class=hash-link aria-label="Direct link to Esc always leaves inspect mode" title="Direct link to Esc always leaves inspect mode" translate=no>​</a></h3>
+<p>The original rule left Esc alone and used <code>ctrl+[</code> to go back. On
+terminals without the kitty keyboard protocol, though, <code>ctrl+[</code> <em>is</em> Esc
+(<code>0x1b</code>), so the rule could not hold. On terminals that do tell them apart,
+two Esc presses in inspect mode canceled the parent's run. Now both keys
+leave inspect mode on every terminal. Esc never cancels from inspect mode;
+you cancel from the parent view.
+Tracking: <a href=https://github.com/joestump-agent/crush/issues/404 target=_blank rel="noopener noreferrer" class="">#404</a>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=durable-task-state>Durable task state<a href=#durable-task-state class=hash-link aria-label="Direct link to Durable task state" title="Direct link to Durable task state" translate=no>​</a></h3>
+<p>Served tasks live in the SQLite task store (<a href=https://github.com/joestump-agent/crush/issues/354 target=_blank rel="noopener noreferrer" class="">#354</a>),
+and every dispatch leaves one durable record (<a href=https://github.com/joestump-agent/crush/issues/355 target=_blank rel="noopener noreferrer" class="">#355</a>):
+a row in <code>a2a_dispatches</code> written at start, updated with the terminal
+result, and stamped delivered when the parent's delivery turn succeeds.
+On startup, before the UI loads any session, reconcile fails every task
+and dispatch record whose owning process died — the dispatch error names
+the preserved workspace — and re-delivers every terminal result the
+parent never received, stamping it on the parent's persisted
+<code>dispatch_agent</code> tool result as it goes. That stamp is the terminal
+record a reloaded agent block renders, in process or against a server,
+instead of a forever-working stale handle
+(<a href=https://github.com/joestump-agent/crush/issues/410 target=_blank rel="noopener noreferrer" class="">#410</a>, <a href=https://github.com/joestump-agent/crush/issues/421 target=_blank rel="noopener noreferrer" class="">#421</a>).</p>
+<p>Tracking: <a href=https://github.com/joestump-agent/crush/issues/354 target=_blank rel="noopener noreferrer" class="">#354</a>, <a href=https://github.com/joestump-agent/crush/issues/355 target=_blank rel="noopener noreferrer" class="">#355</a>, <a href=https://github.com/joestump-agent/crush/issues/410 target=_blank rel="noopener noreferrer" class="">#410</a>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=steering-kill-and-progress-are-a2a-operations>Steering, kill and progress are A2A operations<a href=#steering-kill-and-progress-are-a2a-operations class=hash-link aria-label="Direct link to Steering, kill and progress are A2A operations" title="Direct link to Steering, kill and progress are A2A operations" translate=no>​</a></h3>
+<p>In the first cut <code>@handle</code> and <code>message_agent</code> called a Go method, kills
+called <code>agent.Cancel</code>, and progress reached the UI through an in-process
+collector. None of those could cross a process boundary. As A2A operations
+they are a message on the running context, <code>tasks/cancel</code> and typed
+<code>Working</code> events. The same code then serves a local worker, an isolated
+process and a remote agent, and the TUI is one more A2A client.
+Tracking: typed progress — statically typed todo metadata under a declared extension — shipped in <a href=https://github.com/joestump-agent/crush/issues/359 target=_blank rel="noopener noreferrer" class="">#359</a>; steering — a mid-run message as a new A2A task on the running context, terminal on the queue's consumption verdict — in <a href=https://github.com/joestump-agent/crush/issues/351 target=_blank rel="noopener noreferrer" class="">#351</a>; the kill in <a href=https://github.com/joestump-agent/crush/issues/348 target=_blank rel="noopener noreferrer" class="">#348</a>; the TUI as an A2A client, in process and through the server, in <a href=https://github.com/joestump-agent/crush/issues/421 target=_blank rel="noopener noreferrer" class="">#421</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=standing-implementation-choices>Standing implementation choices<a href=#standing-implementation-choices class=hash-link aria-label="Direct link to Standing implementation choices" title="Direct link to Standing implementation choices" translate=no>​</a></h2>
+<p>These came out of the first implementation and still hold. Each row notes
+what the re-base changes.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Choice<th>Re-base<tbody><tr><td>No automated merge. The main agent, or you, reviews the branch.<td>Kept. <code>apply_dispatch</code> merges only when asked (<a href=https://github.com/joestump-agent/crush/issues/368 target=_blank rel="noopener noreferrer" class="">#368</a>).<tr><td>One dispatch is one ephemeral task session, a child of the parent session.<td>Kept; <code>contextId</code> becomes that session (<a href=https://github.com/joestump-agent/crush/issues/350 target=_blank rel="noopener noreferrer" class="">#350</a>).<tr><td>The workspace is SCM-agnostic, with git worktrees as the first backend.<td>A <code>WorkspaceProvider</code> under <code>&lt;data dir>/worktrees/&lt;repo-key>/</code>, separate from the agent registry (<a href=https://github.com/joestump-agent/crush/issues/391 target=_blank rel="noopener noreferrer" class="">#391</a>, <a href=https://github.com/joestump-agent/crush/issues/383 target=_blank rel="noopener noreferrer" class="">#383</a>).<tr><td>Dispatched agents use the small model by default.<td>The dispatch agent's definition decides; the <code>worker</code> says small (<a href=https://github.com/joestump-agent/crush/issues/433 target=_blank rel="noopener noreferrer" class="">#433</a>).<tr><td>Dispatched tools are the read-only preset plus write tools; no MCP, sub-agents, questions or semantic search.<td>Comes from the definition (<code>@read</code>, <code>@write</code>, job and diagnostics tools, MCP via <code>mcp.allow</code>), with deny lists, hooks and live yolo applied on top (<a href=https://github.com/joestump-agent/crush/issues/376 target=_blank rel="noopener noreferrer" class="">#376</a>, <a href=https://github.com/joestump-agent/crush/issues/377 target=_blank rel="noopener noreferrer" class="">#377</a>, <a href=https://github.com/joestump-agent/crush/issues/378 target=_blank rel="noopener noreferrer" class="">#378</a>, <a href=https://github.com/joestump-agent/crush/issues/384 target=_blank rel="noopener noreferrer" class="">#384</a>). Questions are back for interactive parents, as <code>input-required</code> pauses on the A2A task (<a href=https://github.com/joestump-agent/crush/issues/352 target=_blank rel="noopener noreferrer" class="">#352</a>).<tr><td>Results arrive as a hidden follow-up turn on the parent.<td>Redelivered until consumed, and batched (<a href=https://github.com/joestump-agent/crush/issues/388 target=_blank rel="noopener noreferrer" class="">#388</a>).<tr><td>The diff summary is capped at 250 lines.<td>Kept, plus a 32 KiB byte budget and a 100-file stat cap; the full patch ships as a chunked artifact (<a href=https://github.com/joestump-agent/crush/issues/361 target=_blank rel="noopener noreferrer" class="">#361</a>).</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=superseded-decisions>Superseded decisions<a href=#superseded-decisions class=hash-link aria-label="Direct link to Superseded decisions" title="Direct link to Superseded decisions" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Was<th>Decided<th>Replaced by<tbody><tr><td><strong>Sidekick dashboard.</strong> Progress streams to a Sidekick panel via <code>SidekickUpdate</code>.<td>2026-07-13<td>2026-10-02: Sidekick was reverted (<a href=https://github.com/joestump-agent/crush/pull/290 target=_blank rel="noopener noreferrer" class="">#290</a>). The agent block in the parent chat is the only surface, fed by the same todo snapshots.<tr><td><strong>No pre-defined agent definitions.</strong> Sub-agent prompts are rendered at dispatch time from nothing but the template.<td>2026-10-02<td>2026-10-04: agents are definitions. Prompts are still rendered at dispatch time, from the definition's template.<tr><td><strong>Esc untouched.</strong> Only <code>ctrl+[</code> leaves inspect mode.<td>2026-10-02<td>2026-10-04: Esc and <code>ctrl+[</code> both leave inspect mode, and Esc never cancels from it (<a href=https://github.com/joestump-agent/crush/issues/404 target=_blank rel="noopener noreferrer" class="">#404</a>).<tr><td><strong>Loopback TCP for Phase 1.</strong> One <code>127.0.0.1</code> server per dispatch; gRPC and auth wait for remote workers.<td>2026-07-13<td>2026-10-04: one host per process on a 0600 unix socket; TCP only with TLS and auth (<a href=https://github.com/joestump-agent/crush/issues/346 target=_blank rel="noopener noreferrer" class="">#346</a>, <a href=https://github.com/joestump-agent/crush/issues/358 target=_blank rel="noopener noreferrer" class="">#358</a>, <a href=https://github.com/joestump-agent/crush/issues/357 target=_blank rel="noopener noreferrer" class="">#357</a>).<tr><td><strong>Session-end sweep.</strong> Every dispatch worktree is removed on session end, even an abandoned one (<a href=https://github.com/joestump-agent/crush/issues/63 target=_blank rel="noopener noreferrer" class="">#63</a>).<td>Original plan<td>2026-10-05: nothing is discarded at exit. Only decided and workless workspaces are released; work is kept for salvage; ownership leases, with explicit apply and dismiss (<a href=https://github.com/joestump-agent/crush/issues/365 target=_blank rel="noopener noreferrer" class="">#365</a>, <a href=https://github.com/joestump-agent/crush/issues/367 target=_blank rel="noopener noreferrer" class="">#367</a>, <a href=https://github.com/joestump-agent/crush/issues/368 target=_blank rel="noopener noreferrer" class="">#368</a>).<tr><td><strong>No custom extensions.</strong> Use the A2A spec as-is.<td>2026-07-13<td>2026-10-04: declared, statically typed extensions (<a href=https://github.com/joestump-agent/crush/issues/359 target=_blank rel="noopener noreferrer" class="">#359</a>).<tr><td><strong>Fallback over failure.</strong> A server that fails to start is logged and the dispatch runs directly.<td>Phase 1 code<td>2026-10-04: a host start failure is a dispatch failure (<a href=https://github.com/joestump-agent/crush/issues/347 target=_blank rel="noopener noreferrer" class="">#347</a>).<tr><td><strong>Steering in a later phase.</strong> Mid-run messages wait for the A2A transport.<td>2026-07-13<td>2026-10-02: injection shipped in v1 as the seam A2A will use (<a href=https://github.com/joestump-agent/crush/issues/312 target=_blank rel="noopener noreferrer" class="">#312</a>).</table></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/brunokrugel/crush/edit/fork/docs-site/docs/agents/design-decisions.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"><span class=theme-last-updated>Last updated<!-- --> on <b><time datetime=2026-11-10T12:40:44.000Z itemprop=dateModified>Nov 10, 2026</time></b></span></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/crush/agents/troubleshooting><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>Troubleshooting</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/crush/reference/cli><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>CLI reference</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#decision-log class="table-of-contents__link toc-highlight">Decision log</a><li><a href=#the-2026-10-04-decisions class="table-of-contents__link toc-highlight">The 2026-10-04 decisions</a><ul><li><a href=#a2a-is-the-runtime-contract class="table-of-contents__link toc-highlight">A2A is the runtime contract</a><li><a href=#one-host-per-process-on-a-unix-socket class="table-of-contents__link toc-highlight">One host per process, on a unix socket</a><li><a href=#agents-are-definitions class="table-of-contents__link toc-highlight">Agents are definitions</a><li><a href=#extensions-are-declared-and-statically-typed class="table-of-contents__link toc-highlight">Extensions are declared and statically typed</a><li><a href=#kill-is-taskscancel-with-a-reason class="table-of-contents__link toc-highlight">Kill is <code>tasks/cancel</code> with a reason</a><li><a href=#kill-scope-and-per-agent-thresholds class="table-of-contents__link toc-highlight">Kill scope and per-agent thresholds</a><li><a href=#preserve-work-clean-up-explicitly class="table-of-contents__link toc-highlight">Preserve work, clean up explicitly</a><li><a href=#handle-lifetime-is-run-lifetime class="table-of-contents__link toc-highlight">Handle lifetime is run lifetime</a><li><a href=#not-continuable-one-level-of-delegation class="table-of-contents__link toc-highlight">Not continuable; one level of delegation</a><li><a href=#esc-always-leaves-inspect-mode class="table-of-contents__link toc-highlight">Esc always leaves inspect mode</a><li><a href=#durable-task-state class="table-of-contents__link toc-highlight">Durable task state</a><li><a href=#steering-kill-and-progress-are-a2a-operations class="table-of-contents__link toc-highlight">Steering, kill and progress are A2A operations</a></ul><li><a href=#standing-implementation-choices class="table-of-contents__link toc-highlight">Standing implementation choices</a><li><a href=#superseded-decisions class="table-of-contents__link toc-highlight">Superseded decisions</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer footer--dark"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Docs</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/getting-started/installation>Installation</a><li class=footer__item><a class=footer__link-item href=/crush/getting-started/quickstart>Quickstart</a><li class=footer__item><a class=footer__link-item href=/crush/configuration/crushrc>Configuration</a><li class=footer__item><a class=footer__link-item href=/crush/reference/cli>CLI reference</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Features</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/features/mcp>MCP</a><li class=footer__item><a class=footer__link-item href=/crush/features/channels>Channels</a><li class=footer__item><a class=footer__link-item href=/crush/features/skills>Skills</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Project</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class=footer__link-item>This fork<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/crush target=_blank rel="noopener noreferrer" class=footer__link-item>Upstream Crush<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/catwalk target=_blank rel="noopener noreferrer" class=footer__link-item>Catwalk<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://charm.land target=_blank rel="noopener noreferrer" class=footer__link-item>Charm<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Crush is a Charm project, licensed FSL-1.1-MIT. Docs for the brunokrugel/crush fork, built with Docusaurus.</div></div></div></footer></div></body>

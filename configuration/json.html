@@ -1,0 +1,283 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-configuration/json" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.2"><title data-rh=true>Legacy JSON config | Crush</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true name=twitter:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true property=og:url content=https://brunokrugel.github.io/crush/configuration/json /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="Legacy JSON config | Crush"/><meta data-rh=true name=description content="The original crush.json format — still supported, now deprecated, and where each crushrc builtin maps onto it."/><meta data-rh=true property=og:description content="The original crush.json format — still supported, now deprecated, and where each crushrc builtin maps onto it."/><link data-rh=true rel=icon href=/crush/img/favicon.ico /><link data-rh=true rel=canonical href=https://brunokrugel.github.io/crush/configuration/json /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/configuration/json hreflang=en /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/configuration/json hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://brunokrugel.github.io/crush/configuration/json","name":"crush.json (JSON)","position":1}]}</script><link rel=apple-touch-icon href=/crush/img/touchicon_180.png><link rel=stylesheet href=/crush/assets/css/styles.e14b0f2f.css /><script src=/crush/assets/js/runtime~main.b8734afa.js defer></script><script src=/crush/assets/js/main.b8358137.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-7c2")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/crush/><b class="navbar__title text--truncate">Crush</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/crush/introduction>Docs</a><a class="navbar__item navbar__link" href=/crush/configuration/crushrc>Configuration</a><a class="navbar__item navbar__link" href=/crush/reference/cli>Reference</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/introduction><span class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/fork><span class=linkLabel_WmDU>What this fork adds</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/getting-started/installation><span class=categoryLinkLabel_W154>Getting started</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/installation><span class=linkLabel_WmDU>Installation</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/quickstart><span class=linkLabel_WmDU>Quickstart</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/providers-and-api-keys><span class=linkLabel_WmDU>Providers and API keys</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/crush/configuration/crushrc><span class=categoryLinkLabel_W154>Configuration</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/crushrc><span class=linkLabel_WmDU>crushrc (Bash)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/command-reference><span class=linkLabel_WmDU>Command reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/crush/configuration/json><span class=linkLabel_WmDU>crush.json (JSON)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/providers><span class=linkLabel_WmDU>Providers and models</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/permissions><span class=linkLabel_WmDU>Permissions and safety</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/context-and-ignore><span class=linkLabel_WmDU>Context and ignore files</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/environment><span class=linkLabel_WmDU>Environment and startup</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/features/lsp><span class=categoryLinkLabel_W154>Features</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/lsp><span class=linkLabel_WmDU>Language servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/mcp><span class=linkLabel_WmDU>MCP servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/channels><span class=linkLabel_WmDU>Channels</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/skills><span class=linkLabel_WmDU>Skills</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/hooks><span class=linkLabel_WmDU>Hooks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/auto-mode><span class=linkLabel_WmDU>Auto mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/scheduled-tasks><span class=linkLabel_WmDU>Scheduled tasks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/semantic-search><span class=linkLabel_WmDU>Semantic search</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/sessions><span class=linkLabel_WmDU>Sessions and projects</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/memory><span class=linkLabel_WmDU>Memory</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/forking><span class=linkLabel_WmDU>Forking</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/goal-mode><span class=linkLabel_WmDU>Goal mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/server-and-workspaces><span class=linkLabel_WmDU>Server and workspaces</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/notifications><span class=linkLabel_WmDU>Desktop notifications</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/agents/overview><span class=categoryLinkLabel_W154>Multi-agent</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/overview><span class=linkLabel_WmDU>Overview</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/tutorial><span class=linkLabel_WmDU>Tutorial</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/handles-and-inspect><span class=linkLabel_WmDU>Handles and inspect</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/todo-enforcement><span class=linkLabel_WmDU>Todo enforcement</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/configuration><span class=linkLabel_WmDU>Configuration</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/team><span class=linkLabel_WmDU>Team</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/architecture><span class=linkLabel_WmDU>Architecture</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/a2a-protocol><span class=linkLabel_WmDU>A2A protocol</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/design-decisions><span class=linkLabel_WmDU>Design decisions</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/reference/cli><span class=categoryLinkLabel_W154>Reference</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/cli><span class=linkLabel_WmDU>CLI reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/tools><span class=linkLabel_WmDU>Tool reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/keybindings><span class=linkLabel_WmDU>Keybindings</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/environment-variables><span class=linkLabel_WmDU>Environment variables</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/logging><span class=linkLabel_WmDU>Logging</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/crush/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Configuration</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>crush.json (JSON)</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Legacy JSON config</h1></header>
+<p><code>crush.json</code> is the original config format. It is <strong>deprecated but fully
+supported</strong> — Crush will keep reading it for the foreseeable future, but new
+configuration options are only added to <a class="" href=/crush/configuration/crushrc><code>crushrc</code></a>.</p>
+<p>A few things — <a class="" href=/crush/features/hooks>hooks</a> and
+<a class="" href=/crush/features/channels#reply-routing>channel reply routing</a> among them — still
+have richer JSON documentation than Bash documentation, so you will see JSON in
+those pages. Both formats are discovered together and deep-merged.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=shape>Shape<a href=#shape class=hash-link aria-label="Direct link to Shape" title="Direct link to Shape" translate=no>​</a></h2>
+<div class="language-jsonc codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-jsonc codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">{</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  "$schema": "https://charm.land/crush.json",</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  "providers": {</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    "anthropic": { "api_key": "$ANTHROPIC_API_KEY" }</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  },</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  "models": {</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    "large": { "provider": "anthropic", "model": "claude-sonnet-4-20250514" }</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  },</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  "permissions": { "allowed_tools": ["view", "ls", "grep"] }</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">}</span><br/></div></code></pre></div></div>
+<p>The full field-by-field reference is the JSON schema itself, which is generated
+from the Go config types:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">crush schema </span><span class="token operator">></span><span class="token plain"> schema.json</span><br/></div></code></pre></div></div>
+<p>Or read the committed copy at
+<a href=https://github.com/brunokrugel/crush/blob/fork/schema.json target=_blank rel="noopener noreferrer" class=""><code>schema.json</code></a>.
+Adding the <code>$schema</code> line above gets you completion and validation in any
+editor with JSON schema support.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=where-it-lives>Where it lives<a href=#where-it-lives class=hash-link aria-label="Direct link to Where it lives" title="Direct link to Where it lives" translate=no>​</a></h2>
+<p>Same directories as <code>crushrc</code>, using <code>.crush.json</code> / <code>crush.json</code>:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Priority<th>Unix-like<th>Windows<tbody><tr><td>1<td><code>./.crush.json</code><td><code>.\.crush.json</code><tr><td>2<td><code>./crush.json</code><td><code>.\crush.json</code><tr><td>3<td><code>~/.config/crush/crush.json</code><td><code>%USERPROFILE%\.config\crush\crush.json</code></table>
+<p>If a folder has both a <code>crushrc</code> and a <code>crush.json</code>, they merge, the <code>crushrc</code>
+wins on conflicts, and Crush logs a warning.</p>
+<div class="theme-admonition theme-admonition-warning admonition_xJq3 alert alert--warning"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 16 16"><path fill-rule=evenodd d="M8.893 1.5c-.183-.31-.52-.5-.887-.5s-.703.19-.886.5L.138 13.499a.98.98 0 0 0 0 1.001c.193.31.53.501.886.501h13.964c.367 0 .704-.19.877-.5a1.03 1.03 0 0 0 .01-1.002L8.893 1.5zm.133 11.497H6.987v-2.003h2.039v2.003zm0-3.004H6.987V5.987h2.039v4.006z"/></svg></span>Don't confuse it with state</div><div class=admonitionContent_BuS1><p><code>~/.local/share/crush/crush.json</code> (<code>%LOCALAPPDATA%\crush\crush.json</code> on Windows)
+is <strong>application state</strong>, not configuration. Crush owns it; don't edit it.</div></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=shell-expansion>Shell expansion<a href=#shell-expansion class=hash-link aria-label="Direct link to Shell expansion" title="Direct link to Shell expansion" translate=no>​</a></h2>
+<p>In JSON, only selected string fields are shell-expanded at load time: API keys,
+URLs, MCP/LSP commands and args, and headers. In <code>crushrc</code> there is no such
+list — it is all just Bash.</p>
+<p>Provider <code>extra_body</code> is a non-expanding JSON passthrough. Put env-driven values
+in <code>extra_headers</code>, <code>api_key</code>, or <code>base_url</code>.</p>
+<div class="theme-admonition theme-admonition-warning admonition_xJq3 alert alert--warning"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 16 16"><path fill-rule=evenodd d="M8.893 1.5c-.183-.31-.52-.5-.887-.5s-.703.19-.886.5L.138 13.499a.98.98 0 0 0 0 1.001c.193.31.53.501.886.501h13.964c.367 0 .704-.19.877-.5a1.03 1.03 0 0 0 .01-1.002L8.893 1.5zm.133 11.497H6.987v-2.003h2.039v2.003zm0-3.004H6.987V5.987h2.039v4.006z"/></svg></span>warning</div><div class=admonitionContent_BuS1><p>Both formats are trusted code. Any <code>$(...)</code> in <code>crush.json</code> runs at load time
+with your shell's privileges, before the UI appears.</div></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=mapping-from-crushrc>Mapping from <code>crushrc</code><a href=#mapping-from-crushrc class=hash-link aria-label="Direct link to mapping-from-crushrc" title="Direct link to mapping-from-crushrc" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th><code>crushrc</code><th><code>crush.json</code><tbody><tr><td><code>provider add &lt;id> …</code><td><code>providers.&lt;id></code><tr><td><code>model add &lt;p>/&lt;id> …</code><td><code>providers.&lt;p>.models[]</code><tr><td><code>model large &lt;p>/&lt;id></code><td><code>models.large</code><tr><td><code>mcp add &lt;name> …</code><td><code>mcp.&lt;name></code><tr><td><code>lsp add &lt;name> …</code><td><code>lsp.&lt;name></code><tr><td><code>hook add &lt;event> …</code><td><code>hooks.&lt;Event>[]</code><tr><td><code>permissions allow …</code><td><code>permissions.allowed_tools[]</code><tr><td><code>permissions deny …</code><td><code>options.disabled_tools[]</code><tr><td><code>option &lt;key> &lt;value></code><td><code>options.&lt;key></code><tr><td><code>option skill-path …</code><td><code>options.skills_paths[]</code><tr><td><code>option disable-skill …</code><td><code>options.disabled_skills[]</code><tr><td><code>option context-path …</code><td><code>options.context_paths[]</code><tr><td><code>option global-context-path …</code><td><code>options.global_context_paths[]</code><tr><td><code>option attribution-*</code><td><code>options.attribution.*</code><tr><td><code>option todo-*</code>, <code>option dispatch-stall|dispatch-timeout</code><td><code>options.todo_enforcement.&lt;key></code><tr><td><code>option dispatch-max-concurrent|dispatch-default-agent</code><td><code>options.dispatch.{max_concurrent,default_agent}</code><tr><td><code>option a2a-listen|a2a-tls-cert|a2a-tls-key|a2a-client-ca</code><td><code>options.a2a.{listen,tls_cert,tls_key,client_ca}</code><tr><td><code>agent add|set|defaults|remove</code><td><code>agents.&lt;id></code>, <code>agents.$defaults</code><tr><td><code>option ui &lt;key> &lt;value></code><td><code>options.tui.&lt;key></code></table>
+<p>Note that the JSON names are not a mechanical transliteration of the builtin
+names: <code>permissions deny</code> writes <code>options.disabled_tools</code>, and several
+<code>option</code> booleans are inverted in JSON (<code>option auto-summarize false</code> is
+<code>options.disable_auto_summarize: true</code>, and the same pattern applies to
+<code>disable_default_providers</code> and <code>disable_provider_auto_update</code>). When in doubt, check the schema.</p>
+<p>The top-level <code>options</code> object also carries a few keys with no <code>crushrc</code>
+builtin yet: <code>allowed_commands</code>, <code>allow_all_commands</code> (see
+<a class="" href=/crush/configuration/permissions#blocked-commands>Permissions</a>), and
+<code>todo_enforcement.inactivity_timeout</code> (the
+A2A backstop for dispatched runs; see
+<a class="" href=/crush/agents/todo-enforcement#wander-kill>Todo enforcement</a>). Top-level <code>tools</code>
+tunes the <code>glob</code>, <code>grep</code>, and <code>ls</code> tool limits.</p>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p>These <code>crush.json</code> keys do not exist upstream: <code>options.allowed_commands</code>,
+<code>options.allow_all_commands</code>,
+<code>options.todo_enforcement</code> (<a class="" href=/crush/agents/todo-enforcement>multi-agent</a>),
+<code>options.dispatch</code> (<code>max_concurrent</code>, default 4, and <code>default_agent</code>, default
+<code>worker</code>; see <a class="" href=/crush/agents/configuration>multi-agent configuration</a>),
+<code>options.a2a</code> (the A2A host's <a class="" href=/crush/agents/a2a-protocol#tcp-listener>TLS-only TCP listener</a>;
+<code>listen</code> without <code>tls_cert</code> and <code>tls_key</code> fails the load), the
+top-level <code>agents</code> block (<a class="" href=/crush/agents/configuration>multi-agent</a>), the
+top-level <code>embeddings</code> block (<a class="" href=/crush/features/semantic-search>semantic search</a>),
+and the per-server <code>channel_enabled</code> (<a class="" href=/crush/features/channels>channels</a>). See
+<a class="" href=/crush/fork#configuration>What this fork adds</a>.</div></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=top-level-env>Top-level <code>env</code><a href=#top-level-env class=hash-link aria-label="Direct link to top-level-env" title="Direct link to top-level-env" translate=no>​</a></h2>
+<p>The top-level <code>env</code> field sets environment variables at startup, <strong>before</strong>
+providers are configured. This is the way to set variables that affect provider
+authentication — the AWS SDK credential chain, for instance — without wrapping
+<code>crush</code> in a shell script:</p>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"$schema"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"https://charm.land/crush.json"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"env"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"AWS_PROFILE"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"my-sso-profile"</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+<p>Values support the same <code>$VAR</code> and <code>$(command)</code> expansion as other config
+fields.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-agents-block>The <code>agents</code> block<a href=#the-agents-block class=hash-link aria-label="Direct link to the-agents-block" title="Direct link to the-agents-block" translate=no>​</a></h2>
+<p>The top-level <code>agents</code> object customizes the built-in agents and defines new
+ones (<a class="" href=/crush/agents/configuration>multi-agent</a>). Every field is optional: a null or
+omitted field inherits from the built-in with the same id, lists replace
+rather than append, and <code>0</code> or <code>"off"</code> disables the knob it configures.</p>
+<p>The built-ins are <code>coder</code>, <code>plan</code>, and <code>task</code>, plus <code>worker</code>, the dispatch
+agent definition the multi-agent runtime uses. Their roles (<code>main</code>,
+<code>subagent</code>, <code>dispatch</code>) cannot be changed, and <code>coder</code> cannot be disabled. A
+new id must match <code>^[a-z][a-z0-9-]{0,31}$</code> and must be a <code>dispatch</code> agent.</p>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"$schema"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"https://charm.land/crush.json"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"agents"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"$defaults"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"todos"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"hard_gate"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token boolean">true</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"coder"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"description"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Ship it."</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"tools"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"deny"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token string" style="color:rgb(255, 121, 198)">"sourcegraph"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"worker"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"model"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"large"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"kill"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"after_ignored_nudges"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token number">3</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"stall"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"5m"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"timeout"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"30m"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+<p>That block loads as written. To give the coder an MCP server
+(<code>"mcp": { "allow": ["github"] }</code>) or pin the worker to a model
+(<code>"model": { "provider": "deepseek", "model": "deepseek-chat" }</code>), the server
+and the provider must be configured in the same config, or the load fails
+naming the path.</p>
+<p>Field guide:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Field<th>Values<tbody><tr><td><code>role</code><td><code>main</code>, <code>subagent</code>, or <code>dispatch</code>. A new agent must be <code>dispatch</code>.<tr><td><code>runtime</code><td><code>builtin</code> (in process) or <code>a2a</code> (an external <a href=https://a2a-protocol.org target=_blank rel="noopener noreferrer" class="">Agent Card</a>).<tr><td><code>name</code>, <code>description</code><td>Display values; <code>name</code> is also the agent's A2A card name.<tr><td><code>model</code><td><code>"large"</code>, <code>"small"</code>, or <code>{ "provider": "...", "model": "..." }</code>. A pin must name a configured provider and model.<tr><td><code>prompt</code><td><code>builtin:&lt;id></code> (<code>coder</code>, <code>plan</code>, <code>task</code>, <code>dispatch</code>) or <code>file:&lt;path></code>, a Go template; relative paths resolve against the working directory.<tr><td><code>prompt_append</code><td><code>file:&lt;path></code>, appended verbatim after the rendered prompt.<tr><td><code>skills</code><td>Skill names the agent sees. A dispatch's <code>skills</code> argument can narrow the worker's list, never widen it.<tr><td><code>disabled</code><td><code>true</code> turns a built-in off: <code>task</code> removes the <code>agent</code> tool, <code>plan</code> cannot be switched to, and <code>worker</code> removes the dispatch tools. <code>coder</code> cannot be disabled.<tr><td><code>tools</code><td><code>allow</code> and <code>deny</code> lists; entries are tool names, <code>@read</code>, <code>@write</code>, or <code>*</code>. Effective tools are allow minus deny minus <code>options.disabled_tools</code>, so a definition can narrow but never widen your tool policy.<tr><td><code>mcp</code><td><code>allow</code> list; entries are <code>*</code>, a server id from <code>mcp</code>, or <code>server:tool</code>.<tr><td><code>todos</code><td><code>nudge</code>, <code>nudge_after_tool_calls</code>, <code>hard_gate</code> (see <a class="" href=/crush/agents/todo-enforcement>Todo enforcement</a>).<tr><td><code>kill</code><td><code>after_ignored_nudges</code>, <code>stall</code>, <code>timeout</code>. Dispatch agents only.<tr><td><code>todo_enforcement</code><td>Legacy alias for <code>todos</code> and <code>kill</code>, with the <code>options.todo_enforcement</code> shape. Cannot be combined with either block.<tr><td><code>context_paths</code><td>Context files for the agent, overriding <code>options.context_paths</code>.<tr><td><code>workspace</code><td><code>worktree</code> or <code>none</code>. A builtin dispatch agent always runs in a worktree (<code>none</code> is accepted and ignored); an <code>a2a</code> agent always runs with <code>none</code>.<tr><td><code>card</code>, <code>auth</code>, <code>transport</code><td><a class="" href=/crush/agents/configuration#external-agents>External agents</a> only: the card URL, <code>{ "type": "bearer", "token": "$VAR" }</code>, and <code>{ "idle_timeout": "2m" }</code>.<tr><td><code>$defaults</code><td>Only <code>todos</code> and <code>kill</code>: the knobs every agent inherits.</table>
+<p>An <code>a2a</code> agent is defined by its external card, so it may only set <code>role</code>,
+<code>name</code>, <code>description</code>, <code>disabled</code>, <code>card</code>, <code>auth</code>, <code>workspace</code> (must be
+<code>none</code>), <code>transport</code>, and <code>kill</code> (only <code>timeout</code>).</p>
+<p>The runtime builds every agent from its definition, and <code>dispatch_agent</code> runs
+whichever dispatch agent its <code>agent</code> argument names — <code>options.dispatch.default_agent</code>
+when it names none. The full field semantics, a worked example of adding a
+dispatch agent, and the load errors are on
+<a class="" href=/crush/agents/configuration#agent-definitions>Multi-agent configuration</a>. The
+<code>agent</code> builtin defines the same block from <code>crushrc</code>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=full-example>Full example<a href=#full-example class=hash-link aria-label="Direct link to Full example" title="Direct link to Full example" translate=no>​</a></h2>
+<div class="language-jsonc codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-jsonc codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">{</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  "$schema": "https://charm.land/crush.json",</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  "env": {</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    "AWS_PROFILE": "my-sso-profile"</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  },</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  "providers": {</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    "deepseek": {</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      "type": "completions",</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      "base_url": "https://api.deepseek.com/v1",</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      "api_key": "$DEEPSEEK_API_KEY",</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      "models": [</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">        {</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">          "id": "deepseek-chat",</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">          "name": "Deepseek V3",</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">          "context_window": 64000,</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">          "default_max_tokens": 5000</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">        }</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      ]</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    }</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  },</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  "models": {</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    "large": { "provider": "deepseek", "model": "deepseek-chat" }</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  },</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  "lsp": {</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    "go": { "command": "gopls" }</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  },</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  "mcp": {</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    "github": {</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      "type": "http",</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      "url": "https://api.githubcopilot.com/mcp/",</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      "headers": { "Authorization": "Bearer $GH_PAT" }</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    }</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  },</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  "hooks": {</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    "PreToolUse": [</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      { "matcher": "^bash$", "command": "./hooks/no-rm-rf.sh" }</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    ]</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  },</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  "permissions": {</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    "allowed_tools": ["view", "ls", "grep"]</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  },</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  "options": {</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    "allowed_commands": ["ssh", "curl"],</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    "tui": { "diff": "unified" }</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  }</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">}</span><br/></div></code></pre></div></div></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/brunokrugel/crush/edit/fork/docs-site/docs/configuration/json.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"><span class=theme-last-updated>Last updated<!-- --> on <b><time datetime=2026-11-10T12:40:44.000Z itemprop=dateModified>Nov 10, 2026</time></b></span></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/crush/configuration/command-reference><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>Command reference</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/crush/configuration/providers><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>Providers and models</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#shape class="table-of-contents__link toc-highlight">Shape</a><li><a href=#where-it-lives class="table-of-contents__link toc-highlight">Where it lives</a><li><a href=#shell-expansion class="table-of-contents__link toc-highlight">Shell expansion</a><li><a href=#mapping-from-crushrc class="table-of-contents__link toc-highlight">Mapping from <code>crushrc</code></a><li><a href=#top-level-env class="table-of-contents__link toc-highlight">Top-level <code>env</code></a><li><a href=#the-agents-block class="table-of-contents__link toc-highlight">The <code>agents</code> block</a><li><a href=#full-example class="table-of-contents__link toc-highlight">Full example</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer footer--dark"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Docs</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/getting-started/installation>Installation</a><li class=footer__item><a class=footer__link-item href=/crush/getting-started/quickstart>Quickstart</a><li class=footer__item><a class=footer__link-item href=/crush/configuration/crushrc>Configuration</a><li class=footer__item><a class=footer__link-item href=/crush/reference/cli>CLI reference</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Features</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/features/mcp>MCP</a><li class=footer__item><a class=footer__link-item href=/crush/features/channels>Channels</a><li class=footer__item><a class=footer__link-item href=/crush/features/skills>Skills</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Project</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class=footer__link-item>This fork<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/crush target=_blank rel="noopener noreferrer" class=footer__link-item>Upstream Crush<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/catwalk target=_blank rel="noopener noreferrer" class=footer__link-item>Catwalk<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://charm.land target=_blank rel="noopener noreferrer" class=footer__link-item>Charm<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Crush is a Charm project, licensed FSL-1.1-MIT. Docs for the brunokrugel/crush fork, built with Docusaurus.</div></div></div></footer></div></body>

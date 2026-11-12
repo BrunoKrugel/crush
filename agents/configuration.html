@@ -1,0 +1,875 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-agents/configuration" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.2"><title data-rh=true>Multi-agent configuration | Crush</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true name=twitter:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true property=og:url content=https://brunokrugel.github.io/crush/agents/configuration /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="Multi-agent configuration | Crush"/><meta data-rh=true name=description content="Every setting that affects dispatched agents — the agent definitions behind coder, plan, task and worker, how to add your own, the dispatch options, todo enforcement, permissions, hooks, and external A2A agents."/><meta data-rh=true property=og:description content="Every setting that affects dispatched agents — the agent definitions behind coder, plan, task and worker, how to add your own, the dispatch options, todo enforcement, permissions, hooks, and external A2A agents."/><link data-rh=true rel=icon href=/crush/img/favicon.ico /><link data-rh=true rel=canonical href=https://brunokrugel.github.io/crush/agents/configuration /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/agents/configuration hreflang=en /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/agents/configuration hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://brunokrugel.github.io/crush/agents/configuration","name":"Configuration","position":1}]}</script><link rel=apple-touch-icon href=/crush/img/touchicon_180.png><link rel=stylesheet href=/crush/assets/css/styles.e14b0f2f.css /><script src=/crush/assets/js/runtime~main.b8734afa.js defer></script><script src=/crush/assets/js/main.b8358137.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-7c2")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/crush/><b class="navbar__title text--truncate">Crush</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/crush/introduction>Docs</a><a class="navbar__item navbar__link" href=/crush/configuration/crushrc>Configuration</a><a class="navbar__item navbar__link" href=/crush/reference/cli>Reference</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/introduction><span class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/fork><span class=linkLabel_WmDU>What this fork adds</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/getting-started/installation><span class=categoryLinkLabel_W154>Getting started</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/installation><span class=linkLabel_WmDU>Installation</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/quickstart><span class=linkLabel_WmDU>Quickstart</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/providers-and-api-keys><span class=linkLabel_WmDU>Providers and API keys</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/configuration/crushrc><span class=categoryLinkLabel_W154>Configuration</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/crushrc><span class=linkLabel_WmDU>crushrc (Bash)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/command-reference><span class=linkLabel_WmDU>Command reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/json><span class=linkLabel_WmDU>crush.json (JSON)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/providers><span class=linkLabel_WmDU>Providers and models</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/permissions><span class=linkLabel_WmDU>Permissions and safety</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/context-and-ignore><span class=linkLabel_WmDU>Context and ignore files</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/environment><span class=linkLabel_WmDU>Environment and startup</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/features/lsp><span class=categoryLinkLabel_W154>Features</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/lsp><span class=linkLabel_WmDU>Language servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/mcp><span class=linkLabel_WmDU>MCP servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/channels><span class=linkLabel_WmDU>Channels</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/skills><span class=linkLabel_WmDU>Skills</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/hooks><span class=linkLabel_WmDU>Hooks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/auto-mode><span class=linkLabel_WmDU>Auto mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/scheduled-tasks><span class=linkLabel_WmDU>Scheduled tasks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/semantic-search><span class=linkLabel_WmDU>Semantic search</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/sessions><span class=linkLabel_WmDU>Sessions and projects</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/memory><span class=linkLabel_WmDU>Memory</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/forking><span class=linkLabel_WmDU>Forking</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/goal-mode><span class=linkLabel_WmDU>Goal mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/server-and-workspaces><span class=linkLabel_WmDU>Server and workspaces</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/notifications><span class=linkLabel_WmDU>Desktop notifications</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/crush/agents/overview><span class=categoryLinkLabel_W154>Multi-agent</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/overview><span class=linkLabel_WmDU>Overview</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/tutorial><span class=linkLabel_WmDU>Tutorial</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/handles-and-inspect><span class=linkLabel_WmDU>Handles and inspect</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/todo-enforcement><span class=linkLabel_WmDU>Todo enforcement</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/crush/agents/configuration><span class=linkLabel_WmDU>Configuration</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/team><span class=linkLabel_WmDU>Team</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/architecture><span class=linkLabel_WmDU>Architecture</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/a2a-protocol><span class=linkLabel_WmDU>A2A protocol</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/design-decisions><span class=linkLabel_WmDU>Design decisions</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/reference/cli><span class=categoryLinkLabel_W154>Reference</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/cli><span class=linkLabel_WmDU>CLI reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/tools><span class=linkLabel_WmDU>Tool reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/keybindings><span class=linkLabel_WmDU>Keybindings</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/environment-variables><span class=linkLabel_WmDU>Environment variables</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/logging><span class=linkLabel_WmDU>Logging</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/crush/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Multi-agent</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>Configuration</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Multi-agent configuration</h1></header>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p>Dispatched agents, agent definitions, todo enforcement and every key on this
+page exist only in this fork.</div></div>
+<p>Every agent Crush runs is built from an <strong>agent definition</strong>: the built-in
+<code>coder</code>, <code>plan</code>, <code>task</code> and <code>worker</code>, plus any you add. A definition fixes the
+agent's model, system prompt, tools, MCP servers, skills, context files and
+todo thresholds. You edit them with the <code>agent</code> builtin in <code>crushrc</code> or the
+<code>agents</code> block in <code>crush.json</code>; both formats load, validate and resolve to the
+same thing. A dispatch runs the definition the <code>dispatch_agent</code> call names,
+or <code>options.dispatch.default_agent</code> — the <code>worker</code> — when it names none.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-you-can-set>What you can set<a href=#what-you-can-set class=hash-link aria-label="Direct link to What you can set" title="Direct link to What you can set" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Knob<th><code>crushrc</code><th><code>crush.json</code><th>Applies to<tbody><tr><td>Which agent a dispatch runs by default<td><code>option dispatch-default-agent &lt;id></code><td><code>options.dispatch.default_agent</code><td>Every <code>dispatch_agent</code> call without an <code>agent</code> argument. Must name an enabled dispatch agent; default <code>worker</code><tr><td>How many dispatches run at once<td><code>option dispatch-max-concurrent N</code><td><code>options.dispatch.max_concurrent</code><td>Live dispatches plus ones still provisioning. Default <strong>4</strong>; a value below 1 fails the load<tr><td>A dispatch agent's model<td><code>agent set worker --model small|large|&lt;provider>/&lt;model></code><td><code>agents.worker.model</code><td>The agent's slot, unless the call picks <code>large</code> or <code>small</code>. A <code>{provider, model}</code> pin runs every dispatch on that model and refuses the call's <code>model</code> argument<tr><td>A dispatch agent's tools<td><code>agent set worker --tools …</code> / <code>--deny-tool …</code><td><code>agents.worker.tools.{allow,deny}</code><td>The palette the agent is built with; your deny list still applies on top<tr><td>MCP tools for a dispatch<td><code>agent set worker --mcp …</code><td><code>agents.worker.mcp.allow</code><td>Empty by default; <code>*</code>, a server id, or <code>server:tool</code><tr><td>Prompt and context<td><code>--prompt</code>, <code>--prompt-append</code>, <code>--context-path</code>, <code>--skill</code><td><code>agents.&lt;id>.{prompt,prompt_append,context_paths,skills}</code><td>Any agent<tr><td>Todo nudges and hard gate<td><code>option todo-nudge</code>, <code>todo-nudge-threshold</code>, <code>todo-hard-gate</code>; <code>agent defaults</code> / <code>agent set &lt;id></code> with <code>--nudge</code>, <code>--nudge-after</code>, <code>--hard-gate</code><td><code>options.todo_enforcement.{enabled,nudge_threshold,hard_gate}</code>; <code>agents.$defaults.todos</code>, <code>agents.&lt;id>.todos</code><td>Every agent whose tools include <code>todos</code><tr><td>Kill thresholds<td><code>option todo-kill-after-nudges</code>, <code>dispatch-stall</code>, <code>dispatch-timeout</code>; <code>agent set worker --kill-after-nudges</code>, <code>--stall</code>, <code>--timeout</code><td><code>options.todo_enforcement.{kill_after_nudges,stall_window,hard_timeout}</code>; <code>agents.&lt;id>.kill</code><td>Dispatched runs only. Other agents are nudged and never killed<tr><td>A2A inactivity backstop<td>— (JSON only)<td><code>options.todo_enforcement.inactivity_timeout</code><td>A served dispatch that yields no events for this many seconds ends <strong>failed</strong>. Also the default idle timeout for <a href=#external-agents class="">external agents</a><tr><td>Auto-approved tools<td><code>permissions allow …</code><td><code>permissions.allowed_tools</code><td>Read from your session's config, never the worktree's<tr><td>Yolo<td><code>--yolo</code> at startup, <kbd>ctrl+y</kbd> live<td>—<td>Dispatched agents follow your live setting<tr><td>Turn dispatch off<td><code>permissions deny dispatch_agent message_agent cancel_dispatch apply_dispatch dismiss_dispatch</code>, or <code>agent set worker --disabled true</code><td><code>options.disabled_tools</code>, or <code>agents.worker.disabled</code><td>The main agent<tr><td>A2A TCP listener<td><code>option a2a-listen</code>, <code>a2a-tls-cert</code>, <code>a2a-tls-key</code>, <code>a2a-client-ca</code><td><code>options.a2a.{listen,tls_cert,tls_key,client_ca}</code><td>The process's A2A host, beside its unix socket. TLS only; see <a class="" href=/crush/agents/team>Working with other agents</a></table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=agent-definitions>Agent definitions<a href=#agent-definitions class=hash-link aria-label="Direct link to Agent definitions" title="Direct link to Agent definitions" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-built-ins>The built-ins<a href=#the-built-ins class=hash-link aria-label="Direct link to The built-ins" title="Direct link to The built-ins" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Id<th>Role<th>Model<th>Prompt<th>Tools<th>Notes<tbody><tr><td><code>coder</code><td><code>main</code><td><code>large</code><td><code>builtin:coder</code><td>Everything, MCP included<td>The main agent. Cannot be disabled<tr><td><code>plan</code><td><code>main</code><td><code>large</code><td><code>builtin:plan</code><td><code>agent</code>, <code>@read</code> minus <code>semantic_search</code>, plus <code>question</code><td>Plan mode. Disabling it removes the mode switch<tr><td><code>task</code><td><code>subagent</code><td><code>large</code><td><code>builtin:task</code><td><code>@read</code><td>The <code>agent</code> tool's sub-agent. Disabling it removes the <code>agent</code> tool<tr><td><code>worker</code><td><code>dispatch</code><td><code>small</code><td><code>builtin:dispatch</code><td><code>@read</code>, <code>@write</code>, <code>job_output</code>, <code>job_kill</code>, <code>lsp_diagnostics</code><td>The default dispatch agent, in a <code>worktree</code>. Disabling it with no other dispatch agent removes the five dispatch tools</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-rules>The rules<a href=#the-rules class=hash-link aria-label="Direct link to The rules" title="Direct link to The rules" translate=no>​</a></h3>
+<ul>
+<li class="">Ids match <code>^[a-z][a-z0-9-]{0,31}$</code>. Anything else is a load error.</li>
+<li class="">Entries overlay the built-in with the same id field by field. A <code>null</code> or
+missing field inherits; a list replaces the inherited list rather than
+appending to it.</li>
+<li class=""><code>role</code> says which slot an agent fills: <code>main</code>, <code>subagent</code> or <code>dispatch</code>. A
+built-in's role cannot change, and a new agent must be a <code>dispatch</code> agent.</li>
+<li class=""><code>runtime</code> is <code>builtin</code> (in process) or <code>a2a</code> (an <a href=#external-agents class="">external Agent
+Card</a>). <code>agent set</code> refuses <code>--role</code> and <code>--runtime</code>; use
+<code>agent add</code> to create an agent with them.</li>
+<li class=""><code>0</code> or <code>"off"</code> disables a numeric knob. A negative value is a load error.
+Durations take a Go duration (<code>"5m"</code>) or bare seconds.</li>
+<li class="">Unknown tool names, MCP servers, skills paths, prompt files and model pins
+fail at load time, and the error names the offending path
+(<code>agents.worker.tools.allow[2]: unknown tool "x"</code>).</li>
+<li class="">Your deny list, hooks and yolo setting apply on top of every definition. A
+definition can narrow your policy, never widen it.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=tool-groups>Tool groups<a href=#tool-groups class=hash-link aria-label="Direct link to Tool groups" title="Direct link to Tool groups" translate=no>​</a></h3>
+<p><code>tools.allow</code> and <code>tools.deny</code> take tool names, the two groups, or <code>*</code> (every
+tool):</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Group<th>Members<tbody><tr><td><code>@read</code><td><code>glob</code>, <code>grep</code>, <code>ls</code>, <code>lsp_call_hierarchy</code>, <code>lsp_definition</code>, <code>lsp_symbols</code>, <code>semantic_search</code>, <code>sourcegraph</code>, <code>view</code><tr><td><code>@write</code><td><code>bash</code>, <code>edit</code>, <code>multiedit</code>, <code>write</code>, <code>todos</code></table>
+<p>Whether a named tool is actually registered still depends on the usual
+conditions: the <code>lsp_*</code> tools need a language server (or <code>auto-lsp</code> on),
+<code>semantic_search</code> an embeddings provider, and a dispatched agent is built
+from a fixed list of worktree-rooted tools (see
+<a href=#what-a-dispatched-agent-can-use class="">below</a>).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=fields>Fields<a href=#fields class=hash-link aria-label="Direct link to Fields" title="Direct link to Fields" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Field<th><code>crushrc</code> flag<th>Values<tbody><tr><td><code>role</code><td><code>--role</code><td><code>main</code>, <code>subagent</code>, <code>dispatch</code><tr><td><code>runtime</code><td><code>--runtime</code><td><code>builtin</code> (default) or <code>a2a</code><tr><td><code>name</code>, <code>description</code><td><code>--name</code>, <code>--description</code><td>Display values; the name is the agent's A2A card name<tr><td><code>disabled</code><td><code>--disabled</code><td><code>true</code> removes the agent (see <a href=#how-fields-apply class="">disabled</a>)<tr><td><code>model</code><td><code>--model</code><td><code>"large"</code>, <code>"small"</code>, or <code>{ "provider": "…", "model": "…" }</code> (<code>provider/model</code> in crushrc)<tr><td><code>prompt</code><td><code>--prompt</code><td><code>builtin:&lt;coder|plan|task|dispatch></code> or <code>file:&lt;path></code>; a bare path in crushrc means <code>file:</code><tr><td><code>prompt_append</code><td><code>--prompt-append</code><td><code>file:&lt;path></code>, appended verbatim after the rendered prompt<tr><td><code>tools</code><td><code>--tools</code> (variadic), <code>--deny-tool</code> (repeatable)<td><code>allow</code> and <code>deny</code> lists of tool names, <code>@read</code>, <code>@write</code>, <code>*</code><tr><td><code>mcp</code><td><code>--mcp</code> (variadic)<td><code>allow</code> list: <code>*</code>, a server id from <code>mcp</code>, or <code>server:tool</code><tr><td><code>skills</code><td><code>--skill</code> (repeatable)<td>Skill names the agent may use<tr><td><code>context_paths</code><td><code>--context-path</code> (repeatable)<td>Context files for this agent, replacing <code>options.context_paths</code><tr><td><code>workspace</code><td><code>--workspace</code><td><code>worktree</code> or <code>none</code>. Dispatch agents only; see <a href=#how-fields-apply class="">workspace</a><tr><td><code>todos</code><td><code>--nudge</code>, <code>--nudge-after</code>, <code>--hard-gate</code><td><code>nudge</code> (bool), <code>nudge_after_tool_calls</code> (int or <code>off</code>), <code>hard_gate</code> (bool)<tr><td><code>kill</code><td><code>--kill-after-nudges</code>, <code>--stall</code>, <code>--timeout</code><td><code>after_ignored_nudges</code> (int or <code>off</code>), <code>stall</code>, <code>timeout</code> (durations or <code>off</code>). Dispatch agents only<tr><td><code>card</code>, <code>auth</code>, <code>transport</code><td><code>--card</code>, <code>--bearer</code>, <code>--idle-timeout</code><td><a href=#external-agents class="">External agents</a> only<tr><td><code>todo_enforcement</code><td>—<td>Legacy alias for <code>todos</code> and <code>kill</code> with the <code>options.todo_enforcement</code> shape. Cannot be combined with either block<tr><td><code>$defaults</code><td><code>agent defaults</code><td>Only <code>todos</code> and <code>kill</code>: the knobs every agent inherits</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=how-fields-apply>How fields apply<a href=#how-fields-apply class=hash-link aria-label="Direct link to How fields apply" title="Direct link to How fields apply" translate=no>​</a></h3>
+<ul>
+<li class=""><strong><code>model</code>.</strong> A slot (<code>large</code> or <code>small</code>) picks that slot's model and follows
+it when you switch models in the TUI. A <code>{provider, model}</code> pin runs the
+agent on exactly that model (your small model is still used for auxiliary
+work), and the provider and model must exist in your config. For a
+dispatch, the call's <code>model</code> argument picks a slot — defaulting to the
+selected agent's — and is refused for a pinned definition.</li>
+<li class=""><strong><code>prompt</code>.</strong> <code>builtin:&lt;id></code> is one of the embedded prompts. <code>file:&lt;path></code>
+is a Go template rendered with the same data as the built-ins (working
+directory, git status, skills, context files). Relative paths resolve
+against the working directory, at load time and at runtime, so a missing
+file is a load error. <code>prompt_append</code> is appended after the rendered
+prompt, verbatim.</li>
+<li class=""><strong><code>tools</code>.</strong> The allow list is the agent's whole palette: no tool is forced
+on, so a dispatch agent allowed <code>@read</code> alone is a read-only reviewer, and
+an omitted allow list means every tool. An enabled <code>coder</code>, <code>plan</code> or
+dispatch agent whose definition resolves to no tools — an empty allow list,
+or a deny list that removes everything — fails the load. Your <code>permissions deny</code> list is applied last and is
+policy, not a definition error. A dispatch is refused only when the deny
+list removes all of <code>bash</code>, <code>edit</code>, <code>multiedit</code> and <code>write</code>.</li>
+<li class=""><strong><code>mcp</code>.</strong> A dispatch gets the MCP tools its definition's <code>mcp.allow</code>
+names; the built-in <code>worker</code> names none. MCP servers are process-wide:
+they run in your session's directory, not in the dispatch's worktree.</li>
+<li class=""><strong><code>skills</code>.</strong> Filters the skills the agent sees. A <code>dispatch_agent</code> call's
+<code>skills</code> argument can narrow the definition's list, never widen it, and a
+name that matches no discovered skill fails the call with
+<code>unknown skills: …</code>.</li>
+<li class=""><strong><code>context_paths</code>.</strong> Replaces <code>options.context_paths</code> for that agent. For
+a dispatched agent, relative paths resolve against your checkout, not the
+worktree (<a href=https://github.com/joestump-agent/crush/issues/561 target=_blank rel="noopener noreferrer" class="">#561</a>).</li>
+<li class=""><strong><code>workspace</code>.</strong> A <code>runtime: a2a</code> agent always runs with <code>none</code>. A builtin
+dispatch agent always runs in a <code>worktree</code>: <code>none</code> is accepted but ignored
+for it.</li>
+<li class=""><strong><code>disabled</code>.</strong> A disabled <code>task</code> removes the <code>agent</code> tool; a disabled
+<code>plan</code> cannot be switched to; with no enabled dispatch agent, the main agent
+loses <code>dispatch_agent</code>, <code>message_agent</code>, <code>cancel_dispatch</code>,
+<code>apply_dispatch</code> and <code>dismiss_dispatch</code>. <code>coder</code> cannot be disabled.</li>
+<li class=""><strong><code>todos</code>, <code>kill</code>.</strong> Per-agent thresholds, layered over
+<code>options.todo_enforcement</code>. A <code>kill</code> block on a non-dispatch agent is a load
+error (<code>kill thresholds apply to "dispatch" agents only</code>). The semantics
+are on <a class="" href=/crush/agents/todo-enforcement>Todo enforcement</a>.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=customizing-the-built-ins>Customizing the built-ins<a href=#customizing-the-built-ins class=hash-link aria-label="Direct link to Customizing the built-ins" title="Direct link to Customizing the built-ins" translate=no>​</a></h3>
+<p>Both blocks below load as written, in a project with no other configuration.
+In <code>crushrc</code>:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">agent defaults --nudge-after </span><span class="token number">4</span><span class="token plain"> --kill-after-nudges off</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">agent </span><span class="token builtin class-name" style="color:rgb(189, 147, 249)">set</span><span class="token plain"> coder --deny-tool sourcegraph</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">agent </span><span class="token builtin class-name" style="color:rgb(189, 147, 249)">set</span><span class="token plain"> task </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--nudge</span><span class="token plain"> </span><span class="token boolean">false</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">agent </span><span class="token builtin class-name" style="color:rgb(189, 147, 249)">set</span><span class="token plain"> plan </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--nudge</span><span class="token plain"> </span><span class="token boolean">false</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">agent </span><span class="token builtin class-name" style="color:rgb(189, 147, 249)">set</span><span class="token plain"> worker </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--model</span><span class="token plain"> large </span><span class="token punctuation" style="color:rgb(248, 248, 242)">\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--tools</span><span class="token plain"> @read @write job_output job_kill lsp_diagnostics lsp_references </span><span class="token punctuation" style="color:rgb(248, 248, 242)">\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  --kill-after-nudges </span><span class="token number">2</span><span class="token plain"> </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--stall</span><span class="token plain"> 5m </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--timeout</span><span class="token plain"> 30m</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">option dispatch-max-concurrent </span><span class="token number">2</span><br/></div></code></pre></div></div>
+<p>The same in <code>crush.json</code>:</p>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"$schema"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"https://charm.land/crush.json"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"agents"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"$defaults"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"todos"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"nudge_after_tool_calls"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token number">4</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"kill"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"after_ignored_nudges"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"off"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"coder"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"tools"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"deny"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token string" style="color:rgb(255, 121, 198)">"sourcegraph"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"task"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"todos"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"nudge"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token boolean">false</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"plan"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"todos"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"nudge"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token boolean">false</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"worker"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"model"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"large"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"tools"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"allow"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token string" style="color:rgb(255, 121, 198)">"@read"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"@write"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"job_output"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"job_kill"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"lsp_diagnostics"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"lsp_references"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"kill"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"after_ignored_nudges"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token number">2</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"stall"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"5m"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"timeout"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"30m"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"options"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"dispatch"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"max_concurrent"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token number">2</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+<p>To pin the worker to a specific model, name a provider and model that exist
+in your config: <code>agent set worker --model openai/gpt-5-mini</code> in <code>crushrc</code>, or
+<code>"model": { "provider": "openai", "model": "gpt-5-mini" }</code> in JSON. To give it
+MCP tools, name a server from your <code>mcp</code> block:
+<code>agent set worker --mcp github:get_issue</code>. Each of these fails the load, with
+the path named, when the provider, model or server is not configured.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=adding-a-dispatch-agent>Adding a dispatch agent<a href=#adding-a-dispatch-agent class=hash-link aria-label="Direct link to Adding a dispatch agent" title="Direct link to Adding a dispatch agent" translate=no>​</a></h3>
+<p>A worked example: a <code>tester</code> that the main agent can pick instead of the
+<code>worker</code>, with its own prompt file. Write the prompt first, relative to the
+directory you run Crush in:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token function" style="color:rgb(80, 250, 123)">mkdir</span><span class="token plain"> </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">-p</span><span class="token plain"> .crush/prompts</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token function" style="color:rgb(80, 250, 123)">cat</span><span class="token plain"> </span><span class="token operator">></span><span class="token plain"> .crush/prompts/tester.md </span><span class="token operator">&lt;&lt;</span><span class="token string" style="color:rgb(255, 121, 198)">'MD'</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token string" style="color:rgb(255, 121, 198)">You write tests and nothing else. Use the project's existing test framework,</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token string" style="color:rgb(255, 121, 198)">run only the package you changed, and report the command you ran and its</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token string" style="color:rgb(255, 121, 198)">result in your final message.</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token string" style="color:rgb(255, 121, 198)">MD</span><br/></div></code></pre></div></div>
+<p>Then define the agent. In <code>crushrc</code>:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">agent </span><span class="token function" style="color:rgb(80, 250, 123)">add</span><span class="token plain"> tester </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--role</span><span class="token plain"> dispatch </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--model</span><span class="token plain"> small </span><span class="token punctuation" style="color:rgb(248, 248, 242)">\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--name</span><span class="token plain"> Tester </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--description</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Writes tests for one package"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--tools</span><span class="token plain"> @read @write job_output job_kill lsp_diagnostics </span><span class="token punctuation" style="color:rgb(248, 248, 242)">\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--prompt</span><span class="token plain"> builtin:dispatch --prompt-append .crush/prompts/tester.md </span><span class="token punctuation" style="color:rgb(248, 248, 242)">\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  --kill-after-nudges </span><span class="token number">2</span><span class="token plain"> </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--timeout</span><span class="token plain"> 30m</span><br/></div></code></pre></div></div>
+<p>In <code>crush.json</code>:</p>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"$schema"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"https://charm.land/crush.json"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"agents"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"tester"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"role"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"dispatch"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"model"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"small"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"name"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Tester"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"description"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Writes tests for one package"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"tools"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"allow"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">[</span><span class="token string" style="color:rgb(255, 121, 198)">"@read"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"@write"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"job_output"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"job_kill"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"lsp_diagnostics"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">]</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"prompt"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"builtin:dispatch"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"prompt_append"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"file:.crush/prompts/tester.md"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"kill"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"after_ignored_nudges"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token number">2</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"timeout"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"30m"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+<p>A new agent inherits nothing from <code>worker</code>, so set the three explicitly, as
+above: without <code>--model</code> it resolves to <code>large</code>; without <code>--prompt</code> it runs
+on the dispatch prompt anyway; and without <code>--tools</code> it is allowed <strong>every</strong>
+tool name, which for a dispatch means the whole worktree palette — <code>fetch</code>,
+<code>download</code> and <code>lsp_rename</code> included. An explicit empty allow list
+(<code>"allow": []</code>) fails the load with <code>enabled agent resolves to no tools</code>.</p>
+<p>Once it loads, the <code>dispatch_agent</code> tool's <code>agent</code> parameter lists <code>tester</code>
+beside <code>worker</code>, and asking the main agent to "dispatch the tester agent to
+cover pkg/x" produces <code>dispatch_agent {"agent": "tester", "prompt": …}</code>. The
+result's <code>agent</code> field says which definition ran. To make <code>tester</code> the
+default for every dispatch:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">option dispatch-default-agent tester</span><br/></div></code></pre></div></div>
+<p>A read-only reviewer is the same recipe with <code>--tools @read</code> — no write
+tools means the agent can inspect the base revision and report, nothing
+else. To remove an agent you added, <code>agent remove tester</code>; built-ins are
+disabled with <code>agent set &lt;id> --disabled true</code> instead.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=load-errors>Load errors<a href=#load-errors class=hash-link aria-label="Direct link to Load errors" title="Direct link to Load errors" translate=no>​</a></h3>
+<p>Each error names the config path that caused it. The ones you are most
+likely to meet:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Message<th>Fix<tbody><tr><td><code>agents.&lt;id>: id must match ^[a-z][a-z0-9-]{0,31}$</code><td>Rename the agent<tr><td><code>agents.&lt;id>.role: a new agent must be a "dispatch" agent.</code><td>Only <code>dispatch</code> agents can be added<tr><td><code>agents.&lt;id>.tools.allow[N]: unknown tool "x"</code><td>Check the <a class="" href=/crush/reference/tools>tool reference</a><tr><td><code>agents.&lt;id>.mcp.allow[N]: unknown MCP server "x"</code><td>Define the server in your <code>mcp</code> block first<tr><td><code>agents.&lt;id>.model: unknown provider "x"</code> / <code>provider "x" has no model "y"</code><td>Pin only models your config knows<tr><td><code>agents.&lt;id>: prompt file "…" does not exist</code><td>The path is relative to the directory Crush runs in<tr><td><code>agents.&lt;id>: enabled agent resolves to no tools.</code><td>The allow list is empty, or <code>deny</code> removed everything; name at least one tool<tr><td><code>agents.&lt;id>.kill: kill thresholds apply to "dispatch" agents only.</code><td><code>kill</code> belongs on <code>worker</code> or an agent you added<tr><td><code>agents.&lt;id>.todo_enforcement: set either todo_enforcement or agents.&lt;id>.todos, not both</code><td>Drop the legacy alias<tr><td><code>agents.coder.disabled: the coder agent cannot be disabled.</code><td>Deny tools instead<tr><td><code>options.dispatch.default_agent: unknown agent "x"</code><td>Name an enabled dispatch agent<tr><td><code>option: dispatch-max-concurrent expects a positive integer</code><td>At least 1<tr><td><code>agent set: unknown agent "x" (define it first with agent add)</code><td><code>agent set</code> only overlays existing ids<tr><td><code>agent remove: "worker" is a built-in agent; disable it with …</code><td>Built-ins are disabled, not removed</table>
+<p>A <code>crushrc</code> error is reported as the last line of a longer
+<code>Failed to load config from paths […]</code> message; the <code>agents.…</code> path is the
+part to read.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=per-agent-overrides>Per-agent overrides<a href=#per-agent-overrides class=hash-link aria-label="Direct link to Per-agent overrides" title="Direct link to Per-agent overrides" translate=no>​</a></h3>
+<p>Each definition's <code>todos</code> and <code>kill</code> blocks layer over the global
+<code>options.todo_enforcement</code>; the dispatch tool's watchdog and the dispatched
+agent's ladder read the same resolved settings, so a threshold on the
+definition trips in both places. <code>agents.&lt;id>.todo_enforcement</code> stays
+accepted as a legacy alias: its nudge knobs map onto <code>todos</code>, its kill knobs
+onto <code>kill</code>. Setting the alias together with either block is a load error,
+and on a non-dispatch agent its kill knobs are ignored (kill is
+dispatch-only, the rule the <code>kill</code> block enforces as a load error).</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-a-dispatched-agent-can-use>What a dispatched agent can use<a href=#what-a-dispatched-agent-can-use class=hash-link aria-label="Direct link to What a dispatched agent can use" title="Direct link to What a dispatched agent can use" translate=no>​</a></h2>
+<p>A dispatched agent is built from a fixed set of worktree-rooted tools,
+filtered by its definition's allow list, then by your deny list:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Group<th>Tools<th>Notes<tbody><tr><td>In the <code>worker</code> palette<td><code>glob</code>, <code>grep</code>, <code>ls</code>, <code>view</code>, <code>bash</code>, <code>edit</code>, <code>multiedit</code>, <code>write</code>, <code>todos</code>, <code>job_output</code>, <code>job_kill</code><td><code>bash</code> moves commands longer than 60 s to the background; <code>job_output</code> reads them back<tr><td>With a language server (or <code>auto-lsp</code> on)<td><code>lsp_definition</code>, <code>lsp_symbols</code>, <code>lsp_call_hierarchy</code>, <code>lsp_diagnostics</code><td>The agent's LSP servers start in the worktree and stop when the run ends<tr><td>Interactive parents only<td><code>question</code><td>Pauses the run and appears in your question prompt labeled with the <code>@handle</code>. Your deny list can remove it<tr><td>Available if you add them to <code>tools.allow</code><td><code>fetch</code>, <code>download</code>, <code>lsp_references</code>, <code>lsp_rename</code>, <code>lsp_replace_symbol</code>, <code>lsp_restart</code>, <code>crush_logs</code><td>Built, but not in the <code>worker</code>'s default list<tr><td>MCP tools<td>Whatever <code>mcp.allow</code> names<td>None by default. The servers run in your session's directory<tr><td>Never built for a dispatch<td><code>agent</code>, <code>agentic_fetch</code>, <code>semantic_search</code>, <code>sourcegraph</code>, <code>dispatch_agent</code>, <code>message_agent</code>, <code>cancel_dispatch</code>, <code>apply_dispatch</code>, <code>dismiss_dispatch</code><td>Each reaches outside the worktree or across the one-level delegation boundary. <code>semantic_search</code> and <code>sourcegraph</code> are in <code>@read</code> but are not constructed for a dispatch</table>
+<p>Every path-based tool refuses a path outside the worktree. <code>bash</code> is only
+advised to stay inside; the dispatch prompt tells the agent to.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=permissions-and-yolo>Permissions and yolo<a href=#permissions-and-yolo class=hash-link aria-label="Direct link to Permissions and yolo" title="Direct link to Permissions and yolo" translate=no>​</a></h2>
+<p>A dispatched agent's permission requests show up in your normal permission
+dialog, next to the main agent's, whenever the TUI is up. The request's path is
+the agent's worktree, and its description carries the agent's <code>@handle</code>. Each
+request travels on the agent's A2A task: its run pauses until you decide,
+other agents keep running, and requests from parallel tool calls come one at a
+time.</p>
+<ul>
+<li class=""><strong>Auto-approval</strong> (<code>permissions.allowed_tools</code>) comes from your session's
+config, never from the worktree's. See
+<a href=#config-the-dispatched-agent-reads class="">below</a>.</li>
+<li class=""><strong>Yolo</strong> follows your live setting. Turning it on or off with
+<kbd>ctrl+y</kbd> applies to the next request of every running dispatched
+agent.</li>
+<li class=""><strong>Bash allow-lists</strong>: <code>--allow-commands</code>, <code>--allow-all-commands</code> and
+<code>options.allowed_commands</code> carry over from your session's config.</li>
+<li class=""><strong>Kills</strong>: if the agent is killed while its request waits on you, the request
+is denied and the agent's task ends canceled with the kill reason.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=hooks>Hooks<a href=#hooks class=hash-link aria-label="Direct link to Hooks" title="Direct link to Hooks" translate=no>​</a></h2>
+<p><code>PreToolUse</code> <a class="" href=/crush/features/hooks#pretooluse>hooks</a> fire twice over: on the
+<code>dispatch_agent</code> call itself, so a hook matching <code>^dispatch_agent$</code> can block
+or vet every dispatch, and on the dispatched agent's own tool calls, which are
+wrapped with the parent's hooks. The hook payload carries the dispatched
+session's ID, and the hook commands run from your session's directory, never
+from the worktree, so a policy that blocks <code>git push -f</code> or <code>rm -rf</code> stops a
+dispatched agent too.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=config-the-dispatched-agent-reads>Config the dispatched agent reads<a href=#config-the-dispatched-agent-reads class=hash-link aria-label="Direct link to Config the dispatched agent reads" title="Direct link to Config the dispatched agent reads" translate=no>​</a></h2>
+<p>A dispatched agent runs with your session's config, viewed from inside its
+worktree. It never loads config from the worktree itself: nothing committed
+on the base revision — a revision the main agent chooses — is read or
+executed.</p>
+<ul>
+<li class="">Policy (permissions, command allow-lists, LSP servers, skills paths, MCP,
+hooks) is your session's config: global plus the launch directory's project
+config, whether committed or not.</li>
+<li class="">Context files (<code>AGENTS.md</code>, <code>CRUSH.md</code>, <code>CLAUDE.md</code>, …) are read from
+<strong>your checkout</strong>, the launch directory, exactly as your own agent reads
+them, uncommitted edits included. They are never read from the worktree:
+the base revision is the main agent's choice, so an <code>AGENTS.md</code> committed
+there is as untrusted as a <code>.crushrc</code> would be
+(<a href=https://github.com/joestump-agent/crush/issues/561 target=_blank rel="noopener noreferrer" class="">#561</a>). The same
+goes for a dispatch agent's <code>context_paths</code> and for relative
+<code>global_context_paths</code>. Skills are resolved inside the worktree.</li>
+<li class="">The data directory is shared with your session, so logs and the database
+stay in one place.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=fixed-behaviour>Fixed behaviour<a href=#fixed-behaviour class=hash-link aria-label="Direct link to Fixed behaviour" title="Direct link to Fixed behaviour" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Behaviour<th>Value<tbody><tr><td>Worktree directory<td><code>&lt;data dir>/worktrees/&lt;repo-key>/crush-dispatch-&lt;id></code>. The data directory is <code>crush dirs</code>'s (<code>.crush</code> in the project by default); the repo key is 12 hex characters derived from the repository's git directory, so every checkout of one repository shares it. <code>&lt;data dir>/worktrees/.gitignore</code> is <code>*</code><tr><td>Branch name<td><code>crush-dispatch-&lt;id></code>, where <code>&lt;id></code> is a UUID<tr><td>Base revision<td>The current branch (or <code>HEAD</code> when detached) unless the main agent passes <code>branch</code><tr><td>Diff in the result<td>Per-file stat plus the diff, cut at 250 lines<tr><td>Tool-loop detection<td>More than 5 identical tool calls and results in the last 10 steps<tr><td>A2A host<td>One per process on a unix socket, <code>&lt;data dir>/a2a/&lt;pid>.sock</code> (socket <code>0600</code>, directory <code>0700</code>), JSON-RPC, bearer-authenticated with a per-process token. When that path would exceed the 104-byte socket limit, the socket is <code>$TMPDIR/crush-a2a-&lt;uid>/&lt;pid>-&lt;hash>.sock</code> instead. A TLS-only TCP listener is opt-in<tr><td>A2A client timeouts<td>No total timeout; per-phase bounds only: 10 s dial, 10 s TLS handshake, 30 s response headers<tr><td>A2A server shutdown<td>5 seconds per dispatch route<tr><td>Cleanup when Crush exits<td>Every live dispatch is canceled with reason <code>crush exited</code>, then a 30-second sweep removes the workspaces you applied or dismissed and the ones with no work. Everything else stays<tr><td>Inspect keys<td><kbd>ctrl+]</kbd> in; <kbd>esc</kbd> or <kbd>ctrl+[</kbd> out; <kbd>ctrl+x</kbd> cancels</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=todo-enforcement-settings>Todo enforcement settings<a href=#todo-enforcement-settings class=hash-link aria-label="Direct link to Todo enforcement settings" title="Direct link to Todo enforcement settings" translate=no>​</a></h2>
+<p><code>options.todo_enforcement</code> is the global default for every agent, and the
+<code>todos</code> and <code>kill</code> blocks of a definition override it per agent. The ladder
+itself is explained on <a class="" href=/crush/agents/todo-enforcement>Todo enforcement</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Key<th><code>crushrc</code><th>Type<th>Default<th>Meaning<tbody><tr><td><code>enabled</code><td><code>option todo-nudge</code><td>boolean<td><code>true</code><td>Inject nudges when an agent works without a todo list<tr><td><code>nudge_threshold</code><td><code>option todo-nudge-threshold</code><td>integer or <code>"off"</code><td><code>4</code><td>Tool calls without todo activity before a nudge; a mutating call trips it at once. <code>0</code>/<code>off</code> disables nudging (same as <code>enabled: false</code>). The crushrc key takes at least 1<tr><td><code>hard_gate</code><td><code>option todo-hard-gate</code><td>boolean<td><code>false</code><td>Reject mutating tools until the session has a todo list<tr><td><code>kill_after_nudges</code><td><code>option todo-kill-after-nudges</code><td>integer or <code>"off"</code><td><code>2</code><td>Nudges a <strong>dispatched</strong> run may ignore before it is killed. Any positive value is honored; <code>0</code>/<code>off</code> turns the kill off<tr><td><code>stall_window</code><td><code>option dispatch-stall</code><td>duration<td><code>0</code><td>Kill a dispatched run whose todo list has not changed for this long. Bare seconds, <code>"30m"</code>, or <code>"off"</code><tr><td><code>hard_timeout</code><td><code>option dispatch-timeout</code><td>duration<td><code>0</code><td>Kill a dispatched run after this long, whatever its progress. Same forms<tr><td><code>inactivity_timeout</code><td>—<td>integer seconds<td><code>0</code><td>A2A backstop: a served run with no events at all for this long ends <strong>failed</strong>, with the reason. Also the default <code>transport.idle_timeout</code> for external agents</table>
+<p>Negative values fail the load. Unset keys take their defaults one at a time,
+so <code>{"hard_gate": true}</code> keeps the nudges and the kill on.</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token comment" style="color:rgb(98, 114, 164)"># crushrc</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">option todo-nudge-threshold </span><span class="token number">8</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">option todo-kill-after-nudges off</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">option dispatch-timeout 30m</span><br/></div></code></pre></div></div>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"$schema"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"https://charm.land/crush.json"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"options"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"todo_enforcement"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"nudge_threshold"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token number">8</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"kill_after_nudges"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"off"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"hard_timeout"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"30m"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"inactivity_timeout"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token number">900</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=external-agents>External agents<a href=#external-agents class=hash-link aria-label="Direct link to External agents" title="Direct link to External agents" translate=no>​</a></h2>
+<p>A <code>runtime: a2a</code> definition points a dispatch agent at an
+<a href=https://a2a-protocol.org target=_blank rel="noopener noreferrer" class="">A2A Agent Card</a> hosted somewhere else: a reviewer
+your team runs, or a third-party agent. The main agent dispatches to it like
+any other dispatch agent, with <code>dispatch_agent {agent: "reviewer"}</code>, and the
+run goes through the same A2A client as the built-ins: the remote task's ID
+is tracked, and a dropped stream is resumed. How this fits a team — and why
+<code>--card</code> cannot point at another Crush yet — is on
+<a class="" href=/crush/agents/team>Working with other agents</a>.</p>
+<p>In <code>crushrc</code>:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">agent </span><span class="token function" style="color:rgb(80, 250, 123)">add</span><span class="token plain"> reviewer </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--role</span><span class="token plain"> dispatch </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--runtime</span><span class="token plain"> a2a </span><span class="token punctuation" style="color:rgb(248, 248, 242)">\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--card</span><span class="token plain"> https://reviewer.example.net/.well-known/agent-card.json </span><span class="token punctuation" style="color:rgb(248, 248, 242)">\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--bearer</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">'$REVIEWER_TOKEN'</span><span class="token plain"> </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--workspace</span><span class="token plain"> none </span><span class="token punctuation" style="color:rgb(248, 248, 242)">\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  --idle-timeout 2m </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--timeout</span><span class="token plain"> 30m</span><br/></div></code></pre></div></div>
+<p>The same agent in <code>crush.json</code>:</p>
+<div class="language-json codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-json codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"$schema"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"https://charm.land/crush.json"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token property">"agents"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token property">"reviewer"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"role"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"dispatch"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"runtime"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"a2a"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"card"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"https://reviewer.example.net/.well-known/agent-card.json"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"auth"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"type"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"bearer"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"> </span><span class="token property">"token"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"$REVIEWER_TOKEN"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"workspace"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"none"</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"transport"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"idle_timeout"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"2m"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token punctuation" style="color:rgb(248, 248, 242)">,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">      </span><span class="token property">"kill"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">{</span><span class="token plain"> </span><span class="token property">"timeout"</span><span class="token operator">:</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"30m"</span><span class="token plain"> </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">    </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">  </span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token punctuation" style="color:rgb(248, 248, 242)">}</span><br/></div></code></pre></div></div>
+<p>Both load as written: the card is fetched when the agent is dispatched, not
+when the config loads, and <code>$REVIEWER_TOKEN</code> is resolved per dispatch.</p>
+<p>The fields:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Field<th>Meaning<tbody><tr><td><code>card</code><td>Required. The card's URL. It must be <code>https</code>; plain <code>http</code> is allowed only for <code>localhost</code> and loopback addresses, and the name must resolve to loopback when Crush dials it. A URL with no path, or <code>/</code>, fetches <code>/.well-known/agent-card.json</code>. Credentials in the URL are not allowed.<tr><td><code>auth</code><td>Optional. <code>type</code> is <code>bearer</code>, the only type. <code>token</code> is required with it, and is usually a <code>$VAR</code> or <code>$(cmd)</code> reference. <code>--bearer</code> in <code>crushrc</code> accepts only a reference, never a literal token. A config layer that sets <code>card</code> drops the <code>auth</code> earlier layers gave the agent, so a project config that moves a card never inherits your global token; set <code>auth</code> again next to the new <code>card</code>.<tr><td><code>workspace</code><td><code>none</code>, the default and the only value. An external agent never touches your disk.<tr><td><code>transport.idle_timeout</code><td>How long the agent's stream may stay silent before Crush cancels its task. Unset falls back to <code>options.todo_enforcement.inactivity_timeout</code>, then to <strong>5 minutes</strong>, so an external run is bounded by default. <code>off</code> disables it.<tr><td><code>kill.timeout</code><td>The hard timeout for the whole run. Unset falls back to <code>options.todo_enforcement.hard_timeout</code>, which is off by default. It is the only <code>kill</code> field an external agent may set.<tr><td><code>name</code>, <code>description</code>, <code>disabled</code>, <code>role</code><td>As for any agent. <code>role</code> must be <code>dispatch</code>.</table>
+<p><code>model</code>, <code>prompt</code>, <code>tools</code>, <code>mcp</code>, <code>skills</code>, <code>todos</code> and the other local
+fields are load errors on an external agent
+(<code>a runtime a2a agent is defined by its card and may not set this field</code>);
+so is <code>workspace: worktree</code>. The <code>dispatch_agent</code> call refuses <code>model</code>,
+<code>skills</code> and <code>branch</code> for the same reason.</p>
+<p>A definition with a missing or refused <code>card</code>, <code>auth</code> without a <code>token</code>, or a
+negative <code>idle_timeout</code> does not fail the whole config. It loads with a
+warning that names the agent and the problem, drops out of <code>dispatch_agent</code>'s
+agent list, and a call that names it anyway is refused with the same reason.
+<code>crush run</code> prints the warning to stderr, one line per agent
+(<code>warning: agent "reviewer": cannot be dispatched: agents.reviewer.card: …</code>);
+the TUI shows it as a startup notice in the status bar and writes it to
+<code>crush.log</code>. The same channels carry the warning for a field a builtin agent
+parses but does not honor, such as <code>workspace</code> on a local dispatch agent. The
+one exception is <code>options.dispatch.default_agent</code>: a default that names an
+agent Crush cannot dispatch fails the load, since every dispatch that omits
+<code>agent</code> would be refused.</p>
+<p>What happens on each dispatch:</p>
+<ol>
+<li class=""><strong>The token is resolved.</strong> Once the call has a concurrency slot,
+<code>auth.token</code> goes through the same <code>$VAR</code> and <code>$(cmd)</code> resolver as the rest
+of your config, on every dispatch, so a rotated token is picked up. The
+resolution ends with the tool call. A reference that resolves to nothing,
+or a command that fails, fails the call (<code>auth.token did not resolve; the log has the reason</code>, or <code>resolved to an empty value</code>); the reason,
+including the command's stderr, goes to the log and not to the model.</li>
+<li class=""><strong>The card is fetched and checked.</strong> The fetch carries no credentials, has
+10-second dial and 30-second total timeouts, caps the card at 1 MiB, and
+never follows a redirect to another origin (five same-origin redirects at
+most). Crush then needs a JSON-RPC interface on the card URL's own origin,
+on protocol version 1.x, and, when <code>auth</code> is set, an HTTP bearer security
+scheme. Anything else fails the call with an error that names the card and
+the kind of failure, never text the remote sent — see
+<a href=#failures class="">the failure strings</a>.</li>
+<li class=""><strong>The prompt is sent.</strong> It goes out as a new task, with no context ID of
+Crush's own. A card that streams gets <code>SendStreamingMessage</code>, and its calls
+wait at most 30 seconds for response headers. A card that declares
+<code>streaming: false</code> gets a blocking <code>SendMessage</code> that answers only when the
+task ends, so the idle timeout bounds the whole run: raise it for a slow
+non-streaming agent. No worktree, branch, toolchain or local agent is
+created. The dispatch still gets a registry entry, a handle and a role, so
+its agent block and <code>@handle</code> show up as usual.</li>
+<li class=""><strong>The result is delivered.</strong> The terminal result carries <code>source</code>, the card
+URL. Its first line tells the main agent that the content came from an
+external agent and is untrusted.</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=after-the-run>After the run<a href=#after-the-run class=hash-link aria-label="Direct link to After the run" title="Direct link to After the run" translate=no>​</a></h3>
+<ul>
+<li class=""><code>cancel_dispatch</code> and <kbd>ctrl+x</kbd> work; the dispatch ends <code>killed</code>
+with <code>canceled by user</code>. A silent stream ends it with <code>idle timeout</code>, the
+hard timeout with <code>hard timeout</code>.</li>
+<li class=""><code>apply_dispatch</code> and <code>dismiss_dispatch</code> refuse an external dispatch:
+<code>dispatch &lt;id> ran on an external agent: nothing was written to disk, so there is no workspace or branch to apply or dismiss</code>. There is nothing to
+decide; the findings are the whole result.</li>
+<li class="">Steering is not supported: a message to the agent's <code>@handle</code>, or
+<code>message_agent</code>, fails with <code>steering external agents is not supported yet</code>. A Crush dispatch folds a steer into its running turn and streams the
+reply back, but A2A gives a third-party agent no such contract. The same
+message would start a second task there, and nothing would read its
+reply. Cancel the agent and dispatch again with the new instructions
+instead.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=failures>Failures<a href=#failures class=hash-link aria-label="Direct link to Failures" title="Direct link to Failures" translate=no>​</a></h3>
+<p>Every failure the model sees starts <code>dispatch to external agent "&lt;id>" failed:</code>; what follows is one of these, with the card URL filled in and
+nothing the remote sent:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Text<th>Meaning<tbody><tr><td><code>a2a: resolve agent card &lt;url>: HTTP status 404</code><td>The card URL answered with that status (<code>401</code>/<code>403</code>: the card itself needs a credential Crush does not send)<tr><td><code>… resolve agent card &lt;url>: the host name did not resolve</code> / <code>connection refused</code> / <code>timed out</code><td>Network<tr><td><code>… resolve agent card &lt;url>: TLS certificate verification failed</code><td>The server certificate does not chain to a CA your system trusts; see <a class="" href=/crush/agents/team#certificates>Working with other agents</a><tr><td><code>… resolve agent card &lt;url>: the response is not a valid Agent Card</code> / <code>the card is larger than 1048576 bytes</code> / <code>refusing a cross-origin redirect</code> / <code>stopped after 5 redirects</code><td>The card itself<tr><td><code>a2a: agent card &lt;url> declares no HTTP bearer security scheme; refusing to send the configured bearer token</code><td>You set <code>auth</code>, but the card has no <code>securitySchemes</code> entry of type <code>http</code>/<code>bearer</code>. Drop <code>auth</code>, or fix the card<tr><td><code>a2a: agent card &lt;url> names its JSON-RPC service on another origin than &lt;origin>; refusing it …</code><td>The card's interface URL is on another host or port than the card. Fetch the card from the origin that serves the agent<tr><td><code>a2a: agent card &lt;url> offers no JSON-RPC interface on a protocol version crush speaks (1.x)</code> / <code>offers no supported transport …</code><td>The card offers only gRPC or HTTP+JSON, or an incompatible version<tr><td><code>the external agent asked for input; crush does not forward an external agent's input, permission, or auth requests, so its task was canceled. Re-dispatch with a self-contained prompt</code><td>The remote paused on <code>input-required</code> or <code>auth-required</code><tr><td><code>agent "&lt;id>" cannot be dispatched: agents.&lt;id>.card: …</code><td>The definition is unusable (missing card, <code>http</code> to a non-loopback host, credentials in the URL, <code>auth</code> without a token)<tr><td><code>dispatch unavailable: the A2A host cannot reach external agents</code><td>The process's A2A host could not start</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=trust-model>Trust model<a href=#trust-model class=hash-link aria-label="Direct link to Trust model" title="Direct link to Trust model" translate=no>​</a></h3>
+<p>An external agent is someone else's code. Crush treats its card and its
+output as data, and never lets it steer where your credentials go:</p>
+<ul>
+<li class=""><strong>Credentials go to one origin.</strong> The token is attached only to requests to
+the card URL's origin (scheme, host and port). Every request off that origin
+is refused before it is sent. That covers a card whose service URL points
+elsewhere, which is refused before any request carries the token, and a
+redirect to another host. The pin is by origin, not path: a card may name
+any path on its own host as its service, so agents hosted under different
+paths of one host can receive each other's tokens. Give each agent a host
+of its own when that matters.</li>
+<li class=""><strong>The token is not echoed.</strong> It is not logged, persisted, or put in the
+registry, the result, or an error. If the remote echoes it back, it is
+scrubbed to <code>[REDACTED]</code>. The scrub is an exact match, run after invisible
+characters are dropped and before any text is cut, and a prefix of four or
+more bytes left at a cut is scrubbed too. A remote that sends the token
+encoded, or a deliberate fragment of it, is not caught. Crush's own host
+token never rides an external call.</li>
+<li class=""><strong>Output is untrusted text.</strong> Findings, failure reasons, and stream errors
+that carry the remote's words are labeled <code>UNTRUSTED:</code>. They are stripped
+of control and invisible characters, such as terminal escapes, zero-width
+spaces, bidirectional overrides and the Unicode tag block, and capped at
+32 KiB. A response body is cut off at 16 MiB, one server-sent event at
+4 MiB, and the output is collected from at most 64 artifacts. Artifacts are
+read as text and never applied to disk. There is no diff, and the agent's
+self-reported usage is not added to your session's cost. A task ID that is
+not 256 or fewer printable characters ends the stream.</li>
+<li class=""><strong>No questions, no permissions.</strong> If the agent asks for input or
+authentication, Crush does not forward the request. It cancels the remote
+task and fails the dispatch, saying why. Write the prompt so the agent does
+not need to ask.</li>
+<li class=""><strong>Kills end the stream; <code>tasks/cancel</code> is best effort.</strong> Cancel, the hard
+timeout, the idle timeout and Crush exiting each end the stream, and the
+dispatch ends <code>killed</code> with the reason. Once the remote has named its task,
+Crush also sends <code>tasks/cancel</code> carrying the reason, bounded at 10 seconds,
+and logs a failure. A kill that lands before the remote names a task cuts
+the stream only: there is no task to cancel, and the remote may keep
+working.</li>
+<li class=""><strong>After a crash.</strong> A dispatch the dead process left running fails at the
+next start. An external one has no workspace to preserve, so it fails as
+external, without the card URL, which the durable record does not keep.</li>
+</ul></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/brunokrugel/crush/edit/fork/docs-site/docs/agents/configuration.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"><span class=theme-last-updated>Last updated<!-- --> on <b><time datetime=2026-11-10T12:40:44.000Z itemprop=dateModified>Nov 10, 2026</time></b></span></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/crush/agents/todo-enforcement><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>Todo enforcement</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/crush/agents/team><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>Team</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#what-you-can-set class="table-of-contents__link toc-highlight">What you can set</a><li><a href=#agent-definitions class="table-of-contents__link toc-highlight">Agent definitions</a><ul><li><a href=#the-built-ins class="table-of-contents__link toc-highlight">The built-ins</a><li><a href=#the-rules class="table-of-contents__link toc-highlight">The rules</a><li><a href=#tool-groups class="table-of-contents__link toc-highlight">Tool groups</a><li><a href=#fields class="table-of-contents__link toc-highlight">Fields</a><li><a href=#how-fields-apply class="table-of-contents__link toc-highlight">How fields apply</a><li><a href=#customizing-the-built-ins class="table-of-contents__link toc-highlight">Customizing the built-ins</a><li><a href=#adding-a-dispatch-agent class="table-of-contents__link toc-highlight">Adding a dispatch agent</a><li><a href=#load-errors class="table-of-contents__link toc-highlight">Load errors</a><li><a href=#per-agent-overrides class="table-of-contents__link toc-highlight">Per-agent overrides</a></ul><li><a href=#what-a-dispatched-agent-can-use class="table-of-contents__link toc-highlight">What a dispatched agent can use</a><li><a href=#permissions-and-yolo class="table-of-contents__link toc-highlight">Permissions and yolo</a><li><a href=#hooks class="table-of-contents__link toc-highlight">Hooks</a><li><a href=#config-the-dispatched-agent-reads class="table-of-contents__link toc-highlight">Config the dispatched agent reads</a><li><a href=#fixed-behaviour class="table-of-contents__link toc-highlight">Fixed behaviour</a><li><a href=#todo-enforcement-settings class="table-of-contents__link toc-highlight">Todo enforcement settings</a><li><a href=#external-agents class="table-of-contents__link toc-highlight">External agents</a><ul><li><a href=#after-the-run class="table-of-contents__link toc-highlight">After the run</a><li><a href=#failures class="table-of-contents__link toc-highlight">Failures</a><li><a href=#trust-model class="table-of-contents__link toc-highlight">Trust model</a></ul></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer footer--dark"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Docs</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/getting-started/installation>Installation</a><li class=footer__item><a class=footer__link-item href=/crush/getting-started/quickstart>Quickstart</a><li class=footer__item><a class=footer__link-item href=/crush/configuration/crushrc>Configuration</a><li class=footer__item><a class=footer__link-item href=/crush/reference/cli>CLI reference</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Features</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/features/mcp>MCP</a><li class=footer__item><a class=footer__link-item href=/crush/features/channels>Channels</a><li class=footer__item><a class=footer__link-item href=/crush/features/skills>Skills</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Project</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class=footer__link-item>This fork<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/crush target=_blank rel="noopener noreferrer" class=footer__link-item>Upstream Crush<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/catwalk target=_blank rel="noopener noreferrer" class=footer__link-item>Catwalk<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://charm.land target=_blank rel="noopener noreferrer" class=footer__link-item>Charm<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Crush is a Charm project, licensed FSL-1.1-MIT. Docs for the brunokrugel/crush fork, built with Docusaurus.</div></div></div></footer></div></body>

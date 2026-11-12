@@ -1,0 +1,520 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-agents/troubleshooting" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.2"><title data-rh=true>Multi-agent troubleshooting | Crush</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true name=twitter:image content=https://brunokrugel.github.io/crush/img/crush-screenshot.png /><meta data-rh=true property=og:url content=https://brunokrugel.github.io/crush/agents/troubleshooting /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="Multi-agent troubleshooting | Crush"/><meta data-rh=true name=description content="Symptoms, causes and fixes for dispatched agents, todo enforcement, handles and inspect mode, external agents and the TCP listener, plus the git commands to recover a dispatch worktree by hand."/><meta data-rh=true property=og:description content="Symptoms, causes and fixes for dispatched agents, todo enforcement, handles and inspect mode, external agents and the TCP listener, plus the git commands to recover a dispatch worktree by hand."/><link data-rh=true rel=icon href=/crush/img/favicon.ico /><link data-rh=true rel=canonical href=https://brunokrugel.github.io/crush/agents/troubleshooting /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/agents/troubleshooting hreflang=en /><link data-rh=true rel=alternate href=https://brunokrugel.github.io/crush/agents/troubleshooting hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://brunokrugel.github.io/crush/agents/troubleshooting","name":"Troubleshooting","position":1}]}</script><link rel=apple-touch-icon href=/crush/img/touchicon_180.png><link rel=stylesheet href=/crush/assets/css/styles.e14b0f2f.css /><script src=/crush/assets/js/runtime~main.b8734afa.js defer></script><script src=/crush/assets/js/main.b8358137.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-7c2")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/crush/><b class="navbar__title text--truncate">Crush</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/crush/introduction>Docs</a><a class="navbar__item navbar__link" href=/crush/configuration/crushrc>Configuration</a><a class="navbar__item navbar__link" href=/crush/reference/cli>Reference</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/introduction><span class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/crush/fork><span class=linkLabel_WmDU>What this fork adds</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/getting-started/installation><span class=categoryLinkLabel_W154>Getting started</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/installation><span class=linkLabel_WmDU>Installation</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/quickstart><span class=linkLabel_WmDU>Quickstart</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/getting-started/providers-and-api-keys><span class=linkLabel_WmDU>Providers and API keys</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/configuration/crushrc><span class=categoryLinkLabel_W154>Configuration</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/crushrc><span class=linkLabel_WmDU>crushrc (Bash)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/command-reference><span class=linkLabel_WmDU>Command reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/json><span class=linkLabel_WmDU>crush.json (JSON)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/providers><span class=linkLabel_WmDU>Providers and models</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/permissions><span class=linkLabel_WmDU>Permissions and safety</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/context-and-ignore><span class=linkLabel_WmDU>Context and ignore files</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/configuration/environment><span class=linkLabel_WmDU>Environment and startup</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/features/lsp><span class=categoryLinkLabel_W154>Features</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/lsp><span class=linkLabel_WmDU>Language servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/mcp><span class=linkLabel_WmDU>MCP servers</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/channels><span class=linkLabel_WmDU>Channels</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/skills><span class=linkLabel_WmDU>Skills</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/hooks><span class=linkLabel_WmDU>Hooks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/auto-mode><span class=linkLabel_WmDU>Auto mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/scheduled-tasks><span class=linkLabel_WmDU>Scheduled tasks</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/semantic-search><span class=linkLabel_WmDU>Semantic search</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/sessions><span class=linkLabel_WmDU>Sessions and projects</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/memory><span class=linkLabel_WmDU>Memory</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/forking><span class=linkLabel_WmDU>Forking</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/goal-mode><span class=linkLabel_WmDU>Goal mode</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/server-and-workspaces><span class=linkLabel_WmDU>Server and workspaces</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/features/notifications><span class=linkLabel_WmDU>Desktop notifications</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/crush/agents/overview><span class=categoryLinkLabel_W154>Multi-agent</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/overview><span class=linkLabel_WmDU>Overview</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/tutorial><span class=linkLabel_WmDU>Tutorial</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/handles-and-inspect><span class=linkLabel_WmDU>Handles and inspect</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/todo-enforcement><span class=linkLabel_WmDU>Todo enforcement</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/configuration><span class=linkLabel_WmDU>Configuration</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/team><span class=linkLabel_WmDU>Team</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/architecture><span class=linkLabel_WmDU>Architecture</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/a2a-protocol><span class=linkLabel_WmDU>A2A protocol</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/crush/agents/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/agents/design-decisions><span class=linkLabel_WmDU>Design decisions</span></a></ul><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/crush/reference/cli><span class=categoryLinkLabel_W154>Reference</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/cli><span class=linkLabel_WmDU>CLI reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/tools><span class=linkLabel_WmDU>Tool reference</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/keybindings><span class=linkLabel_WmDU>Keybindings</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/environment-variables><span class=linkLabel_WmDU>Environment variables</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/logging><span class=linkLabel_WmDU>Logging</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/crush/reference/troubleshooting><span class=linkLabel_WmDU>Troubleshooting</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/crush/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Multi-agent</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>Troubleshooting</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Multi-agent troubleshooting</h1></header>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class=admonitionHeading_Gvgb><span class=admonitionIcon_Rf37><svg viewBox="0 0 14 16"><path fill-rule=evenodd d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"/></svg></span>Fork feature</div><div class=admonitionContent_BuS1><p>Everything on this page concerns <a class="" href=/crush/agents/overview>dispatched agents</a> and
+<a class="" href=/crush/agents/todo-enforcement>todo enforcement</a>, which exist only in this fork.
+Report problems to
+<a href=https://github.com/brunokrugel/crush/issues target=_blank rel="noopener noreferrer" class="">brunokrugel/crush</a>.</div></div>
+<p>Each entry gives the symptom, its cause and the fix. Most problems leave a line
+in the <a class="" href=/crush/reference/logging>log</a> (<code>crush logs --tail 200</code>):</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Log message<th>Meaning<tbody><tr><td><code>Dispatch A2A stream failed</code><td>The transport gave up on a dispatch mid-stream after its resume attempts<tr><td><code>Todo enforcement killed the run</code><td>A dispatched agent was killed for ignoring nudges<tr><td><code>Dispatch run killed by watchdog</code><td>A dispatch hit <code>hard_timeout</code> or <code>stall_window</code><tr><td><code>Dispatch workspace sweep failed</code><td>Cleanup at exit stopped partway<tr><td><code>Dispatch result dropped: parent session is gone</code><td>Debug level: the result had nowhere to go<tr><td><code>External agent definition cannot be dispatched</code><td>A <code>runtime: a2a</code> definition is unusable; the <code>reason</code> names the field<tr><td><code>A2A host listening on TCP</code><td>The TLS listener is up; <code>addr</code>, <code>url</code> and <code>mutual_tls</code> say how<tr><td><code>A2A TCP listener not started; serving the unix socket only</code><td>The listener could not bind (port taken, bad certificate); dispatch still works locally<tr><td><code>A2A TCP request rejected: unauthenticated</code><td>A TCP caller without a valid credential; <code>remote</code> and <code>reason</code> (<code>no credential</code> or <code>invalid bearer token</code>) say who and why<tr><td><code>A2A TCP listener has no address to advertise</code> / <code>… accepts only this process's bearer token</code><td>Startup warnings about a listener nobody can use; see <a class="" href=/crush/agents/team#startup-warnings>Working with other agents</a></table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=dispatch-wont-start>Dispatch won't start<a href=#dispatch-wont-start class=hash-link aria-label="Direct link to Dispatch won't start" title="Direct link to Dispatch won't start" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dispatch-unavailable--is-not-a-git-repository>"dispatch unavailable: … is not a git repository"<a href=#dispatch-unavailable--is-not-a-git-repository class=hash-link aria-label='Direct link to "dispatch unavailable: … is not a git repository"' title='Direct link to "dispatch unavailable: … is not a git repository"' translate=no>​</a></h3>
+<p><strong>Cause.</strong> A dispatch runs in a git worktree, so the directory Crush was
+launched in must be inside a git repository. Crush remembers the failure for
+the rest of the process, so running <code>git init</code> afterwards changes nothing
+until you restart.</p>
+<p><strong>Fix.</strong> Launch Crush inside the repository (<code>cd</code> there, or pass <code>--cwd</code>),
+make at least one commit, and restart if you just created the repository.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dispatch-at-capacity-n-agents-are-already-running-dispatchmax_concurrentm>"dispatch at capacity: N agents are already running (dispatch.max_concurrent=M)"<a href=#dispatch-at-capacity-n-agents-are-already-running-dispatchmax_concurrentm class=hash-link aria-label='Direct link to "dispatch at capacity: N agents are already running (dispatch.max_concurrent=M)"' title='Direct link to "dispatch at capacity: N agents are already running (dispatch.max_concurrent=M)"' translate=no>​</a></h3>
+<p><strong>Cause.</strong> At most <code>options.dispatch.max_concurrent</code> dispatches run at once —
+4 by default — counting ones still provisioning. The call provisioned nothing.</p>
+<p><strong>Fix.</strong> Wait for one to finish, cancel one (<kbd>ctrl+x</kbd> on its block,
+or "cancel @tester"), or raise the cap: <code>option dispatch-max-concurrent 8</code>.
+A value below 1 fails the load.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-main-agent-has-no-dispatch_agent-tool>The main agent has no <code>dispatch_agent</code> tool<a href=#the-main-agent-has-no-dispatch_agent-tool class=hash-link aria-label="Direct link to the-main-agent-has-no-dispatch_agent-tool" title="Direct link to the-main-agent-has-no-dispatch_agent-tool" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Cause<th>How to tell<th>Fix<tbody><tr><td>You are in <code>crush run</code><td>The five dispatch tools are interactive-only; a non-interactive run exits with the turn, so a dispatch could never report back<td>Ask for the work directly, or use the TUI<tr><td>The <code>worker</code> is disabled and no other dispatch agent is defined<td><code>agent set worker --disabled true</code> or <code>"worker": {"disabled": true}</code> in your config<td>Enable it, or <code>agent add</code> another dispatch agent<tr><td>The tools are denied<td><code>permissions deny dispatch_agent …</code> or <code>options.disabled_tools</code><td>Remove the entry<tr><td>You are in plan mode, or asking a sub-agent<td>Only the main <code>coder</code> agent gets the tools<td>Switch back to the coder</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=provision-dispatch-workspace->"provision dispatch workspace: …"<a href=#provision-dispatch-workspace- class=hash-link aria-label='Direct link to "provision dispatch workspace: …"' title='Direct link to "provision dispatch workspace: …"' translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>The error mentions<th>Cause<th>Fix<tbody><tr><td><code>resolve current revision</code> or <code>resolve base</code><td>The repository has no commits yet, or the main agent passed a <code>branch</code> that does not exist<td>Commit something, or tell the main agent which branch to use<tr><td><code>create worktree</code><td>git refused to create the worktree<td>Read git's message in the error: a branch named <code>crush-dispatch-&lt;id></code> that already exists, a locked index, a missing data directory</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=unknown-skills->"unknown skills: …"<a href=#unknown-skills- class=hash-link aria-label='Direct link to "unknown skills: …"' title='Direct link to "unknown skills: …"' translate=no>​</a></h3>
+<p>The main agent asked for a skill by a name that matches nothing Crush
+discovered. Skills come from your session's skills paths (<code>option skill-path</code>,
+plus the default <code>.agents/skills</code>, <code>.crush/skills</code>, <code>.claude/skills</code> and
+<code>.cursor/skills</code>), resolved inside the worktree, and a <code>dispatch_agent</code> call's
+<code>skills</code> argument can only narrow the agent definition's <code>skills</code> list, never
+widen it. Check the name in the Skills dialog and the definition's list.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=agent-id-cannot-be-dispatched-agentsidcard-><code>agent "&lt;id>" cannot be dispatched: agents.&lt;id>.card: …</code><a href=#agent-id-cannot-be-dispatched-agentsidcard- class=hash-link aria-label="Direct link to agent-id-cannot-be-dispatched-agentsidcard-" title="Direct link to agent-id-cannot-be-dispatched-agentsidcard-" translate=no>​</a></h3>
+<p><strong>Cause.</strong> The named <a class="" href=/crush/agents/configuration#external-agents>external agent</a>
+is unusable: its card URL is missing, uses plain <code>http</code> to a host that is not
+loopback, carries credentials, or <code>auth</code> is set without a <code>token</code>. Such a
+definition loads anyway — nothing on the command line tells you — and drops
+out of the <code>agent</code> enum; this refusal is where you find out. The same text
+appears on every default dispatch when <code>option dispatch-default-agent</code> names
+such an agent.</p>
+<p><strong>Fix.</strong> Correct the field the message names.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-agent-doesnt-see-my-latest-changes>The agent doesn't see my latest changes<a href=#the-agent-doesnt-see-my-latest-changes class=hash-link aria-label="Direct link to The agent doesn't see my latest changes" title="Direct link to The agent doesn't see my latest changes" translate=no>​</a></h3>
+<p>That is by design. The worktree is cut from a <strong>committed</strong> revision: your
+current branch, or the <code>branch</code> the main agent passed. It never includes
+uncommitted changes. Commit before you dispatch.</p>
+<p>The one exception is context files. <code>AGENTS.md</code>, <code>CRUSH.md</code>, <code>CLAUDE.md</code> and
+the rest are read from <strong>your checkout</strong>, not from the worktree, so an
+uncommitted edit to <code>AGENTS.md</code> reaches the dispatched agent at once.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-agent-ignores-the-agentsmd-on-the-branch-it-was-dispatched-to>The agent ignores the <code>AGENTS.md</code> on the branch it was dispatched to<a href=#the-agent-ignores-the-agentsmd-on-the-branch-it-was-dispatched-to class=hash-link aria-label="Direct link to the-agent-ignores-the-agentsmd-on-the-branch-it-was-dispatched-to" title="Direct link to the-agent-ignores-the-agentsmd-on-the-branch-it-was-dispatched-to" translate=no>​</a></h3>
+<p>Also by design. Context files come from your checkout, never from the base
+revision, because the main agent picks that revision: an <code>AGENTS.md</code> committed
+on a branch could otherwise plant instructions in the dispatched agent's
+system prompt (<a href=https://github.com/joestump-agent/crush/issues/561 target=_blank rel="noopener noreferrer" class="">#561</a>).
+If a branch needs different conventions, put them in your request so the
+main agent passes them on.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=running-agents>Running agents<a href=#running-agents class=hash-link aria-label="Direct link to Running agents" title="Direct link to Running agents" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=a-dispatched-agent-stays-at-working-and-never-progresses>A dispatched agent stays at working and never progresses<a href=#a-dispatched-agent-stays-at-working-and-never-progresses class=hash-link aria-label="Direct link to A dispatched agent stays at working and never progresses" title="Direct link to A dispatched agent stays at working and never progresses" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Cause<th>How to tell<th>Fix<tbody><tr><td>It is waiting on a permission prompt<td>The permission dialog shows a request prefixed with its <code>@handle</code>; the block's <code>→</code> line stops moving<td>Answer the dialog. Toggle yolo with <kbd>ctrl+y</kbd> to approve the rest, or pre-allow with <code>permissions allow bash edit multiedit write</code><tr><td>It asked you a question<td>Your question prompt shows one labeled with the <code>@handle</code><td>Answer it, or dismiss it: the agent carries on with "the user declined to answer"<tr><td>A long command is running<td>Inspect it with <kbd>ctrl+]</kbd>: a <code>bash</code> call is open, or it is reading a background job with <code>job_output</code><td>Wait, or steer it: <code>@tester stop and report what you have</code><tr><td>It is actually working<td>The transcript keeps moving<td>Wait</table>
+<p>A run that stalls for good is bounded only by what you configured: <code>option dispatch-timeout 30m</code> kills it after half an hour with reason <code>hard timeout</code>;
+<code>option dispatch-stall 5m</code> kills a run whose todo list stops changing;
+<code>inactivity_timeout</code> (JSON) fails a served run that emits no events at all.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=stopping-a-single-dispatched-agent>Stopping a single dispatched agent<a href=#stopping-a-single-dispatched-agent class=hash-link aria-label="Direct link to Stopping a single dispatched agent" title="Direct link to Stopping a single dispatched agent" translate=no>​</a></h3>
+<p>Select the agent's block in the chat — or drill into it with
+<kbd>ctrl+]</kbd> — and press <kbd>ctrl+x</kbd>. Asking the main agent to
+"cancel @tester" works too: it calls <code>cancel_dispatch</code>. The run ends killed
+with reason <code>canceled by user</code>, the card shows <strong>canceled</strong>, and the workspace
+and branch remain so you can review the work or dispatch a fresh agent against
+it. A steer (<code>@tester stop and report</code>) is the gentler lever — the agent can
+wrap up on its own. <kbd>esc</kbd> twice cancels only the main agent's turn.
+Quitting Crush cancels every dispatched run with reason <code>crush exited</code> and
+keeps any workspace that holds work.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=my-steer-never-got-a-reply>My steer never got a reply<a href=#my-steer-never-got-a-reply class=hash-link aria-label="Direct link to My steer never got a reply" title="Direct link to My steer never got a reply" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Cause<th>How to tell<th>Fix<tbody><tr><td>The agent finished first<td>The dispatch result lists your message under <code>undelivered_steers</code><td>Dispatch a new agent with the follow-up in its prompt<tr><td>The agent was killed moments later<td>The block shows <strong>Killed</strong>, and your <code>→</code> line never appeared<td>Same<tr><td>The text went to the main agent<td>It appears in the main chat as your prompt<td>The handle was not the very first token, or it was glued to text (<code>@tester's</code>). Retype with the handle first</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-agent-asked-a-question-nobody-can-see>The agent asked a question nobody can see<a href=#the-agent-asked-a-question-nobody-can-see class=hash-link aria-label="Direct link to The agent asked a question nobody can see" title="Direct link to The agent asked a question nobody can see" translate=no>​</a></h3>
+<p>A dispatched agent gets the <code>question</code> tool only while your session is
+interactive at dispatch time. If you attached from another client, or the
+dispatch outlived your TUI, the question is answered automatically with
+<code>no interactive user; proceed with your best judgment</code> and the agent carries
+on.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=kills-and-nudges>Kills and nudges<a href=#kills-and-nudges class=hash-link aria-label="Direct link to Kills and nudges" title="Direct link to Kills and nudges" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=a-dispatched-agent-was-killed>A dispatched agent was killed<a href=#a-dispatched-agent-was-killed class=hash-link aria-label="Direct link to A dispatched agent was killed" title="Direct link to A dispatched agent was killed" translate=no>​</a></h3>
+<p>The block shows <strong>Killed</strong> with one of <code>ignored nudges</code>, <code>stalled todos</code>,
+<code>hard timeout</code> or <code>tool loop</code>, and the main agent receives the reason, the
+agent's last message and the salvageable diff. See
+<a class="" href=/crush/agents/todo-enforcement#wander-kill>Wander kill</a> for what trips each one.</p>
+<p>To give agents more slack, raise <code>option todo-nudge-threshold</code>, set
+<code>option todo-kill-after-nudges off</code>, or raise <code>option dispatch-timeout</code>. The
+workspace is kept either way; re-dispatch with a tighter prompt, or dismiss
+it.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-main-agent-keeps-getting-todo-reminders>The main agent keeps getting todo reminders<a href=#the-main-agent-keeps-getting-todo-reminders class=hash-link aria-label="Direct link to The main agent keeps getting todo reminders" title="Direct link to The main agent keeps getting todo reminders" translate=no>​</a></h3>
+<p>Messages like "You have made tool calls without recording a todo list…" in
+the transcript are the nudge ladder. The main agent, plan mode and <code>agent</code>
+sub-agents are nudged (when they have the <code>todos</code> tool) and never killed; a
+nudged run gets at most two reminders. Turn the nudges off with
+<code>option todo-nudge false</code>, or raise <code>option todo-nudge-threshold</code>. See
+<a class="" href=/crush/agents/todo-enforcement#examples>Todo enforcement</a>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-hard-gate-blocks-every-edit>The hard gate blocks every edit<a href=#the-hard-gate-blocks-every-edit class=hash-link aria-label="Direct link to The hard gate blocks every edit" title="Direct link to The hard gate blocks every edit" translate=no>​</a></h3>
+<p><code>no todo list exists for this session; call the todos tool…</code> means
+<code>option todo-hard-gate on</code> (or <code>hard_gate: true</code>) is set and the session has
+no todo list. The agent writes one and the next mutating call goes through.
+Turn the gate off if you did not mean to enable it.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=results>Results<a href=#results class=hash-link aria-label="Direct link to Results" title="Direct link to Results" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-result-says-no-changes-but-the-agent-did-commit-work>The result says "(no changes)" but the agent did commit work<a href=#the-result-says-no-changes-but-the-agent-did-commit-work class=hash-link aria-label='Direct link to The result says "(no changes)" but the agent did commit work' title='Direct link to The result says "(no changes)" but the agent did commit work' translate=no>​</a></h3>
+<p><strong>Cause.</strong> The diff is computed against the merge-base of the dispatch's base
+and your <code>HEAD</code>, falling back to the base SHA recorded at provision. A
+dispatch cut from an unusual base — a detached <code>HEAD</code> mid-rebase, or
+<code>branch: "HEAD~1"</code> — can diff against the wrong point.</p>
+<p><strong>Fix.</strong> Check the branch directly: <code>git log --oneline -5 crush-dispatch-&lt;id></code>
+and <code>git -C &lt;workspace_path> status</code>. Dispatch from a named branch.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=diff-unavailable->"(diff unavailable: …)"<a href=#diff-unavailable- class=hash-link aria-label='Direct link to "(diff unavailable: …)"' title='Direct link to "(diff unavailable: …)"' translate=no>​</a></h3>
+<p>The diff could not be captured, usually because a git command failed inside
+the worktree. The run itself completed; read the worktree with git directly,
+using the <code>workspace_path</code> from the result.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=apply_dispatch-refused><code>apply_dispatch</code> refused<a href=#apply_dispatch-refused class=hash-link aria-label="Direct link to apply_dispatch-refused" title="Direct link to apply_dispatch-refused" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Message<th>Fix<tbody><tr><td><code>dispatch &lt;id> is still running; cancel it first</code><td>Cancel it, or wait<tr><td><code>cannot apply dispatch &lt;id>: the checkout is dirty; commit or stash your changes first</code><td>Your own checkout has uncommitted changes<tr><td><code>… a merge, rebase, or cherry-pick is already in progress (MERGE_HEAD); finish or abort it first</code><td>Finish the operation in your checkout<tr><td>Conflicting paths listed, "the merge is aborted"<td>Resolve by hand: merge the branch yourself, or re-dispatch against your current branch<tr><td><code>dispatch &lt;id> ran on an external agent: nothing was written to disk, so there is no workspace or branch to apply or dismiss</code><td>External agents produce findings only; there is nothing to apply<tr><td><code>no dispatch "&lt;ref>" is known; dispatch one first</code><td>The handle or id is wrong, or the dispatch was already applied or dismissed</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=a-dispatched-agent-ignored-my-config-hooks-or-deny-list>A dispatched agent ignored my config, hooks or deny list<a href=#a-dispatched-agent-ignored-my-config-hooks-or-deny-list class=hash-link aria-label="Direct link to A dispatched agent ignored my config, hooks or deny list" title="Direct link to A dispatched agent ignored my config, hooks or deny list" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>What was ignored<th>Why<th>Fix<tbody><tr><td>A <code>crushrc</code> or <code>crush.json</code> committed on the base revision<td>The dispatched agent reuses your session's config and never reads the worktree's own config files<td>Put it in the launch directory, or your global config<tr><td>A tool the agent used although you denied it<td><code>permissions deny</code> applies to dispatched agents; check the spelling against the <a class="" href=/crush/reference/tools>tool reference</a>. A tool added back by the agent definition's <code>tools.allow</code> is still removed by your deny list<td>—<tr><td>A skill or MCP server<td>The agent definition's <code>skills</code> and <code>mcp.allow</code> filter what the agent sees; the built-in <code>worker</code> has no MCP tools<td><code>agent set worker --mcp &lt;server></code></table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=worktrees-and-branches>Worktrees and branches<a href=#worktrees-and-branches class=hash-link aria-label="Direct link to Worktrees and branches" title="Direct link to Worktrees and branches" translate=no>​</a></h2>
+<p>Every dispatch creates a worktree at
+<code>&lt;data dir>/worktrees/&lt;repo-key>/crush-dispatch-&lt;id></code> on a branch named
+<code>crush-dispatch-&lt;id></code>. The data directory is the one <code>crush dirs</code> prints
+(<code>.crush</code> in the project by default); the repo key is 12 hex characters derived
+from the repository's git directory. <code>&lt;data dir>/worktrees/.gitignore</code> is <code>*</code>,
+so the worktrees never appear in <code>git status</code>. Crush never merges either one
+without being asked.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=worktrees-disappeared-after-quitting>Worktrees disappeared after quitting<a href=#worktrees-disappeared-after-quitting class=hash-link aria-label="Direct link to Worktrees disappeared after quitting" title="Direct link to Worktrees disappeared after quitting" translate=no>​</a></h3>
+<p>Crush keeps dispatch work at exit: a graceful shutdown removes only
+dispatches you applied or dismissed and ones that produced no work, a crash
+removes nothing — the next launch reconciles the same way — and work with
+commits or uncommitted changes stays on disk and on its branch either way.
+Only this process's own workspaces are ever touched; other Crush instances'
+live worktrees are left alone.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>How Crush ends<th>Dispatch worktrees and branches<tbody><tr><td><kbd>ctrl+c</kbd> in the TUI, or <code>SIGTERM</code><td>Live runs are canceled (<code>crush exited</code>), then decided and workless workspaces are removed with their branches; work is kept<tr><td>Crash, <code>SIGKILL</code>, <code>SIGHUP</code><td>Nothing is removed; the next launch reconciles</table>
+<p>If work you wanted is gone anyway — removed by hand, or with
+<code>crush dispatch prune --force</code> — committed work usually survives as
+unreachable commits until git garbage-collects them:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token function" style="color:rgb(80, 250, 123)">git</span><span class="token plain"> </span><span class="token function" style="color:rgb(80, 250, 123)">fsck</span><span class="token plain"> </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--unreachable</span><span class="token plain"> --no-reflogs </span><span class="token operator">|</span><span class="token plain"> </span><span class="token function" style="color:rgb(80, 250, 123)">grep</span><span class="token plain"> commit</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token function" style="color:rgb(80, 250, 123)">git</span><span class="token plain"> branch rescue-</span><span class="token operator">&lt;</span><span class="token plain">id</span><span class="token operator">></span><span class="token plain"> </span><span class="token operator">&lt;</span><span class="token plain">sha</span><span class="token operator">></span><span class="token plain">      </span><span class="token comment" style="color:rgb(98, 114, 164)"># once you've found it with git show &lt;sha></span><br/></div></code></pre></div></div>
+<p>Uncommitted changes in a removed worktree are gone.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=orphan-worktrees-and-crush-dispatch--branches-pile-up>Orphan worktrees and <code>crush-dispatch-*</code> branches pile up<a href=#orphan-worktrees-and-crush-dispatch--branches-pile-up class=hash-link aria-label="Direct link to orphan-worktrees-and-crush-dispatch--branches-pile-up" title="Direct link to orphan-worktrees-and-crush-dispatch--branches-pile-up" translate=no>​</a></h3>
+<p>Workspaces with work are kept on purpose. From the shell:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">crush dispatch list                    </span><span class="token comment" style="color:rgb(98, 114, 164)"># id, handle, branch, disposition, owner alive?, changes?</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">crush dispatch list </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--json</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">crush dispatch prune --dry-run         </span><span class="token comment" style="color:rgb(98, 114, 164)"># what the default prune would remove</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">crush dispatch prune                   </span><span class="token comment" style="color:rgb(98, 114, 164)"># dead-owner workspaces that were applied or dismissed</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">crush dispatch prune --all-dead        </span><span class="token comment" style="color:rgb(98, 114, 164)"># every dead owner's workspace, keeping ones with changes</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">crush dispatch prune --all-dead </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--force</span><span class="token plain">   </span><span class="token comment" style="color:rgb(98, 114, 164)"># those too</span><br/></div></code></pre></div></div>
+<p>A workspace whose owning process is still alive is never removed
+(<code>skipped …: owner is alive</code>), and neither is one without a lock file
+(<code>no lock file; ownership cannot be proven</code>). A workspace an agent is still
+using shows <code>Owner: alive</code>; a workspace removed by hand with git may leave a
+stale <code>crush-dispatch-&lt;id>.lock</code> behind in the worktrees directory, which is
+harmless.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=recover-a-dispatch-by-hand>Recover a dispatch by hand<a href=#recover-a-dispatch-by-hand class=hash-link aria-label="Direct link to Recover a dispatch by hand" title="Direct link to Recover a dispatch by hand" translate=no>​</a></h3>
+<p>Run these from anywhere in the repository. <code>git worktree list</code> prints absolute
+paths, so use those.</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token comment" style="color:rgb(98, 114, 164)"># Find them.</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain">crush dispatch list</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token function" style="color:rgb(80, 250, 123)">git</span><span class="token plain"> worktree list </span><span class="token operator">|</span><span class="token plain"> </span><span class="token function" style="color:rgb(80, 250, 123)">grep</span><span class="token plain"> crush-dispatch-</span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token function" style="color:rgb(80, 250, 123)">git</span><span class="token plain"> branch </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--list</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">'crush-dispatch-*'</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token comment" style="color:rgb(98, 114, 164)"># Inspect one. A dispatched agent often leaves its work uncommitted.</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token assign-left variable" style="color:rgb(189, 147, 249);font-style:italic">WT</span><span class="token operator">=</span><span class="token variable" style="color:rgb(189, 147, 249);font-style:italic">$(</span><span class="token variable function" style="color:rgb(80, 250, 123);font-style:italic">git</span><span class="token variable" style="color:rgb(189, 147, 249);font-style:italic"> worktree list </span><span class="token variable operator" style="color:rgb(189, 147, 249);font-style:italic">|</span><span class="token variable" style="color:rgb(189, 147, 249);font-style:italic"> </span><span class="token variable function" style="color:rgb(80, 250, 123);font-style:italic">awk</span><span class="token variable" style="color:rgb(189, 147, 249);font-style:italic"> </span><span class="token variable string" style="color:rgb(255, 121, 198);font-style:italic">'/crush-dispatch-&lt;id>/ { print $1 }'</span><span class="token variable" style="color:rgb(189, 147, 249);font-style:italic">)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token function" style="color:rgb(80, 250, 123)">git</span><span class="token plain"> </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">-C</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"</span><span class="token string variable" style="color:rgb(189, 147, 249);font-style:italic">$WT</span><span class="token string" style="color:rgb(255, 121, 198)">"</span><span class="token plain"> status </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--short</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token function" style="color:rgb(80, 250, 123)">git</span><span class="token plain"> </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">-C</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"</span><span class="token string variable" style="color:rgb(189, 147, 249);font-style:italic">$WT</span><span class="token string" style="color:rgb(255, 121, 198)">"</span><span class="token plain"> log </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--oneline</span><span class="token plain"> main</span><span class="token punctuation" style="color:rgb(248, 248, 242)">..</span><span class="token plain">HEAD     </span><span class="token comment" style="color:rgb(98, 114, 164)"># use the branch it was cut from</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token comment" style="color:rgb(98, 114, 164)"># Keep uncommitted work: commit it inside the worktree first.</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token function" style="color:rgb(80, 250, 123)">git</span><span class="token plain"> </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">-C</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"</span><span class="token string variable" style="color:rgb(189, 147, 249);font-style:italic">$WT</span><span class="token string" style="color:rgb(255, 121, 198)">"</span><span class="token plain"> </span><span class="token function" style="color:rgb(80, 250, 123)">add</span><span class="token plain"> </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">-A</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token function" style="color:rgb(80, 250, 123)">git</span><span class="token plain"> </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">-C</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"</span><span class="token string variable" style="color:rgb(189, 147, 249);font-style:italic">$WT</span><span class="token string" style="color:rgb(255, 121, 198)">"</span><span class="token plain"> commit </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">-m</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"Salvage dispatch &lt;id>"</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token comment" style="color:rgb(98, 114, 164)"># Review, then bring it in.</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token function" style="color:rgb(80, 250, 123)">git</span><span class="token plain"> </span><span class="token function" style="color:rgb(80, 250, 123)">diff</span><span class="token plain"> main</span><span class="token punctuation" style="color:rgb(248, 248, 242)">..</span><span class="token plain">.crush-dispatch-</span><span class="token operator">&lt;</span><span class="token plain">id</span><span class="token operator">></span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token function" style="color:rgb(80, 250, 123)">git</span><span class="token plain"> merge crush-dispatch-</span><span class="token operator">&lt;</span><span class="token plain">id</span><span class="token operator">></span><span class="token plain">             </span><span class="token comment" style="color:rgb(98, 114, 164)"># or: git cherry-pick main..crush-dispatch-&lt;id></span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token comment" style="color:rgb(98, 114, 164)"># Remove it.</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token function" style="color:rgb(80, 250, 123)">git</span><span class="token plain"> worktree remove </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--force</span><span class="token plain"> </span><span class="token string" style="color:rgb(255, 121, 198)">"</span><span class="token string variable" style="color:rgb(189, 147, 249);font-style:italic">$WT</span><span class="token string" style="color:rgb(255, 121, 198)">"</span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token function" style="color:rgb(80, 250, 123)">git</span><span class="token plain"> branch </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">-D</span><span class="token plain"> crush-dispatch-</span><span class="token operator">&lt;</span><span class="token plain">id</span><span class="token operator">></span><span class="token plain"></span><br/></div><div class=token-line style=color:#F8F8F2><span class="token plain"></span><span class="token function" style="color:rgb(80, 250, 123)">git</span><span class="token plain"> worktree prune</span><br/></div></code></pre></div></div>
+<p>Prefer <code>apply_dispatch</code> and <code>dismiss_dispatch</code> from the session when the
+dispatch is still known to it: they do the same steps and record the
+decision, so exit and <code>crush dispatch prune</code> know the workspace is settled.</p>
+<p>To clear every dispatch at once, after reviewing them, and only while no Crush
+instance has a live dispatch in this repository:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#F8F8F2;--prism-background-color:#282A36><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#F8F8F2;background-color:#282A36><code class=codeBlockLines_e6Vv><div class=token-line style=color:#F8F8F2><span class="token plain">crush dispatch prune --all-dead </span><span class="token parameter variable" style="color:rgb(189, 147, 249);font-style:italic">--force</span><br/></div></code></pre></div></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=handles-and-inspect>Handles and inspect<a href=#handles-and-inspect class=hash-link aria-label="Direct link to Handles and inspect" title="Direct link to Handles and inspect" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=tester--went-to-the-main-agent>"@tester …" went to the main agent<a href=#tester--went-to-the-main-agent class=hash-link aria-label='Direct link to "@tester …" went to the main agent' title='Direct link to "@tester …" went to the main agent' translate=no>​</a></h3>
+<p>A leading <code>@handle</code> routes your message to that agent only when all of these
+hold:</p>
+<ul>
+<li class="">the handle is the <strong>very first token</strong> of the first line. A mention later in
+the sentence attaches an agent card instead
+(<a class="" href=/crush/agents/handles-and-inspect>details</a>);</li>
+<li class="">the token ends at whitespace, the end of the message, or one of <code>: , . ? !</code>
+followed by whitespace. <code>@tester's work</code> is prose;</li>
+<li class="">the agent was dispatched from <strong>this</strong> session and is live in this
+process. The <kbd>@</kbd> completions list only live agents, so check the
+spelling there. Handles from an earlier run do not carry over.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=agent-tester-finished-completed-task-sessions-are-never-continuable>"agent @tester finished (completed); task sessions are never continuable"<a href=#agent-tester-finished-completed-task-sessions-are-never-continuable class=hash-link aria-label='Direct link to "agent @tester finished (completed); task sessions are never continuable"' title='Direct link to "agent @tester finished (completed); task sessions are never continuable"' translate=no>​</a></h3>
+<p>A finished dispatch (completed, failed or killed) cannot take more messages.
+Your message was not sent anywhere and is still in the editor; clear it, then
+ask the main agent to dispatch a new agent with the follow-up.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=steering-external-agents-is-not-supported-yet>"steering external agents is not supported yet"<a href=#steering-external-agents-is-not-supported-yet class=hash-link aria-label='Direct link to "steering external agents is not supported yet"' title='Direct link to "steering external agents is not supported yet"' translate=no>​</a></h3>
+<p>An <a class="" href=/crush/agents/configuration#external-agents>external agent</a> cannot be steered:
+A2A gives a third-party agent no contract for folding a message into a
+running task. Cancel it and dispatch again with the new instructions.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=ctrl-says-no-live-sub-agents-to-inspect><code>ctrl+]</code> says "No live sub-agents to inspect"<a href=#ctrl-says-no-live-sub-agents-to-inspect class=hash-link aria-label="Direct link to ctrl-says-no-live-sub-agents-to-inspect" title="Direct link to ctrl-says-no-live-sub-agents-to-inspect" translate=no>​</a></h3>
+<p>Nothing is running, and no agent block is selected. To read a finished agent's
+transcript, select its block first (<kbd>tab</kbd>, then <kbd>shift+↑</kbd> /
+<kbd>shift+↓</kbd>) and press <kbd>ctrl+]</kbd>, or open it from the sessions
+tree (<kbd>ctrl+s</kbd>, <kbd>ctrl+]</kbd> on the parent session).</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=external-agents>External agents<a href=#external-agents class=hash-link aria-label="Direct link to External agents" title="Direct link to External agents" translate=no>​</a></h2>
+<p>Every failure the main agent sees starts
+<code>dispatch to external agent "&lt;id>" failed:</code>. The rest is fixed text — nothing
+the remote sent — and the full list is in
+<a class="" href=/crush/agents/configuration#failures>External agents → Failures</a>. The common
+ones:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Text<th>Cause<th>Fix<tbody><tr><td><code>a2a: resolve agent card &lt;url>: HTTP status 401</code> (or <code>403</code>, <code>404</code>)<td>The card URL needs a credential Crush does not send, or is wrong<td>Serve the card unauthenticated at <code>/.well-known/agent-card.json</code>; the bearer token is sent only to the JSON-RPC calls<tr><td><code>… TLS certificate verification failed</code><td>The server's certificate does not chain to a CA your system trusts<td>Install the team CA in the system trust store, or use a publicly trusted certificate. Crush has no per-agent CA setting<tr><td><code>… the host name did not resolve</code> / <code>connection refused</code> / <code>timed out</code><td>Network<td>—<tr><td><code>a2a: agent card &lt;url> declares no HTTP bearer security scheme; refusing to send the configured bearer token</code><td>You set <code>auth</code>, but the card has no <code>http</code>/<code>bearer</code> security scheme<td>Drop <code>auth</code>, or fix the card<tr><td><code>a2a: agent card &lt;url> names its JSON-RPC service on another origin than &lt;origin>; refusing it …</code><td>The card's interface URL is on a different host or port than the card<td>Fetch the card from the origin that serves the agent<tr><td><code>a2a: agent card &lt;url> offers no JSON-RPC interface on a protocol version crush speaks (1.x)</code><td>The card offers only gRPC or HTTP+JSON, or a 0.x version<td>Crush speaks JSON-RPC 1.x only<tr><td><code>the external agent asked for input; crush does not forward …</code><td>The remote paused on <code>input-required</code> or <code>auth-required</code><td>Re-dispatch with a self-contained prompt<tr><td><code>agent "&lt;id>": auth.token did not resolve; the log has the reason</code><td>The <code>$VAR</code> is unset or the <code>$(cmd)</code> failed<td>Read <code>crush logs</code>; the command's stderr is there</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-tcp-listener>The TCP listener<a href=#the-tcp-listener class=hash-link aria-label="Direct link to The TCP listener" title="Direct link to The TCP listener" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=crush-fails-to-load-with-a2alisten-requires-tls_cert-and-tls_key>Crush fails to load with <code>a2a.listen requires tls_cert and tls_key</code><a href=#crush-fails-to-load-with-a2alisten-requires-tls_cert-and-tls_key class=hash-link aria-label="Direct link to crush-fails-to-load-with-a2alisten-requires-tls_cert-and-tls_key" title="Direct link to crush-fails-to-load-with-a2alisten-requires-tls_cert-and-tls_key" translate=no>​</a></h3>
+<p>Plain TCP is refused. Set <code>option a2a-tls-cert</code> and <code>option a2a-tls-key</code> as
+well, or drop <code>option a2a-listen</code>. A relative certificate path fails too
+(<code>… is a relative path; use an absolute path or one starting with ~/</code>).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-log-says-a2a-tcp-listener-not-started-serving-the-unix-socket-only>The log says <code>A2A TCP listener not started; serving the unix socket only</code><a href=#the-log-says-a2a-tcp-listener-not-started-serving-the-unix-socket-only class=hash-link aria-label="Direct link to the-log-says-a2a-tcp-listener-not-started-serving-the-unix-socket-only" title="Direct link to the-log-says-a2a-tcp-listener-not-started-serving-the-unix-socket-only" translate=no>​</a></h3>
+<p>The port is taken, or the certificate and key did not load as a pair. Dispatch
+keeps working over the socket. Fix the setting and restart; the listener does
+not reload.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=a-teammate-gets-401-a2a-unauthenticated>A teammate gets <code>401 a2a: unauthenticated</code><a href=#a-teammate-gets-401-a2a-unauthenticated class=hash-link aria-label="Direct link to a-teammate-gets-401-a2a-unauthenticated" title="Direct link to a-teammate-gets-401-a2a-unauthenticated" translate=no>​</a></h3>
+<p>Your log has <code>A2A TCP request rejected: unauthenticated</code> with their address
+and a <code>reason</code>:</p>
+<ul>
+<li class=""><code>no credential</code>: they sent neither a client certificate nor a bearer
+token. Without <code>option a2a-client-ca</code>, only your own process's token is
+accepted, and it never leaves the process — so a remote caller cannot
+authenticate at all. Set <code>a2a-client-ca</code> and issue them a certificate
+signed by it; see <a class="" href=/crush/agents/team>Working with other agents</a>.</li>
+<li class=""><code>invalid bearer token</code>: they sent a token, but not yours. A bearer token is
+for a process's own clients; teammates use certificates.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=a-teammates-call-is-rejected-with-no-running-agent-for-context->A teammate's call is rejected with <code>no running agent for context …</code><a href=#a-teammates-call-is-rejected-with-no-running-agent-for-context- class=hash-link aria-label="Direct link to a-teammates-call-is-rejected-with-no-running-agent-for-context-" title="Direct link to a-teammates-call-is-rejected-with-no-running-agent-for-context-" translate=no>​</a></h3>
+<p>They authenticated and reached a definition route (<code>/agents/worker</code>), but
+those routes run nothing for a remote caller yet: a Crush host accepts the
+call and rejects the task until the peer registry
+(<a href=https://github.com/joestump-agent/crush/issues/334 target=_blank rel="noopener noreferrer" class="">#334</a>) lands. This is
+the expected answer, and the proof that the certificates and routes line up.
+See <a class="" href=/crush/agents/team#what-works-today>what works today</a>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=a-teammate-gets-404-for-agentsworkerwell-knownagent-cardjson>A teammate gets <code>404</code> for <code>/agents/worker/.well-known/agent-card.json</code><a href=#a-teammate-gets-404-for-agentsworkerwell-knownagent-cardjson class=hash-link aria-label="Direct link to a-teammate-gets-404-for-agentsworkerwell-knownagent-cardjson" title="Direct link to a-teammate-gets-404-for-agentsworkerwell-knownagent-cardjson" translate=no>​</a></h3>
+<p>The host builds a card for every agent definition but does not serve it on
+the wire: its router answers <code>404</code> for any sub-path of a route. Nothing is
+misconfigured; the card is not fetchable until the peer registry publishes
+it. The same <code>404</code> is what a <code>--card</code> pointed at a Crush gets.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=400-or-415-from-the-listener><code>400</code> or <code>415</code> from the listener<a href=#400-or-415-from-the-listener class=hash-link aria-label="Direct link to 400-or-415-from-the-listener" title="Direct link to 400-or-415-from-the-listener" translate=no>​</a></h3>
+<p><code>400</code>: the request's <code>Host</code> header matched neither the listen address nor a
+name in the server certificate. Dial the listener by a name or address that is
+a DNS or IP SAN of <code>a2a-tls-cert</code>, or by the configured listen address.
+<code>415</code>: the request had no <code>Content-Type: application/json</code>; the host requires
+it on every request, <code>GET</code> included.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=clientserver-mode>Client/server mode<a href=#clientserver-mode class=hash-link aria-label="Direct link to Client/server mode" title="Direct link to Client/server mode" translate=no>​</a></h2>
+<p>With <code>CRUSH_CLIENT_SERVER=1</code>, the agent block, @ completions, steering,
+cards and <kbd>ctrl+x</kbd> all work through the server's A2A proxy. A card
+for a finished agent shows the agent's final status text until the server has
+stamped the result on the dispatch record, then its findings. If the agent
+index returns <code>503</code>, the workspace's A2A host has not started yet; it starts
+with the first session that needs it.</div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/brunokrugel/crush/edit/fork/docs-site/docs/agents/troubleshooting.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"><span class=theme-last-updated>Last updated<!-- --> on <b><time datetime=2026-11-10T12:40:44.000Z itemprop=dateModified>Nov 10, 2026</time></b></span></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/crush/agents/a2a-protocol><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>A2A protocol</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/crush/agents/design-decisions><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>Design decisions</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#dispatch-wont-start class="table-of-contents__link toc-highlight">Dispatch won't start</a><ul><li><a href=#dispatch-unavailable--is-not-a-git-repository class="table-of-contents__link toc-highlight">"dispatch unavailable: … is not a git repository"</a><li><a href=#dispatch-at-capacity-n-agents-are-already-running-dispatchmax_concurrentm class="table-of-contents__link toc-highlight">"dispatch at capacity: N agents are already running (dispatch.max_concurrent=M)"</a><li><a href=#the-main-agent-has-no-dispatch_agent-tool class="table-of-contents__link toc-highlight">The main agent has no <code>dispatch_agent</code> tool</a><li><a href=#provision-dispatch-workspace- class="table-of-contents__link toc-highlight">"provision dispatch workspace: …"</a><li><a href=#unknown-skills- class="table-of-contents__link toc-highlight">"unknown skills: …"</a><li><a href=#agent-id-cannot-be-dispatched-agentsidcard- class="table-of-contents__link toc-highlight"><code>agent "&lt;id>" cannot be dispatched: agents.&lt;id>.card: …</code></a><li><a href=#the-agent-doesnt-see-my-latest-changes class="table-of-contents__link toc-highlight">The agent doesn't see my latest changes</a><li><a href=#the-agent-ignores-the-agentsmd-on-the-branch-it-was-dispatched-to class="table-of-contents__link toc-highlight">The agent ignores the <code>AGENTS.md</code> on the branch it was dispatched to</a></ul><li><a href=#running-agents class="table-of-contents__link toc-highlight">Running agents</a><ul><li><a href=#a-dispatched-agent-stays-at-working-and-never-progresses class="table-of-contents__link toc-highlight">A dispatched agent stays at working and never progresses</a><li><a href=#stopping-a-single-dispatched-agent class="table-of-contents__link toc-highlight">Stopping a single dispatched agent</a><li><a href=#my-steer-never-got-a-reply class="table-of-contents__link toc-highlight">My steer never got a reply</a><li><a href=#the-agent-asked-a-question-nobody-can-see class="table-of-contents__link toc-highlight">The agent asked a question nobody can see</a></ul><li><a href=#kills-and-nudges class="table-of-contents__link toc-highlight">Kills and nudges</a><ul><li><a href=#a-dispatched-agent-was-killed class="table-of-contents__link toc-highlight">A dispatched agent was killed</a><li><a href=#the-main-agent-keeps-getting-todo-reminders class="table-of-contents__link toc-highlight">The main agent keeps getting todo reminders</a><li><a href=#the-hard-gate-blocks-every-edit class="table-of-contents__link toc-highlight">The hard gate blocks every edit</a></ul><li><a href=#results class="table-of-contents__link toc-highlight">Results</a><ul><li><a href=#the-result-says-no-changes-but-the-agent-did-commit-work class="table-of-contents__link toc-highlight">The result says "(no changes)" but the agent did commit work</a><li><a href=#diff-unavailable- class="table-of-contents__link toc-highlight">"(diff unavailable: …)"</a><li><a href=#apply_dispatch-refused class="table-of-contents__link toc-highlight"><code>apply_dispatch</code> refused</a><li><a href=#a-dispatched-agent-ignored-my-config-hooks-or-deny-list class="table-of-contents__link toc-highlight">A dispatched agent ignored my config, hooks or deny list</a></ul><li><a href=#worktrees-and-branches class="table-of-contents__link toc-highlight">Worktrees and branches</a><ul><li><a href=#worktrees-disappeared-after-quitting class="table-of-contents__link toc-highlight">Worktrees disappeared after quitting</a><li><a href=#orphan-worktrees-and-crush-dispatch--branches-pile-up class="table-of-contents__link toc-highlight">Orphan worktrees and <code>crush-dispatch-*</code> branches pile up</a><li><a href=#recover-a-dispatch-by-hand class="table-of-contents__link toc-highlight">Recover a dispatch by hand</a></ul><li><a href=#handles-and-inspect class="table-of-contents__link toc-highlight">Handles and inspect</a><ul><li><a href=#tester--went-to-the-main-agent class="table-of-contents__link toc-highlight">"@tester …" went to the main agent</a><li><a href=#agent-tester-finished-completed-task-sessions-are-never-continuable class="table-of-contents__link toc-highlight">"agent @tester finished (completed); task sessions are never continuable"</a><li><a href=#steering-external-agents-is-not-supported-yet class="table-of-contents__link toc-highlight">"steering external agents is not supported yet"</a><li><a href=#ctrl-says-no-live-sub-agents-to-inspect class="table-of-contents__link toc-highlight"><code>ctrl+]</code> says "No live sub-agents to inspect"</a></ul><li><a href=#external-agents class="table-of-contents__link toc-highlight">External agents</a><li><a href=#the-tcp-listener class="table-of-contents__link toc-highlight">The TCP listener</a><ul><li><a href=#crush-fails-to-load-with-a2alisten-requires-tls_cert-and-tls_key class="table-of-contents__link toc-highlight">Crush fails to load with <code>a2a.listen requires tls_cert and tls_key</code></a><li><a href=#the-log-says-a2a-tcp-listener-not-started-serving-the-unix-socket-only class="table-of-contents__link toc-highlight">The log says <code>A2A TCP listener not started; serving the unix socket only</code></a><li><a href=#a-teammate-gets-401-a2a-unauthenticated class="table-of-contents__link toc-highlight">A teammate gets <code>401 a2a: unauthenticated</code></a><li><a href=#a-teammates-call-is-rejected-with-no-running-agent-for-context- class="table-of-contents__link toc-highlight">A teammate's call is rejected with <code>no running agent for context …</code></a><li><a href=#a-teammate-gets-404-for-agentsworkerwell-knownagent-cardjson class="table-of-contents__link toc-highlight">A teammate gets <code>404</code> for <code>/agents/worker/.well-known/agent-card.json</code></a><li><a href=#400-or-415-from-the-listener class="table-of-contents__link toc-highlight"><code>400</code> or <code>415</code> from the listener</a></ul><li><a href=#clientserver-mode class="table-of-contents__link toc-highlight">Client/server mode</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer footer--dark"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Docs</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/getting-started/installation>Installation</a><li class=footer__item><a class=footer__link-item href=/crush/getting-started/quickstart>Quickstart</a><li class=footer__item><a class=footer__link-item href=/crush/configuration/crushrc>Configuration</a><li class=footer__item><a class=footer__link-item href=/crush/reference/cli>CLI reference</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Features</div><ul class="footer__items clean-list"><li class=footer__item><a class=footer__link-item href=/crush/features/mcp>MCP</a><li class=footer__item><a class=footer__link-item href=/crush/features/channels>Channels</a><li class=footer__item><a class=footer__link-item href=/crush/features/skills>Skills</a></ul></div><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Project</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/brunokrugel/crush target=_blank rel="noopener noreferrer" class=footer__link-item>This fork<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/crush target=_blank rel="noopener noreferrer" class=footer__link-item>Upstream Crush<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://github.com/charmbracelet/catwalk target=_blank rel="noopener noreferrer" class=footer__link-item>Catwalk<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><li class=footer__item><a href=https://charm.land target=_blank rel="noopener noreferrer" class=footer__link-item>Charm<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Crush is a Charm project, licensed FSL-1.1-MIT. Docs for the brunokrugel/crush fork, built with Docusaurus.</div></div></div></footer></div></body>
