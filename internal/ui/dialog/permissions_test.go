@@ -37,6 +37,8 @@ func TestPermissions_ActionKeysResolve(t *testing.T) {
 		{key: keyMsg('D'), action: PermissionDeny},
 		{key: keyMsg('s'), action: PermissionAllowForSession},
 		{key: keyMsg('S'), action: PermissionAllowForSession},
+		{key: keyMsg('w'), action: PermissionAlwaysAllow},
+		{key: keyMsg('W'), action: PermissionAlwaysAllow},
 	}
 
 	for _, tc := range tests {
@@ -49,7 +51,7 @@ func TestPermissions_ActionKeysResolve(t *testing.T) {
 }
 
 // TestPermissions_NavigationCyclesOptions verifies that tab and arrow keys
-// cycle through the three permission options.
+// cycle through the four permission options.
 func TestPermissions_NavigationCyclesOptions(t *testing.T) {
 	t.Parallel()
 
@@ -63,13 +65,16 @@ func TestPermissions_NavigationCyclesOptions(t *testing.T) {
 	p.HandleMsg(tea.KeyPressMsg{Code: tea.KeyTab})
 	require.Equal(t, 2, p.selectedOption)
 
+	p.HandleMsg(tea.KeyPressMsg{Code: tea.KeyTab})
+	require.Equal(t, 3, p.selectedOption)
+
 	// Wrap around.
 	p.HandleMsg(tea.KeyPressMsg{Code: tea.KeyTab})
 	require.Equal(t, 0, p.selectedOption)
 
 	// Left cycles backward.
 	p.HandleMsg(keyMsg('h'))
-	require.Equal(t, 2, p.selectedOption)
+	require.Equal(t, 3, p.selectedOption)
 }
 
 // TestPermissions_EnterConfirmsSelection verifies that enter confirms the

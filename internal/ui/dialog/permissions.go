@@ -28,6 +28,7 @@ type PermissionAction string
 const (
 	PermissionAllow           PermissionAction = "allow"
 	PermissionAllowForSession PermissionAction = "allow_session"
+	PermissionAlwaysAllow     PermissionAction = "always_allow"
 	PermissionDeny            PermissionAction = "deny"
 )
 
@@ -80,6 +81,7 @@ type permissionsKeyMap struct {
 	Select           key.Binding
 	Allow            key.Binding
 	AllowSession     key.Binding
+	AlwaysAllow      key.Binding
 	Deny             key.Binding
 	Close            key.Binding
 	ToggleDiffMode   key.Binding
@@ -117,6 +119,10 @@ func defaultPermissionsKeyMap() permissionsKeyMap {
 		AllowSession: key.NewBinding(
 			key.WithKeys("s", "S", "ctrl+s"),
 			key.WithHelp("s", "allow session"),
+		),
+		AlwaysAllow: key.NewBinding(
+			key.WithKeys("w", "W"),
+			key.WithHelp("w", "always allow"),
 		),
 		Deny: key.NewBinding(
 			key.WithKeys("d", "D"),
@@ -156,6 +162,43 @@ func defaultPermissionsKeyMap() permissionsKeyMap {
 			key.WithHelp("shift+←↓↑→", "scroll"),
 		),
 	}
+}
+
+// permissionOption describes one button in the dialog. The slice index is
+// what selectedOption holds, so the buttons, the keyboard cursor, and the
+// action they resolve to cannot drift apart.
+type permissionOption struct {
+	text           string
+	underlineIndex int
+	action         PermissionAction
+}
+
+// permissionOptions are the dialog's buttons in display order.
+var permissionOptions = []permissionOption{
+	{"Allow", 0, PermissionAllow},
+	{"Allow for Session", 10, PermissionAllowForSession},
+	{"Always Allow", 2, PermissionAlwaysAllow},
+	{"Deny", 0, PermissionDeny},
+}
+
+// optionIndex returns the position of the button that resolves to action.
+func optionIndex(action PermissionAction) int {
+	for i, o := range permissionOptions {
+		if o.action == action {
+			return i
+		}
+	}
+	return 0
+}
+
+// defaultSelectedOption picks the button the cursor starts on. A flagged
+// request starts on Deny so that answering the prompt by reflex refuses
+// instead of approving.
+func defaultSelectedOption(perm permission.PermissionRequest) int {
+	if perm.Danger != "" {
+		return optionIndex(PermissionDeny)
+	}
+	return optionIndex(PermissionAllow)
 }
 
 var _ Dialog = (*Permissions)(nil)
@@ -234,16 +277,18 @@ func (p *Permissions) HandleMsg(msg tea.Msg) Action {
 			// Escape denies the permission request.
 			return p.respond(PermissionDeny)
 		case key.Matches(msg, p.keyMap.Right), key.Matches(msg, p.keyMap.Tab):
-			p.selectedOption = (p.selectedOption + 1) % 3
+			p.selectedOption = (p.selectedOption + 1) % 4
 		case key.Matches(msg, p.keyMap.Left):
-			// Add 2 instead of subtracting 1 to avoid negative modulo.
-			p.selectedOption = (p.selectedOption + 2) % 3
+			// Add 3 instead of subtracting 1 to avoid negative modulo.
+			p.selectedOption = (p.selectedOption + 3) % 4
 		case key.Matches(msg, p.keyMap.Select):
 			return p.selectCurrentOption()
 		case key.Matches(msg, p.keyMap.Allow):
 			return p.respond(PermissionAllow)
 		case key.Matches(msg, p.keyMap.AllowSession):
 			return p.respond(PermissionAllowForSession)
+		case key.Matches(msg, p.keyMap.AlwaysAllow):
+			return p.respond(PermissionAlwaysAllow)
 		case key.Matches(msg, p.keyMap.Deny):
 			return p.respond(PermissionDeny)
 		case key.Matches(msg, p.keyMap.ToggleDiffMode):
@@ -302,6 +347,8 @@ func (p *Permissions) selectCurrentOption() tea.Msg {
 		return p.respond(PermissionAllow)
 	case 1:
 		return p.respond(PermissionAllowForSession)
+	case 2:
+		return p.respond(PermissionAlwaysAllow)
 	default:
 		return p.respond(PermissionDeny)
 	}
@@ -753,7 +800,8 @@ func (p *Permissions) renderButtons(contentWidth int, fullscreen bool) string {
 	buttons := []common.ButtonOpts{
 		{Text: "Allow", UnderlineIndex: 0, Selected: p.selectedOption == 0},
 		{Text: "Allow for Session", UnderlineIndex: 10, Selected: p.selectedOption == 1},
-		{Text: "Deny", UnderlineIndex: 0, Selected: p.selectedOption == 2},
+		{Text: "Always Allow", UnderlineIndex: 2, Selected: p.selectedOption == 2},
+		{Text: "Deny", UnderlineIndex: 0, Selected: p.selectedOption == 3},
 	}
 
 	content := common.ButtonGroup(p.com.Styles, buttons, "  ")
