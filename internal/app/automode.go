@@ -102,9 +102,13 @@ func truncateTranscript(input string) string {
 // permissionPreHooks builds the pre-permission hook chain: the native
 // auto mode only. Shell hooks keep their existing surfaces (PreToolUse
 // before tool execution, the prompt-shown/result events), so pre-prompt
-// evaluation stays the classifier's job alone. Nil is fine: the service
-// treats absent hooks as "always prompt".
+// evaluation stays the classifier's job alone. Returning a literal nil
+// keeps the interface value nil: a typed-nil *AutoMode would still pass
+// the service's hooks != nil check and crash on its first call.
 func (app *App) permissionPreHooks() permission.PermissionHooks {
+	if app.autoMode == nil {
+		return nil
+	}
 	return app.autoMode
 }
 
