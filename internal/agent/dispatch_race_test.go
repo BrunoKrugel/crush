@@ -17,10 +17,10 @@ import (
 // wrongly started a concurrent run for the same session is observable as an
 // in-flight count above one.
 type concurrencyProbeModel struct {
-	inFlight atomic.Int32
-	maxSeen  atomic.Int32
 	entered  chan struct{}
 	release  chan struct{}
+	inFlight atomic.Int32
+	maxSeen  atomic.Int32
 }
 
 func (m *concurrencyProbeModel) Provider() string { return "fake" }
@@ -125,14 +125,12 @@ func TestRun_ConcurrentInProcessDispatchStartsOneRun(t *testing.T) {
 	const n = 8
 	var wg sync.WaitGroup
 	for range n {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_, _ = sa.Run(t.Context(), SessionAgentCall{
 				SessionID: sess.ID,
 				Prompt:    "event",
 			})
-		}()
+		})
 	}
 
 	// Wait until the active run's Stream is in flight (blocked on release).

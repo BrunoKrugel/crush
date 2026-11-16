@@ -37,17 +37,15 @@ func (k chooseKeyMap) FullHelp() [][]key.Binding {
 // chooseModel is the Bubble Tea model for a multiple choice question with
 // a ">" cursor.
 type chooseModel struct {
-	question string
-	options  []string
-	cursor   int
-	chosen   int
-
-	help   help.Model
-	keymap chooseKeyMap
-
-	quitting   bool
+	help       help.Model
+	question   string
+	keymap     chooseKeyMap
+	options    []string
+	cursor     int
+	chosen     int
 	blankLines int
 	width      int
+	quitting   bool
 }
 
 func newChooseModel(question string, options []string) chooseModel {

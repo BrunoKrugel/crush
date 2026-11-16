@@ -18,22 +18,20 @@ import (
 // YesNo is an inline yes/no confirmation component. For open-ended
 // responses, use FreeText instead. Notes can be added via alt+n.
 type YesNo struct {
+	lastResponse question.Answer
+	compositor   *lipgloss.Compositor
 	questionEditor
-	Request    question.Question
-	selectedNo bool
-	focused    bool
-	compositor *lipgloss.Compositor
-	hoverX     int
-	hoverY     int
-
+	Request      question.Question
+	keyYes       key.Binding
+	keyClose     key.Binding
+	keyNo        key.Binding
 	keyLeftRight key.Binding
 	keyEnter     key.Binding
-	keyYes       key.Binding
-	keyNo        key.Binding
-	keyClose     key.Binding
-
-	lastResponse question.Answer
+	hoverY       int
+	hoverX       int
 	lastWidth    int
+	focused      bool
+	selectedNo   bool
 }
 
 // NewYesNo creates a new inline yes/no question component.
@@ -55,7 +53,7 @@ func NewYesNo(sty *styles.Styles, req question.Question) *YesNo {
 func (d *YesNo) HandleKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	// Note editor takes priority when active.
 	if d.activeNoteKey != "" && d.noteEditor.Focused() {
-		cmd, handled := d.handleNoteKey(msg, d.keyClose, func() { d.closeNote(question.QuestionNoteKey) })
+		cmd, handled := d.handleNoteKey(msg, d.keyClose, func() { d.closeNote("_question") })
 		if handled {
 			return false, cmd
 		}
@@ -78,7 +76,7 @@ func (d *YesNo) HandleKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		d.answer(d.respond(false))
 		return true, nil
 	case key.Matches(msg, d.keyNote):
-		return false, d.openNote(question.QuestionNoteKey)
+		return false, d.openNote("_question")
 	}
 	return false, nil
 }
@@ -199,7 +197,7 @@ func (d *YesNo) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	y += drawStyledText(scr, image.Rect(area.Min.X, y, area.Max.X, area.Max.Y), buttons)
 
 	// Draw note editor or saved note.
-	cur, _ := d.drawStandaloneNote(scr, area, y, question.QuestionNoteKey)
+	cur, _ := d.drawStandaloneNote(scr, area, y, "_question")
 	return cur
 }
 

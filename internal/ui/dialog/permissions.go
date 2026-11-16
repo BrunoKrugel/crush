@@ -1,7 +1,6 @@
 package dialog
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -10,6 +9,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/fsext"
 	"github.com/charmbracelet/crush/internal/permission"
@@ -17,7 +17,6 @@ import (
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/styles"
 	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/charmbracelet/x/ansi"
 )
 
 // PermissionsID is the identifier for the permissions dialog.
@@ -56,27 +55,22 @@ const (
 
 // Permissions represents a dialog for permission requests.
 type Permissions struct {
-	com          *common.Common
-	windowWidth  int // Terminal window dimensions.
-	windowHeight int
-	fullscreen   bool // true when dialog is fullscreen
-
-	permission     permission.PermissionRequest
-	selectedOption int // 0: Allow, 1: Allow for session, 2: Deny
-
-	viewport      viewport.Model
-	viewportDirty bool // true when viewport content needs to be re-rendered
-	viewportWidth int
-
-	// Diff view state.
-	diffSplitMode        *bool // nil means use default based on width
-	defaultDiffSplitMode bool  // default split mode based on width
-	diffXOffset          int   // horizontal scroll offset for diff view
+	com                  *common.Common
+	diffSplitMode        *bool
+	help                 help.Model
+	permission           permission.PermissionRequest
 	unifiedDiffContent   string
 	splitDiffContent     string
-
-	help   help.Model
-	keyMap permissionsKeyMap
+	keyMap               permissionsKeyMap
+	viewport             viewport.Model
+	selectedOption       int
+	viewportWidth        int
+	diffXOffset          int
+	windowHeight         int
+	windowWidth          int
+	viewportDirty        bool
+	fullscreen           bool
+	defaultDiffSplitMode bool
 }
 
 type permissionsKeyMap struct {
@@ -113,10 +107,7 @@ func defaultPermissionsKeyMap() permissionsKeyMap {
 			key.WithHelp("tab", "next option"),
 		),
 		Select: key.NewBinding(
-			// ctrl+y is deliberately absent: it is the global yolo-mode
-			// toggle, and dialogs see keys first, so accepting it here
-			// turns "stop asking me" into "approve this one".
-			key.WithKeys("enter"),
+			key.WithKeys("enter", "ctrl+y"),
 			key.WithHelp("enter", "confirm"),
 		),
 		Allow: key.NewBinding(
@@ -167,42 +158,6 @@ func defaultPermissionsKeyMap() permissionsKeyMap {
 	}
 }
 
-// permissionOption describes one button in the dialog. The slice index is
-// what selectedOption holds, so the buttons, the keyboard cursor, and the
-// action they resolve to cannot drift apart.
-type permissionOption struct {
-	text           string
-	underlineIndex int
-	action         PermissionAction
-}
-
-// permissionOptions are the dialog's buttons in display order.
-var permissionOptions = []permissionOption{
-	{"Allow", 0, PermissionAllow},
-	{"Allow for Session", 10, PermissionAllowForSession},
-	{"Deny", 0, PermissionDeny},
-}
-
-// optionIndex returns the position of the button that resolves to action.
-func optionIndex(action PermissionAction) int {
-	for i, o := range permissionOptions {
-		if o.action == action {
-			return i
-		}
-	}
-	return 0
-}
-
-// defaultSelectedOption picks the button the cursor starts on. A flagged
-// request starts on Deny so that answering the prompt by reflex refuses
-// instead of approving.
-func defaultSelectedOption(perm permission.PermissionRequest) int {
-	if perm.Danger != "" {
-		return optionIndex(PermissionDeny)
-	}
-	return optionIndex(PermissionAllow)
-}
-
 var _ Dialog = (*Permissions)(nil)
 
 // PermissionsOption configures the permissions dialog.
@@ -239,7 +194,7 @@ func NewPermissions(com *common.Common, perm permission.PermissionRequest, opts 
 	p := &Permissions{
 		com:            com,
 		permission:     perm,
-		selectedOption: defaultSelectedOption(perm),
+		selectedOption: 0,
 		viewport:       vp,
 		help:           h,
 		keyMap:         km,
@@ -279,11 +234,10 @@ func (p *Permissions) HandleMsg(msg tea.Msg) Action {
 			// Escape denies the permission request.
 			return p.respond(PermissionDeny)
 		case key.Matches(msg, p.keyMap.Right), key.Matches(msg, p.keyMap.Tab):
-			p.selectedOption = (p.selectedOption + 1) % len(permissionOptions)
+			p.selectedOption = (p.selectedOption + 1) % 3
 		case key.Matches(msg, p.keyMap.Left):
-			// Step forward by one short of a full cycle to avoid negative
-			// modulo.
-			p.selectedOption = (p.selectedOption + len(permissionOptions) - 1) % len(permissionOptions)
+			// Add 2 instead of subtracting 1 to avoid negative modulo.
+			p.selectedOption = (p.selectedOption + 2) % 3
 		case key.Matches(msg, p.keyMap.Select):
 			return p.selectCurrentOption()
 		case key.Matches(msg, p.keyMap.Allow):
@@ -343,12 +297,14 @@ func (p *Permissions) HandleMsg(msg tea.Msg) Action {
 }
 
 func (p *Permissions) selectCurrentOption() tea.Msg {
-	if p.selectedOption < 0 || p.selectedOption >= len(permissionOptions) {
-		// Only reachable through a bug, and refusing is the safe way to
-		// be wrong.
+	switch p.selectedOption {
+	case 0:
+		return p.respond(PermissionAllow)
+	case 1:
+		return p.respond(PermissionAllowForSession)
+	default:
 		return p.respond(PermissionDeny)
 	}
-	return p.respond(permissionOptions[p.selectedOption].action)
 }
 
 func (p *Permissions) respond(action PermissionAction) tea.Msg {
@@ -467,10 +423,6 @@ func (p *Permissions) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		p.viewport.SetContent(renderedContent)
 		p.viewportWidth = p.viewport.Width()
 		p.viewportDirty = false
-	} else {
-		// SetHeight does not clamp the offset; only SetContent does. Re-set
-		// it so a taller viewport does not stay scrolled past the end.
-		p.viewport.SetYOffset(p.viewport.YOffset())
 	}
 	content = p.viewport.View()
 	if needsScrollbar {
@@ -494,26 +446,10 @@ func (p *Permissions) renderHeader(contentWidth int) string {
 	title := common.DialogTitle(t, "Permission Required", contentWidth-t.Dialog.Title.GetHorizontalFrameSize(), t.Dialog.TitleGradFromColor, t.Dialog.TitleGradToColor)
 	title = t.Dialog.Title.Render(title)
 
-	lines := []string{title}
-
-	// Add warning for dangerous commands, naming what tripped the check so
-	// the user can judge it rather than just be alarmed by it. The reason
-	// names a shell construct where it cannot name a command, and those
-	// run long, so the line wraps rather than clipping: a warning cut off
-	// mid-phrase is worse than one that costs a second line.
-	if p.permission.Danger != "" {
-		warning := lipgloss.NewStyle().
-			Foreground(t.Status.WarnIndicator.GetBackground()).
-			Width(contentWidth).
-			Render(ansi.Wordwrap("⚠ Potentially dangerous: "+p.permission.Danger, contentWidth, ""))
-		lines = append(lines, "", warning)
-	}
-
-	lines = append(lines, "")
-
 	// Tool info.
 	toolLine := p.renderToolName(contentWidth)
-	lines = append(lines, toolLine)
+
+	lines := []string{title, "", toolLine}
 
 	// Show generic Path only for tools that don't render their own file/path line.
 	switch p.permission.ToolName {
@@ -576,14 +512,8 @@ func (p *Permissions) renderKeyValue(key, value string, width int) string {
 func (p *Permissions) renderToolName(width int) string {
 	toolName := p.permission.ToolName
 
-	// Check if this is an MCP tool (format: mcp_<mcpname>_<toolname>).
-	if strings.HasPrefix(toolName, "mcp_") {
-		parts := strings.SplitN(toolName, "_", 3)
-		if len(parts) == 3 {
-			mcpName := prettyName(parts[1])
-			toolPart := prettyName(parts[2])
-			toolName = fmt.Sprintf("%s %s %s", mcpName, styles.ArrowRightIcon, toolPart)
-		}
+	if server, tool, ok := tools.ParseMCPToolName(toolName); ok {
+		toolName = fmt.Sprintf("%s %s %s", prettyName(server), styles.ArrowRightIcon, prettyName(tool))
 	}
 
 	return p.renderKeyValue("Tool", toolName, width)
@@ -786,8 +716,8 @@ func (p *Permissions) renderDefaultContent(width int) string {
 		}
 
 		var parsed any
-		if err := json.Unmarshal([]byte(paramStr), &parsed); err == nil {
-			if b, err := json.MarshalIndent(parsed, "", "  "); err == nil {
+		if err := sonic.Unmarshal([]byte(paramStr), &parsed); err == nil {
+			if b, err := sonic.MarshalIndent(parsed, "", "  "); err == nil {
 				jsonContent := string(b)
 				highlighted, err := common.SyntaxHighlight(t, jsonContent, "params.json", t.Dialog.Permissions.ParamsBg)
 				if err == nil {
@@ -819,37 +749,14 @@ func (p *Permissions) renderContentPanel(content string, width int) string {
 	return panelStyle.Width(width).Render(content)
 }
 
-// renderButtonGroup renders the permission buttons joined by spacing. On a
-// flagged request the approving buttons are painted in the negative style,
-// because approving is the destructive choice here and it should not wear
-// the same inviting highlight it does on an ordinary prompt.
-func (p *Permissions) renderButtonGroup(spacing string) string {
-	t := p.com.Styles
-	approveStyles := t
-	if p.permission.Danger != "" {
-		danger := *t
-		danger.Button.Focused = danger.Button.Negative
-		approveStyles = &danger
-	}
-
-	parts := make([]string, len(permissionOptions))
-	for i, o := range permissionOptions {
-		st := t
-		if o.action != PermissionDeny {
-			st = approveStyles
-		}
-		parts[i] = common.Button(st, common.ButtonOpts{
-			Text:           o.text,
-			UnderlineIndex: o.underlineIndex,
-			Selected:       p.selectedOption == i,
-		})
-	}
-
-	return strings.Join(parts, spacing)
-}
-
 func (p *Permissions) renderButtons(contentWidth int, fullscreen bool) string {
-	content := p.renderButtonGroup("  ")
+	buttons := []common.ButtonOpts{
+		{Text: "Allow", UnderlineIndex: 0, Selected: p.selectedOption == 0},
+		{Text: "Allow for Session", UnderlineIndex: 10, Selected: p.selectedOption == 1},
+		{Text: "Deny", UnderlineIndex: 0, Selected: p.selectedOption == 2},
+	}
+
+	content := common.ButtonGroup(p.com.Styles, buttons, "  ")
 
 	// Center when stacked or when the dialog fills the screen; otherwise
 	// hug the right edge next to the content. Right-aligning across a
@@ -859,7 +766,7 @@ func (p *Permissions) renderButtons(contentWidth int, fullscreen bool) string {
 		align = lipgloss.Center
 	}
 	if lipgloss.Width(content) > contentWidth {
-		content = p.renderButtonGroup("\n")
+		content = common.ButtonGroup(p.com.Styles, buttons, "\n")
 		align = lipgloss.Center
 	}
 

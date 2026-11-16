@@ -3,7 +3,6 @@ package mcpoauth
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/oauth"
 	"github.com/charmbracelet/crush/internal/oauth/callback"
 	"github.com/modelcontextprotocol/go-sdk/auth"
@@ -70,34 +70,37 @@ var callbackPorts = []int{
 // InitialTokenSource injects a restored token at startup. That removes
 // the need to hand-roll authorization-server discovery.
 type Handler struct {
-	inner    auth.OAuthHandler
-	receiver *callbackReceiver
-
-	// openURL opens the authorization URL in the user's browser. It is
-	// a field so tests can simulate a headless environment or drive the
-	// callback directly.
-	openURL func(string) error
-
-	// interactive permits the browser authorization flow. It is false for
-	// background connections (startup) so a missing or unrefreshable token
-	// surfaces as a needs-auth state instead of opening a browser and
-	// blocking initialization.
-	interactive bool
-
-	mu             sync.Mutex
-	cachedToken    *oauth2.Token
-	authURL        string
-	serverURL      string
-	onTokenRefresh func(*oauth.Token)
-
-	// suppressBrowser, when true, prevents openURL from being invoked
-	// (the authorization URL is still recorded and logged). Used when
-	// the flow is driven remotely, e.g. by a connected client that opens
-	// the browser on its own machine.
+	inner           auth.OAuthHandler
+	receiver        *callbackReceiver
+	openURL         func(string) error
+	cachedToken     *oauth2.Token
+	onTokenRefresh  func(*oauth.Token)
+	authURL         string
+	serverURL       string
+	mu              sync.Mutex
+	interactive     bool
 	suppressBrowser bool
 }
 
 var _ auth.OAuthHandler = (*Handler)(nil)
+
+// Option customizes optional Handler behavior without changing the
+// positional signature shared by many call sites.
+type Option func(*options)
+
+type options struct {
+	clientIDMetadataURL string
+}
+
+// WithClientIDMetadataURL enables the Client ID Metadata Document
+// registration method (SEP-991). The URL is sent as the client_id for
+// servers that advertise client_id_metadata_document_supported (e.g.
+// Home Assistant); the server fetches the document and validates the
+// redirect URIs it lists. When the server does not advertise that
+// method, the option is ignored and other registration methods apply.
+func WithClientIDMetadataURL(url string) Option {
+	return func(o *options) { o.clientIDMetadataURL = url }
+}
 
 // NewHandler creates a new OAuth handler for an MCP server. savedToken,
 // if present, restores a prior session: its access/refresh tokens and
@@ -116,7 +119,13 @@ func NewHandler(
 	onTokenRefresh func(*oauth.Token),
 	interactive bool,
 	callbackPort int,
+	opts ...Option,
 ) (*Handler, error) {
+	o := options{}
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	receiver := &callbackReceiver{
 		serverName: serverName,
 		fixedPort:  callbackPort,
@@ -200,8 +209,12 @@ func NewHandler(
 			},
 		},
 	}
+	if o.clientIDMetadataURL != "" {
+		cfg.ClientIDMetadataDocumentConfig = &auth.ClientIDMetadataDocumentConfig{
+			URL: o.clientIDMetadataURL,
+		}
+	}
 
-	// Restore a saved client registration as a pre-registered client so
 	// Use a pre-registered client so the SDK skips dynamic registration.
 	// An explicitly configured client (for servers that don't support DCR,
 	// like GitHub or Slack) takes precedence over one captured from a
@@ -395,41 +408,25 @@ func (h *Handler) Close() {
 // the callback port is occupied only for the few seconds an actual login
 // is in flight.
 type callbackReceiver struct {
-	handler *Handler
-	// serverName labels the callback page so the user can see which MCP
-	// server they just authorized.
+	handler    *Handler
+	flight     *authFlight
+	server     *http.Server
 	serverName string
-
-	// fixedPort, when > 0, is the OAuthCallbackPort config: the single
-	// port the registered redirect URI points at. When 0, a port is
-	// chosen from callbackPorts at bind time.
-	fixedPort int
-
-	mu sync.Mutex
-	// flight is the authorization currently awaiting a redirect, if any.
-	// Connecting to a server can issue several requests at once, so more
-	// than one of them can meet a 401 and ask to authorize. They share a
-	// single flight rather than each opening their own browser tab and
-	// racing for one redirect.
-	flight *authFlight
-	// server and port describe the live listener. They are set only while
-	// an authorization is in flight and cleared the moment it settles.
-	server *http.Server
-	port   int
-	closed bool
+	fixedPort  int
+	port       int
+	mu         sync.Mutex
+	closed     bool
 }
 
 // authFlight is one authorization attempt: a browser tab was opened and a
 // redirect is expected. It settles exactly once, whichever arrives first —
 // a result, an error, or the receiver shutting down.
 type authFlight struct {
-	done   chan struct{}
-	once   sync.Once
-	result *auth.AuthorizationResult
 	err    error
-
-	// joined counts callers waiting on this flight instead of opening a tab.
-	joined atomic.Int32
+	done   chan struct{}
+	result *auth.AuthorizationResult
+	refs   atomic.Int64
+	once   sync.Once
 }
 
 // settle records the outcome of the flight and wakes everyone waiting on
@@ -451,13 +448,15 @@ func (r *callbackReceiver) begin() (*authFlight, bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.flight != nil {
-		r.flight.joined.Add(1)
+		r.flight.refs.Add(1)
 		return r.flight, false, nil
 	}
 	if err := r.bindLocked(); err != nil {
 		return nil, false, err
 	}
-	r.flight = &authFlight{done: make(chan struct{})}
+	flight := &authFlight{done: make(chan struct{})}
+	flight.refs.Store(1)
+	r.flight = flight
 	return r.flight, true, nil
 }
 
@@ -583,7 +582,7 @@ func (r *callbackReceiver) handleCallback(w http.ResponseWriter, req *http.Reque
 				Code:  query.Get("code"),
 				State: query.Get("state"),
 				// Required by servers that implement RFC 9207.
-				Iss: query.Get("iss"),
+				Iss: strings.TrimSuffix(query.Get("iss"), "/"),
 			}, nil)
 		}
 	}
@@ -597,7 +596,7 @@ func (r *callbackReceiver) fetchAuthorizationCode(ctx context.Context, args *aut
 	if !owned {
 		// Another request already opened the browser for this server. Wait
 		// for that redirect instead of opening a second tab.
-		slog.Debug("Joining in-progress MCP OAuth authorization", "name", r.serverName, "waiting", flight.joined.Load())
+		slog.Debug("Joining in-progress MCP OAuth authorization", "name", r.serverName, "waiting", flight.refs.Load())
 		return r.await(ctx, flight, false)
 	}
 	defer r.end(flight)
@@ -631,6 +630,7 @@ func (r *callbackReceiver) fetchAuthorizationCode(ctx context.Context, args *aut
 // releases the callback listener once the flow is done, so the port is
 // free again as soon as the authorization completes (or is abandoned).
 func (r *callbackReceiver) await(ctx context.Context, flight *authFlight, owned bool) (*auth.AuthorizationResult, error) {
+	defer flight.refs.Add(-1)
 	select {
 	case <-flight.done:
 		if owned {
@@ -703,7 +703,7 @@ func (rt *metadataFixupRoundTripper) RoundTrip(req *http.Request) (*http.Respons
 	}
 
 	var raw map[string]any
-	if json.Unmarshal(body, &raw) != nil {
+	if sonic.Unmarshal(body, &raw) != nil {
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 		return resp, nil
 	}
@@ -715,7 +715,7 @@ func (rt *metadataFixupRoundTripper) RoundTrip(req *http.Request) (*http.Respons
 	}
 
 	raw["issuer"] = strings.TrimSuffix(issuer, "/")
-	fixed, err := json.Marshal(raw)
+	fixed, err := sonic.Marshal(raw)
 	if err != nil {
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 		return resp, nil

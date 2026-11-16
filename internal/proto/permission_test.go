@@ -1,9 +1,9 @@
 package proto_test
 
 import (
-	"encoding/json"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/stretchr/testify/require"
@@ -19,10 +19,10 @@ func TestPermissionRequestParamsTypeAssertable(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		toolName string
 		params   any
 		assert   func(t *testing.T, got any)
+		name     string
+		toolName string
 	}{
 		{
 			name:     "bash",
@@ -157,6 +157,47 @@ func TestPermissionRequestParamsTypeAssertable(t *testing.T) {
 				require.Equal(t, "summarize this page", v.Prompt)
 			},
 		},
+		{
+			// The dialog renders the replace-symbol diff from these
+			// params; a dispatched agent's request crosses the A2A wire
+			// in this shape (#353).
+			name:     "lsp_replace_symbol",
+			toolName: tools.ReplaceSymbolToolName,
+			params: tools.ReplaceSymbolPermissionsParams{
+				FilePath:   "/tmp/x.go",
+				OldContent: "func old() {}",
+				NewContent: "func renamed() {}",
+			},
+			assert: func(t *testing.T, got any) {
+				v, ok := got.(tools.ReplaceSymbolPermissionsParams)
+				require.True(t, ok, "params must decode as tools.ReplaceSymbolPermissionsParams, got %T", got)
+				require.Equal(t, "/tmp/x.go", v.FilePath)
+				require.Equal(t, "func old() {}", v.OldContent)
+				require.Equal(t, "func renamed() {}", v.NewContent)
+			},
+		},
+		{
+			// MCP tools pass their raw input as a JSON string, which the
+			// dialog renders as is (#353): it must stay a string.
+			name:     "mcp tool with string input",
+			toolName: "mcp_github_create_issue",
+			params:   `{"title":"bug"}`,
+			assert: func(t *testing.T, got any) {
+				v, ok := got.(string)
+				require.True(t, ok, "string params must decode as a string, got %T", got)
+				require.Equal(t, `{"title":"bug"}`, v)
+			},
+		},
+		{
+			name:     "unknown tool with object params",
+			toolName: "some_future_tool",
+			params:   map[string]any{"key": "value"},
+			assert: func(t *testing.T, got any) {
+				v, ok := got.(map[string]any)
+				require.True(t, ok, "object params must decode as a map, got %T", got)
+				require.Equal(t, "value", v["key"])
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -174,11 +215,11 @@ func TestPermissionRequestParamsTypeAssertable(t *testing.T) {
 				Path:       "/tmp",
 				Params:     tc.params,
 			}
-			data, err := json.Marshal(outbound)
+			data, err := sonic.Marshal(outbound)
 			require.NoError(t, err)
 
 			var inbound proto.PermissionRequest
-			require.NoError(t, json.Unmarshal(data, &inbound))
+			require.NoError(t, sonic.Unmarshal(data, &inbound))
 
 			tc.assert(t, inbound.Params)
 		})

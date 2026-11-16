@@ -26,8 +26,8 @@ type JobOutputResponseMetadata struct {
 	ShellID          string `json:"shell_id"`
 	Command          string `json:"command"`
 	Description      string `json:"description"`
-	Done             bool   `json:"done"`
 	WorkingDirectory string `json:"working_directory"`
+	Done             bool   `json:"done"`
 }
 
 func NewJobOutputTool(spillDir string) fantasy.AgentTool {

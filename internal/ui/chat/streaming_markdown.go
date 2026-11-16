@@ -33,24 +33,13 @@ import (
 //   - width is the glamour wrap width that produced
 //     stablePrefixRender. A width change drops the cache.
 type streamingMarkdown struct {
-	width              int
 	stablePrefix       string
 	stablePrefixRender string
-	// Cached cumulative state at the stable prefix boundary.
-	// Used by findBoundaryAfter to validate new boundary candidates
-	// without re-scanning the entire prefix from the start.
-	// baseFenceCount is always even (safe boundaries require even
-	// fence parity), so the delta scan always starts outside a fence.
-	baseFenceCount    int
-	baseHasListMarker bool
-
-	// stablePrefixLines is the line count of stablePrefixRender, and
-	// lastLines the line count of whatever the most recent Render
-	// returned. Callers need the count to size a truncation hint;
-	// tracking it alongside the prefix keeps that O(trail) rather than
-	// a fresh O(document) scan on every flush.
-	stablePrefixLines int
-	lastLines         int
+	width              int
+	baseFenceCount     int
+	stablePrefixLines  int
+	lastLines          int
+	baseHasListMarker  bool
 }
 
 // LastLines reports the number of lines in the string the most recent

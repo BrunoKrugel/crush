@@ -22,8 +22,8 @@ func TestEditErrorWithoutDiffHasNoTrailingBlank(t *testing.T) {
 	const noDiffMeta = `{"hook":{"hooks":[{"name":"wakatime","event":"PreToolUse","duration_ms":12}]}}`
 
 	tests := []struct {
-		name string
 		item func() ToolMessageItem
+		name string
 	}{
 		{
 			name: "edit",

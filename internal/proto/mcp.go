@@ -1,10 +1,11 @@
 package proto
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/bytedance/sonic"
 )
 
 // MCPState represents the current state of an MCP client.
@@ -84,23 +85,20 @@ func (t *MCPEventType) UnmarshalText(data []byte) error {
 
 // MCPEvent represents an event in the MCP system.
 type MCPEvent struct {
-	Type          MCPEventType `json:"type"`
-	Name          string       `json:"name"`
-	State         MCPState     `json:"state"`
-	Error         error        `json:"error,omitempty"`
-	ToolCount     int          `json:"tool_count,omitempty"`
-	PromptCount   int          `json:"prompt_count,omitempty"`
-	ResourceCount int          `json:"resource_count,omitempty"`
-	// ChannelMessage carries the rendered <channel> element for
-	// MCPEventChannelMessage events so channel pushes reach client/server
-	// sessions over the wire.
-	ChannelMessage string `json:"channel_message,omitempty"`
+	Error          error        `json:"error,omitempty"`
+	Type           MCPEventType `json:"type"`
+	Name           string       `json:"name"`
+	ChannelMessage string       `json:"channel_message,omitempty"`
+	State          MCPState     `json:"state"`
+	ToolCount      int          `json:"tool_count,omitempty"`
+	PromptCount    int          `json:"prompt_count,omitempty"`
+	ResourceCount  int          `json:"resource_count,omitempty"`
 }
 
 // MarshalJSON implements the [json.Marshaler] interface.
 func (e MCPEvent) MarshalJSON() ([]byte, error) {
 	type Alias MCPEvent
-	return json.Marshal(&struct {
+	return sonic.Marshal(&struct {
 		Error string `json:"error,omitempty"`
 		Alias
 	}{
@@ -114,7 +112,7 @@ func (e MCPEvent) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON implements the [json.Unmarshaler] interface.
+// UnmarshalJSON implements the [sonic.Unmarshaler] interface.
 func (e *MCPEvent) UnmarshalJSON(data []byte) error {
 	type Alias MCPEvent
 	aux := &struct {
@@ -123,7 +121,7 @@ func (e *MCPEvent) UnmarshalJSON(data []byte) error {
 	}{
 		Alias: Alias(*e),
 	}
-	if err := json.Unmarshal(data, &aux); err != nil {
+	if err := sonic.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 	*e = MCPEvent(aux.Alias)
@@ -136,15 +134,14 @@ func (e *MCPEvent) UnmarshalJSON(data []byte) error {
 // MCPClientInfo is the wire-format representation of an MCP client's
 // state, suitable for JSON transport between server and client.
 type MCPClientInfo struct {
+	ConnectedAt   time.Time `json:"connected_at"`
+	Error         error     `json:"error,omitempty"`
 	Name          string    `json:"name"`
 	State         MCPState  `json:"state"`
-	Error         error     `json:"error,omitempty"`
 	ToolCount     int       `json:"tool_count,omitempty"`
 	PromptCount   int       `json:"prompt_count,omitempty"`
 	ResourceCount int       `json:"resource_count,omitempty"`
-	ConnectedAt   time.Time `json:"connected_at"`
-	// Channel reports whether this server is an active channel.
-	Channel bool `json:"channel,omitempty"`
+	Channel       bool      `json:"channel,omitempty"`
 }
 
 type MCPPromptArgument struct {
@@ -166,7 +163,7 @@ type MCPPrompt struct {
 // MarshalJSON implements the [json.Marshaler] interface.
 func (i MCPClientInfo) MarshalJSON() ([]byte, error) {
 	type Alias MCPClientInfo
-	return json.Marshal(&struct {
+	return sonic.Marshal(&struct {
 		Error string `json:"error,omitempty"`
 		Alias
 	}{
@@ -180,7 +177,7 @@ func (i MCPClientInfo) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON implements the [json.Unmarshaler] interface.
+// UnmarshalJSON implements the [sonic.Unmarshaler] interface.
 func (i *MCPClientInfo) UnmarshalJSON(data []byte) error {
 	type Alias MCPClientInfo
 	aux := &struct {
@@ -189,7 +186,7 @@ func (i *MCPClientInfo) UnmarshalJSON(data []byte) error {
 	}{
 		Alias: Alias(*i),
 	}
-	if err := json.Unmarshal(data, &aux); err != nil {
+	if err := sonic.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 	*i = MCPClientInfo(aux.Alias)

@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"sync"
 	"time"
+	"uuid"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/db"
 	"github.com/charmbracelet/crush/internal/pubsub"
-	"github.com/google/uuid"
 )
 
 // defaultUpdateDebounce is the default debounce window for [Service.Update].
@@ -22,10 +23,10 @@ const defaultUpdateDebounce = 33 * time.Millisecond
 
 type CreateMessageParams struct {
 	Role             MessageRole
-	Parts            []ContentPart
 	Model            string
 	ModelName        string
 	Provider         string
+	Parts            []ContentPart
 	IsSummaryMessage bool
 }
 
@@ -77,32 +78,11 @@ type Service interface {
 // service.mu. The flushing flag serializes concurrent flushers for
 // the same ID so SQL writes never reorder.
 type pendingState struct {
-	// latest is the most recent [Message] passed to [Service.Update]
-	// that has not yet been flushed.
-	latest Message
-
-	// dirty is true when latest contains state that has not been
-	// written to SQL since the last successful flush.
-	dirty bool
-
-	// flushing is true while a goroutine is performing the SQL write
-	// for this ID. New updates are still accepted (and re-mark dirty)
-	// but other flushers must back off.
-	flushing bool
-
-	// timer is the active debounce timer, or nil if no flush is
-	// scheduled. Stopped and reset when a terminal update preempts
-	// the debounce window.
-	timer *time.Timer
-
-	// baseline is the projection of the snapshot most recently
-	// written to SQL that terminal-state detection needs. Used as the
-	// baseline for [shouldFlushNow].
-	baseline flushBaseline
-
-	// hasFlushed is false until the first successful write for this
-	// ID; until then baseline is the zero value and must not be
-	// treated as a real prior state.
+	timer      *time.Timer
+	baseline   flushBaseline
+	latest     Message
+	dirty      bool
+	flushing   bool
 	hasFlushed bool
 }
 
@@ -131,12 +111,11 @@ func newFlushBaseline(m *Message) flushBaseline {
 }
 
 type service struct {
+	q db.Querier
 	*pubsub.Broker[Message]
-	q        db.Querier
+	pending  map[string]*pendingState
 	debounce time.Duration
-
-	mu      sync.Mutex
-	pending map[string]*pendingState
+	mu       sync.Mutex
 }
 
 // ServiceOption configures a [Service] at construction.
@@ -638,8 +617,8 @@ const (
 )
 
 type partWrapper struct {
-	Type partType    `json:"type"`
 	Data ContentPart `json:"data"`
+	Type partType    `json:"type"`
 }
 
 func marshalParts(parts []ContentPart) ([]byte, error) {
@@ -676,7 +655,7 @@ func marshalParts(parts []ContentPart) ([]byte, error) {
 			Data: part,
 		}
 	}
-	return json.Marshal(wrappedParts)
+	return sonic.Marshal(wrappedParts)
 }
 
 // rawPartWrapper is [partWrapper] for decoding: the payload stays encoded
@@ -690,7 +669,7 @@ func unmarshalParts(data []byte) ([]ContentPart, error) {
 	// One pass gets every type tag and its still-encoded payload. Splitting
 	// into []json.RawMessage first would walk the same bytes twice.
 	var wrapped []rawPartWrapper
-	if err := json.Unmarshal(data, &wrapped); err != nil {
+	if err := sonic.Unmarshal(data, &wrapped); err != nil {
 		return nil, err
 	}
 
@@ -734,7 +713,7 @@ func unmarshalPart(typ partType, data json.RawMessage) (ContentPart, error) {
 
 func decodePart[T ContentPart](data json.RawMessage) (ContentPart, error) {
 	var part T
-	if err := json.Unmarshal(data, &part); err != nil {
+	if err := sonic.Unmarshal(data, &part); err != nil {
 		return nil, err
 	}
 	return part, nil

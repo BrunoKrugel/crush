@@ -14,7 +14,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/oauth"
 )
 
@@ -183,7 +183,7 @@ func requestToken(ctx context.Context, vals url.Values) (*oauth.Token, error) {
 	}
 
 	var tr tokenResponse
-	if err := json.Unmarshal(body, &tr); err != nil {
+	if err := sonic.Unmarshal(body, &tr); err != nil {
 		return nil, fmt.Errorf("decode token response: %w", err)
 	}
 	if tr.AccessToken == "" {

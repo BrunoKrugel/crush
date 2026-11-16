@@ -13,6 +13,7 @@ import (
 	"charm.land/catwalk/v3/pkg/catwalk"
 	mcptools "github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/commands"
+	"github.com/charmbracelet/crush/internal/compaction"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/history"
 	"github.com/charmbracelet/crush/internal/lsp"
@@ -21,8 +22,10 @@ import (
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/question"
+	"github.com/charmbracelet/crush/internal/scheduler"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/skills"
+	"github.com/charmbracelet/crush/internal/snapshot"
 )
 
 // Reasons the coder agent may be unavailable, returned by
@@ -175,7 +178,7 @@ type Workspace interface {
 	AgentQueuedPromptsList(sessionID string) []string
 	AgentClearQueue(sessionID string)
 	AgentSetMain(agentID string) error
-	AgentSummarize(ctx context.Context, sessionID string) error
+	AgentSummarize(ctx context.Context, sessionID, instructions string) error
 	UpdateAgentModel(ctx context.Context) error
 	InitCoderAgent(ctx context.Context) error
 	InitCoderAgentNonInteractive(ctx context.Context) error
@@ -289,6 +292,35 @@ type Workspace interface {
 	// Events
 	Subscribe(program *tea.Program)
 	Shutdown()
+	// Dispatched-agent surface (fork UI feature; returns empty in this
+	// build because the A2A host is not yet integrated).
+	ListAgentTasks(sessionID string) []AgentTask
+	AgentTask(sessionID string) (AgentTask, bool)
+	AgentTaskByHandle(sessionID, handle string) (AgentTask, bool)
+	SendAgentMessage(ctx context.Context, sessionID, handle, text string, attachments []message.Attachment) error
+	CancelAgentTask(ctx context.Context, ref string) error
+	LoadDiagnostics() []config.LoadDiagnostic
+	ListSnapshots(ctx context.Context, sessionID string) ([]snapshot.SnapshotInfo, error)
+	RestoreSnapshot(ctx context.Context, sessionID, commitHash string) error
+	DiffSnapshot(ctx context.Context, sessionID, commitHash string) (string, error)
+	// Fork-only surfaces the fork UI expects; inert in this build.
+	MCPSetLazy(ctx context.Context, name string, lazy bool) error
+	AgentListCronTasks(sessionID string) []scheduler.Task
+	ListAllChildSessions(ctx context.Context) ([]session.Session, error)
+	AgentSummarizePreview(ctx context.Context, sessionID, instructions string) (compaction.Preview, error)
+	AgentConfirmSummarize(ctx context.Context, sessionID string, preview compaction.Preview) error
+	AgentDiscardSummarize(ctx context.Context, sessionID, checkpointID string) error
+	MCPReconnect(ctx context.Context, name string) error
+	CallMCPTool(ctx context.Context, name, toolName string, args map[string]any) (MCPToolCallResult, error)
+	ReloadSkills() error
+	ReloadModelDiscovery(ctx context.Context) (int, error)
+	PermissionSkipRequests() bool
+	PermissionSetSkipRequests(skip bool)
+	PermissionSetAutoMode(auto bool)
+	PermissionAutoMode() bool
+	ForkSession(ctx context.Context, sessionID, messageID, title string, worktree bool) (session.Session, error)
+	AgentStartGoal(ctx context.Context, sessionID, text string, budget int) error
+	AgentCancelGoal(ctx context.Context, sessionID string) error
 }
 
 // MCPResourceContents holds the contents of an MCP resource.
@@ -297,4 +329,10 @@ type MCPResourceContents struct {
 	MIMEType string `json:"mime_type,omitempty"`
 	Text     string `json:"text,omitempty"`
 	Blob     []byte `json:"blob,omitempty"`
+}
+
+// MCPToolCallResult is the fork UI's view of one MCP tool invocation.
+type MCPToolCallResult struct {
+	Result any
+	Error  error
 }

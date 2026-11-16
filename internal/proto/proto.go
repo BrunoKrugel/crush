@@ -175,12 +175,14 @@ func (a AgentInfo) IsZero() bool {
 // remains correct only when no other turns are in flight for the
 // same session.
 type AgentMessage struct {
-	HiddenUserMessage bool         `json:"hidden_user_message,omitempty"`
-	SessionID         string       `json:"session_id"`
-	RunID             string       `json:"run_id,omitempty"`
-	Channel           string       `json:"channel,omitempty"`
-	Prompt            string       `json:"prompt"`
-	Attachments       []Attachment `json:"attachments,omitempty"`
+	HiddenUserMessage bool                    `json:"hidden_user_message,omitempty"`
+	SessionID         string                  `json:"session_id"`
+	RunID             string                  `json:"run_id,omitempty"`
+	Channel           string                  `json:"channel,omitempty"`
+	Prompt            string                  `json:"prompt"`
+	Attachments       []Attachment            `json:"attachments,omitempty"`
+	PermissionPolicy  PermissionRequestPolicy `json:"permission_policy,omitempty"`
+	OperatorSteering  bool                    `json:"operator_steering,omitempty"`
 }
 
 // SessionNote is something the host application tells a session's agent,
@@ -506,3 +508,28 @@ func (i *LSPClientInfo) UnmarshalJSON(data []byte) error {
 	}
 	return nil
 }
+
+type PermissionRequestPolicy string
+
+const (
+	// PermissionRequestPolicyPrompt retains normal permission handling,
+	// including existing grants, hooks, allowlists, and workspace overrides.
+	PermissionRequestPolicyPrompt PermissionRequestPolicy = ""
+	// PermissionRequestPolicyAutoApprove approves this turn and its descendants.
+	PermissionRequestPolicyAutoApprove PermissionRequestPolicy = "auto_approve"
+)
+
+// AgentMessage represents a message sent to the agent.
+//
+// RunID, when non-empty, is echoed back on the [RunComplete] event
+// emitted for the resulting turn. Callers that need to correlate a
+// specific SendMessage with its terminal event (notably
+// `crush run`, which may attach to a busy session whose currently
+// running turn finishes first) should set it to a fresh unique
+// value before the request. Server-side propagation flows through
+// agent.WithRunID on the request context into the
+// SessionAgentCall; it is preserved across the busy-session queue.
+// When empty the resulting RunComplete carries an empty RunID and
+// callers must fall back to SessionID-only filtering, which
+// remains correct only when no other turns are in flight for the
+// same session.

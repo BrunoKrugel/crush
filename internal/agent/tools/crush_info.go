@@ -353,15 +353,15 @@ func writePermissions(b *strings.Builder, cfg *config.ConfigStore) {
 	overrides := cfg.Overrides()
 
 	hasAllowedTools := c.Permissions != nil && len(c.Permissions.AllowedTools) > 0
-	isNonNormalMode := overrides.PermissionMode == permission.PermissionModeYolo ||
-		overrides.PermissionMode == permission.PermissionModeSysadmin
+	isNonNormalMode := overrides.PermissionMode == int(permission.PermissionModeYolo) ||
+		overrides.PermissionMode == int(permission.PermissionModeSysadmin)
 
 	if !isNonNormalMode && !hasAllowedTools {
 		return
 	}
 
 	b.WriteString("[permissions]\n")
-	switch overrides.PermissionMode {
+	switch permission.PermissionMode(overrides.PermissionMode) {
 	case permission.PermissionModeSysadmin:
 		b.WriteString("mode = sysadmin\n")
 	case permission.PermissionModeYolo:

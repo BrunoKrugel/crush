@@ -1,9 +1,16 @@
 package proto
 
 import (
-	"encoding/json"
 	"errors"
+
+	"github.com/bytedance/sonic"
+	"github.com/charmbracelet/crush/internal/agent/notify"
 )
+
+// SummaryResponse distinguishes cancellation from other HTTP conflicts.
+type SummaryResponse struct {
+	Cancelled bool `json:"cancelled"`
+}
 
 // AgentEventType represents the type of agent event.
 type AgentEventType string
@@ -38,6 +45,9 @@ type AgentEvent struct {
 	// caller set one.
 	RunID string `json:"run_id,omitempty"`
 
+	// FinishState distinguishes a turn handoff from an idle session.
+	FinishState notify.FinishState `json:"finish_state,omitempty"`
+
 	// ProviderID identifies the provider that needs reauthentication.
 	ProviderID string `json:"provider_id,omitempty"`
 
@@ -60,7 +70,7 @@ type AgentEvent struct {
 // MarshalJSON implements the [json.Marshaler] interface.
 func (e AgentEvent) MarshalJSON() ([]byte, error) {
 	type Alias AgentEvent
-	return json.Marshal(&struct {
+	return sonic.Marshal(&struct {
 		Error string `json:"error,omitempty"`
 		Alias
 	}{
@@ -74,7 +84,7 @@ func (e AgentEvent) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON implements the [json.Unmarshaler] interface.
+// UnmarshalJSON implements the [sonic.Unmarshaler] interface.
 func (e *AgentEvent) UnmarshalJSON(data []byte) error {
 	type Alias AgentEvent
 	aux := &struct {
@@ -83,7 +93,7 @@ func (e *AgentEvent) UnmarshalJSON(data []byte) error {
 	}{
 		Alias: Alias(*e),
 	}
-	if err := json.Unmarshal(data, &aux); err != nil {
+	if err := sonic.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 	*e = AgentEvent(aux.Alias)

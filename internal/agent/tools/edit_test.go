@@ -2,13 +2,13 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,7 +56,7 @@ func TestReplaceContentPreservesCRLFAndMetadata(t *testing.T) {
 	require.Equal(t, []string{filePath}, tracker.reads)
 
 	var meta EditResponseMetadata
-	require.NoError(t, json.Unmarshal([]byte(resp.Metadata), &meta))
+	require.NoError(t, sonic.Unmarshal([]byte(resp.Metadata), &meta))
 	require.Equal(t, "alpha\nbeta\n", meta.OldContent)
 	require.Equal(t, "alpha\r\nBETA\r\n", meta.NewContent)
 }

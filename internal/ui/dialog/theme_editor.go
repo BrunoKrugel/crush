@@ -21,9 +21,9 @@ const (
 )
 
 type paletteSlot struct {
-	name string
 	get  func(styles.Palette) string
 	set  func(*styles.Palette, string)
+	name string
 }
 
 // ThemeEditor edits a theme palette with live preview. name is the theme
@@ -32,21 +32,20 @@ type paletteSlot struct {
 type ThemeEditor struct {
 	com     *common.Common
 	help    help.Model
-	input   textinput.Model
+	palette styles.Palette
 	name    string
 	base    string
-	palette styles.Palette
-	slots   []paletteSlot
-	index   int
-	scroll  int
-	invalid bool
-
-	keyMap struct {
+	keyMap  struct {
 		Save     key.Binding
 		Next     key.Binding
 		Previous key.Binding
 		Close    key.Binding
 	}
+	slots   []paletteSlot
+	input   textinput.Model
+	index   int
+	scroll  int
+	invalid bool
 }
 
 var _ Dialog = (*ThemeEditor)(nil)
@@ -273,8 +272,9 @@ func (ed *ThemeEditor) keepSelectedVisible(height int) {
 	if ed.index >= ed.scroll+height {
 		ed.scroll = ed.index - height + 1
 	}
-	// A taller window must not stay scrolled past the last slot.
-	ed.scroll = max(0, min(ed.scroll, len(ed.slots)-height))
+	if ed.scroll < 0 {
+		ed.scroll = 0
+	}
 }
 
 func (ed *ThemeEditor) renderSlots(width, height int) string {

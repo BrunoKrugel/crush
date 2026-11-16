@@ -39,15 +39,14 @@ func (k confirmKeyMap) FullHelp() [][]key.Binding {
 // confirmModel is the Bubble Tea model for a yes/no question rendered as
 // selectable buttons. No is selected by default for safety.
 type confirmModel struct {
+	help       help.Model
 	question   string
+	keymap     confirmKeyMap
+	blankLines int
+	width      int
 	answered   bool
 	yes        bool
 	quitting   bool
-	blankLines int
-
-	help   help.Model
-	keymap confirmKeyMap
-	width  int
 }
 
 func newConfirmModel(question string) confirmModel {

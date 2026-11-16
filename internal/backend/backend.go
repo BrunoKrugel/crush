@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/crush/internal/app"
+	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/db"
@@ -454,7 +455,7 @@ func (b *Backend) CreateWorkspace(args proto.Workspace) (*Workspace, proto.Works
 	}
 
 	cfg.Overrides().EnabledChannels = args.Channels
-	cfg.Overrides().PermissionMode = proto.ProtoModeToPermission(args.PermissionMode)
+	cfg.Overrides().PermissionMode = int(proto.ProtoModeToPermission(args.PermissionMode))
 
 	if err := createDotCrushDir(cfg.Config().Options.DataDirectory); err != nil {
 		return nil, proto.Workspace{}, fmt.Errorf("failed to create data directory: %w", err)
@@ -1267,7 +1268,7 @@ func logFirstWinsMismatch(existing *Workspace, args proto.Workspace) {
 	// Compare the internal modes so an unset request ("") matches the
 	// normalized default ("normal") instead of spuriously logging.
 	existingMode := existing.Cfg.Overrides().PermissionMode
-	requestedMode := proto.ProtoModeToPermission(args.PermissionMode)
+	requestedMode := int(proto.ProtoModeToPermission(args.PermissionMode))
 	if existingMode == requestedMode &&
 		existingCfg.Options.Debug == args.Debug &&
 		existingCfg.Options.DataDirectory == args.DataDir &&
@@ -1279,8 +1280,8 @@ func logFirstWinsMismatch(existing *Workspace, args proto.Workspace) {
 		"Workspace flag mismatch on duplicate create; first wins",
 		"workspace_id", existing.ID,
 		"path", existing.Path,
-		"existing_permission_mode", proto.PermissionModeToProto(existingMode),
-		"requested_permission_mode", proto.PermissionModeToProto(requestedMode),
+		"existing_permission_mode", proto.PermissionModeToProto(permission.PermissionMode(existingMode)),
+		"requested_permission_mode", proto.PermissionModeToProto(permission.PermissionMode(requestedMode)),
 		"existing_debug", existingCfg.Options.Debug,
 		"requested_debug", args.Debug,
 		"existing_data_dir", existingCfg.Options.DataDirectory,

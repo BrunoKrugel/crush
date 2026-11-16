@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -21,9 +22,10 @@ var loginCmd = &cobra.Command{
 	Short:   "Login Crush to a platform",
 	Long: `Login Crush to a specified platform.
 	The platform should be provided as an argument.
-	Available platforms are: hyper, copilot, openai (chatgpt), grok (xai).`,
-	Example: `
-	# Authenticate with Charm Hyper
+	Available platforms are: hyper, copilot, openai (chatgpt), grok (xai), and honcho.
+	Providers whose OAuth flow is declared in config — including providers
+	added by a plugin — sign in the same way.`,
+	Example: `# Authenticate with Charm Hyper
 	crush login
 
 	# Authenticate with GitHub Copilot
@@ -35,9 +37,14 @@ var loginCmd = &cobra.Command{
 	# Authenticate with a Grok (xAI) account
 	crush login grok
 
+	# Connect Honcho so Crush remembers across sessions
+	crush login honcho
+
+	# Authenticate with a provider declared by a plugin
+	crush login example
+
 	# Force re-authentication even if already logged in
-	crush login -f copilot
-	`,
+	crush login -f copilot`,
 	ValidArgs: []cobra.Completion{
 		"hyper",
 		"copilot",
@@ -47,6 +54,8 @@ var loginCmd = &cobra.Command{
 		"chatgpt",
 		"grok",
 		"xai",
+		"honcho",
+		"memory",
 	},
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -70,10 +79,50 @@ var loginCmd = &cobra.Command{
 			return loginOpenAI(ws, force)
 		case "grok", "xai":
 			return loginGrok(ws, force)
+		case "honcho", "memory":
+			return loginHoncho(force)
 		default:
-			return fmt.Errorf("unknown platform: %s", args[0])
+			return loginDeclaredProvider(ws, provider, force)
 		}
 	},
+}
+
+// loginDeclaredProvider authenticates with a provider that declares its own
+// OAuth flow in config, which is how providers shipped by plugins sign in
+// without a Crush release.
+func loginDeclaredProvider(ws workspace.Workspace, provider string, force bool) error {
+	cfg := ws.Config()
+	pc, ok := cfg.Providers.Get(provider)
+	if !ok {
+		return fmt.Errorf("unknown platform: %s", provider)
+	}
+	if !pc.UsesOAuth() {
+		return fmt.Errorf(
+			"provider %s has no OAuth flow to log in with; declare one with provider add --oauth-issuer and --oauth-client-id, or set an API key",
+			provider,
+		)
+	}
+
+	name := cmp.Or(pc.Name, provider)
+	if !force && pc.OAuthToken != nil {
+		fmt.Printf("You are already logged in to %s.\n", name)
+		fmt.Println("Use --force to re-authenticate.")
+		return nil
+	}
+
+	ctx := getLoginContext()
+	token, err := login.RunOAuth(ctx, name, pc.Auth)
+	if err != nil {
+		return err
+	}
+
+	if err := ws.SetProviderAPIKey(config.ScopeGlobal, provider, token); err != nil {
+		return err
+	}
+
+	fmt.Println()
+	fmt.Printf("You're now authenticated with %s!\n", name)
+	return nil
 }
 
 func init() {

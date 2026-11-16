@@ -7,7 +7,6 @@ import (
 	"charm.land/bubbles/v2/help"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/util"
 	uv "github.com/charmbracelet/ultraviolet"
@@ -23,19 +22,15 @@ const badgeLeftInset = 1
 
 // Status is the status bar and help model.
 type Status struct {
-	com      *common.Common
-	hideHelp bool
-	help     help.Model
-	helpKm   help.KeyMap
-	msg      util.InfoMsg
-
-	// msgSeq identifies the message on screen; expiry timers carry it.
-	msgSeq uint64
-
-	// inputMode and permMode drive the mode badge shown before the help
-	// hints.
+	helpKm    help.KeyMap
+	com       *common.Common
+	help      help.Model
+	msg       util.InfoMsg
+	msgSeq    uint64
+	hideHelp  bool
 	inputMode uiInputMode
-	permMode  permission.PermissionMode
+	yolo      bool
+	auto      bool
 }
 
 // NewStatus creates a new status bar and help model.
@@ -70,10 +65,12 @@ func (s *Status) ClearInfoMsg(seq uint64) {
 	}
 }
 
-// SetMode sets the input mode and permission mode used for the mode badge.
-func (s *Status) SetMode(mode uiInputMode, permMode permission.PermissionMode) {
+// SetMode sets the input mode and permission-mode state used for the mode
+// badge. Yolo wins over auto when both are set.
+func (s *Status) SetMode(mode uiInputMode, yolo, auto bool) {
 	s.inputMode = mode
-	s.permMode = permMode
+	s.yolo = yolo
+	s.auto = auto
 }
 
 // modeBadge renders the badge for the current mode, or an empty string in
@@ -81,15 +78,15 @@ func (s *Status) SetMode(mode uiInputMode, permMode permission.PermissionMode) {
 func (s *Status) modeBadge() string {
 	t := s.com.Styles
 	// Mirror the editor prompt precedence: planning wins over YOLO, which
-	// can be carried into plan mode.
+	// can be carried into plan mode. AUTO shows only when yolo is off.
 	if s.inputMode == uiInputModePlan {
 		return t.Status.ModeBadgePlan.String()
 	}
-	switch s.permMode {
-	case permission.PermissionModeSysadmin:
-		return t.Status.ModeBadgeSysadmin.String()
-	case permission.PermissionModeYolo:
+	if s.yolo {
 		return t.Status.ModeBadgeYolo.String()
+	}
+	if s.auto {
+		return t.Status.ModeBadgeAuto.String()
 	}
 	return ""
 }
@@ -159,9 +156,9 @@ func (s *Status) Draw(scr uv.Screen, area uv.Rectangle) {
 		indStyle = s.com.Styles.Status.ModeBannerYoloBadge
 		msgStyle = s.com.Styles.Status.ModeBannerYolo
 		indInset = badgeLeftInset
-	case util.InfoTypeSysadmin:
-		indStyle = s.com.Styles.Status.ModeBannerSysadminBadge
-		msgStyle = s.com.Styles.Status.ModeBannerSysadmin
+	case util.InfoTypeAuto:
+		indStyle = s.com.Styles.Status.ModeBannerAutoBadge
+		msgStyle = s.com.Styles.Status.ModeBannerAuto
 		indInset = badgeLeftInset
 	case util.InfoTypeError:
 		indStyle = s.com.Styles.Status.ErrorIndicator

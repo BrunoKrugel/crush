@@ -43,6 +43,7 @@ import (
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/hooks"
+	"github.com/charmbracelet/crush/internal/ledger"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/proto"
@@ -231,6 +232,13 @@ type activeCancel struct {
 
 type sessionAgent struct {
 	models             func() ModelSet
+	// ledger supplies the rendered memory checkpoint (fork-only feature;
+	// nil when unused). render.go treats nil as "no checkpoint".
+	ledger ledger.Service
+	// smallModel is the cheap model used for observation-style work.
+	// Nil-safe: callers treat nil as "no small model configured" -- it
+	// is a *csync.Value[Model] only when the feature is wired.
+	smallModel         *csync.Value[Model]
 	systemPromptPrefix *csync.Value[string]
 	systemPrompt       *csync.Value[string]
 	tools              *csync.Slice[fantasy.AgentTool]

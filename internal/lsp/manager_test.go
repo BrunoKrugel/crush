@@ -40,10 +40,10 @@ func TestCanAutoStartFiltersBeforeLookingUpCommand(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
 		server  *powernapconfig.ServerConfig
-		want    bool
+		name    string
 		lookups int
+		want    bool
 	}{
 		{
 			name: "unhandled file type",

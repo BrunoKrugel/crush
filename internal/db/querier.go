@@ -6,6 +6,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
@@ -70,6 +71,53 @@ type Querier interface {
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) error
 	UpdateSession(ctx context.Context, arg UpdateSessionParams) (Session, error)
 	UpdateSessionTitleAndUsage(ctx context.Context, arg UpdateSessionTitleAndUsageParams) error
+	AddSessionCost(ctx context.Context, arg AddSessionCostParams) error
+	AddSessionUsage(ctx context.Context, arg AddSessionUsageParams) error
+	ClearSessionGoal(ctx context.Context, id string) (Session, error)
+	CountA2ATasks(ctx context.Context, arg CountA2ATasksParams) (int64, error)
+	CountLedgerEntries(ctx context.Context, sessionID string) (int64, error)
+	CreateA2ATask(ctx context.Context, arg CreateA2ATaskParams) error
+	CreateLedgerEntry(ctx context.Context, arg CreateLedgerEntryParams) (int64, error)
+	CreateSnapshot(ctx context.Context, arg CreateSnapshotParams) (Snapshot, error)
+	DeleteSnapshotsBySession(ctx context.Context, sessionID string) error
+	FailA2ADispatch(ctx context.Context, arg FailA2ADispatchParams) (int64, error)
+	FinishA2ADispatch(ctx context.Context, arg FinishA2ADispatchParams) (int64, error)
+	// Copy one source message into the forked session: same role, parts,
+	// timestamps, and provider metadata, so the forked session replays exactly
+	// the history it inherited. The message gets a fresh id, because
+	// messages.id is the table's primary key and the source keeps its copy.
+	ForkMessage(ctx context.Context, arg ForkMessageParams) error
+	GetA2ADispatch(ctx context.Context, dispatchID string) (A2aDispatch, error)
+	GetA2ADispatchAbandonedAt(ctx context.Context, dispatchID string) (int64, error)
+	GetA2ADispatchBySession(ctx context.Context, sessionID string) (A2aDispatch, error)
+	GetA2ADispatchDeliveredAt(ctx context.Context, dispatchID string) (int64, error)
+	GetA2ATask(ctx context.Context, id string) (A2aTask, error)
+	GetLatestSnapshotBySession(ctx context.Context, sessionID string) (Snapshot, error)
+	// 1-based position of a message within its session's ordering, so a fork
+	// can bound the copy to everything at or before the fork point.
+	GetSessionMessagePosition(ctx context.Context, arg GetSessionMessagePositionParams) (int64, error)
+	GetSnapshot(ctx context.Context, id string) (Snapshot, error)
+	GetSnapshotByMessageID(ctx context.Context, arg GetSnapshotByMessageIDParams) (Snapshot, error)
+	ListA2ATasks(ctx context.Context, arg ListA2ATasksParams) ([]A2aTask, error)
+	ListAllChildSessions(ctx context.Context) ([]Session, error)
+	ListChildSessions(ctx context.Context, parentSessionID sql.NullString) ([]Session, error)
+	ListLedgerEntries(ctx context.Context, sessionID string) ([]CompactionLedger, error)
+	ListNonTerminalA2ADispatches(ctx context.Context) ([]A2aDispatch, error)
+	ListNonTerminalA2ATasks(ctx context.Context) ([]A2aTask, error)
+	ListSnapshotsBySession(ctx context.Context, sessionID string) ([]Snapshot, error)
+	ListUndeliveredA2ADispatches(ctx context.Context) ([]A2aDispatch, error)
+	MarkA2ADispatchAbandoned(ctx context.Context, arg MarkA2ADispatchAbandonedParams) error
+	MarkA2ADispatchDelivered(ctx context.Context, arg MarkA2ADispatchDeliveredParams) error
+	MaxLedgerSeq(ctx context.Context, sessionID string) (int64, error)
+	SetA2ADispatchTask(ctx context.Context, arg SetA2ADispatchTaskParams) error
+	SetSessionForkOrigin(ctx context.Context, arg SetSessionForkOriginParams) error
+	// The goal mode's state travels in one JSON column, so the ladder can
+	// read it with the session and the goal loop can update it without
+	// touching the rest of the row.
+	SetSessionGoal(ctx context.Context, arg SetSessionGoalParams) (Session, error)
+	UpdateA2ATask(ctx context.Context, arg UpdateA2ATaskParams) (int64, error)
+	UpdateA2ATaskIfVersion(ctx context.Context, arg UpdateA2ATaskIfVersionParams) (int64, error)
+	UpsertA2ADispatch(ctx context.Context, arg UpsertA2ADispatchParams) error
 }
 
 var _ Querier = (*Queries)(nil)

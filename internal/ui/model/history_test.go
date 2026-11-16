@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/crush/internal/config"
-	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/workspace"
 	"github.com/stretchr/testify/require"
 )
@@ -17,9 +16,13 @@ func (historyWorkspace) Config() *config.Config {
 	return &config.Config{}
 }
 
-func (historyWorkspace) PermissionMode() permission.PermissionMode {
-	return permission.PermissionModeNormal
+func (historyWorkspace) PermissionSkipRequests() bool {
+	return false
 }
+
+func (historyWorkspace) PermissionAutoMode() bool { return false }
+
+func (historyWorkspace) PermissionSetAutoMode(bool) {}
 
 func TestHistoryBangCommandStripsPrefixWhileAlreadyInBangMode(t *testing.T) {
 	t.Parallel()

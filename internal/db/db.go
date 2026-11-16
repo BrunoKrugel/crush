@@ -22,8 +22,272 @@ func New(db DBTX) *Queries {
 }
 
 func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
-	q := Queries{db: db}
 	var err error
+	q := &Queries{db: db}
+	if q.addSessionCostStmt, err = db.PrepareContext(ctx, addSessionCost); err != nil {
+		return nil, fmt.Errorf("error preparing query AddSessionCost: %w", err)
+	}
+	if q.addSessionUsageStmt, err = db.PrepareContext(ctx, addSessionUsage); err != nil {
+		return nil, fmt.Errorf("error preparing query AddSessionUsage: %w", err)
+	}
+	if q.clearSessionGoalStmt, err = db.PrepareContext(ctx, clearSessionGoal); err != nil {
+		return nil, fmt.Errorf("error preparing query ClearSessionGoal: %w", err)
+	}
+	if q.countA2ATasksStmt, err = db.PrepareContext(ctx, countA2ATasks); err != nil {
+		return nil, fmt.Errorf("error preparing query CountA2ATasks: %w", err)
+	}
+	if q.countLedgerEntriesStmt, err = db.PrepareContext(ctx, countLedgerEntries); err != nil {
+		return nil, fmt.Errorf("error preparing query CountLedgerEntries: %w", err)
+	}
+	if q.createA2ATaskStmt, err = db.PrepareContext(ctx, createA2ATask); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateA2ATask: %w", err)
+	}
+	if q.createFileStmt, err = db.PrepareContext(ctx, createFile); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateFile: %w", err)
+	}
+	if q.createLedgerEntryStmt, err = db.PrepareContext(ctx, createLedgerEntry); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateLedgerEntry: %w", err)
+	}
+	if q.createMessageStmt, err = db.PrepareContext(ctx, createMessage); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateMessage: %w", err)
+	}
+	if q.createSessionStmt, err = db.PrepareContext(ctx, createSession); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateSession: %w", err)
+	}
+	if q.createSnapshotStmt, err = db.PrepareContext(ctx, createSnapshot); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateSnapshot: %w", err)
+	}
+	if q.deleteFileStmt, err = db.PrepareContext(ctx, deleteFile); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteFile: %w", err)
+	}
+	if q.deleteMCPDisabledServerStmt, err = db.PrepareContext(ctx, deleteMCPDisabledServer); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteMCPDisabledServer: %w", err)
+	}
+	if q.deleteMCPEnabledServerStmt, err = db.PrepareContext(ctx, deleteMCPEnabledServer); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteMCPEnabledServer: %w", err)
+	}
+	if q.deleteMessageStmt, err = db.PrepareContext(ctx, deleteMessage); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteMessage: %w", err)
+	}
+	if q.deleteSessionFilesStmt, err = db.PrepareContext(ctx, deleteSessionFiles); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteSessionFiles: %w", err)
+	}
+	if q.deleteSessionMessagesStmt, err = db.PrepareContext(ctx, deleteSessionMessages); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteSessionMessages: %w", err)
+	}
+	if q.deleteSessionStmt, err = db.PrepareContext(ctx, deleteSession); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteSession: %w", err)
+	}
+	if q.deleteSkillsDisabledStmt, err = db.PrepareContext(ctx, deleteSkillsDisabled); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteSkillsDisabled: %w", err)
+	}
+	if q.deleteSkillsEnabledStmt, err = db.PrepareContext(ctx, deleteSkillsEnabled); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteSkillsEnabled: %w", err)
+	}
+	if q.deleteSnapshotsBySessionStmt, err = db.PrepareContext(ctx, deleteSnapshotsBySession); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteSnapshotsBySession: %w", err)
+	}
+	if q.failA2ADispatchStmt, err = db.PrepareContext(ctx, failA2ADispatch); err != nil {
+		return nil, fmt.Errorf("error preparing query FailA2ADispatch: %w", err)
+	}
+	if q.finishA2ADispatchStmt, err = db.PrepareContext(ctx, finishA2ADispatch); err != nil {
+		return nil, fmt.Errorf("error preparing query FinishA2ADispatch: %w", err)
+	}
+	if q.forkMessageStmt, err = db.PrepareContext(ctx, forkMessage); err != nil {
+		return nil, fmt.Errorf("error preparing query ForkMessage: %w", err)
+	}
+	if q.getA2ADispatchAbandonedAtStmt, err = db.PrepareContext(ctx, getA2ADispatchAbandonedAt); err != nil {
+		return nil, fmt.Errorf("error preparing query GetA2ADispatchAbandonedAt: %w", err)
+	}
+	if q.getA2ADispatchBySessionStmt, err = db.PrepareContext(ctx, getA2ADispatchBySession); err != nil {
+		return nil, fmt.Errorf("error preparing query GetA2ADispatchBySession: %w", err)
+	}
+	if q.getA2ADispatchDeliveredAtStmt, err = db.PrepareContext(ctx, getA2ADispatchDeliveredAt); err != nil {
+		return nil, fmt.Errorf("error preparing query GetA2ADispatchDeliveredAt: %w", err)
+	}
+	if q.getA2ADispatchStmt, err = db.PrepareContext(ctx, getA2ADispatch); err != nil {
+		return nil, fmt.Errorf("error preparing query GetA2ADispatch: %w", err)
+	}
+	if q.getA2ATaskStmt, err = db.PrepareContext(ctx, getA2ATask); err != nil {
+		return nil, fmt.Errorf("error preparing query GetA2ATask: %w", err)
+	}
+	if q.getAverageResponseTimeStmt, err = db.PrepareContext(ctx, getAverageResponseTime); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAverageResponseTime: %w", err)
+	}
+	if q.getFileByPathAndSessionStmt, err = db.PrepareContext(ctx, getFileByPathAndSession); err != nil {
+		return nil, fmt.Errorf("error preparing query GetFileByPathAndSession: %w", err)
+	}
+	if q.getFileReadStmt, err = db.PrepareContext(ctx, getFileRead); err != nil {
+		return nil, fmt.Errorf("error preparing query GetFileRead: %w", err)
+	}
+	if q.getFileStmt, err = db.PrepareContext(ctx, getFile); err != nil {
+		return nil, fmt.Errorf("error preparing query GetFile: %w", err)
+	}
+	if q.getHourDayHeatmapStmt, err = db.PrepareContext(ctx, getHourDayHeatmap); err != nil {
+		return nil, fmt.Errorf("error preparing query GetHourDayHeatmap: %w", err)
+	}
+	if q.getLastSessionStmt, err = db.PrepareContext(ctx, getLastSession); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLastSession: %w", err)
+	}
+	if q.getLatestSnapshotBySessionStmt, err = db.PrepareContext(ctx, getLatestSnapshotBySession); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLatestSnapshotBySession: %w", err)
+	}
+	if q.getMessageStmt, err = db.PrepareContext(ctx, getMessage); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMessage: %w", err)
+	}
+	if q.getRecentActivityStmt, err = db.PrepareContext(ctx, getRecentActivity); err != nil {
+		return nil, fmt.Errorf("error preparing query GetRecentActivity: %w", err)
+	}
+	if q.getSessionByIDStmt, err = db.PrepareContext(ctx, getSessionByID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetSessionByID: %w", err)
+	}
+	if q.getSessionMessagePositionStmt, err = db.PrepareContext(ctx, getSessionMessagePosition); err != nil {
+		return nil, fmt.Errorf("error preparing query GetSessionMessagePosition: %w", err)
+	}
+	if q.getSnapshotByMessageIDStmt, err = db.PrepareContext(ctx, getSnapshotByMessageID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetSnapshotByMessageID: %w", err)
+	}
+	if q.getSnapshotStmt, err = db.PrepareContext(ctx, getSnapshot); err != nil {
+		return nil, fmt.Errorf("error preparing query GetSnapshot: %w", err)
+	}
+	if q.getToolUsageStmt, err = db.PrepareContext(ctx, getToolUsage); err != nil {
+		return nil, fmt.Errorf("error preparing query GetToolUsage: %w", err)
+	}
+	if q.getTotalStatsStmt, err = db.PrepareContext(ctx, getTotalStats); err != nil {
+		return nil, fmt.Errorf("error preparing query GetTotalStats: %w", err)
+	}
+	if q.getUsageByDayOfWeekStmt, err = db.PrepareContext(ctx, getUsageByDayOfWeek); err != nil {
+		return nil, fmt.Errorf("error preparing query GetUsageByDayOfWeek: %w", err)
+	}
+	if q.getUsageByDayStmt, err = db.PrepareContext(ctx, getUsageByDay); err != nil {
+		return nil, fmt.Errorf("error preparing query GetUsageByDay: %w", err)
+	}
+	if q.getUsageByHourStmt, err = db.PrepareContext(ctx, getUsageByHour); err != nil {
+		return nil, fmt.Errorf("error preparing query GetUsageByHour: %w", err)
+	}
+	if q.getUsageByModelStmt, err = db.PrepareContext(ctx, getUsageByModel); err != nil {
+		return nil, fmt.Errorf("error preparing query GetUsageByModel: %w", err)
+	}
+	if q.insertMCPDisabledServerStmt, err = db.PrepareContext(ctx, insertMCPDisabledServer); err != nil {
+		return nil, fmt.Errorf("error preparing query InsertMCPDisabledServer: %w", err)
+	}
+	if q.insertMCPEnabledServerStmt, err = db.PrepareContext(ctx, insertMCPEnabledServer); err != nil {
+		return nil, fmt.Errorf("error preparing query InsertMCPEnabledServer: %w", err)
+	}
+	if q.insertSkillsDisabledStmt, err = db.PrepareContext(ctx, insertSkillsDisabled); err != nil {
+		return nil, fmt.Errorf("error preparing query InsertSkillsDisabled: %w", err)
+	}
+	if q.insertSkillsEnabledStmt, err = db.PrepareContext(ctx, insertSkillsEnabled); err != nil {
+		return nil, fmt.Errorf("error preparing query InsertSkillsEnabled: %w", err)
+	}
+	if q.listA2ATasksStmt, err = db.PrepareContext(ctx, listA2ATasks); err != nil {
+		return nil, fmt.Errorf("error preparing query ListA2ATasks: %w", err)
+	}
+	if q.listAllChildSessionsStmt, err = db.PrepareContext(ctx, listAllChildSessions); err != nil {
+		return nil, fmt.Errorf("error preparing query ListAllChildSessions: %w", err)
+	}
+	if q.listAllUserMessagesStmt, err = db.PrepareContext(ctx, listAllUserMessages); err != nil {
+		return nil, fmt.Errorf("error preparing query ListAllUserMessages: %w", err)
+	}
+	if q.listChildSessionsStmt, err = db.PrepareContext(ctx, listChildSessions); err != nil {
+		return nil, fmt.Errorf("error preparing query ListChildSessions: %w", err)
+	}
+	if q.listFilesByPathStmt, err = db.PrepareContext(ctx, listFilesByPath); err != nil {
+		return nil, fmt.Errorf("error preparing query ListFilesByPath: %w", err)
+	}
+	if q.listFilesBySessionStmt, err = db.PrepareContext(ctx, listFilesBySession); err != nil {
+		return nil, fmt.Errorf("error preparing query ListFilesBySession: %w", err)
+	}
+	if q.listLatestSessionFilesStmt, err = db.PrepareContext(ctx, listLatestSessionFiles); err != nil {
+		return nil, fmt.Errorf("error preparing query ListLatestSessionFiles: %w", err)
+	}
+	if q.listLedgerEntriesStmt, err = db.PrepareContext(ctx, listLedgerEntries); err != nil {
+		return nil, fmt.Errorf("error preparing query ListLedgerEntries: %w", err)
+	}
+	if q.listMCPDisabledServersStmt, err = db.PrepareContext(ctx, listMCPDisabledServers); err != nil {
+		return nil, fmt.Errorf("error preparing query ListMCPDisabledServers: %w", err)
+	}
+	if q.listMCPEnabledServersStmt, err = db.PrepareContext(ctx, listMCPEnabledServers); err != nil {
+		return nil, fmt.Errorf("error preparing query ListMCPEnabledServers: %w", err)
+	}
+	if q.listMessagesBySessionStmt, err = db.PrepareContext(ctx, listMessagesBySession); err != nil {
+		return nil, fmt.Errorf("error preparing query ListMessagesBySession: %w", err)
+	}
+	if q.listNewFilesStmt, err = db.PrepareContext(ctx, listNewFiles); err != nil {
+		return nil, fmt.Errorf("error preparing query ListNewFiles: %w", err)
+	}
+	if q.listNonTerminalA2ADispatchesStmt, err = db.PrepareContext(ctx, listNonTerminalA2ADispatches); err != nil {
+		return nil, fmt.Errorf("error preparing query ListNonTerminalA2ADispatches: %w", err)
+	}
+	if q.listNonTerminalA2ATasksStmt, err = db.PrepareContext(ctx, listNonTerminalA2ATasks); err != nil {
+		return nil, fmt.Errorf("error preparing query ListNonTerminalA2ATasks: %w", err)
+	}
+	if q.listSessionReadFilesStmt, err = db.PrepareContext(ctx, listSessionReadFiles); err != nil {
+		return nil, fmt.Errorf("error preparing query ListSessionReadFiles: %w", err)
+	}
+	if q.listSessionsStmt, err = db.PrepareContext(ctx, listSessions); err != nil {
+		return nil, fmt.Errorf("error preparing query ListSessions: %w", err)
+	}
+	if q.listSkillsDisabledStmt, err = db.PrepareContext(ctx, listSkillsDisabled); err != nil {
+		return nil, fmt.Errorf("error preparing query ListSkillsDisabled: %w", err)
+	}
+	if q.listSkillsEnabledStmt, err = db.PrepareContext(ctx, listSkillsEnabled); err != nil {
+		return nil, fmt.Errorf("error preparing query ListSkillsEnabled: %w", err)
+	}
+	if q.listSnapshotsBySessionStmt, err = db.PrepareContext(ctx, listSnapshotsBySession); err != nil {
+		return nil, fmt.Errorf("error preparing query ListSnapshotsBySession: %w", err)
+	}
+	if q.listUndeliveredA2ADispatchesStmt, err = db.PrepareContext(ctx, listUndeliveredA2ADispatches); err != nil {
+		return nil, fmt.Errorf("error preparing query ListUndeliveredA2ADispatches: %w", err)
+	}
+	if q.listUserMessagesBySessionStmt, err = db.PrepareContext(ctx, listUserMessagesBySession); err != nil {
+		return nil, fmt.Errorf("error preparing query ListUserMessagesBySession: %w", err)
+	}
+	if q.markA2ADispatchAbandonedStmt, err = db.PrepareContext(ctx, markA2ADispatchAbandoned); err != nil {
+		return nil, fmt.Errorf("error preparing query MarkA2ADispatchAbandoned: %w", err)
+	}
+	if q.markA2ADispatchDeliveredStmt, err = db.PrepareContext(ctx, markA2ADispatchDelivered); err != nil {
+		return nil, fmt.Errorf("error preparing query MarkA2ADispatchDelivered: %w", err)
+	}
+	if q.maxLedgerSeqStmt, err = db.PrepareContext(ctx, maxLedgerSeq); err != nil {
+		return nil, fmt.Errorf("error preparing query MaxLedgerSeq: %w", err)
+	}
+	if q.recordFileReadStmt, err = db.PrepareContext(ctx, recordFileRead); err != nil {
+		return nil, fmt.Errorf("error preparing query RecordFileRead: %w", err)
+	}
+	if q.renameSessionStmt, err = db.PrepareContext(ctx, renameSession); err != nil {
+		return nil, fmt.Errorf("error preparing query RenameSession: %w", err)
+	}
+	if q.setA2ADispatchTaskStmt, err = db.PrepareContext(ctx, setA2ADispatchTask); err != nil {
+		return nil, fmt.Errorf("error preparing query SetA2ADispatchTask: %w", err)
+	}
+	if q.setSessionChannelStmt, err = db.PrepareContext(ctx, setSessionChannel); err != nil {
+		return nil, fmt.Errorf("error preparing query SetSessionChannel: %w", err)
+	}
+	if q.setSessionForkOriginStmt, err = db.PrepareContext(ctx, setSessionForkOrigin); err != nil {
+		return nil, fmt.Errorf("error preparing query SetSessionForkOrigin: %w", err)
+	}
+	if q.setSessionGoalStmt, err = db.PrepareContext(ctx, setSessionGoal); err != nil {
+		return nil, fmt.Errorf("error preparing query SetSessionGoal: %w", err)
+	}
+	if q.updateA2ATaskIfVersionStmt, err = db.PrepareContext(ctx, updateA2ATaskIfVersion); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateA2ATaskIfVersion: %w", err)
+	}
+	if q.updateA2ATaskStmt, err = db.PrepareContext(ctx, updateA2ATask); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateA2ATask: %w", err)
+	}
+	if q.updateMessageStmt, err = db.PrepareContext(ctx, updateMessage); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateMessage: %w", err)
+	}
+	if q.updateSessionStmt, err = db.PrepareContext(ctx, updateSession); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateSession: %w", err)
+	}
+	if q.updateSessionTitleAndUsageStmt, err = db.PrepareContext(ctx, updateSessionTitleAndUsage); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateSessionTitleAndUsage: %w", err)
+	}
+	if q.upsertA2ADispatchStmt, err = db.PrepareContext(ctx, upsertA2ADispatch); err != nil {
+		return nil, fmt.Errorf("error preparing query UpsertA2ADispatch: %w", err)
+	}
 	if q.createFileStmt, err = db.PrepareContext(ctx, createFile); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateFile: %w", err)
 	}
@@ -180,11 +444,451 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateSessionTitleAndUsageStmt, err = db.PrepareContext(ctx, updateSessionTitleAndUsage); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateSessionTitleAndUsage: %w", err)
 	}
-	return &q, nil
+	return q, nil
 }
 
 func (q *Queries) Close() error {
 	var err error
+	if q.addSessionCostStmt != nil {
+		if cerr := q.addSessionCostStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing addSessionCostStmt: %w", cerr)
+		}
+	}
+	if q.addSessionUsageStmt != nil {
+		if cerr := q.addSessionUsageStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing addSessionUsageStmt: %w", cerr)
+		}
+	}
+	if q.clearSessionGoalStmt != nil {
+		if cerr := q.clearSessionGoalStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing clearSessionGoalStmt: %w", cerr)
+		}
+	}
+	if q.countA2ATasksStmt != nil {
+		if cerr := q.countA2ATasksStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countA2ATasksStmt: %w", cerr)
+		}
+	}
+	if q.countLedgerEntriesStmt != nil {
+		if cerr := q.countLedgerEntriesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countLedgerEntriesStmt: %w", cerr)
+		}
+	}
+	if q.createA2ATaskStmt != nil {
+		if cerr := q.createA2ATaskStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createA2ATaskStmt: %w", cerr)
+		}
+	}
+	if q.createFileStmt != nil {
+		if cerr := q.createFileStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createFileStmt: %w", cerr)
+		}
+	}
+	if q.createLedgerEntryStmt != nil {
+		if cerr := q.createLedgerEntryStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createLedgerEntryStmt: %w", cerr)
+		}
+	}
+	if q.createMessageStmt != nil {
+		if cerr := q.createMessageStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createMessageStmt: %w", cerr)
+		}
+	}
+	if q.createSessionStmt != nil {
+		if cerr := q.createSessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createSessionStmt: %w", cerr)
+		}
+	}
+	if q.createSnapshotStmt != nil {
+		if cerr := q.createSnapshotStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createSnapshotStmt: %w", cerr)
+		}
+	}
+	if q.deleteFileStmt != nil {
+		if cerr := q.deleteFileStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteFileStmt: %w", cerr)
+		}
+	}
+	if q.deleteMCPDisabledServerStmt != nil {
+		if cerr := q.deleteMCPDisabledServerStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteMCPDisabledServerStmt: %w", cerr)
+		}
+	}
+	if q.deleteMCPEnabledServerStmt != nil {
+		if cerr := q.deleteMCPEnabledServerStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteMCPEnabledServerStmt: %w", cerr)
+		}
+	}
+	if q.deleteMessageStmt != nil {
+		if cerr := q.deleteMessageStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteMessageStmt: %w", cerr)
+		}
+	}
+	if q.deleteSessionFilesStmt != nil {
+		if cerr := q.deleteSessionFilesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteSessionFilesStmt: %w", cerr)
+		}
+	}
+	if q.deleteSessionMessagesStmt != nil {
+		if cerr := q.deleteSessionMessagesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteSessionMessagesStmt: %w", cerr)
+		}
+	}
+	if q.deleteSessionStmt != nil {
+		if cerr := q.deleteSessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteSessionStmt: %w", cerr)
+		}
+	}
+	if q.deleteSkillsDisabledStmt != nil {
+		if cerr := q.deleteSkillsDisabledStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteSkillsDisabledStmt: %w", cerr)
+		}
+	}
+	if q.deleteSkillsEnabledStmt != nil {
+		if cerr := q.deleteSkillsEnabledStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteSkillsEnabledStmt: %w", cerr)
+		}
+	}
+	if q.deleteSnapshotsBySessionStmt != nil {
+		if cerr := q.deleteSnapshotsBySessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteSnapshotsBySessionStmt: %w", cerr)
+		}
+	}
+	if q.failA2ADispatchStmt != nil {
+		if cerr := q.failA2ADispatchStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing failA2ADispatchStmt: %w", cerr)
+		}
+	}
+	if q.finishA2ADispatchStmt != nil {
+		if cerr := q.finishA2ADispatchStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing finishA2ADispatchStmt: %w", cerr)
+		}
+	}
+	if q.forkMessageStmt != nil {
+		if cerr := q.forkMessageStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing forkMessageStmt: %w", cerr)
+		}
+	}
+	if q.getA2ADispatchAbandonedAtStmt != nil {
+		if cerr := q.getA2ADispatchAbandonedAtStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getA2ADispatchAbandonedAtStmt: %w", cerr)
+		}
+	}
+	if q.getA2ADispatchBySessionStmt != nil {
+		if cerr := q.getA2ADispatchBySessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getA2ADispatchBySessionStmt: %w", cerr)
+		}
+	}
+	if q.getA2ADispatchDeliveredAtStmt != nil {
+		if cerr := q.getA2ADispatchDeliveredAtStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getA2ADispatchDeliveredAtStmt: %w", cerr)
+		}
+	}
+	if q.getA2ADispatchStmt != nil {
+		if cerr := q.getA2ADispatchStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getA2ADispatchStmt: %w", cerr)
+		}
+	}
+	if q.getA2ATaskStmt != nil {
+		if cerr := q.getA2ATaskStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getA2ATaskStmt: %w", cerr)
+		}
+	}
+	if q.getAverageResponseTimeStmt != nil {
+		if cerr := q.getAverageResponseTimeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAverageResponseTimeStmt: %w", cerr)
+		}
+	}
+	if q.getFileByPathAndSessionStmt != nil {
+		if cerr := q.getFileByPathAndSessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getFileByPathAndSessionStmt: %w", cerr)
+		}
+	}
+	if q.getFileReadStmt != nil {
+		if cerr := q.getFileReadStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getFileReadStmt: %w", cerr)
+		}
+	}
+	if q.getFileStmt != nil {
+		if cerr := q.getFileStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getFileStmt: %w", cerr)
+		}
+	}
+	if q.getHourDayHeatmapStmt != nil {
+		if cerr := q.getHourDayHeatmapStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getHourDayHeatmapStmt: %w", cerr)
+		}
+	}
+	if q.getLastSessionStmt != nil {
+		if cerr := q.getLastSessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLastSessionStmt: %w", cerr)
+		}
+	}
+	if q.getLatestSnapshotBySessionStmt != nil {
+		if cerr := q.getLatestSnapshotBySessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLatestSnapshotBySessionStmt: %w", cerr)
+		}
+	}
+	if q.getMessageStmt != nil {
+		if cerr := q.getMessageStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMessageStmt: %w", cerr)
+		}
+	}
+	if q.getRecentActivityStmt != nil {
+		if cerr := q.getRecentActivityStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getRecentActivityStmt: %w", cerr)
+		}
+	}
+	if q.getSessionByIDStmt != nil {
+		if cerr := q.getSessionByIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getSessionByIDStmt: %w", cerr)
+		}
+	}
+	if q.getSessionMessagePositionStmt != nil {
+		if cerr := q.getSessionMessagePositionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getSessionMessagePositionStmt: %w", cerr)
+		}
+	}
+	if q.getSnapshotByMessageIDStmt != nil {
+		if cerr := q.getSnapshotByMessageIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getSnapshotByMessageIDStmt: %w", cerr)
+		}
+	}
+	if q.getSnapshotStmt != nil {
+		if cerr := q.getSnapshotStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getSnapshotStmt: %w", cerr)
+		}
+	}
+	if q.getToolUsageStmt != nil {
+		if cerr := q.getToolUsageStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getToolUsageStmt: %w", cerr)
+		}
+	}
+	if q.getTotalStatsStmt != nil {
+		if cerr := q.getTotalStatsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getTotalStatsStmt: %w", cerr)
+		}
+	}
+	if q.getUsageByDayOfWeekStmt != nil {
+		if cerr := q.getUsageByDayOfWeekStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getUsageByDayOfWeekStmt: %w", cerr)
+		}
+	}
+	if q.getUsageByDayStmt != nil {
+		if cerr := q.getUsageByDayStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getUsageByDayStmt: %w", cerr)
+		}
+	}
+	if q.getUsageByHourStmt != nil {
+		if cerr := q.getUsageByHourStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getUsageByHourStmt: %w", cerr)
+		}
+	}
+	if q.getUsageByModelStmt != nil {
+		if cerr := q.getUsageByModelStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getUsageByModelStmt: %w", cerr)
+		}
+	}
+	if q.insertMCPDisabledServerStmt != nil {
+		if cerr := q.insertMCPDisabledServerStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing insertMCPDisabledServerStmt: %w", cerr)
+		}
+	}
+	if q.insertMCPEnabledServerStmt != nil {
+		if cerr := q.insertMCPEnabledServerStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing insertMCPEnabledServerStmt: %w", cerr)
+		}
+	}
+	if q.insertSkillsDisabledStmt != nil {
+		if cerr := q.insertSkillsDisabledStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing insertSkillsDisabledStmt: %w", cerr)
+		}
+	}
+	if q.insertSkillsEnabledStmt != nil {
+		if cerr := q.insertSkillsEnabledStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing insertSkillsEnabledStmt: %w", cerr)
+		}
+	}
+	if q.listA2ATasksStmt != nil {
+		if cerr := q.listA2ATasksStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listA2ATasksStmt: %w", cerr)
+		}
+	}
+	if q.listAllChildSessionsStmt != nil {
+		if cerr := q.listAllChildSessionsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listAllChildSessionsStmt: %w", cerr)
+		}
+	}
+	if q.listAllUserMessagesStmt != nil {
+		if cerr := q.listAllUserMessagesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listAllUserMessagesStmt: %w", cerr)
+		}
+	}
+	if q.listChildSessionsStmt != nil {
+		if cerr := q.listChildSessionsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listChildSessionsStmt: %w", cerr)
+		}
+	}
+	if q.listFilesByPathStmt != nil {
+		if cerr := q.listFilesByPathStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listFilesByPathStmt: %w", cerr)
+		}
+	}
+	if q.listFilesBySessionStmt != nil {
+		if cerr := q.listFilesBySessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listFilesBySessionStmt: %w", cerr)
+		}
+	}
+	if q.listLatestSessionFilesStmt != nil {
+		if cerr := q.listLatestSessionFilesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listLatestSessionFilesStmt: %w", cerr)
+		}
+	}
+	if q.listLedgerEntriesStmt != nil {
+		if cerr := q.listLedgerEntriesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listLedgerEntriesStmt: %w", cerr)
+		}
+	}
+	if q.listMCPDisabledServersStmt != nil {
+		if cerr := q.listMCPDisabledServersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listMCPDisabledServersStmt: %w", cerr)
+		}
+	}
+	if q.listMCPEnabledServersStmt != nil {
+		if cerr := q.listMCPEnabledServersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listMCPEnabledServersStmt: %w", cerr)
+		}
+	}
+	if q.listMessagesBySessionStmt != nil {
+		if cerr := q.listMessagesBySessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listMessagesBySessionStmt: %w", cerr)
+		}
+	}
+	if q.listNewFilesStmt != nil {
+		if cerr := q.listNewFilesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listNewFilesStmt: %w", cerr)
+		}
+	}
+	if q.listNonTerminalA2ADispatchesStmt != nil {
+		if cerr := q.listNonTerminalA2ADispatchesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listNonTerminalA2ADispatchesStmt: %w", cerr)
+		}
+	}
+	if q.listNonTerminalA2ATasksStmt != nil {
+		if cerr := q.listNonTerminalA2ATasksStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listNonTerminalA2ATasksStmt: %w", cerr)
+		}
+	}
+	if q.listSessionReadFilesStmt != nil {
+		if cerr := q.listSessionReadFilesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listSessionReadFilesStmt: %w", cerr)
+		}
+	}
+	if q.listSessionsStmt != nil {
+		if cerr := q.listSessionsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listSessionsStmt: %w", cerr)
+		}
+	}
+	if q.listSkillsDisabledStmt != nil {
+		if cerr := q.listSkillsDisabledStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listSkillsDisabledStmt: %w", cerr)
+		}
+	}
+	if q.listSkillsEnabledStmt != nil {
+		if cerr := q.listSkillsEnabledStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listSkillsEnabledStmt: %w", cerr)
+		}
+	}
+	if q.listSnapshotsBySessionStmt != nil {
+		if cerr := q.listSnapshotsBySessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listSnapshotsBySessionStmt: %w", cerr)
+		}
+	}
+	if q.listUndeliveredA2ADispatchesStmt != nil {
+		if cerr := q.listUndeliveredA2ADispatchesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listUndeliveredA2ADispatchesStmt: %w", cerr)
+		}
+	}
+	if q.listUserMessagesBySessionStmt != nil {
+		if cerr := q.listUserMessagesBySessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listUserMessagesBySessionStmt: %w", cerr)
+		}
+	}
+	if q.markA2ADispatchAbandonedStmt != nil {
+		if cerr := q.markA2ADispatchAbandonedStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing markA2ADispatchAbandonedStmt: %w", cerr)
+		}
+	}
+	if q.markA2ADispatchDeliveredStmt != nil {
+		if cerr := q.markA2ADispatchDeliveredStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing markA2ADispatchDeliveredStmt: %w", cerr)
+		}
+	}
+	if q.maxLedgerSeqStmt != nil {
+		if cerr := q.maxLedgerSeqStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing maxLedgerSeqStmt: %w", cerr)
+		}
+	}
+	if q.recordFileReadStmt != nil {
+		if cerr := q.recordFileReadStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing recordFileReadStmt: %w", cerr)
+		}
+	}
+	if q.renameSessionStmt != nil {
+		if cerr := q.renameSessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing renameSessionStmt: %w", cerr)
+		}
+	}
+	if q.setA2ADispatchTaskStmt != nil {
+		if cerr := q.setA2ADispatchTaskStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing setA2ADispatchTaskStmt: %w", cerr)
+		}
+	}
+	if q.setSessionChannelStmt != nil {
+		if cerr := q.setSessionChannelStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing setSessionChannelStmt: %w", cerr)
+		}
+	}
+	if q.setSessionForkOriginStmt != nil {
+		if cerr := q.setSessionForkOriginStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing setSessionForkOriginStmt: %w", cerr)
+		}
+	}
+	if q.setSessionGoalStmt != nil {
+		if cerr := q.setSessionGoalStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing setSessionGoalStmt: %w", cerr)
+		}
+	}
+	if q.updateA2ATaskIfVersionStmt != nil {
+		if cerr := q.updateA2ATaskIfVersionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateA2ATaskIfVersionStmt: %w", cerr)
+		}
+	}
+	if q.updateA2ATaskStmt != nil {
+		if cerr := q.updateA2ATaskStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateA2ATaskStmt: %w", cerr)
+		}
+	}
+	if q.updateMessageStmt != nil {
+		if cerr := q.updateMessageStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateMessageStmt: %w", cerr)
+		}
+	}
+	if q.updateSessionStmt != nil {
+		if cerr := q.updateSessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateSessionStmt: %w", cerr)
+		}
+	}
+	if q.updateSessionTitleAndUsageStmt != nil {
+		if cerr := q.updateSessionTitleAndUsageStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateSessionTitleAndUsageStmt: %w", cerr)
+		}
+	}
+	if q.upsertA2ADispatchStmt != nil {
+		if cerr := q.upsertA2ADispatchStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing upsertA2ADispatchStmt: %w", cerr)
+		}
+	}
 	if q.createFileStmt != nil {
 		if cerr := q.createFileStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createFileStmt: %w", cerr)
@@ -482,60 +1186,102 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                                   DBTX
-	tx                                   *sql.Tx
+	addSessionCostStmt                   *sql.Stmt
+	addSessionUsageStmt                  *sql.Stmt
+	clearSessionGoalStmt                 *sql.Stmt
+	countA2ATasksStmt                    *sql.Stmt
+	countLedgerEntriesStmt               *sql.Stmt
+	createA2ATaskStmt                    *sql.Stmt
 	createFileStmt                       *sql.Stmt
+	createLedgerEntryStmt                *sql.Stmt
 	createMessageStmt                    *sql.Stmt
 	createSessionStmt                    *sql.Stmt
+	createSnapshotStmt                   *sql.Stmt
 	deleteFileStmt                       *sql.Stmt
 	deleteMCPDisabledServerStmt          *sql.Stmt
 	deleteMCPEnabledServerStmt           *sql.Stmt
 	deleteMessageStmt                    *sql.Stmt
-	deleteSessionStmt                    *sql.Stmt
 	deleteSessionFilesStmt               *sql.Stmt
 	deleteSessionMessagesStmt            *sql.Stmt
+	deleteSessionStmt                    *sql.Stmt
 	deleteSkillsDisabledStmt             *sql.Stmt
 	deleteSkillsEnabledStmt              *sql.Stmt
+	deleteSnapshotsBySessionStmt         *sql.Stmt
+	failA2ADispatchStmt                  *sql.Stmt
+	finishA2ADispatchStmt                *sql.Stmt
+	forkMessageStmt                      *sql.Stmt
+	getA2ADispatchAbandonedAtStmt        *sql.Stmt
+	getA2ADispatchBySessionStmt          *sql.Stmt
+	getA2ADispatchDeliveredAtStmt        *sql.Stmt
+	getA2ADispatchStmt                   *sql.Stmt
+	getA2ATaskStmt                       *sql.Stmt
 	getAverageResponseTimeStmt           *sql.Stmt
-	getFileStmt                          *sql.Stmt
 	getFileByPathAndSessionStmt          *sql.Stmt
 	getFileReadStmt                      *sql.Stmt
+	getFileStmt                          *sql.Stmt
 	getHourDayHeatmapStmt                *sql.Stmt
-	getLastAssistantMessageBySessionStmt *sql.Stmt
 	getLastSessionStmt                   *sql.Stmt
+	getLatestSnapshotBySessionStmt       *sql.Stmt
 	getMessageStmt                       *sql.Stmt
 	getRecentActivityStmt                *sql.Stmt
 	getSessionByIDStmt                   *sql.Stmt
+	getSessionMessagePositionStmt        *sql.Stmt
+	getSnapshotByMessageIDStmt           *sql.Stmt
+	getSnapshotStmt                      *sql.Stmt
 	getToolUsageStmt                     *sql.Stmt
 	getTotalStatsStmt                    *sql.Stmt
-	getUsageByDayStmt                    *sql.Stmt
 	getUsageByDayOfWeekStmt              *sql.Stmt
+	getUsageByDayStmt                    *sql.Stmt
 	getUsageByHourStmt                   *sql.Stmt
 	getUsageByModelStmt                  *sql.Stmt
 	insertMCPDisabledServerStmt          *sql.Stmt
 	insertMCPEnabledServerStmt           *sql.Stmt
 	insertSkillsDisabledStmt             *sql.Stmt
 	insertSkillsEnabledStmt              *sql.Stmt
+	listA2ATasksStmt                     *sql.Stmt
+	listAllChildSessionsStmt             *sql.Stmt
 	listAllUserMessagesStmt              *sql.Stmt
+	listChildSessionsStmt                *sql.Stmt
 	listFilesByPathStmt                  *sql.Stmt
 	listFilesBySessionStmt               *sql.Stmt
 	listLatestSessionFilesStmt           *sql.Stmt
+	listLedgerEntriesStmt                *sql.Stmt
 	listMCPDisabledServersStmt           *sql.Stmt
 	listMCPEnabledServersStmt            *sql.Stmt
 	listMessagesBySessionStmt            *sql.Stmt
-	listMessagesBySessionFromSummaryStmt *sql.Stmt
 	listNewFilesStmt                     *sql.Stmt
+	listNonTerminalA2ADispatchesStmt     *sql.Stmt
+	listNonTerminalA2ATasksStmt          *sql.Stmt
 	listSessionReadFilesStmt             *sql.Stmt
 	listSessionsStmt                     *sql.Stmt
 	listSkillsDisabledStmt               *sql.Stmt
 	listSkillsEnabledStmt                *sql.Stmt
+	listSnapshotsBySessionStmt           *sql.Stmt
+	listUndeliveredA2ADispatchesStmt     *sql.Stmt
 	listUserMessagesBySessionStmt        *sql.Stmt
+	markA2ADispatchAbandonedStmt         *sql.Stmt
+	markA2ADispatchDeliveredStmt         *sql.Stmt
+	maxLedgerSeqStmt                     *sql.Stmt
 	recordFileReadStmt                   *sql.Stmt
 	renameSessionStmt                    *sql.Stmt
+	setA2ADispatchTaskStmt               *sql.Stmt
 	setSessionChannelStmt                *sql.Stmt
+	setSessionForkOriginStmt             *sql.Stmt
+	setSessionGoalStmt                   *sql.Stmt
+	updateA2ATaskIfVersionStmt           *sql.Stmt
+	updateA2ATaskStmt                    *sql.Stmt
 	updateMessageStmt                    *sql.Stmt
 	updateSessionStmt                    *sql.Stmt
 	updateSessionTitleAndUsageStmt       *sql.Stmt
+	upsertA2ADispatchStmt                *sql.Stmt
+	db                                   DBTX
+	tx                                   *sql.Tx
+	getLastAssistantMessageBySessionStmt *sql.Stmt
+	listMessagesBySessionFromSummaryStmt *sql.Stmt
+}
+
+func (q *Queries) DB() DBTX {
+	return q.db
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {

@@ -22,7 +22,6 @@ import (
 	"github.com/charmbracelet/crush/internal/oauth/grok"
 	"github.com/charmbracelet/crush/internal/oauth/hyper"
 	"github.com/charmbracelet/crush/internal/oauth/openai"
-	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 	"golang.org/x/sync/singleflight"
@@ -61,7 +60,7 @@ type fileSnapshot struct {
 // disk. They are applied on top of the loaded Config and survive only for
 // the lifetime of the process (or workspace).
 type RuntimeOverrides struct {
-	PermissionMode permission.PermissionMode
+	PermissionMode int
 	// EnabledChannels lists the MCP servers opted in as channels for this
 	// session (via the --channels flag). A server present in MCP config only
 	// pushes channel events when it also appears here. Entries may be written
@@ -98,6 +97,7 @@ type ConfigStore struct {
 	globalDataPath     string   // ~/.local/share/crush/crush.json
 	workspacePath      string   // .crush/crush.json
 	loadedPaths        []string // config files that were successfully loaded
+	loadDiagnostics    []LoadDiagnostic
 	knownProviders     []catwalk.Provider
 	overrides          RuntimeOverrides
 	trackedConfigPaths []string                // unique, normalized config file paths
@@ -1573,4 +1573,19 @@ func (s *ConfigStore) autoReload(ctx context.Context) error {
 	}
 	defer s.writeMu.Unlock()
 	return s.reloadFromDiskLocked(ctx)
+}
+
+// reload raised (#560), plus the ones the command recorded (#578), in a
+// stable order. Empty when the load was clean and nothing was recorded.
+func (s *ConfigStore) LoadDiagnostics() []LoadDiagnostic {
+	s.writeMu.RLock()
+	defer s.writeMu.RUnlock()
+	return slices.Clone(s.loadDiagnostics)
+}
+
+func (s *ConfigStore) AddLoadDiagnostic(d LoadDiagnostic) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	s.loadDiagnostics = append(s.loadDiagnostics, d)
+	sortLoadDiagnostics(s.loadDiagnostics)
 }

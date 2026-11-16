@@ -10,11 +10,11 @@ import (
 
 func TestParseModelStr(t *testing.T) {
 	tests := []struct {
+		setupProviders  func() map[string]config.ProviderConfig
 		name            string
 		modelStr        string
 		expectedFilter  string
 		expectedModelID string
-		setupProviders  func() map[string]config.ProviderConfig
 	}{
 		{
 			name:            "simple model with no slashes",
@@ -106,13 +106,13 @@ func setupMockProvidersWithSlashes() map[string]config.ProviderConfig {
 
 func TestFindModels(t *testing.T) {
 	tests := []struct {
+		setupProviders   func() map[string]config.ProviderConfig
 		name             string
 		modelStr         string
 		expectedProvider string
 		expectedModelID  string
-		expectError      bool
 		errorContains    string
-		setupProviders   func() map[string]config.ProviderConfig
+		expectError      bool
 	}{
 		{
 			name:             "simple model found in one provider",

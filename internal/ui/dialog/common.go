@@ -2,6 +2,7 @@ package dialog
 
 import (
 	"cmp"
+	"image"
 	"image/color"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/list"
 	"github.com/charmbracelet/crush/internal/ui/styles"
+	uv "github.com/charmbracelet/ultraviolet"
 )
 
 // dialogInputTextWidth returns the text-area width for a dialog input so
@@ -36,6 +38,26 @@ type sizer interface {
 	SetSize(width, height int)
 }
 
+// dialogChromeHeight returns the vertical space a standard dialog spends on
+// everything but its list: the title, the filter input, the help line, and
+// the surrounding frames. Subtract it from a dialog height to get the list
+// viewport height, or add it to a content height to get the dialog height
+// that fits it.
+func dialogChromeHeight(t *styles.Styles) int {
+	return t.Dialog.Title.GetVerticalFrameSize() + titleContentHeight +
+		t.Dialog.InputPrompt.GetVerticalFrameSize() + inputContentHeight +
+		t.Dialog.HelpView.GetVerticalFrameSize() +
+		t.Dialog.View.GetVerticalFrameSize()
+}
+
+// fitDialogHeight returns the dialog height that shows contentHeight rows of
+// list content plus spare blank rows, shrinking to whatever the screen has
+// room for. areaHeight is the full height available to the dialog.
+func fitDialogHeight(t *styles.Styles, contentHeight, spare, areaHeight int) int {
+	available := max(0, areaHeight-t.Dialog.View.GetVerticalBorderSize())
+	return min(dialogChromeHeight(t)+contentHeight+spare, available)
+}
+
 // sizeDialogList computes the list dimensions within a dialog and calls
 // l.SetSize. It accounts for the title, input, help, and view frame sizes
 // so callers don't have to repeat the arithmetic. The scrollbar column is
@@ -50,12 +72,7 @@ type sizer interface {
 //   - innerWidth: dialog content width (total minus View horizontal frame).
 //   - dialogHeight: total dialog content height (already clamped).
 func sizeDialogList(t *styles.Styles, l sizer, innerWidth, dialogHeight int) (listHeight, listTotalHeight, listWidth int) {
-	heightOffset := t.Dialog.Title.GetVerticalFrameSize() + titleContentHeight +
-		t.Dialog.InputPrompt.GetVerticalFrameSize() + inputContentHeight +
-		t.Dialog.HelpView.GetVerticalFrameSize() +
-		t.Dialog.View.GetVerticalFrameSize()
-
-	listHeight = max(0, dialogHeight-heightOffset)
+	listHeight = max(0, dialogHeight-dialogChromeHeight(t))
 	listTotalHeight = l.TotalHeight()
 
 	// Reserve one column for the scrollbar only when it will actually
@@ -117,6 +134,47 @@ func applyInfoColumnVisibility(items []list.Item, rowWidth, maxPercent int) {
 			ic.SetHideInfo(hide)
 		}
 	}
+}
+
+// dialogListArea computes the screen rectangle a dialog's list occupies.
+// The dialog view is centered in area (clamped to it), and the list is the
+// last content part above the help footer, so the list's top is derived
+// bottom-up from the dialog's bottom edge minus the bottom frame, the help
+// height, and the list view height. The result is clamped to both the dialog
+// and the given area.
+func dialogListArea(
+	area uv.Rectangle,
+	view, bodyView, helpView string,
+	viewStyle, bodyStyle lipgloss.Style,
+	bodyWidth, bodyHeight int,
+) image.Rectangle {
+	viewWidth, viewHeight := lipgloss.Size(view)
+	dialogArea := common.CenterRect(area, min(viewWidth, area.Dx()), min(viewHeight, area.Dy()))
+	bodyViewTop := dialogArea.Max.Y -
+		viewStyle.GetMarginBottom() -
+		viewStyle.GetBorderBottomSize() -
+		viewStyle.GetPaddingBottom() -
+		lipgloss.Height(helpView) -
+		lipgloss.Height(bodyView)
+	bodyMin := image.Pt(
+		dialogArea.Min.X+
+			viewStyle.GetMarginLeft()+
+			viewStyle.GetBorderLeftSize()+
+			viewStyle.GetPaddingLeft()+
+			bodyStyle.GetMarginLeft()+
+			bodyStyle.GetBorderLeftSize()+
+			bodyStyle.GetPaddingLeft(),
+		bodyViewTop+
+			bodyStyle.GetMarginTop()+
+			bodyStyle.GetBorderTopSize()+
+			bodyStyle.GetPaddingTop(),
+	)
+	return image.Rect(
+		bodyMin.X,
+		bodyMin.Y,
+		bodyMin.X+bodyWidth,
+		bodyMin.Y+bodyHeight,
+	).Intersect(dialogArea).Intersect(area)
 }
 
 // renderDialogHelp renders keybind hints as a single padded footer line at
@@ -265,40 +323,18 @@ func renameCursorOffset(
 // RenderContext is a dialog rendering context that can be used to render
 // common dialog layouts.
 type RenderContext struct {
-	// Styles is the styles to use for rendering.
-	Styles *styles.Styles
-	// TitleStyle is the style of the dialog title by default it uses Styles.Dialog.Title
-	TitleStyle lipgloss.Style
-	// ViewStyle is the style of the dialog title by default it uses Styles.Dialog.View
-	ViewStyle lipgloss.Style
-	// TitleGradientFromColor is the color the title gradient starts by default
-	// its Styles.Dialog.TitleGradFromColor
+	TitleStyle             lipgloss.Style
+	ViewStyle              lipgloss.Style
 	TitleGradientFromColor color.Color
-	// TitleGradientToColor is the color the title gradient ends by default its
-	// Styles.Dialog.TitleGradToColor
-	TitleGradientToColor color.Color
-	// Width is the total width of the dialog including any margins, borders,
-	// and paddings.
-	Width int
-	// Gap is the gap between content parts. Zero means no gap.
-	Gap int
-	// Title is the title of the dialog. This will be styled using the default
-	// dialog title style and prepended to the content parts slice.
-	Title string
-	// TitleInfo is additional information to display next to the title. This
-	// part is displayed as is, any styling must be applied before setting this
-	// field.
-	TitleInfo string
-	// Parts are the rendered parts of the dialog.
-	Parts []string
-	// Help is the fully rendered help footer line. Produce it with
-	// renderDialogHelp so it is sized and padded consistently; it is
-	// appended as-is without further styling.
-	Help string
-	// IsOnboarding indicates whether to render the dialog as part of the
-	// onboarding flow. This means that the content will be rendered at the
-	// bottom left of the screen.
-	IsOnboarding bool
+	TitleGradientToColor   color.Color
+	Styles                 *styles.Styles
+	Title                  string
+	TitleInfo              string
+	Help                   string
+	Parts                  []string
+	Width                  int
+	Gap                    int
+	IsOnboarding           bool
 }
 
 // NewRenderContext creates a new RenderContext with the provided styles and width.

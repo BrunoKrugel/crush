@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/oauth"
 	"github.com/stretchr/testify/require"
 )
@@ -37,7 +38,7 @@ func stubTokenServer(t *testing.T, resp any) (*httptest.Server, *url.Values) {
 
 func signClaims(t *testing.T, claims any) string {
 	t.Helper()
-	payload, err := json.Marshal(claims)
+	payload, err := sonic.Marshal(claims)
 	require.NoError(t, err)
 	return fmt.Sprintf("h.%s.s", base64.RawURLEncoding.EncodeToString(payload))
 }

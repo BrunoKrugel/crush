@@ -6,7 +6,6 @@ import (
 	"cmp"
 	"context"
 	_ "embed"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -20,6 +19,7 @@ import (
 	"time"
 
 	"charm.land/fantasy"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/fsext"
@@ -74,11 +74,11 @@ type GrepParams struct {
 }
 
 type grepMatch struct {
-	path     string
 	modTime  time.Time
+	path     string
+	lineText string
 	lineNum  int
 	charNum  int
-	lineText string
 }
 
 type GrepResponseMetadata struct {
@@ -135,7 +135,10 @@ func NewGrepTool(workingDir string, config config.ToolGrep) fantasy.AgentTool {
 				searchPattern = escapeRegexPattern(params.Pattern)
 			}
 
-			searchPath := cmp.Or(params.Path, workingDir)
+			searchPath, err := ContainPath(ctx, cmp.Or(params.Path, workingDir))
+			if err != nil {
+				return fantasy.NewTextErrorResponse(err.Error()), nil
+			}
 
 			searchCtx, cancel := context.WithTimeout(ctx, config.GetTimeout())
 			defer cancel()
@@ -243,7 +246,7 @@ func searchWithRipgrep(ctx context.Context, pattern, path, include string) ([]gr
 			continue
 		}
 		var match ripgrepMatch
-		if err := json.Unmarshal(line, &match); err != nil {
+		if err := sonic.Unmarshal(line, &match); err != nil {
 			continue
 		}
 		if match.Type != "match" {
@@ -277,10 +280,10 @@ type ripgrepMatch struct {
 		Lines struct {
 			Text string `json:"text"`
 		} `json:"lines"`
-		LineNumber int `json:"line_number"`
 		Submatches []struct {
 			Start int `json:"start"`
 		} `json:"submatches"`
+		LineNumber int `json:"line_number"`
 	} `json:"data"`
 }
 
@@ -364,9 +367,9 @@ func searchFilesWithRegex(pattern, rootPath, include string) ([]grepMatch, error
 // number, the 1-based column of the first match on that line, and the
 // line text (with the trailing newline stripped).
 type lineMatch struct {
+	lineText string
 	lineNum  int
 	charNum  int
-	lineText string
 }
 
 // fileMatches returns every line in filePath that matches pattern. Like

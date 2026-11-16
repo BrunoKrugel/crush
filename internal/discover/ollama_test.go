@@ -111,15 +111,15 @@ func TestExtractContextLength(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
 		info     map[string]any
+		name     string
 		expected int64
 	}{
-		{"llama key", map[string]any{"llama.context_length": float64(8192)}, 8192},
-		{"qwen2 key", map[string]any{"qwen2.context_length": float64(32768)}, 32768},
-		{"no context key", map[string]any{"llama.block_count": float64(32)}, 0},
-		{"empty map", map[string]any{}, 0},
-		{"nil map", nil, 0},
+		{name: "llama key", info: map[string]any{"llama.context_length": float64(8192)}, expected: 8192},
+		{name: "qwen2 key", info: map[string]any{"qwen2.context_length": float64(32768)}, expected: 32768},
+		{name: "no context key", info: map[string]any{"llama.block_count": float64(32)}, expected: 0},
+		{name: "empty map", info: map[string]any{}, expected: 0},
+		{name: "nil map", info: nil, expected: 0},
 	}
 
 	for _, tt := range tests {

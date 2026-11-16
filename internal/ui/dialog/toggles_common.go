@@ -23,10 +23,7 @@ const scrollbarColumnWidth = 2
 // visible rows over count items, scrolling so the cursor always stays in
 // view.
 func toggleVisibleOffset(cursor, offset, count, visible int) int {
-	offset = min(offset, max(0, count-visible))
-	if cursor < offset {
-		offset = cursor
-	}
+	offset = min(cursor, min(offset, max(0, count-visible)))
 	if cursor >= offset+visible {
 		offset = cursor - visible + 1
 	}

@@ -241,10 +241,11 @@ func (w *AppWorkspace) AgentSetMain(agentID string) error {
 	return w.app.AgentCoordinator.SetMainAgent(agentID)
 }
 
-func (w *AppWorkspace) AgentSummarize(ctx context.Context, sessionID string) error {
+func (w *AppWorkspace) AgentSummarize(ctx context.Context, sessionID, instructions string) error {
 	if w.app.AgentCoordinator == nil {
 		return errors.New("agent coordinator not initialized")
 	}
+	_ = instructions
 	return w.app.AgentCoordinator.Summarize(ctx, sessionID)
 }
 

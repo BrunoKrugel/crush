@@ -1,0 +1,119 @@
+package mcp
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"time"
+
+	"github.com/charmbracelet/crush/internal/config"
+)
+
+// channelHealthCheckInterval is how often the health check pings each
+// channel-enabled MCP session.
+const channelHealthCheckInterval = time.Minute
+
+// StartChannelHealthCheck launches the periodic channel session health
+// check. It runs for the lifetime of ctx.
+func StartChannelHealthCheck(ctx context.Context, cfg *config.ConfigStore) {
+	go runChannelHealthCheck(ctx, cfg, channelHealthCheckInterval)
+}
+
+// runChannelHealthCheck periodically renews channel sessions that no other
+// traffic would renew.
+//
+// A channel-enabled MCP connection carries no traffic of its own: the
+// consumer never calls its tools, so the lazy getOrRenewClient path behind
+// every tool call never runs, and pingSession is never reached. When such a
+// connection's stream drops, nothing surfaces the failure — the session
+// looks established from the client's side, the server keeps writing
+// notifications into a dead stream, and only a restart clears it. This loop
+// closes that gap: it pings every registered channel session on a fixed
+// interval and renews the dead ones through the same serialized renewal path
+// tool calls use, without waiting for traffic that will never come.
+func runChannelHealthCheck(ctx context.Context, cfg *config.ConfigStore, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			checkChannelSessions(ctx, cfg)
+		}
+	}
+}
+
+// checkChannelSessions pings every channel session and renews any whose ping
+// fails. Only channel sessions are checked: ordinary servers have their
+// sessions renewed lazily by tool calls, so proactively pinging them would
+// add traffic for no benefit.
+//
+// A ping alone cannot see the failure mode that matters most: on a
+// streamable-HTTP channel server, doorbells arrive on the standalone SSE
+// stream, and a session whose stream is gone keeps answering pings over
+// ordinary request/response. So a channel session on a streamable transport
+// is only healthy when its notification stream is connected too; when the
+// stream has stayed down past the reconnect grace the session is forced
+// through the same rebuild path a failed ping takes.
+func checkChannelSessions(ctx context.Context, cfg *config.ConfigStore) {
+	// A failed renewal removes the dead session before rebuilding it. If the
+	// rebuild also fails, there is no session left for the loop below to visit
+	// on the next tick. Retry those channel servers from their retained error
+	// state so a temporary outage cannot leave the channel permanently deaf.
+	for name, info := range states.Seq2() {
+		if info.State != StateError || !info.Channel {
+			continue
+		}
+		m, ok := cfg.Config().MCP[name]
+		if !ok || !ChannelOptIn(m, cfg.Overrides().EnabledChannels, name) {
+			continue
+		}
+		if _, ok := sessions.Get(name); ok {
+			continue
+		}
+
+		mu := renewLock(name)
+		mu.Lock()
+		// Recheck after taking the same lock used by ordinary renewals. A
+		// reconnect or config change may have completed while we waited.
+		info, ok = states.Get(name)
+		m, configured := cfg.Config().MCP[name]
+		_, connected := sessions.Get(name)
+		if !ok || info.State != StateError || !info.Channel || !configured ||
+			!ChannelOptIn(m, cfg.Overrides().EnabledChannels, name) || connected {
+			mu.Unlock()
+			continue
+		}
+		err := initClientWithSessionFactory(ctx, cfg, name, m, currentGen(name), cfg.Resolver(), newSession)
+		mu.Unlock()
+		if err != nil {
+			slog.Warn("MCP channel health check failed to retry session", "name", name, "error", err)
+		}
+	}
+
+	for name, sess := range sessions.Seq2() {
+		if !sess.IsChannel() {
+			continue
+		}
+		// A channel session whose notification stream is down pings fine, so the
+		// ordinary ping-gated renewal would keep it forever. Force the rebuild
+		// instead — and force it THROUGH the renewal path rather than tearing the
+		// session down here first. updateState(StateError) deletes the registry
+		// entry, and renewClient's post-lock guard then finds nothing and bails
+		// with "not available" without ever rebuilding, which turned this health
+		// check into a once-a-minute outage.
+		renew := getOrRenewClient
+		if health, ok := channelStreamStates.Get(name); ok && !health.healthy(channelStreamClosedGrace) {
+			channelStreamReportable(name, health)
+			renew = forceRenewClient
+		}
+		if _, err := renew(ctx, cfg, name); err != nil {
+			slog.Warn("MCP channel health check failed to renew session", "name", name, "error", err)
+		}
+	}
+}
+
+// errChannelStreamDown forces a channel session rebuild when the standalone
+// SSE notification stream has been down longer than the reconnect grace.
+var errChannelStreamDown = errors.New("standalone SSE notification stream not connected")

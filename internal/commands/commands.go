@@ -42,12 +42,11 @@ type MCPPrompt struct {
 
 // CustomCommand represents a user-defined custom command loaded from markdown files.
 type CustomCommand struct {
+	Skill     *skills.Skill
 	ID        string
 	Name      string
 	Content   string
 	Arguments []Argument
-	// Skill is set when this command represents a user-invocable skill
-	Skill *skills.Skill
 }
 
 type commandSource struct {

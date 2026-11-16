@@ -1,9 +1,9 @@
 package chat
 
 import (
-	"encoding/json"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/ui/styles"
 )
@@ -38,13 +38,13 @@ func (g *GenericToolRenderContext) RenderTool(sty *styles.Styles, width int, opt
 	}
 
 	var params map[string]any
-	if err := json.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
 		return toolErrorContent(sty, &message.ToolResult{Content: "Invalid parameters"}, cappedWidth)
 	}
 
 	var toolParams []string
 	if len(params) > 0 {
-		parsed, _ := json.Marshal(params)
+		parsed, _ := sonic.Marshal(params)
 		toolParams = append(toolParams, string(parsed))
 	}
 
@@ -64,10 +64,13 @@ func (g *GenericToolRenderContext) RenderTool(sty *styles.Styles, width int, opt
 	bodyWidth := cappedWidth - toolBodyLeftPaddingTotal
 
 	if opts.Result.Data != "" && strings.HasPrefix(opts.Result.MIMEType, "image/") {
-		body := sty.Tool.Body.Render(toolOutputImageContent(sty, opts.Result.Data, opts.Result.MIMEType))
-		return joinToolParts(header, body)
+		// toolOutputImageContent applies sty.Tool.Body itself — wrapping it
+		// again here double-indented image results.
+		return joinToolParts(header, toolOutputImageContent(sty, opts.Result.Data, opts.Result.MIMEType))
 	}
 
-	body := renderToolResultTextContent(sty, opts.Result.Content, toolResultContentWidths{Body: bodyWidth, Diff: cappedWidth}, opts.ExpandedContent)
+	widths := toolResultContentWidths{Body: bodyWidth, Diff: cappedWidth}
+
+	body := renderToolResultTextContent(sty, opts.Result.Content, widths, opts.ExpandedContent)
 	return joinToolParts(header, body)
 }

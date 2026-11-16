@@ -1,6 +1,7 @@
 package list
 
 import (
+	"slices"
 	"strings"
 )
 
@@ -8,65 +9,30 @@ import (
 // always rendered like a chat conversation where items are stacked vertically
 // from top to bottom.
 type List struct {
-	// Viewport size
-	width, height int
-
-	// Items in the list
-	items []Item
-
-	// Gap between items (0 or less means no gap)
-	gap int
-
-	// show list in reverse order
-	reverse bool
-
-	// Focus and selection state
-	focused     bool
-	selectedIdx int // The current selected index -1 means no selection
-
-	// offsetIdx is the index of the first visible item in the viewport.
-	offsetIdx int
-	// offsetLine is the number of lines of the item at offsetIdx that are
-	// scrolled out of view (above the viewport).
-	// It must always be >= 0.
-	offsetLine int
-
-	// renderCallbacks is a list of callbacks to apply when rendering items.
-	renderCallbacks []func(idx, selectedIdx int, item Item) Item
-
-	// totalHeightCache is a cached value of the total rendered height of
-	// all items. It is invalidated whenever the item set changes or the
-	// viewport width changes (which can alter per-item line counts).
-	totalHeightCache int
-	totalHeightValid bool
-
-	// cache is the F6 list-level render memo, keyed by item pointer.
-	// Each entry stores the rendered content, a pre-split slice of
-	// lines (so AtBottom / Render / VisibleItemIndices /
-	// findItemAtY all share one render per frame), the height, and
-	// the keys that govern invalidation (width and version). The
-	// frozen flag mirrors §4.5.1: once a Finished() item is
-	// rendered, subsequent draws return the stored output verbatim
-	// without calling back into Render.
-	cache map[Item]*listCacheEntry
-
-	// freezeSuppressed marks items the list must not freeze on the
-	// next render even when their Finished() reports true. This is
-	// the §4.5.1 selection-drag escape hatch (option (a)): items
-	// inside an active selection range render as live items so that
-	// per-line highlight overlays land on the latest content. Cleared
-	// on EndSelectionDrag.
 	freezeSuppressed map[Item]struct{}
+	cache            map[Item]*listCacheEntry
+	renderCallbacks  []func(idx, selectedIdx int, item Item) Item
+	items            []Item
+	gap              int
+	selectedIdx      int
+	offsetIdx        int
+	offsetLine       int
+	totalHeightCache int
+	width            int
+	height           int
+	focused          bool
+	reverse          bool
+	totalHeightValid bool
 }
 
 // listCacheEntry is the per-item entry in the list-level render memo.
 type listCacheEntry struct {
-	width   int
-	version uint64
-	frozen  bool
 	content string
 	lines   []string
+	width   int
+	version uint64
 	height  int
+	frozen  bool
 }
 
 // renderedItem is the legacy view of a cached entry returned by getItem.
@@ -214,7 +180,7 @@ func (l *List) Prewarm(from, batch int) int {
 // needed (e.g. deciding whether a scrollbar is required).
 func (l *List) Overflows(height int) bool {
 	total := 0
-	for idx := len(l.items) - 1; idx >= 0; idx-- {
+	for idx := range slices.Backward(l.items) {
 		total += l.getItem(idx).height
 		if l.gap > 0 && idx < len(l.items)-1 {
 			total += l.gap
@@ -582,31 +548,6 @@ func (l *List) Render() string {
 	}
 
 	budget := max(l.height, 0)
-	lines := l.renderWindow(budget)
-	// A window that ends before the viewport is full while scrolled means
-	// the offset is past the end: content below it shrank or went away
-	// (an item removed, a tail that collapsed, a filter). Clamp so the
-	// view never sits lifted off the bottom. Checking only the underfilled
-	// case keeps the common path free of the tail walk.
-	if len(lines) < budget && (l.offsetIdx > 0 || l.offsetLine > 0) {
-		l.ScrollToBottom()
-		lines = l.renderWindow(budget)
-	}
-
-	l.height = budget
-
-	if l.reverse {
-		// Reverse the lines so the list renders bottom-to-top.
-		for i, j := 0, len(lines)-1; i < j; i, j = i+1, j-1 {
-			lines[i], lines[j] = lines[j], lines[i]
-		}
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-// renderWindow collects at most budget lines starting at the scroll offset.
-func (l *List) renderWindow(budget int) []string {
 	lines := make([]string, 0, budget)
 	currentIdx := l.offsetIdx
 	currentOffset := l.offsetLine
@@ -660,7 +601,17 @@ func (l *List) renderWindow(budget int) []string {
 		currentIdx++
 		currentOffset = 0 // Reset offset for subsequent items.
 	}
-	return lines
+
+	l.height = budget
+
+	if l.reverse {
+		// Reverse the lines so the list renders bottom-to-top.
+		for i, j := 0, len(lines)-1; i < j; i, j = i+1, j-1 {
+			lines[i], lines[j] = lines[j], lines[i]
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // PrependItems prepends items to the list.
@@ -718,14 +669,11 @@ func (l *List) RemoveItem(idx int) {
 		l.selectedIdx--
 	}
 
-	// Adjust offset if needed. Removing the item the view starts inside
-	// starts the view at the top of the item that slid into its place; the
-	// old line offset belonged to the removed item and would skip into,
-	// or past, the new one.
+	// Adjust offset if needed
 	if l.offsetIdx > idx {
 		l.offsetIdx--
-	} else if l.offsetIdx == idx {
-		l.offsetIdx = min(l.offsetIdx, max(0, len(l.items)-1))
+	} else if l.offsetIdx == idx && l.offsetIdx >= len(l.items) {
+		l.offsetIdx = max(0, len(l.items)-1)
 		l.offsetLine = 0
 	}
 	l.totalHeightValid = false

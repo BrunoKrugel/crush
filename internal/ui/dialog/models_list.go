@@ -14,9 +14,9 @@ import (
 // ModelsList is a list specifically for model items and groups.
 type ModelsList struct {
 	*list.List
-	groups []ModelGroup
-	query  string
 	t      *styles.Styles
+	query  string
+	groups []ModelGroup
 }
 
 // NewModelsList creates a new list suitable for model items and groups.

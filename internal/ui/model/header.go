@@ -1,16 +1,23 @@
 package model
 
 import (
+	"cmp"
 	"fmt"
+	"net"
+	"os"
+	"os/user"
 	"strings"
-	"time"
+	"sync"
 
 	"charm.land/lipgloss/v2"
+	"charm.land/x/nerdfont"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/fsext"
+	"github.com/charmbracelet/crush/internal/goal"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/charmbracelet/crush/internal/usage"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -23,14 +30,77 @@ const (
 	diagToDetailsSpacing = 1 // space between diagonal pattern and details section
 )
 
+// defaultWorkingDirFormat is used when options.tui.working_dir_format is
+// unset. It mirrors the familiar user@host:cwd shell prompt so the header
+// stays unambiguous when hopping between hosts.
+const defaultWorkingDirFormat = "{user}@{host}:{cwd}"
+
+// currentUserHost resolves the current username and hostname once per
+// process. The hostname is shortened to its first label so long FQDNs do
+// not crowd the header.
+var currentUserHost = sync.OnceValue(func() userHost {
+	host, err := os.Hostname()
+	if err != nil {
+		host = ""
+	}
+	name := ""
+	if u, err := user.Current(); err == nil {
+		name = u.Username
+	}
+	if name == "" {
+		name = cmp.Or(os.Getenv("USER"), os.Getenv("USERNAME"), os.Getenv("LOGNAME"))
+	}
+	return userHost{name: shortUsername(name), host: shortHostname(host)}
+})
+
+type userHost struct {
+	name string
+	host string
+}
+
+// shortHostname reduces a hostname to its first DNS label so long FQDNs do
+// not crowd the header. IP literals are left intact and an empty hostname
+// falls back to "localhost".
+func shortHostname(host string) string {
+	if host == "" {
+		return "localhost"
+	}
+	if net.ParseIP(host) != nil {
+		return host
+	}
+	if label, _, ok := strings.Cut(host, "."); ok && label != "" {
+		return label
+	}
+	return host
+}
+
+// shortUsername strips a Windows-style DOMAIN\ prefix from a username.
+func shortUsername(name string) string {
+	if _, short, ok := strings.Cut(name, `\`); ok && short != "" {
+		return short
+	}
+	return name
+}
+
+// formatWorkingDir expands {cwd}, {user} and {host} placeholders in a
+// working directory format string. Unknown placeholders are left verbatim.
+// A blank format falls back to defaultWorkingDirFormat.
+func formatWorkingDir(format, cwd, user, host string) string {
+	if strings.TrimSpace(format) == "" {
+		format = defaultWorkingDirFormat
+	}
+	// Sequential ReplaceAll avoids building a Replacer trie on every frame.
+	out := strings.ReplaceAll(format, "{host}", host)
+	out = strings.ReplaceAll(out, "{user}", user)
+	return strings.ReplaceAll(out, "{cwd}", cwd)
+}
+
 type header struct {
-	// cached logo and compact logo
+	com         *common.Common
 	logo        string
 	compactLogo string
-
-	com     *common.Common
-	width   int
-	compact bool
+	width       int
+	compact     bool
 }
 
 // newHeader creates a new header model.
@@ -74,8 +144,8 @@ func (h *header) drawHeader(
 	width int,
 	lspErrorCount int,
 	hyperCredits *int,
+	usageMeters []usage.Meter,
 	gitBranch string,
-	runningSubAgents int,
 ) {
 	t := h.com.Styles
 	if width != h.width || compact != h.compact {
@@ -105,8 +175,8 @@ func (h *header) drawHeader(
 		detailsOpen,
 		availDetailWidth,
 		hyperCredits,
+		usageMeters,
 		gitBranch,
-		runningSubAgents,
 	)
 
 	remainingWidth := width -
@@ -139,23 +209,25 @@ func renderHeaderDetails(
 	detailsOpen bool,
 	availWidth int,
 	hyperCredits *int,
+	usageMeters []usage.Meter,
 	gitBranch string,
-	runningSubAgents int,
 ) string {
 	t := com.Styles
 
 	var parts []string
 
-	// Subagents work out of sight in compact mode, so the header carries
-	// a live count of how many are still going.
-	if runningSubAgents > 0 {
-		parts = append(parts, t.Header.Percentage.Render(fmt.Sprintf(
-			"%s %d", subAgentSpinner(time.Now()), runningSubAgents,
-		)))
+	// Goal-mode badge: shows while a goal is active on this session, with
+	// the turn budget as the counter.
+	if session.Goal != nil && session.Goal.State == goal.StateActive {
+		label := "GOAL"
+		if session.Goal.TurnBudget > 0 {
+			label = fmt.Sprintf("GOAL %d", session.Goal.TurnBudget)
+		}
+		parts = append(parts, t.Status.ModeBadgeAuto.Render(label))
 	}
 
 	if lspErrorCount > 0 {
-		parts = append(parts, t.LSP.ErrorDiagnostic.Render(fmt.Sprintf("%s%d", styles.LSPErrorIcon, lspErrorCount)))
+		parts = append(parts, t.LSP.ErrorDiagnostic.Render(fmt.Sprintf("%s%d", nerdfont.Glyph(styles.LSPErrorIcon, "E"), lspErrorCount)))
 	}
 
 	agentCfg := com.Config().Agents[config.AgentCoder]
@@ -175,6 +247,24 @@ func renderHeaderDetails(
 		parts = append(parts, hc)
 	}
 
+	// A plan with several limits shows the ones the model in use draws from,
+	// compactly: the short tag the provider gave each meter and the share
+	// left in it.
+	if len(usageMeters) > 0 {
+		segments := make([]string, 0, len(usageMeters))
+		for _, meter := range usageMeters {
+			if meter.IsFraction() {
+				segments = append(segments, fmt.Sprintf("%s %d%%", meter.Tag(), meter.Percent()))
+			} else {
+				// An amount rather than a share, such as a credit balance.
+				segments = append(segments, fmt.Sprintf("%s %g", meter.Tag(), meter.Left))
+			}
+		}
+		quota := t.Header.HypercreditIcon.Render(styles.HypercreditIcon) + " " +
+			t.Header.Percentage.Render(strings.Join(segments, " · "))
+		parts = append(parts, quota)
+	}
+
 	const keystroke = "ctrl+d"
 	if detailsOpen {
 		parts = append(parts, t.Header.Keystroke.Render(keystroke)+t.Header.KeystrokeTip.Render(" close"))
@@ -187,21 +277,31 @@ func renderHeaderDetails(
 	metadata = dot + metadata
 
 	const dirTrimLimit = 4
-	workingDir := com.Workspace.WorkingDir()
-	cwd := t.Header.WorkingDir.Render(fsext.DirTrim(fsext.PrettyPath(workingDir), dirTrimLimit))
+	cwd := fsext.DirTrim(fsext.PrettyPath(com.Workspace.WorkingDir()), dirTrimLimit)
 
+	format := ""
+	if cfg := com.Config().Options.TUI; cfg != nil {
+		format = cfg.WorkingDirFormat
+	}
+	uh := currentUserHost()
+	dir := formatWorkingDir(format, cwd, uh.name, uh.host)
+	// Truncation drops from the right, which is where the metadata lives.
+	// When the formatted directory would crowd out the metadata, fall back
+	// to the bare path rather than losing the token usage and keystroke hint.
+	if lipgloss.Width(dir+metadata) > availWidth && lipgloss.Width(cwd+metadata) <= availWidth {
+		dir = cwd
+	}
+	dirStr := t.Header.WorkingDir.Render(dir)
 	if gitBranch != "" {
-		// Reserve space for the separator between branch and path and
+		// Reserve space for the dot separator between branch and path and
 		// at least some of the path.
-		branchSep := " "
-		metadataWidth := lipgloss.Width(metadata)
-		maxBranchWidth := max(0, availWidth-metadataWidth-lipgloss.Width(cwd)-lipgloss.Width(branchSep))
+		branchSep := t.Header.Separator.Render(" • ")
+		maxBranchWidth := max(0, availWidth-lipgloss.Width(metadata)-lipgloss.Width(dirStr)-lipgloss.Width(branchSep))
 		if maxBranchWidth > 0 {
 			truncBranch := ansi.Truncate(gitBranch, maxBranchWidth, "…")
-			cwd = t.Header.GitBranch.Render(truncBranch) + branchSep + cwd
+			dirStr = t.Header.GitBranch.Render(truncBranch) + branchSep + dirStr
 		}
 	}
-
-	result := cwd + metadata
+	result := dirStr + metadata
 	return ansi.Truncate(result, max(0, availWidth), "…")
 }

@@ -2,7 +2,6 @@
 package styles
 
 import (
-	"encoding/json"
 	"fmt"
 	"image/color"
 	"log/slog"
@@ -10,12 +9,13 @@ import (
 
 	"charm.land/bubbles/v2/filepicker"
 	"charm.land/bubbles/v2/help"
-	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/glamour/v2/ansi"
 	"charm.land/lipgloss/v2"
 	"github.com/alecthomas/chroma/v2"
+	"github.com/bytedance/sonic"
 	"github.com/charmbracelet/crush/internal/ui/diffview"
+	"github.com/charmbracelet/crush/internal/ui/textarea"
 	uv "github.com/charmbracelet/ultraviolet"
 )
 
@@ -25,6 +25,16 @@ const (
 	LoadingIcon     string = "⟳"
 	ModelIcon       string = "◇"
 	HypercreditIcon string = "◆"
+
+	// AgentIcon marks a dispatched sub-agent surface: the @ popup's agent
+	// rows, the inspect-mode sidebar banner, and the agent tag on an
+	// inspected transcript's metadata lines. Nerd Font md-robot; renders
+	// as one cell on Nerd Font terminals and as a replacement glyph
+	// elsewhere.
+	AgentIcon string = "󰚩"
+
+	// GitBranchIcon is the Powerline branch glyph, shown only with Nerd Fonts.
+	GitBranchIcon string = "\ue0a0"
 
 	ArrowRightIcon string = "→"
 
@@ -64,9 +74,17 @@ const (
 	TodoPendingIcon    string = "•"
 	TodoInProgressIcon string = "→"
 
-	ImageIcon  string = "■"
-	TextIcon   string = "≡"
-	SkillIcon  string = "▲"
+	CronRecurringIcon string = "↻"
+	CronOneShotIcon   string = "⏱"
+	CronDeletedIcon   string = "✕"
+
+	ImageIcon string = "▣"
+	TextIcon  string = "≡"
+	SkillIcon string = "▲"
+	// PromptIcon marks a resolved MCP prompt. Single-width and geometric to
+	// match the icons above: an emoji here would be double-width and
+	// colour-rendered, breaking both the row's look and its width math.
+	PromptIcon string = "◈"
 	RemoveIcon string = "✕"
 
 	ColorSwatchIcon string = "■"
@@ -74,10 +92,17 @@ const (
 	ScrollbarThumb string = "┃"
 	ScrollbarTrack string = "│"
 
-	LSPErrorIcon   string = "E"
-	LSPWarningIcon string = "W"
-	LSPInfoIcon    string = "I"
-	LSPHintIcon    string = "H"
+	ChannelIcon string = "󰍩"
+
+	// LSP severity icons are Nerd Font glyphs, shown only when the terminal
+	// is expected to render them. Each glyph carries a trailing space as a
+	// separator from the count that follows it. Terminals without Nerd
+	// Font support fall back to the letters E, W, I, and H through
+	// nerdfont.Glyph at the call sites, which supply their own spacing.
+	LSPErrorIcon   string = "\U000F0159 " // nf-md-close_circle
+	LSPWarningIcon string = "\U000F0028 " // nf-md-alert
+	LSPInfoIcon    string = "\U000F02FC " // nf-md-information
+	LSPHintIcon    string = "\U000F0335 " // nf-md-bug_outline
 )
 
 const (
@@ -86,421 +111,107 @@ const (
 )
 
 type Styles struct {
-	// ANSI holds the 16 standard ANSI colors (0-7 normal, 8-15 bright)
-	// used to remap legible colors onto raw terminal output, such as the
-	// output of bang-mode shell commands. Terminal programs emit the
-	// basic 16-color SGR codes (red, green, blue, …) and leave the actual
-	// colors up to the terminal; without this palette they fall through
-	// to the user's terminal defaults, which are often illegible on
-	// Crush's background. Defining them here keeps output readable and
-	// on-brand regardless of terminal configuration.
-	ANSI [16]color.Color
-
-	// Header
-	Header struct {
-		Charm             lipgloss.Style // Style for "Charm™" label
-		Diagonals         lipgloss.Style // Style for diagonal separators (╱)
-		Percentage        lipgloss.Style // Style for context percentage
-		HypercreditIcon   lipgloss.Style // Style for Hypercredit count (◆ N)
-		Keystroke         lipgloss.Style // Style for keystroke hints (e.g., "ctrl+d")
-		KeystrokeTip      lipgloss.Style // Style for keystroke action text (e.g., "open", "close")
-		WorkingDir        lipgloss.Style // Style for current working directory
-		GitBranch         lipgloss.Style // Style for the current git branch name
-		Separator         lipgloss.Style // Style for separator dots (•)
-		Wrapper           lipgloss.Style // Outer container for the entire header row
-		LogoGradCanvas    lipgloss.Style // Canvas for the compact "CRUSH" gradient
-		LogoGradFromColor color.Color    // "CRUSH" wordmark gradient start
-		LogoGradToColor   color.Color    // "CRUSH" wordmark gradient end
-	}
-
-	CompactDetails struct {
-		View    lipgloss.Style
-		Version lipgloss.Style
-		Title   lipgloss.Style
-	}
-
-	// Tool calls
-	ToolCallSuccess lipgloss.Style
-
-	// Text selection
-	TextSelection lipgloss.Style
-
-	// Markdown & Chroma
-	Markdown      ansi.StyleConfig
-	QuietMarkdown ansi.StyleConfig
-	PlanMarkdown  ansi.StyleConfig
-
-	// Inputs
-	TextInput textinput.Styles
-
-	// Help
-	Help help.Styles
-
-	// Diff
-	Diff diffview.Style
-
-	// FilePicker
-	FilePicker filepicker.Styles
-
-	// Buttons
-	Button struct {
-		Focused lipgloss.Style
-		Blurred lipgloss.Style
-		// Inactive styles buttons of a prompt that is not in the
-		// active pane: slightly lighter than Blurred so the choices
-		// stay legible while the chat has focus.
-		Inactive lipgloss.Style
-		Hovered  lipgloss.Style
-		Negative lipgloss.Style // Selected negative/destructive action.
-	}
-
-	// Editor
-	Editor struct {
-		Textarea textarea.Styles
-
-		// Normal mode prompt ("> " icon on the first line, "::: " after).
-		PromptNormalIconFocused lipgloss.Style
-		PromptNormalIconBlurred lipgloss.Style
-		PromptNormalFocused     lipgloss.Style
-		PromptNormalBlurred     lipgloss.Style
-
-		// Plan mode prompt.
-		PromptPlanIconFocused lipgloss.Style
-		PromptPlanIconBlurred lipgloss.Style
-		PromptPlanDotsFocused lipgloss.Style
-		PromptPlanDotsBlurred lipgloss.Style
-
-		// YOLO mode prompt.
-		PromptYoloIconFocused lipgloss.Style
-		PromptYoloIconBlurred lipgloss.Style
-		PromptYoloDotsFocused lipgloss.Style
-		PromptYoloDotsBlurred lipgloss.Style
-
-		// Bang mode prompt (" ! " icon + ":::" dots, Turtle color).
-		PromptBangIconFocused lipgloss.Style
-		PromptBangIconBlurred lipgloss.Style
-		PromptBangDotsFocused lipgloss.Style
-		PromptBangDotsBlurred lipgloss.Style
-
-		// Question mode prompt (" ? " icon + ":::" dots).
-		PromptQuestionIconFocused lipgloss.Style
-		PromptQuestionIconBlurred lipgloss.Style
-
-		// Question choice styling.
-		QuestionSelected   lipgloss.Style // Active choice text (Dolly).
-		QuestionUnselected lipgloss.Style // Inactive header text (Sash).
-		QuestionBody       lipgloss.Style // Description/body text.
-		QuestionConfirm    lipgloss.Style // Confirm tab title (primary).
-		QuestionNote       lipgloss.Style // Saved note text (dimmer than body).
-		QuestionCursorBar  lipgloss.Style // Active cursor indicator bar.
-		QuestionRadioOn    lipgloss.Style // Selected single-choice radio.
-		QuestionRadioOff   lipgloss.Style // Unselected single-choice radio.
-		QuestionCheckOn    lipgloss.Style // Checked multi-choice indicator.
-		QuestionCheckOff   lipgloss.Style // Unchecked multi-choice indicator.
-
-		// Sysadmin mode prompt (" # " icon + ":::" dots).
-		PromptSysadminIconFocused lipgloss.Style
-		PromptSysadminIconBlurred lipgloss.Style
-		PromptSysadminDotsFocused lipgloss.Style
-		PromptSysadminDotsBlurred lipgloss.Style
-	}
-
-	// Radio
-	Radio struct {
-		On    lipgloss.Style
-		Off   lipgloss.Style
-		Label lipgloss.Style // Text next to a radio button
-	}
-
-	// Tabs for batch question forms. Uses uv types for direct
-	// screen rendering without lipgloss.
-	Tab struct {
-		ActiveBorder          uv.Border
-		InactiveBorder        uv.Border
-		ActiveBorderBlurred   uv.Border
-		InactiveBorderBlurred uv.Border
-		ActiveStyle           uv.Style
-		InactiveStyle         uv.Style
-	}
-
-	// Background
-	Background color.Color
-
 	// Exit banner
 	ExitBanner struct {
 		Text  lipgloss.Style // Parting message, session title, and resume command
 		Label lipgloss.Style // Session and Continue labels
 	}
 
-	// Logo
-	Logo struct {
-		FieldColor         color.Color
-		TitleColorA        color.Color
-		TitleColorB        color.Color
-		CharmColor         color.Color
-		VersionColor       color.Color
-		SmallCharm         lipgloss.Style // "Charm™" label in SmallRender
-		SmallDiagonals     lipgloss.Style // Diagonal line fill in SmallRender
-		GradCanvas         lipgloss.Style // Blank canvas for gradient painting
-		SmallGradFromColor color.Color    // Small "Crush" wordmark gradient start
-		SmallGradToColor   color.Color    // Small "Crush" wordmark gradient end
-	}
-
-	// Working indicator gradient (spinners/shimmers on assistant "thinking",
-	// tool-call pending, CLI generating, startup).
-	WorkingGradFromColor color.Color
-	WorkingGradToColor   color.Color
-	WorkingLabelColor    color.Color // Label text color next to the indicator
-	WorkingTimerColor    color.Color // Elapsed timer suffix color
-	ThinkingLabelColor   color.Color // Label text color for thinking/summarizing spinners
-	CanceledLabelColor   color.Color // Label text color for canceled prompts
-
-	// Section Title
-	Section struct {
-		Title lipgloss.Style
-		Line  lipgloss.Style
-	}
-
-	// Initialize
-	Initialize struct {
-		Header  lipgloss.Style
-		Content lipgloss.Style
-		Accent  lipgloss.Style
-	}
-
-	// LSP
-	LSP struct {
-		ErrorDiagnostic   lipgloss.Style
-		WarningDiagnostic lipgloss.Style
-		HintDiagnostic    lipgloss.Style
-		InfoDiagnostic    lipgloss.Style
-	}
-
-	// Sidebar
-	Sidebar struct {
-		SessionTitle lipgloss.Style // Current session title at top of sidebar
-		WorkingDir   lipgloss.Style // Working directory path (PrettyPath)
-	}
-
-	// ModelInfo (model name, provider, reasoning, token/cost summary)
-	ModelInfo struct {
-		Icon                 lipgloss.Style // Model icon (◇)
-		Name                 lipgloss.Style // Model name text
-		Provider             lipgloss.Style // "via <provider>" text
-		ProviderFallback     lipgloss.Style // Provider on its own second line
-		Reasoning            lipgloss.Style // Reasoning effort text
-		TokenCount           lipgloss.Style // "(42K)" token count
-		TokenPercentage      lipgloss.Style // "42%" percent of context window
-		EstimatedUsagePrefix lipgloss.Style // "~" prefix for estimated usage
-		Cost                 lipgloss.Style // "$0.42" cost readout
-		HypercreditIcon      lipgloss.Style // Hypercredit icon (◆)
-		HypercreditText      lipgloss.Style // Remaining Hypercredits text
-	}
-
-	// Resource styles the LSP/MCP/skills sidebar lists: their heading,
-	// each row's status icon, name, status text, and truncation hints.
-	Resource struct {
-		Heading         lipgloss.Style // Section header ("LSPs", "MCPs", "Skills")
-		Name            lipgloss.Style // Resource name (e.g. "gopls")
-		StatusText      lipgloss.Style // Row status description (e.g. "starting...")
-		OfflineIcon     lipgloss.Style // Offline/unstarted/stopped status icon
-		WorkingIcon     lipgloss.Style // In-progress icon style with no preset glyph
-		DisabledIcon    lipgloss.Style // Disabled status icon
-		BusyIcon        lipgloss.Style // Busy/starting status icon
-		ErrorIcon       lipgloss.Style // Error status icon
-		OnlineIcon      lipgloss.Style // Online/ready status icon
-		OnlineText      lipgloss.Style // Online/ready status text (e.g. "connected"), no icon
-		NeedsAuthIcon   lipgloss.Style // Needs authentication status icon
-		AdditionalText  lipgloss.Style // "None" and "…and N more" text
-		CapabilityCount lipgloss.Style // "N tools" / "N prompts" / "N resources"
-		RowTitleBase    lipgloss.Style // Base style applied over row titles in common.Status
-		RowDescBase     lipgloss.Style // Base style applied over row descriptions in common.Status
-		DefaultTitleFg  color.Color    // Default title color when opt is zero
-		DefaultDescFg   color.Color    // Default description color when opt is zero
-	}
-
-	// Files
-	Files struct {
-		Path           lipgloss.Style
-		Additions      lipgloss.Style
-		Deletions      lipgloss.Style
-		SectionTitle   lipgloss.Style // "Modified Files" heading
-		EmptyMessage   lipgloss.Style // "None" placeholder when no files
-		TruncationHint lipgloss.Style // "…and N more" message
-	}
-
-	// Chat
-	// Messages - chat message item styles
-	Messages struct {
-		UserBlurred      lipgloss.Style
-		UserFocused      lipgloss.Style
-		AssistantBlurred lipgloss.Style
-		AssistantFocused lipgloss.Style
-		NoContent        lipgloss.Style
-		Thinking         lipgloss.Style
-		ErrorTag         lipgloss.Style
-		ErrorTitle       lipgloss.Style
-		ErrorDetails     lipgloss.Style
-		ToolCallFocused  lipgloss.Style
-		ToolCallCompact  lipgloss.Style
-		ToolCallBlurred  lipgloss.Style
-
-		// Shell (bang mode) item styles.
-		ShellBarFocused    lipgloss.Style // Left vertical bar when focused.
-		ShellBarBlurred    lipgloss.Style // Left vertical bar when blurred.
-		ShellPrompt        lipgloss.Style // "$" prompt symbol (focused).
-		ShellPromptBlurred lipgloss.Style // "$" prompt symbol (blurred).
-		ShellCommand       lipgloss.Style // Command text (syntax-highlighted).
-		ShellOutput        lipgloss.Style // Plain output text.
-		ShellExitCode      lipgloss.Style // Non-zero exit code indicator.
-		ShellTruncation    lipgloss.Style // "N more lines" hint.
-
-		SectionHeader lipgloss.Style
-
-		// Plan section styles
-		PlanBox lipgloss.Style // Border+padding for the final plan message
-
-		// Thinking section styles
-		ThinkingBox            lipgloss.Style // Background for thinking content
-		ThinkingTruncationHint lipgloss.Style // "… (N lines hidden)" hint
-		ThinkingFooterTitle    lipgloss.Style // "Thought for" text
-		ThinkingFooterDuration lipgloss.Style // Duration value
-		AssistantInfoIcon      lipgloss.Style
-		AssistantInfoModel     lipgloss.Style
-		AssistantInfoProvider  lipgloss.Style
-		AssistantInfoDuration  lipgloss.Style
-		SubduedHypercreditIcon lipgloss.Style // Subdued ◆ for hypercredit figures within subdued text
-		AssistantCanceled      lipgloss.Style // Italic "Canceled" footer
-	}
-
 	// Tool - styles for tool call rendering
 	Tool struct {
-		// Icon styles with tool status
-		IconPending   lipgloss.Style
-		IconSuccess   lipgloss.Style
-		IconError     lipgloss.Style
-		IconCancelled lipgloss.Style
-
-		// Tool name styles
-		NameNormal lipgloss.Style // Top-level tool name
-		NameNested lipgloss.Style // Nested child tool name (inside Agent/Agentic Fetch)
-
-		// Parameter list styles
-		ParamMain   lipgloss.Style
-		ParamKey    lipgloss.Style
-		Description lipgloss.Style // A tool's own summary of what it is doing
-
-		// Content rendering styles
-		ContentLine           lipgloss.Style // Individual content line with background and width
-		ContentTruncation     lipgloss.Style // Truncation message "… (N lines)"
-		ContentCodeLine       lipgloss.Style // Code line with background and width
-		ContentCodeTruncation lipgloss.Style // Code truncation message with bgBase
-		ContentCodeBg         color.Color    // Background color for syntax highlighting
-		Body                  lipgloss.Style // Body content padding (PaddingLeft(2))
-
-		// Deprecated - kept for backward compatibility
-		ContentBg         lipgloss.Style // Content background
-		ContentText       lipgloss.Style // Content text
-		ContentLineNumber lipgloss.Style // Line numbers in code
-
-		// State message styles
-		StateWaiting   lipgloss.Style // "Waiting for tool response..."
-		StateCancelled lipgloss.Style // "Canceled."
-
-		// Error styles
-		ErrorTag     lipgloss.Style // ERROR tag
-		ErrorMessage lipgloss.Style // Error message text
-
-		// Warning styles (used for permission denied)
-		WarnTag     lipgloss.Style // WARN tag
-		WarnMessage lipgloss.Style // Warning message text
-
-		// Diff styles
-		DiffTruncation lipgloss.Style // Diff truncation message with padding
-
-		// Multi-edit note styles
-		NoteTag     lipgloss.Style // NOTE tag (yellow background)
-		NoteMessage lipgloss.Style // Note message text
-
-		// Job header styles (for bash jobs)
-		JobIconPending lipgloss.Style // Pending job icon (green dark)
-		JobIconError   lipgloss.Style // Error job icon (red dark)
-		JobIconSuccess lipgloss.Style // Success job icon (green)
-		JobToolName    lipgloss.Style // Job tool name "Bash" (blue)
-		JobAction      lipgloss.Style // Action text (Start, Output, Kill)
-		JobPID         lipgloss.Style // PID text
-		JobDescription lipgloss.Style // Description text
-
-		// Agent task styles
-		AgentTaskTag lipgloss.Style // Agent task tag (blue background, bold)
-		AgentPrompt  lipgloss.Style // Agent prompt text
-		AgentName    lipgloss.Style // Subagent first name
-		AgentLabel   lipgloss.Style // Label a subagent was dispatched with, after its first name
-		AgentMessage lipgloss.Style // Message sent to a subagent
-
-		// Agentic fetch styles
-		AgenticFetchPromptTag lipgloss.Style // Agentic fetch prompt tag (green background, bold)
-
-		// Todo styles
-		TodoRatio          lipgloss.Style // Todo ratio (e.g., "2/5")
-		TodoCompletedIcon  lipgloss.Style // Completed todo icon
-		TodoInProgressIcon lipgloss.Style // In-progress todo icon
-		TodoPendingIcon    lipgloss.Style // Pending todo icon
-		TodoStatusNote     lipgloss.Style // " · completed N" / " · starting task" trailing note
-		TodoItem           lipgloss.Style // Default body text for todo list items
-		TodoJustStarted    lipgloss.Style // Text of the just-started todo in tool-call bodies
-
-		// MCP tools
-		MCPName     lipgloss.Style // The mcp name
-		MCPToolName lipgloss.Style // The mcp tool name
-		MCPArrow    lipgloss.Style // The mcp arrow icon
-
-		// Images and external resources
+		IconPending             lipgloss.Style
+		IconSuccess             lipgloss.Style
+		IconError               lipgloss.Style
+		IconCancelled           lipgloss.Style
+		NameNormal              lipgloss.Style
+		NameNested              lipgloss.Style
+		ParamMain               lipgloss.Style
+		ParamKey                lipgloss.Style
+		ContentLine             lipgloss.Style
+		ContentTruncation       lipgloss.Style
+		ContentCodeLine         lipgloss.Style
+		ContentCodeTruncation   lipgloss.Style
+		ContentCodeBg           color.Color
+		Body                    lipgloss.Style
+		ContentBg               lipgloss.Style
+		ContentText             lipgloss.Style
+		ContentLineNumber       lipgloss.Style
+		StateWaiting            lipgloss.Style
+		StateCancelled          lipgloss.Style
+		ErrorTag                lipgloss.Style
+		ErrorMessage            lipgloss.Style
+		WarnTag                 lipgloss.Style
+		WarnMessage             lipgloss.Style
+		DiffTruncation          lipgloss.Style
+		NoteTag                 lipgloss.Style
+		NoteMessage             lipgloss.Style
+		JobIconPending          lipgloss.Style
+		JobIconError            lipgloss.Style
+		JobIconSuccess          lipgloss.Style
+		JobToolName             lipgloss.Style
+		JobAction               lipgloss.Style
+		JobPID                  lipgloss.Style
+		JobDescription          lipgloss.Style
+		AgentTaskTag            lipgloss.Style
+		AgentPrompt             lipgloss.Style
+		AgentMessage            lipgloss.Style
+		AgentLabel              lipgloss.Style
+		AgentName               lipgloss.Style
+		AgenticFetchPromptTag   lipgloss.Style
+		TodoRatio               lipgloss.Style
+		TodoCompletedIcon       lipgloss.Style
+		TodoInProgressIcon      lipgloss.Style
+		TodoPendingIcon         lipgloss.Style
+		TodoStatusNote          lipgloss.Style
+		TodoItem                lipgloss.Style
+		TodoJustStarted         lipgloss.Style
+		CronRecurringIcon       lipgloss.Style
+		CronOneShotIcon         lipgloss.Style
+		CronDeletedIcon         lipgloss.Style
+		CronTaskID              lipgloss.Style
+		CronSchedule            lipgloss.Style
+		CronNextRun             lipgloss.Style
+		CronPrompt              lipgloss.Style
+		CronMeta                lipgloss.Style
+		CronError               lipgloss.Style
+		MCPName                 lipgloss.Style
+		MCPToolName             lipgloss.Style
+		MCPArrow                lipgloss.Style
 		ResourceLoadedText      lipgloss.Style
 		ResourceLoadedIndicator lipgloss.Style
 		ResourceName            lipgloss.Style
 		ResourceSize            lipgloss.Style
 		MediaType               lipgloss.Style
-
-		// Hooks
-		HookLabel        lipgloss.Style // "Hook" label
-		HookName         lipgloss.Style // Hook command name
-		HookMatcher      lipgloss.Style // Matcher regex pattern
-		HookArrow        lipgloss.Style // Arrow indicator
-		HookDetail       lipgloss.Style // Decision detail text
-		HookOK           lipgloss.Style // "OK" status
-		HookDenied       lipgloss.Style // "Denied" status
-		HookDeniedLabel  lipgloss.Style // "Hook" label when denied
-		HookDeniedReason lipgloss.Style // Denied reason text
-		HookRewrote      lipgloss.Style // "Rewrote Input" indicator
-
-		// Action verb colors for tool-call headers.
-		ActionCreate  lipgloss.Style // Constructive actions (e.g. "Add", "Create")
-		ActionDestroy lipgloss.Style // Destructive actions (e.g. "Remove", "Delete")
-
-		// Tool result helpers.
-		ResultEmpty      lipgloss.Style // "No results" placeholder
-		ResultTruncation lipgloss.Style // "… and N more" truncation line
-		ResultItemName   lipgloss.Style // Item name (left column in result lists)
-		ResultItemDesc   lipgloss.Style // Item description (right column)
+		HookLabel               lipgloss.Style
+		HookName                lipgloss.Style
+		HookMatcher             lipgloss.Style
+		HookArrow               lipgloss.Style
+		HookDetail              lipgloss.Style
+		HookOK                  lipgloss.Style
+		HookDenied              lipgloss.Style
+		HookDeniedLabel         lipgloss.Style
+		HookDeniedReason        lipgloss.Style
+		HookRewrote             lipgloss.Style
+		ActionCreate            lipgloss.Style
+		ActionDestroy           lipgloss.Style
+		ResultEmpty             lipgloss.Style
+		ResultTruncation        lipgloss.Style
+		ResultItemName          lipgloss.Style
+		ResultItemDesc          lipgloss.Style
 	}
-
-	// Dialog styles
 	Dialog struct {
 		Title              lipgloss.Style
 		TitleText          lipgloss.Style
 		TitleError         lipgloss.Style
 		TitleAccent        lipgloss.Style
-		TitleLineBase      lipgloss.Style // Base for the gradient ╱╱╱ next to dialog titles
-		TitleGradFromColor color.Color    // Default dialog title ╱╱╱ gradient start
-		TitleGradToColor   color.Color    // Default dialog title ╱╱╱ gradient end
-		// View is the main content area style.
-		View          lipgloss.Style
-		PrimaryText   lipgloss.Style
-		SecondaryText lipgloss.Style
-		// HelpView is the line that contains the help.
-		HelpView lipgloss.Style
-		Help     struct {
+		TitleLineBase      lipgloss.Style
+		TitleGradFromColor color.Color
+		TitleGradToColor   color.Color
+		View               lipgloss.Style
+		PrimaryText        lipgloss.Style
+		SecondaryText      lipgloss.Style
+		HelpView           lipgloss.Style
+		Help               struct {
 			Ellipsis       lipgloss.Style
 			ShortKey       lipgloss.Style
 			ShortDesc      lipgloss.Style
@@ -509,36 +220,20 @@ type Styles struct {
 			FullDesc       lipgloss.Style
 			FullSeparator  lipgloss.Style
 		}
-
-		NormalItem   lipgloss.Style
-		SelectedItem lipgloss.Style
-		InputPrompt  lipgloss.Style
-
-		// PromptMessage is the friendly description of what an
-		// integrated credential prompt (GPG pinentry) is asking for.
-		PromptMessage lipgloss.Style
-		// PromptKey styles the labeled key rows shown under it.
-		PromptKey lipgloss.Style
-		// SSHMessage is the friendly description of what an integrated
-		// SSH askpass prompt is asking for.
-		SSHMessage lipgloss.Style
-		// SSHKey styles the labeled account/key row shown under it.
-		SSHKey lipgloss.Style
-
-		List lipgloss.Style
-
-		Spinner lipgloss.Style
-
-		// ContentPanel is used for content blocks with subtle background.
+		NormalItem     lipgloss.Style
+		SelectedItem   lipgloss.Style
+		InputPrompt    lipgloss.Style
+		List           lipgloss.Style
+		Spinner        lipgloss.Style
+		PromptMessage  lipgloss.Style
+		PromptKey      lipgloss.Style
+		SSHMessage     lipgloss.Style
+		SSHKey         lipgloss.Style
 		ContentPanel   lipgloss.Style
-		ContentPanelBg color.Color // Background color for ContentPanel syntax highlighting.
-
-		// Scrollbar styles for scrollable content.
+		ContentPanelBg color.Color
 		ScrollbarThumb lipgloss.Style
 		ScrollbarTrack lipgloss.Style
-
-		// Arguments
-		Arguments struct {
+		Arguments      struct {
 			Content                  lipgloss.Style
 			Description              lipgloss.Style
 			InputLabelBlurred        lipgloss.Style
@@ -546,58 +241,44 @@ type Styles struct {
 			InputRequiredMarkBlurred lipgloss.Style
 			InputRequiredMarkFocused lipgloss.Style
 		}
-
-		// ListItem styles the info-text rendered alongside list items (commands,
-		// models, reasoning options). Sessions have their own overrides below.
 		ListItem struct {
 			InfoBlurred lipgloss.Style
 			InfoFocused lipgloss.Style
 		}
-
 		Models struct {
-			ConfiguredText lipgloss.Style // "Configured" badge shown on the ModelGroup header
+			ConfiguredText lipgloss.Style
 		}
-
 		Permissions struct {
-			KeyText   lipgloss.Style // Left key cell of a key/value row
-			ValueText lipgloss.Style // Right value cell of a key/value row
-			ParamsBg  color.Color    // Background color behind highlighted JSON parameters
+			KeyText   lipgloss.Style
+			ValueText lipgloss.Style
+			ParamsBg  color.Color
 		}
-
 		Quit struct {
-			Content lipgloss.Style // Wrapper for the quit dialog's inner content
-			Hint    lipgloss.Style // Style for quit hint
-			Warning lipgloss.Style // Style for the work-in-progress warning
-			Frame   lipgloss.Style // Outer rounded border framing the quit dialog
+			Content lipgloss.Style
+			Hint    lipgloss.Style
+			Frame   lipgloss.Style
 		}
-
 		APIKey struct {
-			Spinner lipgloss.Style // Loading spinner while validating the key
+			Spinner lipgloss.Style
 		}
-
-		// AuthMethod styles the OAuth-vs-API-key choice dialog.
 		AuthMethod struct {
-			Prompt      lipgloss.Style // "How would you like to authenticate?" question line
-			CardBlurred lipgloss.Style // Unselected choice card frame and label
-			CardFocused lipgloss.Style // Selected choice card frame and label
+			Prompt      lipgloss.Style
+			CardBlurred lipgloss.Style
+			CardFocused lipgloss.Style
 		}
-
 		OAuth struct {
-			Spinner      lipgloss.Style // Loading spinner
-			Instructions lipgloss.Style // Emphasized instruction text
-			UserCode     lipgloss.Style // Prominent user code display
-			Success      lipgloss.Style // Positive status text (e.g. "Authentication successful!")
-			Link         lipgloss.Style // Underlined verification URL
-			Enter        lipgloss.Style // "enter" keyword highlight in instructions
-			ErrorText    lipgloss.Style // Error message when authentication fails
-			StatusText   lipgloss.Style // Narrative status text ("Initializing...", "Verifying...", etc.)
-			UserCodeBg   color.Color    // Background color of the centered user-code box
+			Spinner      lipgloss.Style
+			Instructions lipgloss.Style
+			UserCode     lipgloss.Style
+			Success      lipgloss.Style
+			Link         lipgloss.Style
+			Enter        lipgloss.Style
+			ErrorText    lipgloss.Style
+			StatusText   lipgloss.Style
+			UserCodeBg   color.Color
 		}
-
 		ImagePreview lipgloss.Style
-
-		Sessions struct {
-			// styles for when we are in delete mode
+		Sessions     struct {
 			DeletingView                   lipgloss.Style
 			DeletingItemFocused            lipgloss.Style
 			DeletingItemBlurred            lipgloss.Style
@@ -605,8 +286,6 @@ type Styles struct {
 			DeletingMessage                lipgloss.Style
 			DeletingTitleGradientFromColor color.Color
 			DeletingTitleGradientToColor   color.Color
-
-			// styles for when we are in update mode
 			RenamingView                   lipgloss.Style
 			RenamingingItemFocused         lipgloss.Style
 			RenamingItemBlurred            lipgloss.Style
@@ -615,116 +294,303 @@ type Styles struct {
 			RenamingTitleGradientFromColor color.Color
 			RenamingTitleGradientToColor   color.Color
 			RenamingPlaceholder            lipgloss.Style
-
-			InfoBlurred lipgloss.Style // Timestamp text on unfocused session items
-			InfoFocused lipgloss.Style // Timestamp text on the focused session item
+			InfoBlurred                    lipgloss.Style
+			InfoFocused                    lipgloss.Style
 		}
 	}
-
-	// Status bar and help
-	Status struct {
-		Help lipgloss.Style
-
-		// Mode badges shown before the help hints.
-		ModeBadgePlan     lipgloss.Style
-		ModeBadgeYolo     lipgloss.Style
-		ModeBadgeSysadmin lipgloss.Style
-
-		// Full-width banners shown when switching modes.
-		ModeBannerPlan          lipgloss.Style
-		ModeBannerPlanBadge     lipgloss.Style
-		ModeBannerYolo          lipgloss.Style
-		ModeBannerYoloBadge     lipgloss.Style
-		ModeBannerSysadmin      lipgloss.Style
-		ModeBannerSysadminBadge lipgloss.Style
-
-		ErrorIndicator   lipgloss.Style
-		WarnIndicator    lipgloss.Style
-		InfoIndicator    lipgloss.Style
-		UpdateIndicator  lipgloss.Style
-		SuccessIndicator lipgloss.Style
-
-		ErrorMessage   lipgloss.Style
-		WarnMessage    lipgloss.Style
-		InfoMessage    lipgloss.Style
-		UpdateMessage  lipgloss.Style
-		SuccessMessage lipgloss.Style
+	Editor struct {
+		PromptBangIconBlurred     lipgloss.Style
+		PromptBangDotsBlurred     lipgloss.Style
+		PromptNormalIconBlurred   lipgloss.Style
+		PromptNormalFocused       lipgloss.Style
+		PromptNormalBlurred       lipgloss.Style
+		PromptPlanIconFocused     lipgloss.Style
+		PromptPlanIconBlurred     lipgloss.Style
+		PromptPlanDotsFocused     lipgloss.Style
+		PromptPlanDotsBlurred     lipgloss.Style
+		PromptYoloIconFocused     lipgloss.Style
+		PromptYoloIconBlurred     lipgloss.Style
+		PromptYoloDotsFocused     lipgloss.Style
+		PromptYoloDotsBlurred     lipgloss.Style
+		PromptAutoIconFocused     lipgloss.Style
+		PromptAutoIconBlurred     lipgloss.Style
+		PromptAutoDotsFocused     lipgloss.Style
+		PromptAutoDotsBlurred     lipgloss.Style
+		PromptBangIconFocused     lipgloss.Style
+		PromptNormalIconFocused   lipgloss.Style
+		TokenSkill                lipgloss.Style
+		PromptQuestionIconBlurred lipgloss.Style
+		PromptQuestionIconFocused lipgloss.Style
+		PromptBangDotsFocused     lipgloss.Style
+		QuestionSelected          lipgloss.Style
+		QuestionUnselected        lipgloss.Style
+		QuestionBody              lipgloss.Style
+		QuestionConfirm           lipgloss.Style
+		QuestionNote              lipgloss.Style
+		QuestionCursorBar         lipgloss.Style
+		QuestionRadioOn           lipgloss.Style
+		QuestionRadioOff          lipgloss.Style
+		QuestionCheckOn           lipgloss.Style
+		QuestionCheckOff          lipgloss.Style
+		TokenFile                 lipgloss.Style
+		Textarea                  textarea.Styles
 	}
-
-	// Completions popup styles
+	Messages struct {
+		UserBlurred            lipgloss.Style
+		UserFocused            lipgloss.Style
+		AssistantBlurred       lipgloss.Style
+		AssistantFocused       lipgloss.Style
+		NoContent              lipgloss.Style
+		Thinking               lipgloss.Style
+		ErrorTag               lipgloss.Style
+		ErrorTitle             lipgloss.Style
+		ErrorDetails           lipgloss.Style
+		ToolCallFocused        lipgloss.Style
+		ToolCallCompact        lipgloss.Style
+		ToolCallBlurred        lipgloss.Style
+		ShellBarFocused        lipgloss.Style
+		ShellBarBlurred        lipgloss.Style
+		ShellPrompt            lipgloss.Style
+		ShellPromptBlurred     lipgloss.Style
+		ShellCommand           lipgloss.Style
+		ShellOutput            lipgloss.Style
+		ShellExitCode          lipgloss.Style
+		ShellTruncation        lipgloss.Style
+		SectionHeader          lipgloss.Style
+		PlanBox                lipgloss.Style
+		CompactionBox          lipgloss.Style
+		CompactionHeader       lipgloss.Style
+		CompactionNote         lipgloss.Style
+		ThinkingBox            lipgloss.Style
+		ThinkingTruncationHint lipgloss.Style
+		ThinkingFooterTitle    lipgloss.Style
+		ThinkingFooterDuration lipgloss.Style
+		AssistantInfoIcon      lipgloss.Style
+		AssistantInfoModel     lipgloss.Style
+		AssistantInfoProvider  lipgloss.Style
+		AssistantInfoDuration  lipgloss.Style
+		SubduedHypercreditIcon lipgloss.Style
+		AssistantCanceled      lipgloss.Style
+		AssistantCopyIcon      lipgloss.Style
+		ChannelInfoIcon        lipgloss.Style
+		ChannelInfoSender      lipgloss.Style
+		ChannelInfoProvider    lipgloss.Style
+		ChannelInfoTimestamp   lipgloss.Style
+	}
+	Diff   diffview.Style
+	Status struct {
+		Help                lipgloss.Style
+		ModeBadgePlan       lipgloss.Style
+		ModeBadgeYolo       lipgloss.Style
+		ModeBadgeAuto       lipgloss.Style
+		ModeBannerPlan      lipgloss.Style
+		ModeBannerPlanBadge lipgloss.Style
+		ModeBannerYolo      lipgloss.Style
+		ModeBannerYoloBadge lipgloss.Style
+		ModeBannerAuto      lipgloss.Style
+		ModeBannerAutoBadge lipgloss.Style
+		ErrorIndicator      lipgloss.Style
+		WarnIndicator       lipgloss.Style
+		InfoIndicator       lipgloss.Style
+		UpdateIndicator     lipgloss.Style
+		SuccessIndicator    lipgloss.Style
+		ErrorMessage        lipgloss.Style
+		WarnMessage         lipgloss.Style
+		InfoMessage         lipgloss.Style
+		UpdateMessage       lipgloss.Style
+		SuccessMessage      lipgloss.Style
+	}
+	Pills struct {
+		Base               lipgloss.Style
+		Focused            lipgloss.Style
+		QueueItemPrefix    lipgloss.Style
+		CronItemPrefix     lipgloss.Style
+		QueueItemText      lipgloss.Style
+		QueueLabel         lipgloss.Style
+		QueueIconBase      lipgloss.Style
+		QueueGradFromColor color.Color
+		QueueGradToColor   color.Color
+		TodoLabel          lipgloss.Style
+		TodoProgress       lipgloss.Style
+		TodoCurrentTask    lipgloss.Style
+		TodoSpinner        lipgloss.Style
+		HelpKey            lipgloss.Style
+		HelpText           lipgloss.Style
+		Area               lipgloss.Style
+	}
+	Resource struct {
+		Heading         lipgloss.Style
+		Name            lipgloss.Style
+		StatusText      lipgloss.Style
+		OfflineIcon     lipgloss.Style
+		DisabledIcon    lipgloss.Style
+		BusyIcon        lipgloss.Style
+		ErrorIcon       lipgloss.Style
+		OnlineIcon      lipgloss.Style
+		WorkingIcon     lipgloss.Style
+		OnlineText      lipgloss.Style
+		NeedsAuthIcon   lipgloss.Style
+		AdditionalText  lipgloss.Style
+		CapabilityCount lipgloss.Style
+		RowTitleBase    lipgloss.Style
+		RowDescBase     lipgloss.Style
+		DefaultTitleFg  color.Color
+		DefaultDescFg   color.Color
+	}
+	Header struct {
+		Charm             lipgloss.Style
+		Diagonals         lipgloss.Style
+		Percentage        lipgloss.Style
+		HypercreditIcon   lipgloss.Style
+		Keystroke         lipgloss.Style
+		KeystrokeTip      lipgloss.Style
+		WorkingDir        lipgloss.Style
+		GitBranch         lipgloss.Style
+		Separator         lipgloss.Style
+		Wrapper           lipgloss.Style
+		LogoGradCanvas    lipgloss.Style
+		LogoGradFromColor color.Color
+		LogoGradToColor   color.Color
+	}
+	FilePicker filepicker.Styles
+	ModelInfo  struct {
+		Icon                 lipgloss.Style
+		Name                 lipgloss.Style
+		Provider             lipgloss.Style
+		ProviderFallback     lipgloss.Style
+		Reasoning            lipgloss.Style
+		TokenCount           lipgloss.Style
+		TokenPercentage      lipgloss.Style
+		EstimatedUsagePrefix lipgloss.Style
+		Cost                 lipgloss.Style
+		HypercreditIcon      lipgloss.Style
+		HypercreditText      lipgloss.Style
+	}
+	QuietMarkdown ansi.StyleConfig
+	PlanMarkdown  ansi.StyleConfig
+	Markdown      ansi.StyleConfig
+	Attachments   AttachmentStyles
+	Help          help.Styles
+	Files         struct {
+		Path           lipgloss.Style
+		Additions      lipgloss.Style
+		Deletions      lipgloss.Style
+		SectionTitle   lipgloss.Style
+		EmptyMessage   lipgloss.Style
+		TruncationHint lipgloss.Style
+	}
+	Button struct {
+		Focused  lipgloss.Style
+		Blurred  lipgloss.Style
+		Inactive lipgloss.Style
+		Hovered  lipgloss.Style
+		Negative lipgloss.Style
+	}
+	LSP struct {
+		ErrorDiagnostic   lipgloss.Style
+		WarningDiagnostic lipgloss.Style
+		HintDiagnostic    lipgloss.Style
+		InfoDiagnostic    lipgloss.Style
+	}
 	Completions struct {
 		Normal  lipgloss.Style
 		Focused lipgloss.Style
 		Match   lipgloss.Style
+		Agent   lipgloss.Style
 	}
-
-	// Attachments styles
-	Attachments AttachmentStyles
-
-	// Pills styles for todo/queue pills
-	Pills struct {
-		Base               lipgloss.Style // Base pill style with padding
-		Focused            lipgloss.Style // Pill with visible rounded border
-		QueueItemPrefix    lipgloss.Style // Prefix for queue list items
-		QueueItemText      lipgloss.Style // Queue list item body text
-		QueueLabel         lipgloss.Style // "N Queued" label text
-		QueueIconBase      lipgloss.Style // Base style for queue gradient triangles
-		QueueGradFromColor color.Color    // Start color for queue indicator gradient
-		QueueGradToColor   color.Color    // End color for queue indicator gradient
-		TodoLabel          lipgloss.Style // "To-Do" label
-		TodoProgress       lipgloss.Style // Todo ratio (e.g. "2/5")
-		TodoCurrentTask    lipgloss.Style // Current in-progress task name
-		TodoSpinner        lipgloss.Style // Todo spinner style
-		HelpKey            lipgloss.Style // Keystroke hint style
-		HelpText           lipgloss.Style // Help action text style
-		Area               lipgloss.Style // Pills area container
+	Logo struct {
+		FieldColor         color.Color
+		TitleColorA        color.Color
+		TitleColorB        color.Color
+		CharmColor         color.Color
+		VersionColor       color.Color
+		SmallCharm         lipgloss.Style
+		SmallDiagonals     lipgloss.Style
+		GradCanvas         lipgloss.Style
+		SmallGradFromColor color.Color
+		SmallGradToColor   color.Color
 	}
+	Sidebar struct {
+		SessionTitle lipgloss.Style
+		WorkingDir   lipgloss.Style
+		AgentInspect lipgloss.Style
+	}
+	CompactDetails struct {
+		View    lipgloss.Style
+		Version lipgloss.Style
+		Title   lipgloss.Style
+	}
+	Initialize struct {
+		Header  lipgloss.Style
+		Content lipgloss.Style
+		Accent  lipgloss.Style
+	}
+	Radio struct {
+		On    lipgloss.Style
+		Off   lipgloss.Style
+		Label lipgloss.Style
+	}
+	Section struct {
+		Title lipgloss.Style
+		Line  lipgloss.Style
+	}
+	ToolCallSuccess      lipgloss.Style
+	TextSelection        lipgloss.Style
+	ANSI                 [16]color.Color
+	Background           color.Color
+	WorkingGradFromColor color.Color
+	WorkingGradToColor   color.Color
+	WorkingTimerColor    color.Color
+	WorkingLabelColor    color.Color
+	Tab                  struct {
+		ActiveBorder          uv.Border
+		InactiveBorder        uv.Border
+		ActiveBorderBlurred   uv.Border
+		InactiveBorderBlurred uv.Border
+		ActiveStyle           uv.Style
+		InactiveStyle         uv.Style
+	}
+	TextInput textinput.Styles // Icon styles with tool status
+	// Text next to a radio button
 }
 
 // ChromaTheme converts the current markdown chroma styles to a chroma
 // StyleEntries map.
 func (s *Styles) ChromaTheme() chroma.StyleEntries {
-	return ChromaEntries(s.Markdown.CodeBlock.Chroma)
-}
+	rules := s.Markdown.CodeBlock
 
-// ChromaEntries converts a markdown chroma config to chroma style entries,
-// the same way glamour does for code blocks. A nil config has no entries.
-func ChromaEntries(c *ansi.Chroma) chroma.StyleEntries {
-	if c == nil {
-		return chroma.StyleEntries{}
-	}
 	return chroma.StyleEntries{
-		chroma.Text:                chromaStyle(c.Text),
-		chroma.Error:               chromaStyle(c.Error),
-		chroma.Comment:             chromaStyle(c.Comment),
-		chroma.CommentPreproc:      chromaStyle(c.CommentPreproc),
-		chroma.Keyword:             chromaStyle(c.Keyword),
-		chroma.KeywordReserved:     chromaStyle(c.KeywordReserved),
-		chroma.KeywordNamespace:    chromaStyle(c.KeywordNamespace),
-		chroma.KeywordType:         chromaStyle(c.KeywordType),
-		chroma.Operator:            chromaStyle(c.Operator),
-		chroma.Punctuation:         chromaStyle(c.Punctuation),
-		chroma.Name:                chromaStyle(c.Name),
-		chroma.NameBuiltin:         chromaStyle(c.NameBuiltin),
-		chroma.NameTag:             chromaStyle(c.NameTag),
-		chroma.NameAttribute:       chromaStyle(c.NameAttribute),
-		chroma.NameClass:           chromaStyle(c.NameClass),
-		chroma.NameConstant:        chromaStyle(c.NameConstant),
-		chroma.NameDecorator:       chromaStyle(c.NameDecorator),
-		chroma.NameException:       chromaStyle(c.NameException),
-		chroma.NameFunction:        chromaStyle(c.NameFunction),
-		chroma.NameOther:           chromaStyle(c.NameOther),
-		chroma.Literal:             chromaStyle(c.Literal),
-		chroma.LiteralNumber:       chromaStyle(c.LiteralNumber),
-		chroma.LiteralDate:         chromaStyle(c.LiteralDate),
-		chroma.LiteralString:       chromaStyle(c.LiteralString),
-		chroma.LiteralStringEscape: chromaStyle(c.LiteralStringEscape),
-		chroma.GenericDeleted:      chromaStyle(c.GenericDeleted),
-		chroma.GenericEmph:         chromaStyle(c.GenericEmph),
-		chroma.GenericInserted:     chromaStyle(c.GenericInserted),
-		chroma.GenericStrong:       chromaStyle(c.GenericStrong),
-		chroma.GenericSubheading:   chromaStyle(c.GenericSubheading),
-		chroma.Background:          chromaStyle(c.Background),
+		chroma.Text:                chromaStyle(rules.Chroma.Text),
+		chroma.Error:               chromaStyle(rules.Chroma.Error),
+		chroma.Comment:             chromaStyle(rules.Chroma.Comment),
+		chroma.CommentPreproc:      chromaStyle(rules.Chroma.CommentPreproc),
+		chroma.Keyword:             chromaStyle(rules.Chroma.Keyword),
+		chroma.KeywordReserved:     chromaStyle(rules.Chroma.KeywordReserved),
+		chroma.KeywordNamespace:    chromaStyle(rules.Chroma.KeywordNamespace),
+		chroma.KeywordType:         chromaStyle(rules.Chroma.KeywordType),
+		chroma.Operator:            chromaStyle(rules.Chroma.Operator),
+		chroma.Punctuation:         chromaStyle(rules.Chroma.Punctuation),
+		chroma.Name:                chromaStyle(rules.Chroma.Name),
+		chroma.NameBuiltin:         chromaStyle(rules.Chroma.NameBuiltin),
+		chroma.NameTag:             chromaStyle(rules.Chroma.NameTag),
+		chroma.NameAttribute:       chromaStyle(rules.Chroma.NameAttribute),
+		chroma.NameClass:           chromaStyle(rules.Chroma.NameClass),
+		chroma.NameConstant:        chromaStyle(rules.Chroma.NameConstant),
+		chroma.NameDecorator:       chromaStyle(rules.Chroma.NameDecorator),
+		chroma.NameException:       chromaStyle(rules.Chroma.NameException),
+		chroma.NameFunction:        chromaStyle(rules.Chroma.NameFunction),
+		chroma.NameOther:           chromaStyle(rules.Chroma.NameOther),
+		chroma.Literal:             chromaStyle(rules.Chroma.Literal),
+		chroma.LiteralNumber:       chromaStyle(rules.Chroma.LiteralNumber),
+		chroma.LiteralDate:         chromaStyle(rules.Chroma.LiteralDate),
+		chroma.LiteralString:       chromaStyle(rules.Chroma.LiteralString),
+		chroma.LiteralStringEscape: chromaStyle(rules.Chroma.LiteralStringEscape),
+		chroma.GenericDeleted:      chromaStyle(rules.Chroma.GenericDeleted),
+		chroma.GenericEmph:         chromaStyle(rules.Chroma.GenericEmph),
+		chroma.GenericInserted:     chromaStyle(rules.Chroma.GenericInserted),
+		chroma.GenericStrong:       chromaStyle(rules.Chroma.GenericStrong),
+		chroma.GenericSubheading:   chromaStyle(rules.Chroma.GenericSubheading),
+		chroma.Background:          chromaStyle(rules.Chroma.Background),
 	}
 }
 
@@ -736,6 +602,7 @@ type AttachmentStyles struct {
 	Image    lipgloss.Style
 	Text     lipgloss.Style
 	Skill    lipgloss.Style
+	Prompt   lipgloss.Style
 	Remove   lipgloss.Style
 	Deleting lipgloss.Style
 	More     lipgloss.Style // "N more…" hint for chips that didn't fit
@@ -762,13 +629,13 @@ func (s *Styles) Clone() Styles {
 // If the glamour library adds non-serializable fields, this approach will
 // need to be replaced with a reflect-based deep copy.
 func cloneStyleConfig(src ansi.StyleConfig) ansi.StyleConfig {
-	data, err := json.Marshal(src)
+	data, err := sonic.Marshal(src)
 	if err != nil {
 		slog.Error("Failed to marshal markdown styles for theme preview", "error", err)
 		return src
 	}
 	var dst ansi.StyleConfig
-	if err := json.Unmarshal(data, &dst); err != nil {
+	if err := sonic.Unmarshal(data, &dst); err != nil {
 		slog.Error("Failed to unmarshal markdown styles for theme preview", "error", err)
 		return src
 	}

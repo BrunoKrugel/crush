@@ -54,8 +54,9 @@ func (s SelectedModelType) String() string {
 }
 
 const (
-	SelectedModelTypeLarge SelectedModelType = "large"
-	SelectedModelTypeSmall SelectedModelType = "small"
+	SelectedModelTypeLarge    SelectedModelType = "large"
+	SelectedModelTypeSmall    SelectedModelType = "small"
+	SelectedModelTypeAutoMode SelectedModelType = "auto_mode"
 )
 
 const (
@@ -91,6 +92,8 @@ type SelectedModel struct {
 }
 
 type ProviderConfig struct {
+	Gateway *oauth.GatewaySpec `json:"gateway,omitempty" jsonschema:"description=jq programs rewriting requests and responses to the provider wire format"`
+	Usage *oauth.UsageSpec `json:"usage,omitempty" jsonschema:"description=Endpoint that reports the quota remaining on this provider's plan"`
 	// The provider's id.
 	ID string `json:"id,omitempty" jsonschema:"description=Unique identifier for the provider,example=openai"`
 	// The provider's name, used for display purposes.
@@ -160,6 +163,7 @@ type ProviderConfig struct {
 	// is authenticated with a Grok account. Like ChatGPTModels, it is
 	// the provider's whole catalog in that case.
 	GrokModels []catwalk.Model `json:"grok_models,omitempty" jsonschema:"-"`
+	Auth       *oauth.AuthSpec `json:"auth,omitempty" jsonschema:"description=OAuth configuration that lets crush login authenticate this provider"`
 }
 
 // ToProvider converts the [ProviderConfig] to a [catwalk.Provider].
@@ -196,6 +200,7 @@ const (
 
 type MCPConfig struct {
 	Command       string            `json:"command,omitempty" jsonschema:"description=Command to execute for stdio MCP servers,example=npx"`
+	Lazy          *bool             `json:"lazy,omitempty" jsonschema:"description=Keep this server's tools out of the model context until the agent loads them with mcp_search,default=true"`
 	Env           map[string]string `json:"env,omitempty" jsonschema:"description=Environment variables to set for the MCP server"`
 	Args          []string          `json:"args,omitempty" jsonschema:"description=Arguments to pass to the MCP server command"`
 	Type          MCPType           `json:"type" jsonschema:"required,description=Type of MCP connection,enum=stdio,enum=sse,enum=http,default=stdio"`
@@ -242,7 +247,8 @@ type MCPConfig struct {
 	// OAuthClientSecret is the optional secret paired with
 	// OAuthClientID for confidential clients. Values run through shell
 	// expansion, so $VAR and $(cmd) work.
-	OAuthClientSecret string `json:"oauth_client_secret,omitempty" jsonschema:"description=Pre-registered OAuth client secret paired with oauth_client_id"`
+	OAuthClientSecret     string `json:"oauth_client_secret,omitempty" jsonschema:"description=Pre-registered OAuth client secret paired with oauth_client_id"`
+	OAuthClientIDMetadata string `json:"oauth_client_id_metadata,omitempty" jsonschema:"description=URL of an OAuth Client ID Metadata Document (SEP-991) sent as the client_id for servers that advertise client_id_metadata_document_supported but have no registration endpoint"`
 
 	// OAuthCallbackPort pins the localhost port used for the OAuth
 	// redirect listener. Set this when the OAuth provider requires an
@@ -320,14 +326,17 @@ type LSPConfig struct {
 }
 
 type TUIOptions struct {
-	CompactMode bool        `json:"compact_mode,omitempty" jsonschema:"description=Enable compact mode for the TUI interface,default=false"`
-	DiffMode    string      `json:"diff_mode,omitempty" jsonschema:"description=Diff mode for the TUI interface,enum=unified,enum=split"`
-	ActiveTheme string      `json:"active_theme,omitempty" jsonschema:"description=Name of the currently active theme,default=charmtone-panther,example=charmtone-panther,example=gruvbox-dark,example=keanu"`
-	Completions Completions `json:"completions,omitzero" jsonschema:"description=Completions UI options"`
-	Transparent *bool       `json:"transparent,omitempty" jsonschema:"description=Enable transparent background for the TUI interface,default=false"`
-	Scrollbar   string      `json:"scrollbar,omitempty" jsonschema:"description=Chat scrollbar visibility,enum=default,enum=always,enum=never,default=default"`
-	Mouse       *bool       `json:"mouse,omitempty" jsonschema:"description=Enable terminal mouse capture for selection\\, clicks\\, and scrolling in the TUI. Disable to let the terminal emulator or tmux handle text selection and copy/paste,default=true"`
-	ExitBanner  ExitBanner  `json:"exit_banner,omitempty" jsonschema:"description=Exit banner style after quitting Crush,enum=default,enum=compact,enum=none,default=default"`
+	ScrollSpeed      *float64    `json:"scroll_speed,omitempty" jsonschema:"description=Multiplier applied to mouse wheel scroll distance in the TUI,default=1"`
+	NerdFonts        *bool       `json:"nerd_fonts,omitempty" jsonschema:"description=Override Nerd Font glyph detection for the TUI: true forces glyphs on, false forces them off, and unset keeps automatic detection"`
+	WorkingDirFormat string      `json:"working_dir_format,omitempty" jsonschema:"description=Format for the working directory shown in the header. Supported placeholders: {cwd} for the path, {user} for the current user, {host} for the hostname.,default={user}@{host}:{cwd},example={cwd},example={host}:{cwd}"`
+	CompactMode      bool        `json:"compact_mode,omitempty" jsonschema:"description=Enable compact mode for the TUI interface,default=false"`
+	DiffMode         string      `json:"diff_mode,omitempty" jsonschema:"description=Diff mode for the TUI interface,enum=unified,enum=split"`
+	ActiveTheme      string      `json:"active_theme,omitempty" jsonschema:"description=Name of the currently active theme,default=charmtone-panther,example=charmtone-panther,example=gruvbox-dark,example=keanu"`
+	Completions      Completions `json:"completions,omitzero" jsonschema:"description=Completions UI options"`
+	Transparent      *bool       `json:"transparent,omitempty" jsonschema:"description=Enable transparent background for the TUI interface,default=false"`
+	Scrollbar        string      `json:"scrollbar,omitempty" jsonschema:"description=Chat scrollbar visibility,enum=default,enum=always,enum=never,default=default"`
+	Mouse            *bool       `json:"mouse,omitempty" jsonschema:"description=Enable terminal mouse capture for selection\\, clicks\\, and scrolling in the TUI. Disable to let the terminal emulator or tmux handle text selection and copy/paste,default=true"`
+	ExitBanner       ExitBanner  `json:"exit_banner,omitempty" jsonschema:"description=Exit banner style after quitting Crush,enum=default,enum=compact,enum=none,default=default"`
 }
 
 // IsTransparent reports whether the TUI draws a transparent background. The
@@ -454,10 +463,12 @@ func (Attribution) JSONSchemaExtend(schema *jsonschema.Schema) {
 }
 
 type Options struct {
+	TodoEnforcement *TodoEnforcementConfig `json:"todo_enforcement,omitempty" jsonschema:"description=Proactive todo enforcement defaults"`
 	ContextPaths         []string    `json:"context_paths,omitempty" jsonschema:"description=Paths to files containing context information for the AI,example=.cursorrules,example=CRUSH.md"`
 	GlobalContextPaths   []string    `json:"global_context_paths,omitempty" jsonschema:"description=Paths to files containing global context information for the AI,default=~/.config/crush/CRUSH.md,default=~/.config/AGENTS.md"`
 	SkillsPaths          []string    `json:"skills_paths,omitempty" jsonschema:"description=Paths to directories containing Agent Skills (folders with SKILL.md files),example=~/.config/crush/skills,example=./skills"`
 	TUI                  *TUIOptions `json:"tui,omitempty" jsonschema:"description=Terminal user interface options"`
+	LazyMCP              *bool       `json:"lazy_mcp,omitempty" jsonschema:"description=Keep MCP tools out of the model context until the agent loads them with mcp_search. Individual servers override it with mcp.<name>.lazy,default=true"`
 	Debug                bool        `json:"debug,omitempty" jsonschema:"description=Enable debug logging,default=false"`
 	DebugLSP             bool        `json:"debug_lsp,omitempty" jsonschema:"description=Enable debug logging for LSP servers,default=false"`
 	DisableAutoSummarize bool        `json:"disable_auto_summarize,omitempty" jsonschema:"description=Disable automatic conversation summarization,default=false"`
@@ -780,6 +791,7 @@ func (l LSPConfig) ResolvedEnv(r VariableResolver) (map[string]string, error) {
 }
 
 type Agent struct {
+	Prompt *string `json:"prompt,omitempty" jsonschema:"description=Agent system prompt override"`
 	ID          string `json:"id,omitempty"`
 	Name        string `json:"name,omitempty"`
 	Description string `json:"description,omitempty"`
@@ -799,7 +811,18 @@ type Agent struct {
 	AllowedMCP map[string][]string `json:"allowed_mcp,omitempty"`
 
 	// Overrides the context paths for this agent
-	ContextPaths []string `json:"context_paths,omitempty"`
+	ContextPaths    []string               `json:"context_paths,omitempty"`
+	Transport       *AgentTransport        `json:"-"`
+	Auth            *AgentAuth             `json:"-"`
+	ModelRef        *AgentModelRef         `json:"-"`
+	TodoEnforcement *TodoEnforcementConfig `json:"todo_enforcement,omitempty" jsonschema:"description=Todo enforcement overrides for this agent: nudge injection and the opt-in mutating-tool gate"`
+	Workspace       string                 `json:"-"`
+	PromptAppend    string                 `json:"-"`
+	Unusable        string                 `json:"-"`
+	Role            string                 `json:"-"`
+	Runtime         string                 `json:"-"`
+	Card            string                 `json:"-"`
+	Skills          []string               `json:"-"`
 }
 
 type Tools struct {
@@ -842,7 +865,8 @@ type HookConfig = hooks.HookConfig
 
 // Config holds the configuration for crush.
 type Config struct {
-	Schema string `json:"$schema,omitempty"`
+	Honcho *Honcho `json:"honcho,omitempty" jsonschema:"description=Honcho memory integration; gives Crush recall across sessions"`
+	Schema string  `json:"$schema,omitempty"`
 
 	// We currently only support large/small as values here.
 	Models map[SelectedModelType]SelectedModel `json:"models,omitempty" jsonschema:"description=Model configurations for different model types,example={\"large\":{\"model\":\"gpt-4o\",\"provider\":\"openai\"}}"`
@@ -866,7 +890,11 @@ type Config struct {
 	Hooks map[string][]HookConfig `json:"hooks,omitempty" jsonschema:"description=User-defined shell commands that fire on hook events (e.g. PreToolUse)"`
 
 	// Env is a map of environment variables set on startup.
-	Env map[string]string `json:"env,omitempty" jsonschema:"description=Environment variables to set on startup"`
+	Env              map[string]string          `json:"env,omitempty" jsonschema:"description=Environment variables to set on startup"`
+	AgentDefinitions map[string]AgentDefinition `json:"agents,omitempty" jsonschema:"description=Agent definitions: override a built-in agent field by field, or add dispatch agents"`
+	Snapshots        *SnapshotsConfig           `json:"snapshots,omitempty" jsonschema:"description=Git-backed filesystem snapshots captured at each user message"`
+	AutoMode         *AutoModeConfig            `json:"auto_mode,omitempty" jsonschema:"description=Native auto mode: an in-process safety classifier that runs before permission prompts. User-level only: a repository cannot grant itself auto mode"`
+	Embeddings       *EmbeddingsConfig          `json:"embeddings,omitempty" jsonschema:"description=Embeddings configuration"`
 
 	Agents map[string]Agent `json:"-"`
 }
@@ -1321,4 +1349,478 @@ func ptrValOr[T any](t *T, el T) T {
 		return el
 	}
 	return *t
+}
+
+// TodoEnforcementConfig configures the proactive todo enforcement ladder
+// (#315): nudges and, opt-in, a hard gate that keeps mutating tools out of
+// agents with no todo list. It appears once under options (global defaults
+// for every agent) and once per agent definition (per agent type
+// overrides); a per-agent field replaces the global one field by field.
+//
+// Nil everywhere means "defaults on": nudge injection enabled, hard gate
+// off.
+type TodoEnforcementConfig struct {
+	// Enabled toggles nudge injection. When false the coordinator never
+	// injects todo nudges; the hard gate is governed by its own field.
+	Enabled *bool `json:"enabled,omitempty" jsonschema:"description=Inject a context nudge when an agent works without a todo list,default=true"`
+	// NudgeThreshold is how many tool calls without todos activity trip
+	// the first nudge. A mutating tool call (a file writer, a
+	// non-read-only bash command, an MCP tool without a read-only hint)
+	// trips it immediately regardless of count. 0 or "off" disables
+	// nudging, the same as enabled: false; a negative value is a load
+	// error.
+	NudgeThreshold *IntOrOff `json:"nudge_threshold,omitempty" jsonschema:"description=Tool calls without todos activity before a nudge is injected; a mutating tool call trips it immediately. 0 or 'off' disables nudging\\, the same as enabled: false; a negative value is a load error"`
+	// HardGate rejects mutating tools (file writers, non-read-only bash
+	// commands, MCP tools without a read-only hint) until the session
+	// has a todo list. Deterministic but brittle; off by default.
+	HardGate *bool `json:"hard_gate,omitempty" jsonschema:"description=Reject mutating tools (file writers\\, non-read-only bash commands\\, MCP tools without a read-only hint) until a todo list exists,default=false"`
+	// KillAfterNudges is the wander-kill rung (#316): how many nudges a
+	// run may ignore before the coordinator kills it deterministically.
+	// The default of 2 kills after both the nudge and the escalating
+	// nudge are ignored; 0 or "off" disables the kill, and any positive
+	// value is honored, unclamped. It only wires up for dispatched
+	// agents (the parent must be able to re-dispatch); the main
+	// agent's ladder stays capped at nudging. A negative value is a
+	// load error.
+	KillAfterNudges *IntOrOff `json:"kill_after_nudges,omitempty" jsonschema:"description=Wander kill: nudges a dispatched agent may ignore before it is killed. 0 or 'off' disables; a negative value is a load error"`
+	// StallWindow kills a dispatched run whose todo list has not been
+	// updated for this long while it keeps running ("stalled todos").
+	// 0 or "off" (the default) disables the stall check. Accepts a
+	// number of seconds (legacy form) or a duration string such as
+	// "30m"; a negative value is a load error.
+	StallWindow *Duration `json:"stall_window,omitempty" jsonschema:"description=Wander kill: time without a todo update that marks a dispatched run as stalled. 0 or 'off' disables; a negative value is a load error"`
+	// HardTimeout kills a dispatched run after this long, whatever its
+	// progress. 0 or "off" (the default) disables the timeout. Accepts
+	// a number of seconds (legacy form) or a duration string such as
+	// "30m"; a negative value is a load error.
+	HardTimeout *Duration `json:"hard_timeout,omitempty" jsonschema:"description=Wander kill: time after which a dispatched run is killed outright. 0 or 'off' disables; a negative value is a load error"`
+	// InactivityTimeout is the A2A-level backstop (#360): a dispatched
+	// run served over A2A that yields no events at all for this many
+	// seconds is ended by the executor with a Failed status carrying
+	// the reason. It guards the runs the in-process watchdogs (#316)
+	// miss: stall_window and hard_timeout default to 0, and the ladder
+	// needs model steps to fire. 0 (the default) disables the backstop.
+	InactivityTimeout *int `json:"inactivity_timeout,omitempty" jsonschema:"description=A2A backstop: seconds without any event that end a silent dispatched run with a Failed status; 0 disables,default=0,example=900"`
+}
+
+// JSONSchemaExtend adds the defaults and examples for the knob fields.
+// They cannot come from the field tags: the tags reach only the $ref
+// wrapper, while the type-specific keyword parsing the tags rely on runs
+// on typed properties, and these are references to the knob definitions.
+func (TodoEnforcementConfig) JSONSchemaExtend(schema *jsonschema.Schema) {
+	if schema.Properties == nil {
+		return
+	}
+	set := func(name string, def any, examples ...any) {
+		if prop, ok := schema.Properties.Get(name); ok {
+			prop.Default = def
+			prop.Examples = examples
+		}
+	}
+	set("nudge_threshold", 4, 8, 1, "off")
+	set("kill_after_nudges", 2, 3, 10, "off")
+	set("stall_window", 0, 300, "30m", "off")
+	set("hard_timeout", 0, 1800, "30m", "off")
+}
+
+func (c *TodoEnforcementConfig) Validate(path string) error {
+	if c == nil {
+		return nil
+	}
+	if c.NudgeThreshold != nil && *c.NudgeThreshold < 0 {
+		return fmt.Errorf("%s.nudge_threshold: must not be negative (got %d)", path, *c.NudgeThreshold)
+	}
+	if c.KillAfterNudges != nil && *c.KillAfterNudges < 0 {
+		return fmt.Errorf("%s.kill_after_nudges: must not be negative (got %d)", path, *c.KillAfterNudges)
+	}
+	if c.StallWindow != nil && *c.StallWindow < 0 {
+		return fmt.Errorf("%s.stall_window: must not be negative (got %s)", path, durationForError(*c.StallWindow))
+	}
+	if c.HardTimeout != nil && *c.HardTimeout < 0 {
+		return fmt.Errorf("%s.hard_timeout: must not be negative (got %s)", path, durationForError(*c.HardTimeout))
+	}
+	if c.InactivityTimeout != nil && *c.InactivityTimeout < 0 {
+		return fmt.Errorf("%s.inactivity_timeout: must not be negative (got %d)", path, *c.InactivityTimeout)
+	}
+	return nil
+}
+
+func (o *Options) GetLazyMCP() bool {
+	return o == nil || o.LazyMCP == nil || *o.LazyMCP
+}
+
+type Honcho struct {
+	// Enabled turns the integration on. Supplying an API key or a custom base
+	// URL also enables it, since either is an unambiguous statement of intent.
+	Enabled bool `json:"enabled,omitempty" jsonschema:"description=Enable the Honcho memory integration"`
+
+	// APIKey authenticates to Honcho. Prefer $HONCHO_API_KEY over writing a
+	// credential into a config file.
+	APIKey string `json:"api_key,omitempty" jsonschema:"description=Honcho API key; prefer the HONCHO_API_KEY environment variable"`
+
+	// BaseURL points at a self-hosted deployment. Empty means Honcho Cloud.
+	BaseURL string `json:"base_url,omitempty" jsonschema:"description=Honcho deployment URL; empty means Honcho Cloud"`
+
+	// Workspace isolates this application's memory.
+	Workspace string `json:"workspace,omitempty" jsonschema:"description=Honcho workspace to store memory in"`
+
+	// PeerName identifies the human whose representation Honcho builds.
+	PeerName string `json:"peer_name,omitempty" jsonschema:"description=Peer name identifying you in Honcho"`
+
+	// AgentPeer identifies Crush itself.
+	AgentPeer string `json:"agent_peer,omitempty" jsonschema:"description=Peer name identifying Crush in Honcho"`
+
+	// RecallMode selects how memory reaches the model: hybrid injects context
+	// automatically, tools leaves it to the model to ask.
+	RecallMode string `json:"recall_mode,omitempty" jsonschema:"enum=hybrid,enum=context,enum=tools,description=How memory reaches the model"`
+
+	// ObservationMode selects whose conclusion collection is used.
+	ObservationMode string `json:"observation_mode,omitempty" jsonschema:"enum=unified,enum=directional,description=Which conclusion collection to use"`
+
+	// SessionStrategy selects what maps onto a Honcho session.
+	SessionStrategy string `json:"session_strategy,omitempty" jsonschema:"enum=per-directory,enum=per-repo,enum=git-branch,enum=per-session,enum=global,description=What maps onto a Honcho session"`
+
+	// AgentObserveMe asks Honcho to model Crush itself, not just the user.
+	AgentObserveMe bool `json:"agent_observe_me,omitempty" jsonschema:"description=Also build a representation of Crush itself"`
+
+	// CaptureTools records one-line summaries of meaningful tool calls.
+	// A pointer so an omitted field ("use the default", which is on)
+	// stays distinguishable from an explicit false.
+	CaptureTools *bool `json:"capture_tools,omitempty" jsonschema:"description=Record a summary of meaningful tool calls,default=true"`
+
+	// MaxConclusions caps how many conclusions enter an injected block.
+	MaxConclusions int `json:"max_conclusions,omitempty" jsonschema:"description=Maximum conclusions to inject per memory block"`
+
+	// ContextTokens caps the size of the per-turn recall block.
+	ContextTokens int `json:"context_tokens,omitempty" jsonschema:"description=Token budget for the per-turn memory block"`
+}
+
+// DefaultSnapshotExclusions lists the paths snapshots never capture when
+// the user has not configured their own exclusions.
+var DefaultSnapshotExclusions = []string{"node_modules", "vendor", "dist", "build"}
+
+// SnapshotsConfig configures the git-backed filesystem snapshots.
+type SnapshotsConfig struct {
+	// Enabled is nil when unset, which means snapshots are on.
+	Enabled *bool `json:"enabled,omitempty" jsonschema:"description=Capture a filesystem snapshot at each user message into the project's private snapshot store,default=true"`
+	// Exclude holds glob or prefix patterns skipped during the snapshot walk.
+	Exclude []string `json:"exclude,omitempty" jsonschema:"description=Path patterns excluded from snapshots,example=node_modules"`
+	// Keep bounds how many snapshots a session retains: the oldest beyond
+	// the newest keep are pruned after each capture. Zero keeps everything.
+	Keep int `json:"keep,omitempty" jsonschema:"description=Snapshots kept per session; the oldest beyond this are pruned after each capture. Zero keeps everything,default=0"`
+}
+
+// SnapshotsEnabled reports whether snapshots are on; they are on by default.
+func (c *Config) SnapshotsEnabled() bool {
+	return c.Snapshots == nil || c.Snapshots.Enabled == nil || *c.Snapshots.Enabled
+}
+
+// SnapshotExclusions returns the configured exclusions or the defaults.
+func (c *Config) SnapshotExclusions() []string {
+	if c.Snapshots == nil || len(c.Snapshots.Exclude) == 0 {
+		return DefaultSnapshotExclusions
+	}
+	return c.Snapshots.Exclude
+}
+
+type AutoModeConfig struct {
+	Enabled bool `json:"enabled,omitempty" jsonschema:"description=Enable native auto mode. Intended to be set in user-level config only: a repository should not be able to grant itself auto mode,default=false"`
+	// Classifier selects the LLM used for classification. When
+	// Provider and Model are set they reference an existing provider
+	// and model in this config (e.g. local-llama/gemma4-e4b).
+	// Alternatively, an OpenAI-compatible classifier endpoint can be
+	// pointed at directly with BaseURL (and optionally APIKey)
+	// without a provider entry. Without any classifier selection auto
+	// mode runs rules-only: static allow/deny, ambiguities escalate
+	// to the prompt.
+	Classifier *AutoModeClassifier `json:"classifier,omitempty" jsonschema:"description=Classifier model selection"`
+	// MaxTokens caps the classifier completion length. Reasoning models
+	// need a generous budget. Default 1024.
+	MaxTokens int `json:"max_tokens,omitempty" jsonschema:"description=Max completion tokens for the classifier,default=1024"`
+	// TimeoutSeconds bounds each classification (both LLM stages).
+	// Default 60.
+	TimeoutSeconds int `json:"timeout_seconds,omitempty" jsonschema:"description=Per-evaluation timeout in seconds,default=60"`
+	// FailOpen allows on classifier failure instead of escalating to
+	// the prompt. Default false.
+	FailOpen bool `json:"fail_open,omitempty" jsonschema:"description=Allow on classifier failure instead of escalating,default=false"`
+	// MaxConsecutiveDenials / MaxTotalDenials pause classification when
+	// exceeded, escalating to the prompt. Defaults 3 / 20.
+	MaxConsecutiveDenials int `json:"max_consecutive_denials,omitempty" jsonschema:"description=Consecutive denials before auto mode pauses,default=3"`
+	MaxTotalDenials       int `json:"max_total_denials,omitempty" jsonschema:"description=Total denials before auto mode pauses,default=20"`
+	// Environment is prose describing trusted repos, domains, buckets,
+	// and services, injected into the classifier prompts.
+	Environment []string `json:"environment,omitempty" jsonschema:"description=Prose describing the trusted environment, injected into classifier prompts"`
+	// PromptStage1File / PromptStage2File override the built-in
+	// classifier prompts with template files. Placeholders: {{cwd}},
+	// {{tool}}, {{params}}, {{environment}}, {{transcript}}.
+	PromptStage1File string `json:"prompt_stage1_file,omitempty" jsonschema:"description=Optional stage 1 (fast filter) prompt template file"`
+	PromptStage2File string `json:"prompt_stage2_file,omitempty" jsonschema:"description=Optional stage 2 (chain of thought) prompt template file"`
+	// TranscriptMaxChars caps the reasoning-blind transcript excerpt
+	// passed to the classifier. Default 24000.
+	TranscriptMaxChars int `json:"transcript_max_chars,omitempty" jsonschema:"description=Max characters of transcript passed to the classifier,default=24000"`
+}
+
+func (a *AutoModeConfig) Validate(path string) error {
+	for _, knob := range []struct {
+		field string
+		value int
+	}{
+		{"max_tokens", a.MaxTokens},
+		{"timeout_seconds", a.TimeoutSeconds},
+		{"transcript_max_chars", a.TranscriptMaxChars},
+		{"max_consecutive_denials", a.MaxConsecutiveDenials},
+		{"max_total_denials", a.MaxTotalDenials},
+	} {
+		if knob.value < 0 {
+			return fmt.Errorf("%s.%s must not be negative (got %d)", path, knob.field, knob.value)
+		}
+	}
+	return nil
+}
+
+// AutoModeClassifier selects the classifier model: either by referencing
+// a provider and model id already declared in the providers config, or
+// by pointing at a standalone OpenAI-compatible endpoint with BaseURL.
+type AutoModeClassifier struct {
+	Provider string `json:"provider,omitempty" jsonschema:"description=Provider id from the providers config,example=local-llama"`
+	Model    string `json:"model,omitempty" jsonschema:"description=Model id on that provider,example=gemma4-e4b"`
+	BaseURL  string `json:"base_url,omitempty" jsonschema:"description=Standalone OpenAI-compatible classifier endpoint, bypassing the providers config"`
+	APIKey   string `json:"api_key,omitempty" jsonschema:"description=API key for the standalone classifier endpoint. Supports shell expansion of $VAR and $(command)."`
+}
+
+// NeedsSignIn reports whether the provider declares an OAuth flow and holds
+// neither a token nor a key: it is configured, but signing in is the only
+// path to serving a request.
+func (c *ProviderConfig) NeedsSignIn() bool {
+	return c != nil && c.UsesOAuth() && c.OAuthToken == nil && c.APIKey == ""
+}
+
+func (c *ProviderConfig) UsesOAuth() bool {
+	return c != nil && c.Auth.UsesOAuth()
+}
+
+// DefaultScrollSpeed is the wheel-to-lines multiplier used when the user has
+// not configured one.
+const DefaultScrollSpeed = 1.0
+
+// HasUsableSelection reports whether the large model selection points at a
+// provider that can serve a request. It is false while the selected
+// provider waits on a sign-in, or when nothing is selected yet.
+func (c *Config) HasUsableSelection() bool {
+	large, ok := c.Models[SelectedModelTypeLarge]
+	if !ok || large.Provider == "" {
+		return false
+	}
+	pc, ok := c.Providers.Get(large.Provider)
+	return ok && !pc.NeedsSignIn()
+}
+
+// ScrollSpeedValue returns the configured scroll speed multiplier. The nil
+// receiver and the unset pointer both mean the default. Values are clamped to
+// a small positive minimum so scrolling never inverts or stalls.
+func (t *TUIOptions) ScrollSpeedValue() float64 {
+	if t == nil || t.ScrollSpeed == nil {
+		return DefaultScrollSpeed
+	}
+	return max(*t.ScrollSpeed, 0.1)
+}
+
+// ResolvedAutoMode returns the effective auto-mode configuration with
+// defaults applied, and whether auto mode is enabled at all. The second
+// return value is false when no auto_mode block is configured.
+func (c *Config) ResolvedAutoMode() (AutoModeConfig, bool) {
+	if c.AutoMode == nil {
+		return AutoModeConfig{
+			Enabled:               false,
+			FailOpen:              false,
+			MaxTokens:             1024,
+			TimeoutSeconds:        60,
+			MaxConsecutiveDenials: 3,
+			MaxTotalDenials:       20,
+			TranscriptMaxChars:    24000,
+		}, false
+	}
+	e := *c.AutoMode
+	if e.MaxTokens <= 0 {
+		e.MaxTokens = 1024
+	}
+	if e.TimeoutSeconds <= 0 {
+		e.TimeoutSeconds = 60
+	}
+	if e.MaxConsecutiveDenials <= 0 {
+		e.MaxConsecutiveDenials = 3
+	}
+	if e.MaxTotalDenials <= 0 {
+		e.MaxTotalDenials = 20
+	}
+	if e.TranscriptMaxChars <= 0 {
+		e.TranscriptMaxChars = 24000
+	}
+	return e, e.Enabled
+}
+
+// #3874 documents. When it reports false, classification runs
+// rules-only. A classifier configured only with a standalone BaseURL
+// (no provider entry) is not resolved here; the agent layer builds that
+// model directly from the endpoint fields.
+func (c *Config) AutoModeClassifierModel() (SelectedModel, bool) {
+	if c.AutoMode != nil && c.AutoMode.Classifier != nil {
+		cl := *c.AutoMode.Classifier
+		if cl.Provider != "" && cl.Model != "" {
+			return SelectedModel{Provider: cl.Provider, Model: cl.Model}, true
+		}
+	}
+	if sel, ok := c.Models[SelectedModelTypeSmall]; ok {
+		return sel, true
+	}
+	if sel, ok := c.Models[SelectedModelTypeLarge]; ok {
+		return sel, true
+	}
+	return SelectedModel{}, false
+}
+
+// EmbeddingsConfig configures the embedding provider that backs the
+// semantic_search tool. It points at any OpenAI-compatible
+// /v1/embeddings endpoint. A nil config disables semantic search
+// entirely — the tool is not registered.
+type EmbeddingsConfig struct {
+	BaseURL   string `json:"base_url,omitempty" jsonschema:"description=Base URL of an OpenAI-compatible embeddings endpoint,default=https://api.openai.com/v1,example=https://api.openai.com/v1"`
+	APIKey    string `json:"api_key,omitempty" jsonschema:"description=API key for the embeddings endpoint. Supports shell expansion of $VAR and $(command)."`
+	Model     string `json:"model,omitempty" jsonschema:"description=Embedding model name,default=text-embedding-3-small,example=text-embedding-3-small"`
+	Dimension int    `json:"dimension,omitempty" jsonschema:"description=Embedding vector dimension. Baked into the vector table on first creation; changing it requires reindexing.,default=768,example=768"`
+}
+
+// ResolvedEmbeddings returns the effective embedding configuration with
+// defaults applied, and whether semantic search is enabled at all. The
+// second return value is false when no embeddings block is configured.
+func (c *Config) ResolvedEmbeddings() (EmbeddingsConfig, bool) {
+	if c.Embeddings == nil {
+		return EmbeddingsConfig{}, false
+	}
+	e := *c.Embeddings
+	if e.BaseURL == "" {
+		e.BaseURL = "https://api.openai.com/v1"
+	}
+	if e.Model == "" {
+		e.Model = "text-embedding-3-small"
+	}
+	if e.Dimension <= 0 {
+		e.Dimension = 768
+	}
+	return e, true
+}
+
+// DefaultDispatchMaxConcurrent bounds how many dispatched agents run at
+// once.
+const DefaultDispatchMaxConcurrent = 4
+
+// its call names no agent (#433).
+const DefaultDispatchAgent = AgentWorker
+
+// DispatchOptions configures the dispatch_agent tool (#390).
+type DispatchOptions struct {
+	// MaxConcurrent caps the concurrently running dispatched agents:
+	// live dispatches plus setups still in flight. A value below 1 is
+	// a load error; nil resolves to DefaultDispatchMaxConcurrent.
+	MaxConcurrent *int `json:"max_concurrent,omitempty" jsonschema:"description=Maximum number of concurrently running dispatched agents; a value below 1 is a load error,default=4,example=2"`
+	// DefaultAgent is the agent id dispatch_agent runs when its call
+	// names no agent (#433). It must name an existing dispatch agent
+	// that is not disabled; anything else is a load error. Empty
+	// resolves to DefaultDispatchAgent.
+	DefaultAgent string `json:"default_agent,omitempty" jsonschema:"description=Agent id dispatch_agent runs when the call names no agent; must be an enabled dispatch agent,default=worker"`
+}
+
+// ResolveTodoEnforcement layers the per-agent config over over the global
+// one, field by field, and applies defaults. Nil layers resolve to the
+// defaults: nudging on, threshold 4, hard gate off.
+func ResolveTodoEnforcement(global, over *TodoEnforcementConfig) TodoEnforcementSettings {
+	merged := TodoEnforcementConfig{}
+	if global != nil {
+		merged = *global
+	}
+	if over != nil {
+		if over.Enabled != nil {
+			merged.Enabled = over.Enabled
+		}
+		if over.NudgeThreshold != nil {
+			merged.NudgeThreshold = over.NudgeThreshold
+		}
+		if over.HardGate != nil {
+			merged.HardGate = over.HardGate
+		}
+		if over.KillAfterNudges != nil {
+			merged.KillAfterNudges = over.KillAfterNudges
+		}
+		if over.StallWindow != nil {
+			merged.StallWindow = over.StallWindow
+		}
+		if over.HardTimeout != nil {
+			merged.HardTimeout = over.HardTimeout
+		}
+		if over.InactivityTimeout != nil {
+			merged.InactivityTimeout = over.InactivityTimeout
+		}
+	}
+	settings := TodoEnforcementSettings{
+		Enabled:         true,
+		NudgeThreshold:  defaultTodoNudgeThreshold,
+		KillAfterNudges: defaultTodoKillAfterNudges,
+	}
+	if merged.Enabled != nil {
+		settings.Enabled = *merged.Enabled
+	}
+	if merged.NudgeThreshold != nil {
+		settings.NudgeThreshold = int(*merged.NudgeThreshold)
+	}
+	if merged.HardGate != nil {
+		settings.HardGate = *merged.HardGate
+	}
+	if merged.KillAfterNudges != nil {
+		settings.KillAfterNudges = int(*merged.KillAfterNudges)
+		settings.KillAfterNudgesSet = true
+	}
+	if merged.StallWindow != nil {
+		settings.StallWindow = time.Duration(*merged.StallWindow)
+	}
+	if merged.HardTimeout != nil {
+		settings.HardTimeout = time.Duration(*merged.HardTimeout)
+	}
+	// An explicit 0 (or "off") threshold disables nudging outright, the
+	// same as enabled: false; it must win over an explicit enabled: true.
+	if merged.NudgeThreshold != nil && *merged.NudgeThreshold == 0 {
+		settings.Enabled = false
+	}
+	if merged.InactivityTimeout != nil && *merged.InactivityTimeout > 0 {
+		settings.InactivityTimeout = time.Duration(*merged.InactivityTimeout) * time.Second
+	}
+	return settings
+}
+
+// TodoEnforcementSettings is the resolved enforcement ladder: the per-agent
+// override layered over the global options with defaults applied.
+type TodoEnforcementSettings struct {
+	NudgeThreshold    int
+	KillAfterNudges   int
+	StallWindow       time.Duration
+	HardTimeout       time.Duration
+	InactivityTimeout time.Duration
+	Enabled           bool
+	HardGate          bool
+	// KillAfterNudgesSet reports whether the kill threshold was
+	// configured explicitly, as opposed to carrying the default. Goal
+	// mode reads it: an explicit threshold says how many ignored
+	// continuations to put up with, while the default says nothing and
+	// leaves the goal's own turn budget in charge.
+	KillAfterNudgesSet bool
+}
+
+const (
+	defaultTodoNudgeThreshold = 4
+	// defaultTodoKillAfterNudges kills a dispatched agent after both the
+	// nudge and the escalating nudge have been ignored.
+	defaultTodoKillAfterNudges = 2
+)
+
+func (a Agent) ResolvedTodoEnforcement(global *TodoEnforcementConfig) TodoEnforcementSettings {
+	return ResolveTodoEnforcement(global, a.TodoEnforcement)
 }

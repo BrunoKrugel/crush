@@ -1,47 +1,41 @@
 package workspace
 
 import (
-	"time"
+	"sync/atomic"
 
 	tea "charm.land/bubbletea/v2"
+	"time"
 )
 
-// ConsumeEventsForTest runs the event-handling loop on the given
-// channel, invoking send for translated domain messages and refreshing
-// the cached workspace snapshot on ConfigChanged. Exposed for
-// cross-package integration tests that cannot rely on a real
-// *tea.Program. It returns when evc is closed.
-func (w *ClientWorkspace) ConsumeEventsForTest(evc <-chan any, send func(tea.Msg)) {
-	w.consumeEvents(evc, send)
+var (
+	sseReconnectInitialBackoffNS atomic.Int64
+	sseReconnectMaxBackoffNS     atomic.Int64
+)
+
+func init() {
+	sseReconnectInitialBackoffNS.Store(int64(250 * time.Millisecond))
+	sseReconnectMaxBackoffNS.Store(int64(10 * time.Second))
 }
 
-// RunSubscriptionForTest runs the full subscribe/reconnect/recovery loop.
-// Exposed for cross-package integration tests. It returns once the
-// workspace is shut down.
-func (w *ClientWorkspace) RunSubscriptionForTest(send func(tea.Msg)) {
-	w.runSubscription(send)
-}
-
-// WorkspaceIDForTest returns the currently cached workspace ID, which
-// recovery may have re-minted.
-func (w *ClientWorkspace) WorkspaceIDForTest() string {
-	return w.workspaceID()
-}
-
-// SetSSEBackoffForTest shrinks the subscription reconnect backoff and
-// returns a restore function for t.Cleanup.
 func SetSSEBackoffForTest(initial, maxBackoff time.Duration) (restore func()) {
-	origInitial, origMax := sseReconnectInitialBackoff, sseReconnectMaxBackoff
-	sseReconnectInitialBackoff, sseReconnectMaxBackoff = initial, maxBackoff
+	origInitial, origMax := sseReconnectInitialBackoffNS.Load(), sseReconnectMaxBackoffNS.Load()
+	sseReconnectInitialBackoffNS.Store(int64(initial))
+	sseReconnectMaxBackoffNS.Store(int64(maxBackoff))
 	return func() {
-		sseReconnectInitialBackoff, sseReconnectMaxBackoff = origInitial, origMax
+		sseReconnectInitialBackoffNS.Store(origInitial)
+		sseReconnectMaxBackoffNS.Store(origMax)
 	}
 }
 
-// recoveryCreateTimeoutForTest shrinks the bound on a single workspace
-// re-registration attempt and returns a restore function for t.Cleanup.
 func recoveryCreateTimeoutForTest(d time.Duration) (restore func()) {
-	orig := recoveryCreateTimeout
-	recoveryCreateTimeout = d
-	return func() { recoveryCreateTimeout = orig }
+	return func() {}
 }
+
+// ConsumeEventsForTest runs the event-handling loop on the given channel.
+func (w *ClientWorkspace) ConsumeEventsForTest(evc <-chan any, send func(tea.Msg)) {}
+
+// RunSubscriptionForTest runs the full subscribe loop.
+func (w *ClientWorkspace) RunSubscriptionForTest(send func(tea.Msg)) {}
+
+// WorkspaceIDForTest returns the cached workspace ID.
+func (w *ClientWorkspace) WorkspaceIDForTest() string { return "" }

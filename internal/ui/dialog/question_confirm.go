@@ -20,34 +20,29 @@ import (
 // user confirm or go back to editing. Implements questionResponder
 // so QuestionForm treats it like any other tab.
 type ConfirmComponent struct {
+	compositor       *lipgloss.Compositor
+	OnReject         func()
+	OnConfirm        func()
 	Styles           *styles.Styles
 	Title            string
 	Description      string
-	QuestionLabels   []string
-	QuestionRequests []question.Question
+	keyClose         key.Binding
+	keyDown          key.Binding
+	keyRight         key.Binding
+	keyYes           key.Binding
+	keyNo            key.Binding
+	keyEnter         key.Binding
+	keyLeft          key.Binding
+	keyUp            key.Binding
 	Answers          []*question.Answer
+	QuestionRequests []question.Question
+	QuestionLabels   []string
+	lastWidth        int
+	scrollOffset     int
+	hoverX           int
+	hoverY           int
+	focused          bool
 	confirmYes       bool
-
-	keyLeft  key.Binding
-	keyRight key.Binding
-	keyYes   key.Binding
-	keyNo    key.Binding
-	keyEnter key.Binding
-	keyClose key.Binding
-	keyUp    key.Binding
-	keyDown  key.Binding
-
-	focused      bool
-	lastWidth    int
-	scrollOffset int
-	compositor   *lipgloss.Compositor
-	hoverX       int
-	hoverY       int
-
-	// OnConfirm is called when the user confirms.
-	OnConfirm func()
-	// OnReject is called when the user says "not yet".
-	OnReject func()
 }
 
 // NewConfirmComponent creates a new confirmation component.
@@ -192,7 +187,7 @@ func (c *ConfirmComponent) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 
 	// Title.
 	titleWrapped := ansi.Wrap(c.Title, area.Dx()-iconWidth, "")
-	for _, l := range strings.Split(titleWrapped, "\n") {
+	for l := range strings.SplitSeq(titleWrapped, "\n") {
 		lines = append(lines, line{text: iconPrompt + c.Styles.Editor.QuestionUnselected.Render(l)})
 	}
 	lines = append(lines, line{}) // blank
@@ -206,11 +201,11 @@ func (c *ConfirmComponent) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		mu.Unlock()
 		if err == nil {
 			desc = strings.TrimSuffix(desc, "\n")
-			for _, l := range strings.Split(desc, "\n") {
+			for l := range strings.SplitSeq(desc, "\n") {
 				lines = append(lines, line{text: l})
 			}
 		} else {
-			for _, l := range strings.Split(c.Description, "\n") {
+			for l := range strings.SplitSeq(c.Description, "\n") {
 				lines = append(lines, line{text: l})
 			}
 		}
@@ -251,10 +246,7 @@ func (c *ConfirmComponent) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	overflow := viewport > 0 && totalLines > viewport
 
 	// Clamp scroll offset.
-	maxScroll := totalLines - viewport
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
+	maxScroll := max(totalLines-viewport, 0)
 	if c.scrollOffset > maxScroll {
 		c.scrollOffset = maxScroll
 	}

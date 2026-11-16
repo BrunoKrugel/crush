@@ -23,6 +23,9 @@ type ModelType int
 const (
 	ModelTypeLarge ModelType = iota
 	ModelTypeSmall
+	// ModelTypeAutoMode selects the auto-mode classifier. It is stored
+	// on Config.AutoMode.Classifier, not in the large/small models map.
+	ModelTypeAutoMode
 )
 
 // String returns the string representation of the [ModelType].
@@ -32,6 +35,8 @@ func (mt ModelType) String() string {
 		return "Large Task"
 	case ModelTypeSmall:
 		return "Small Task"
+	case ModelTypeAutoMode:
+		return "Auto Mode"
 	default:
 		return "Unknown"
 	}
@@ -44,6 +49,8 @@ func (mt ModelType) Config() config.SelectedModelType {
 		return config.SelectedModelTypeLarge
 	case ModelTypeSmall:
 		return config.SelectedModelTypeSmall
+	case ModelTypeAutoMode:
+		return config.SelectedModelTypeAutoMode
 	default:
 		return ""
 	}
@@ -56,6 +63,8 @@ func (mt ModelType) Placeholder() string {
 		return largeModelInputPlaceholder
 	case ModelTypeSmall:
 		return smallModelInputPlaceholder
+	case ModelTypeAutoMode:
+		return autoModeModelInputPlaceholder
 	default:
 		return ""
 	}
@@ -65,6 +74,7 @@ const (
 	onboardingModelInputPlaceholder = "Find your fave"
 	largeModelInputPlaceholder      = "Choose a model for large, complex tasks"
 	smallModelInputPlaceholder      = "Choose a model for small, simple tasks"
+	autoModeModelInputPlaceholder   = "Choose a model for the auto-mode classifier"
 )
 
 // ModelsID is the identifier for the model selection dialog.
@@ -74,24 +84,23 @@ const defaultModelsDialogMaxWidth = 73
 
 // Models represents a model selection dialog.
 type Models struct {
-	com          *common.Common
-	isOnboarding bool
-
-	modelType ModelType
-	providers []catwalk.Provider
-
+	com    *common.Common
+	list   *ModelsList
+	help   help.Model
 	keyMap struct {
 		Tab      key.Binding
 		UpDown   key.Binding
 		Select   key.Binding
 		Edit     key.Binding
+		Reload   key.Binding
 		Next     key.Binding
 		Previous key.Binding
 		Close    key.Binding
 	}
-	list  *ModelsList
-	input textinput.Model
-	help  help.Model
+	providers    []catwalk.Provider
+	input        textinput.Model
+	modelType    ModelType
+	isOnboarding bool
 }
 
 var _ Dialog = (*Models)(nil)
@@ -128,6 +137,10 @@ func NewModels(com *common.Common, isOnboarding bool) (*Models, error) {
 	m.keyMap.Edit = key.NewBinding(
 		key.WithKeys("ctrl+e"),
 		key.WithHelp("ctrl+e", "edit"),
+	)
+	m.keyMap.Reload = key.NewBinding(
+		key.WithKeys("ctrl+r"),
+		key.WithHelp("ctrl+r", "reload"),
 	)
 	m.keyMap.UpDown = key.NewBinding(
 		key.WithKeys("up", "down"),
@@ -208,15 +221,13 @@ func (m *Models) HandleMsg(msg tea.Msg) Action {
 				ModelType:      modelItem.SelectedModelType(),
 				ReAuthenticate: isEdit,
 			}
+		case key.Matches(msg, m.keyMap.Reload):
+			return ActionReloadModelDiscovery{}
 		case key.Matches(msg, m.keyMap.Tab):
 			if m.isOnboarding {
 				break
 			}
-			if m.modelType == ModelTypeLarge {
-				m.modelType = ModelTypeSmall
-			} else {
-				m.modelType = ModelTypeLarge
-			}
+			m.modelType = m.nextModelType()
 			if err := m.setProviderItems(); err != nil {
 				return util.ReportError(err)
 			}
@@ -242,24 +253,43 @@ func (m *Models) Cursor() *tea.Cursor {
 	return InputCursor(m.com.Styles, m.input.Cursor())
 }
 
+// nextModelType cycles large -> small -> auto mode -> large. Onboarding
+// never reaches here; it has no type radio.
+func (m *Models) nextModelType() ModelType {
+	switch m.modelType {
+	case ModelTypeLarge:
+		return ModelTypeSmall
+	case ModelTypeSmall:
+		return ModelTypeAutoMode
+	default:
+		return ModelTypeLarge
+	}
+}
+
 // modelTypeRadioView returns the radio view for model type selection.
 func (m *Models) modelTypeRadioView() string {
 	t := m.com.Styles
 	textStyle := t.Radio.Label
 	largeRadioStyle := t.Radio.Off
 	smallRadioStyle := t.Radio.Off
-	if m.modelType == ModelTypeLarge {
+	autoRadioStyle := t.Radio.Off
+	switch m.modelType {
+	case ModelTypeLarge:
 		largeRadioStyle = t.Radio.On
-	} else {
+	case ModelTypeSmall:
 		smallRadioStyle = t.Radio.On
+	default:
+		autoRadioStyle = t.Radio.On
 	}
 
 	largeRadio := largeRadioStyle.Padding(0, 1).Render()
 	smallRadio := smallRadioStyle.Padding(0, 1).Render()
+	autoRadio := autoRadioStyle.Padding(0, 1).Render()
 
-	return fmt.Sprintf("%s%s  %s%s",
+	return fmt.Sprintf("%s%s  %s%s  %s%s",
 		largeRadio, textStyle.Render(ModelTypeLarge.String()),
-		smallRadio, textStyle.Render(ModelTypeSmall.String()))
+		smallRadio, textStyle.Render(ModelTypeSmall.String()),
+		autoRadio, textStyle.Render(ModelTypeAutoMode.String()))
 }
 
 // Draw implements [Dialog].
@@ -322,7 +352,7 @@ func (m *Models) ShortHelp() []key.Binding {
 	if m.isSelectedConfigured() {
 		h = append(h, m.keyMap.Edit)
 	}
-	h = append(h, m.keyMap.Close)
+	h = append(h, m.keyMap.Reload, m.keyMap.Close)
 	return h
 }
 
@@ -345,6 +375,20 @@ func (m *Models) isSelectedConfigured() bool {
 	return isConfigured
 }
 
+// currentModelForType reports the model currently stored for the slot.
+// Large and small live in the models map. Auto mode lives on
+// Config.AutoMode.Classifier and must not be read from that map.
+func currentModelForType(cfg *config.Config, typ ModelType) config.SelectedModel {
+	if typ != ModelTypeAutoMode {
+		return cfg.Models[typ.Config()]
+	}
+	if cfg.AutoMode == nil || cfg.AutoMode.Classifier == nil {
+		return config.SelectedModel{}
+	}
+	cl := cfg.AutoMode.Classifier
+	return config.SelectedModel{Provider: cl.Provider, Model: cl.Model}
+}
+
 // setProviderItems sets the provider items in the list.
 func (m *Models) setProviderItems() error {
 	t := m.com.Styles
@@ -352,7 +396,7 @@ func (m *Models) setProviderItems() error {
 
 	var selectedItemID string
 	selectedType := m.modelType.Config()
-	currentModel := cfg.Models[selectedType]
+	currentModel := currentModelForType(cfg, m.modelType)
 	recentItems := cfg.RecentModels[selectedType]
 
 	// Track providers already added to avoid duplicates
@@ -383,13 +427,28 @@ func (m *Models) setProviderItems() error {
 			!slices.ContainsFunc(m.providers, containsProviderFunc(id)) {
 			provider := p.ToProvider()
 
-			// Add this unknown provider to the list
+			// Add this unknown provider to the list. The badge means the
+			// provider can serve a request now, so one that declares an
+			// OAuth flow it has not completed reads as unconfigured: its
+			// models are listed, and selecting one opens the sign-in.
 			name := cmp.Or(p.Name, id)
 
 			addedProviders[id] = true
 
-			group := NewModelGroup(t, name, true)
-			for _, model := range p.Models {
+			// A nameless model is a config override (a reasoning effort,
+			// say) for one the catalog has not listed yet: nothing to show.
+			models := slices.DeleteFunc(slices.Clone(p.Models), func(model catwalk.Model) bool {
+				return model.Name == ""
+			})
+
+			group := NewModelGroup(t, name, !p.NeedsSignIn())
+			if len(models) == 0 && p.UsesOAuth() {
+				// The catalog sits behind the login, which may also be
+				// stale or have failed to list models. The empty model ID
+				// marks the sign-in hand-off, as for ChatGPT and Grok.
+				group.AppendItems(NewModelItem(t, provider, catwalk.Model{Name: "Sign in to view the models"}, m.modelType, false))
+			}
+			for _, model := range models {
 				item := NewModelItem(t, provider, model, m.modelType, false)
 				group.AppendItems(item)
 				itemsMap[item.ID()] = item
@@ -441,22 +500,34 @@ func (m *Models) setProviderItems() error {
 
 		name := cmp.Or(displayProvider.Name, providerID)
 
-		// A ChatGPT or Grok login lists only its subscription's models; the
-		// API catalog would 404. Until that list is fetched, show the catalog.
-		if subscriptionModels, _ := providerConfig.SubscriptionModels(); subscriptionModels != nil {
-			group := NewModelGroup(t, name, true)
-			for _, model := range subscriptionModels {
-				item := NewModelItem(t, provider, model, m.modelType, false)
-				group.AppendItems(item)
-				itemsMap[item.ID()] = item
-				if model.ID == currentModel.Model && string(provider.ID) == currentModel.Provider {
-					selectedItemID = item.ID()
+		// The OpenAI and xAI providers each hold exactly one credential.
+		// Signed in with ChatGPT or Grok, only the models the
+		// subscription grants are usable, so they are all the section
+		// lists; the API catalog would only 404. Without a login the
+		// section is the API catalog.
+		if providerConfig.OAuthToken != nil {
+			var subscriptionModels []catwalk.Model
+			switch provider.ID {
+			case catwalk.InferenceProviderOpenAI:
+				subscriptionModels = providerConfig.ChatGPTModels
+			case catwalk.InferenceProviderXAI:
+				subscriptionModels = providerConfig.GrokModels
+			}
+			if subscriptionModels != nil {
+				group := NewModelGroup(t, name, true)
+				for _, model := range subscriptionModels {
+					item := NewModelItem(t, provider, model, m.modelType, false)
+					group.AppendItems(item)
+					itemsMap[item.ID()] = item
+					if model.ID == currentModel.Model && string(provider.ID) == currentModel.Provider {
+						selectedItemID = item.ID()
+					}
 				}
+				if len(group.Items) > 0 {
+					groups = append(groups, group)
+				}
+				continue
 			}
-			if len(group.Items) > 0 {
-				groups = append(groups, group)
-			}
-			continue
 		}
 
 		group := NewModelGroup(t, name, providerConfigured)
@@ -472,10 +543,28 @@ func (m *Models) setProviderItems() error {
 		groups = append(groups, group)
 	}
 
+	// Show configured providers first, keeping the original order within
+	// each tier.
+	slices.SortStableFunc(groups, func(a, b ModelGroup) int {
+		switch {
+		case a.configured == b.configured:
+			return 0
+		case b.configured:
+			return 1
+		default:
+			return -1
+		}
+	})
+
 	if len(recentItems) > 0 {
 		recentGroup := NewModelGroup(t, "Recently used", false)
 
-		var validRecentItems []config.SelectedModel
+		// Recents that cannot be resolved right now are skipped for
+		// display but left in the config. Whether a provider is available
+		// depends on the environment Crush happened to be launched from, so
+		// pruning the stored list here would permanently discard history
+		// over a temporarily missing API key. The list is already bounded
+		// when entries are added.
 		for _, recent := range recentItems {
 			key := modelKey(recent.Provider, recent.Model)
 			item, ok := itemsMap[key]
@@ -487,17 +576,9 @@ func (m *Models) setProviderItems() error {
 			item = NewModelItem(t, item.prov, item.model, m.modelType, true)
 			item.showProvider = true
 
-			validRecentItems = append(validRecentItems, recent)
 			recentGroup.AppendItems(item)
 			if recent.Model == currentModel.Model && recent.Provider == currentModel.Provider {
 				selectedItemID = item.ID()
-			}
-		}
-
-		if len(validRecentItems) != len(recentItems) {
-			// FIXME: Does this need to be here? Is it mutating the config during a read?
-			if err := m.com.Workspace.SetConfigField(config.ScopeGlobal, fmt.Sprintf("recent_models.%s", selectedType), validRecentItems); err != nil {
-				return fmt.Errorf("failed to update recent models: %w", err)
 			}
 		}
 
@@ -508,10 +589,14 @@ func (m *Models) setProviderItems() error {
 
 	// Set model groups in the list.
 	m.list.SetGroups(groups...)
-	m.list.SetSelectedItem(selectedItemID)
 	if selectedItemID != "" {
+		m.list.SetSelectedItem(selectedItemID)
 		m.list.ScrollToSelected()
 	} else {
+		// With nothing selected yet, highlight the first actual model.
+		// Index 0 is a group header, which is not selectable, so leaving
+		// the highlight there would make the first Enter do nothing.
+		m.list.SelectFirst()
 		m.list.ScrollToTop()
 	}
 
@@ -520,6 +605,26 @@ func (m *Models) setProviderItems() error {
 		m.input.Placeholder = m.modelType.Placeholder()
 	}
 
+	return nil
+}
+
+// ReloadItems rebuilds the model list from the current config, preserving the
+// active filter query. It is called after a model-discovery reload so newly
+// discovered models appear without closing the dialog.
+func (m *Models) ReloadItems() error {
+	if err := m.setProviderItems(); err != nil {
+		return err
+	}
+	// setProviderItems repopulates the full item set; re-apply the filter
+	// the user had typed so the view doesn't jump back to the full list.
+	// Mirror the typing path: filtering invalidates the previous
+	// selection, so select the first match rather than leaving the cursor
+	// on an arbitrary (possibly hidden) item.
+	if query := m.input.Value(); query != "" {
+		m.list.SetFilter(query)
+		m.list.SelectFirst()
+		m.list.ScrollToTop()
+	}
 	return nil
 }
 

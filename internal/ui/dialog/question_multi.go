@@ -17,13 +17,11 @@ import (
 // It embeds choiceList for shared navigation, fill-in, and
 // rendering scaffold.
 type MultiChoice struct {
-	choiceList
-
-	selected  map[int]bool
-	keyToggle key.Binding
-	keyDone   key.Binding
-
+	selected     map[int]bool
 	lastResponse question.Answer
+	keyToggle    key.Binding
+	keyDone      key.Binding
+	choiceList
 }
 
 // NewMultiChoice creates a new inline multi-choice component.

@@ -89,8 +89,8 @@ func TestDocsEndpoints(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var spec struct {
-		OpenAPI string                                `json:"openapi"`
 		Paths   map[string]map[string]json.RawMessage `json:"paths"`
+		OpenAPI string                                `json:"openapi"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&spec))
 	require.Equal(t, "3.2.1", spec.OpenAPI)

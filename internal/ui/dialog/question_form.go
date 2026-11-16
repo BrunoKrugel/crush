@@ -30,38 +30,26 @@ type questionResponder interface {
 // its own internal keybindings. For multi-question batches, a
 // Confirm tab is appended automatically.
 type QuestionForm struct {
+	confirmComp  *ConfirmComponent
+	OnCancel     func()
+	OnAnswer     func(responses []question.Answer)
+	compositor   *lipgloss.Compositor
 	Styles       *styles.Styles
 	BatchID      string
-	questions    []questionResponder // includes ConfirmComponent as last item for batches
-	labels       []string            // includes "Confirm" for batches
+	keyClose     key.Binding
+	keyNextTab   key.Binding
+	keyPrevTab   key.Binding
+	answers      []*question.Answer
 	requestIDs   []string
-	answers      []*question.Answer // nil until answered; only covers real questions
+	labels       []string
+	questions    []questionResponder
+	numQuestions int
 	activeIdx    int
+	hoverX       int
+	hoverY       int
+	showTabs     bool
+	hasConfirm   bool
 	focused      bool
-	hasConfirm   bool              // whether a confirm tab exists
-	showTabs     bool              // whether to render tab chrome
-	numQuestions int               // real question count (excludes confirm tab)
-	confirmComp  *ConfirmComponent // nil when no confirm tab
-
-	keyPrevTab key.Binding
-	keyNextTab key.Binding
-	keyClose   key.Binding
-
-	// Compositor for tab hit detection. Built during Draw() from
-	// tab layers positioned at their screen coordinates.
-	compositor *lipgloss.Compositor
-
-	// Hover position for highlighting interactive elements.
-	hoverX, hoverY int
-
-	// OnAnswer is called when the form is submitted. The UI sets
-	// this to wire up workspace submission.
-	OnAnswer func(responses []question.Answer)
-
-	// OnCancel is called when the user presses escape to cancel
-	// the entire question batch. The UI sets this to wire up
-	// workspace cancellation.
-	OnCancel func()
 }
 
 var _ CollapsibleInlineEditor = (*QuestionForm)(nil)
@@ -490,17 +478,11 @@ func (f *QuestionForm) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 				counter := fmt.Sprintf("%d/%d", f.activeIdx+1, n)
 				activeLabel := labels[f.activeIdx]
 				combined := activeLabel + " · " + counter
-				maxLabel := avail - tabPadX*2 - 2
-				if maxLabel < 3 {
-					maxLabel = 3
-				}
+				maxLabel := max(avail-tabPadX*2-2, 3)
 				if ansi.StringWidth(combined) > maxLabel {
 					// Truncate the label part to fit.
 					counterPart := " · " + counter
-					labelBudget := maxLabel - ansi.StringWidth(counterPart)
-					if labelBudget < 1 {
-						labelBudget = 1
-					}
+					labelBudget := max(maxLabel-ansi.StringWidth(counterPart), 1)
 					combined = ansi.Truncate(activeLabel, labelBudget, "…") + counterPart
 				}
 				for i := range labels {

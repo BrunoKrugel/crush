@@ -60,6 +60,12 @@ func NewReplaceSymbolTool(
 				return fantasy.NewTextErrorResponse("file_path is required"), nil
 			}
 
+			contained, err := ContainPath(ctx, params.FilePath)
+			if err != nil {
+				return fantasy.NewTextErrorResponse(err.Error()), nil
+			}
+			params.FilePath = contained
+
 			action := params.Action
 			if action == "" {
 				action = "replace"
@@ -135,6 +141,7 @@ func NewReplaceSymbolTool(
 				granted, err := permissions.Request(ctx, permission.CreatePermissionRequest{
 					SessionID:   sessionID,
 					Path:        params.FilePath,
+					ToolCallID:  call.ID,
 					ToolName:    ReplaceSymbolToolName,
 					Description: fmt.Sprintf("%s symbol '%s' in %s", action, params.Symbol, params.FilePath),
 					Params: ReplaceSymbolPermissionsParams{

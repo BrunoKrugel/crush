@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"hash/fnv"
 	"strings"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/crush/internal/compaction"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/ui/anim"
 	"github.com/charmbracelet/crush/internal/ui/common"
@@ -21,6 +21,11 @@ import (
 // assistantMessageTruncateFormat is the text shown when an assistant message is
 // truncated in the collapsed state.
 const assistantMessageTruncateFormat = "… (%d lines hidden) [click or space to expand]"
+
+// assistantCopyIcon is the click-to-copy glyph rendered right-aligned on
+// the last content line of finished assistant messages. Clicking it copies the message's
+// raw Markdown source (not the glamour-rendered text) to the clipboard.
+const assistantCopyIcon = "⎘"
 
 // assistantMessageTailWindowFormat is shown above a tail-windowed thinking
 // block to advertise that earlier lines exist and that the user can
@@ -87,10 +92,10 @@ const (
 // per-section side data that the caller needs to recover on a hit
 // (e.g. the thinking box height for click detection).
 type assistantSection struct {
+	out     string
 	width   int
 	srcHash uint64
 	extra   uint64
-	out     string
 	h       int
 	aux     int
 	valid   bool
@@ -185,61 +190,30 @@ func fnvFields(fields ...[]byte) uint64 {
 //
 // This item includes thinking, and the content but does not include the tool calls.
 type AssistantMessageItem struct {
+	*focusableMessageItem
+	*cachedMessageItem
+	message *message.Message
+	sty     *styles.Styles
+	anim    *anim.Anim
 	*list.Versioned
 	*highlightableMessageItem
-	*cachedMessageItem
-	*focusableMessageItem
-
-	message           *message.Message
-	sty               *styles.Styles
-	anim              *anim.Anim
-	thinkingViewMode  thinkingViewMode
-	thinkingBoxHeight int // Tracks the rendered thinking box height for click detection.
-
-	// planAgent marks this item as plan-agent output. While the plan
-	// streams (the message is not finished) and the plan-start marker
-	// has arrived, the content renders as an open plan card: top and
-	// side borders only, with the bottom border withheld until the
-	// plan-ready marker lands.
-	planAgent bool
-
-	// Incremental FNV-64a hash of the thinking text. Avoids
-	// re-hashing the entire accumulated text on every streaming
-	// tick. thinkingHashSample holds a short prefix of the hashed
-	// text so we can detect divergence (e.g. a user retry that
-	// rewrites the thinking from scratch) without re-hashing the
-	// whole thing. See CHARM-1785.
+	thinkingHashSample string
+	hyperlinks         []hyperlinkSpan
+	streamingThinking  streamingMarkdown
+	streamingSummary   streamingMarkdown
+	streamingPlan      streamingMarkdown
+	streamingContent   streamingMarkdown
+	thinkingSec        assistantSection
+	contentSec         assistantSection
+	errorSec           assistantSection
 	thinkingHash       uint64
 	thinkingHashLen    int
-	thinkingHashSample string
-
-	// Per-section render caches. Splitting these out means content
-	// streaming does not invalidate the (often expensive) thinking
-	// render, and vice versa.
-	thinkingSec assistantSection
-	contentSec  assistantSection
-	errorSec    assistantSection
-
-	// streamingContent caches a "stable prefix" glamour render of
-	// the assistant content body so each streaming flush only
-	// re-renders the trailing partial. F8 of
-	// docs/notes/2026-05-12-chat-rendering-perf.md. See
-	// streaming_markdown.go for the full algorithm.
-	streamingContent streamingMarkdown
-
-	// streamingThinking applies the same stable-prefix caching to
-	// the thinking/reasoning section. Without this, every streaming
-	// delta forces a full glamour re-render of the entire accumulated
-	// thinking text, which burns CPU and starves the terminal emulator
-	// during long reasoning traces.
-	streamingThinking streamingMarkdown
-
-	// streamingPlan applies the same stable-prefix caching to the plan
-	// card while the plan streams, so each streaming flush only
-	// re-renders the trailing partial of the plan document. Kept apart
-	// from streamingContent because it renders through the plan
-	// renderer, whose cached prefix is not interchangeable.
-	streamingPlan streamingMarkdown
+	copyIconColEnd     int
+	copyIconColStart   int
+	copyIconRow        int
+	thinkingBoxHeight  int
+	planAgent          bool
+	thinkingViewMode   thinkingViewMode
 }
 
 var _ Expandable = (*AssistantMessageItem)(nil)
@@ -256,24 +230,7 @@ func NewAssistantMessageItem(sty *styles.Styles, message *message.Message) Messa
 		sty:                      sty,
 	}
 
-	// Summary messages are generated outside a regular turn, so the turn
-	// timer is not active while they stream; give them their own elapsed
-	// timer anchored at item creation instead.
-	if message.IsSummaryMessage {
-		startedAt := time.Now()
-		a.anim = anim.New(anim.Settings{
-			ID:          a.ID(),
-			Size:        15,
-			GradColorA:  sty.WorkingGradFromColor,
-			GradColorB:  sty.WorkingGradToColor,
-			LabelColor:  sty.WorkingLabelColor,
-			CycleColors: true,
-			Suffix:      func() string { return common.FormatDuration(time.Since(startedAt)) },
-			SuffixColor: sty.WorkingTimerColor,
-		})
-	} else {
-		a.anim = newTurnAnim(sty, a.ID(), message.SessionID)
-	}
+	a.anim = newTurnAnim(sty, a.ID(), message.SessionID)
 	return a
 }
 
@@ -285,7 +242,7 @@ func (a *AssistantMessageItem) Spinning() bool {
 // restyleAnim implements [animRestyler].
 func (a *AssistantMessageItem) restyleAnim() {
 	a.anim.SetColors(
-		a.sty.ThinkingLabelColor,
+		a.sty.WorkingLabelColor,
 		a.sty.WorkingGradFromColor,
 		a.sty.WorkingGradToColor,
 		a.sty.WorkingTimerColor,
@@ -449,6 +406,13 @@ func (a *AssistantMessageItem) renderMessageContent(width int) (string, int) {
 		messageParts = append(messageParts, a.cachedContent(width))
 	}
 
+	// A checkpoint message renders as its own card rather than as chat
+	// prose: the box, its title, and the note describing what was replaced
+	// are the whole item.
+	if a.message.IsSummaryMessage && !a.message.IsErrorLike() {
+		return a.renderCompactionCard(width), lipgloss.Height(a.renderCompactionCard(width))
+	}
+
 	if a.message.IsFinished() {
 		var banner string
 		switch {
@@ -478,6 +442,42 @@ func (a *AssistantMessageItem) renderMessageContent(width int) (string, int) {
 	}
 
 	out := strings.Join(messageParts, "\n")
+
+	// Click-to-copy icon: right-aligned ⎘ appended to the last content
+	// line, shown only while the message item is focused (selected).
+	// The icon copies the raw Markdown source via HandleMouseClickCmd.
+	a.copyIconRow = -1
+	if a.message.IsFinished() && content != "" && a.focused {
+		icon := a.sty.Messages.AssistantCopyIcon.Render(assistantCopyIcon)
+		iconWidth := lipgloss.Width(icon)
+		a.copyIconRow = lipgloss.Height(out) - 1
+		head := ""
+		lastLine := out
+		if idx := strings.LastIndex(out, "\n"); idx >= 0 {
+			head = out[:idx+1]
+			lastLine = out[idx+1:]
+		}
+		// The icon hugs the right edge of the item: pad (or truncate)
+		// the last line so the icon's rightmost cell lands on the item
+		// width, keeping the line within width so the compositor does
+		// not clip it and a chat-relative mouse x can reach it.
+		iconCol := max(width-iconWidth, 0)
+		if w := lipgloss.Width(lastLine); w > iconCol {
+			lastLine = ansi.Truncate(lastLine, iconCol, "")
+		} else {
+			lastLine += strings.Repeat(" ", iconCol-w)
+		}
+		a.copyIconColStart = iconCol
+		a.copyIconColEnd = iconCol + iconWidth
+		out = head + lastLine + icon
+	}
+
+	// Index hyperlink spans for click-to-open. Reparsing the joined output
+	// (rather than tracking spans through each section cache) keeps the
+	// index consistent with what is actually on screen regardless of which
+	// section caches hit.
+	a.hyperlinks = parseHyperlinkSpans(out)
+
 	return out, lipgloss.Height(out)
 }
 
@@ -545,15 +545,22 @@ func (a *AssistantMessageItem) thinkingHashIncremental(thinking string) uint64 {
 }
 
 // contentKey returns the (srcHash, extra) cache key components for the
-// main content section. extra folds in the streaming-plan state so a
-// message flips between the plain, open-card, and closed-card renders
-// as the plan run progresses.
+// main content section. extra folds in two independent render states as
+// separate bits. Finish state is included because the rendered output
+// depends on IsFinished() (the truncated-block
+// branch): the last streaming delta and the finished message often carry
+// byte-identical text, and the finished render must not be served from a
+// cache entry stored while streaming. The plan bit flips a message between
+// the plain, open-card, and closed-card renders as the plan run progresses.
 func (a *AssistantMessageItem) contentKey() (uint64, uint64) {
-	var planStreaming byte
-	if a.planStreaming() {
-		planStreaming = 1
+	var extra uint64
+	if a.message.IsFinished() {
+		extra |= 1
 	}
-	return fnv64(a.message.Content().Text), uint64(planStreaming)
+	if a.planStreaming() {
+		extra |= 2
+	}
+	return fnv64(a.message.Content().Text), extra
 }
 
 // SetPlanAgent flags this item as plan-agent output (or clears the
@@ -619,6 +626,7 @@ func (a *AssistantMessageItem) cachedContent(width int) string {
 	// Hide the end plan marker and wrap the message in a background "card" so
 	// the plan stands out from regular assistant replies. Mirrors the
 	// ThinkingBox treatment.
+	//
 	var out string
 	switch {
 	case common.PlanReadyMarkerPresent(text):
@@ -885,6 +893,8 @@ func (a *AssistantMessageItem) clearCache() {
 	a.errorSec.reset()
 	a.streamingContent.Reset()
 	a.streamingThinking.Reset()
+	// A kept model would draw the
+	// old palette next to newly-themed chat. Drop them and let the next
 	a.streamingPlan.Reset()
 	a.thinkingHash = 0
 	a.thinkingHashLen = 0
@@ -958,19 +968,206 @@ func (a *AssistantMessageItem) tailWindowWouldTruncate() bool {
 // path. Toggling here directly would double-toggle because the caller always
 // runs the generic path after a handled click.
 func (a *AssistantMessageItem) HandleMouseClick(btn ansi.MouseButton, x, y int) bool {
+	handled, _ := a.HandleMouseClickCmd(btn, x, y)
+	return handled
+}
+
+// HandleMouseClickCmd implements [list.MouseClickCommandable]. A click on
+// the click-to-copy icon returns the copy command, which suppresses the
+// generic expansion toggle in the chat click dispatcher; a click on the
+// thinking box reports handled with a nil command so expansion proceeds
+// through the generic [Expandable] path (see HandleMouseClick for why the
+// toggle itself must not run here).
+func (a *AssistantMessageItem) HandleMouseClickCmd(btn ansi.MouseButton, x, y int) (bool, tea.Cmd) {
 	if btn != ansi.MouseLeft {
-		return false
+		return false, nil
 	}
-	// Only the thinking box is clickable; other regions of the assistant
-	// message should not trigger expansion.
-	return a.thinkingBoxHeight > 0 && y < a.thinkingBoxHeight
+	// The click-to-copy icon wins over every other region: it is a
+	// discrete action, not an expansion target. The copy takes the raw
+	// Markdown source (the same text the c/y keybinding copies), not the
+	// glamour-rendered output. Click coordinates are chat-relative, so the
+	// content column is offset by MessageLeftPaddingTotal (the prefix bar).
+	if a.copyIconRow >= 0 && y == a.copyIconRow &&
+		x >= a.copyIconColStart+MessageLeftPaddingTotal && x < a.copyIconColEnd+MessageLeftPaddingTotal {
+		text := a.message.Content().Text
+		return true, common.CopyToClipboard(text, "Message copied to clipboard")
+	}
+	// Hyperlinks open in the browser on plain click. Terminals defer link
+	// handling to the application whenever mouse reporting is active
+	// (verified on Ghostty 1.3.1: CMD+click dies in any mouse mode), so
+	// without this links render but can never be opened. Like the copy
+	// footer, producing a command suppresses the expansion toggle.
+	if url := spanAt(a.hyperlinks, y, x-MessageLeftPaddingTotal); url != "" {
+		return true, openURL(url)
+	}
+	// Only the thinking box is clickable for expansion; other regions of
+	// the assistant message should not trigger expansion.
+	return a.thinkingBoxHeight > 0 && y < a.thinkingBoxHeight, nil
+}
+
+// SetFocused implements list.Focusable. Besides the base focus bookkeeping
+// It routes focus into the item, so
+// cycling, Enter activation) only engages while the surface model holds
+// focus, so surface focus follows item selection (#44).
+func (a *AssistantMessageItem) SetFocused(focused bool) {
+	a.focusableMessageItem.SetFocused(focused)
 }
 
 // HandleKeyEvent implements KeyEventHandler.
+// gets first claim on the keys it understands (Tab/Shift+Tab cycle its
+
+// falls through, so the copy shortcut keeps working whenever no surface
+// consumes the key.
 func (a *AssistantMessageItem) HandleKeyEvent(key tea.KeyMsg) (bool, tea.Cmd) {
 	if k := key.String(); k == "c" || k == "y" {
 		text := a.message.Content().Text
 		return true, common.CopyToClipboard(text, "Message copied to clipboard")
 	}
 	return false, nil
+}
+
+// formatTokenCount shortens a token count the way the context meter does, so a
+// checkpoint's note and the status bar never disagree about the same number.
+func formatTokenCount(tokens int64) string {
+	switch {
+	case tokens >= 1_000_000:
+		return strings.Replace(fmt.Sprintf("%.1fM", float64(tokens)/1_000_000), ".0M", "M", 1)
+	case tokens >= 1_000:
+		return strings.Replace(fmt.Sprintf("%.1fK", float64(tokens)/1_000), ".0K", "K", 1)
+	default:
+		return fmt.Sprintf("%d", tokens)
+	}
+}
+
+// planBoxLayout returns a style and content width whose combined horizontal
+// frame fits within the available message width.
+func boxLayout(style lipgloss.Style, width int) (lipgloss.Style, int) {
+	width = max(1, width)
+	frameWidth := style.GetHorizontalFrameSize()
+	if frameWidth >= width {
+		style = style.PaddingLeft(0).PaddingRight(0)
+		frameWidth = style.GetHorizontalFrameSize()
+	}
+	return style, max(1, width-frameWidth)
+}
+
+// cachedError returns the rendered error section.
+
+// hasCheckpoint reports whether this message should present itself as a session
+// checkpoint.
+//
+// A summarization that fails partway leaves a half-written summary in the
+// transcript with no footer and no cut pointing at it. Framing that as a
+// "Session Summary" would claim the conversation above it had been replaced,
+// when nothing of the sort happened, so it renders as ordinary text under its
+// error banner instead, where the failure is at least legible.
+func (a *AssistantMessageItem) hasCheckpoint() bool {
+	return a.message.IsSummaryMessage && !a.message.IsErrorLike()
+}
+
+// renderCompactionCard paints a checkpoint inside a bordered box, the way the
+// plan card paints a plan. Without it a summary is plain assistant text in the
+// middle of a conversation, and the natural reading is that the agent said it
+// about the last message rather than that it replaced everything above.// renderCompactionCard paints a checkpoint inside a bordered box, the way the
+// plan card paints a plan. Without it a summary is plain assistant text in the
+// middle of a conversation, and the natural reading is that the agent said it
+// about the last message rather than that it replaced everything above.
+func (a *AssistantMessageItem) renderCompactionCard(width int) string {
+	text := a.message.Content().Text
+	box, innerWidth := boxLayout(a.sty.Messages.CompactionBox, width)
+	streaming := !a.message.IsFinished()
+
+	title := "Session Summary"
+	if streaming {
+		// The footer lands last, so there is nothing to report about what was
+		// replaced until the checkpoint is finished.
+		title = "Summarizing\u2026"
+	}
+	parts := []string{a.sty.Messages.CompactionHeader.Render(title)}
+	if body := strings.TrimSpace(compaction.Body(text)); body != "" {
+		parts = append(parts, "")
+		if streaming {
+			renderer := common.MarkdownRenderer(a.sty, innerWidth)
+			parts = append(parts, a.streamingSummary.Render(body, innerWidth, renderer))
+		} else {
+			parts = append(parts, a.renderMarkdownAt(body, innerWidth))
+		}
+	}
+	if note := a.compactionNote(text, streaming); len(note) > 0 {
+		parts = append(parts, "")
+		parts = append(parts, note...)
+	}
+	content := strings.Join(parts, "\n")
+
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		lines[i] = ansi.Truncate(line, innerWidth, "")
+	}
+	if streaming {
+		// An open box, as with a streaming plan: the bottom edge would imply
+		// the checkpoint is finished before it is.
+		box = box.BorderBottom(false)
+	}
+	return box.Width(max(1, width)).Render(strings.Join(lines, "\n"))
+}
+
+// compactionNote answers the question a summary in the middle of a session
+// provokes: how much of the conversation did this replace, and is anything of
+// it still around?// compactionNote answers the question a summary in the middle of a session
+// provokes: how much of the conversation did this replace, and is anything of
+// it still around?
+func (a *AssistantMessageItem) compactionNote(text string, streaming bool) []string {
+	if streaming {
+		return nil
+	}
+	info, ok := compaction.ParseInfo(text)
+	if !ok {
+		return nil
+	}
+	// One fact per line: the note is the first thing a reader looks for, and a
+	// single long sentence gets truncated at ordinary terminal widths. Each
+	// line is also conditional, because a footer that was reworded, cut short,
+	// or written by a build that counted differently yields partial data - and
+	// "Replaced 0 earlier messages" is a false statement about the session
+	// where saying nothing is merely quiet.
+	var lines []string
+	if info.ReplacedMessages > 0 {
+		lines = append(lines, fmt.Sprintf(
+			"Replaced %d earlier messages (~%s tokens)",
+			info.ReplacedMessages, formatTokenCount(info.ReplacedTokens)))
+	}
+	if info.KeptMessages > 0 {
+		lines = append(lines, fmt.Sprintf(
+			"Kept the %d most recent (~%s) verbatim",
+			info.KeptMessages, formatTokenCount(info.KeptTokens)))
+	}
+	if info.Observed > 0 {
+		lines = append(lines, fmt.Sprintf(
+			"Keeps %d recorded memories verbatim across compactions",
+			info.Observed))
+	}
+	if info.TranscriptPath != "" {
+		lines = append(lines, "Full transcript: "+info.TranscriptPath)
+	}
+	for i, line := range lines {
+		lines[i] = a.sty.Messages.CompactionNote.Render(line)
+	}
+	return lines
+}
+
+// renderMarkdownAt renders finished markdown at an explicit width, for text
+// that lives inside a box rather than directly in the message column.
+
+// renderMarkdownAt renders finished markdown at an explicit width, for text
+// that lives inside a box rather than directly in the message column.
+func (a *AssistantMessageItem) renderMarkdownAt(content string, width int) string {
+	renderer := common.MarkdownRenderer(a.sty, width)
+	mu := common.LockMarkdownRenderer(renderer)
+	mu.Lock()
+	rendered, err := renderer.Render(content)
+	mu.Unlock()
+	if err != nil {
+		return content
+	}
+	return strings.TrimSpace(rendered)
 }

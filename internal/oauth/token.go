@@ -1,6 +1,8 @@
 package oauth
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -101,4 +103,23 @@ func (e *TokenExchangeError) IsRefreshTokenRevoked() bool {
 		Error string `json:"error"`
 	}
 	return json.Unmarshal([]byte(e.Body), &body) == nil && body.Error == "invalid_grant"
+}
+
+// first six bytes of its SHA-256, hex encoded. Enough to tell one credential
+// from another, and to follow one across processes and restarts, which is
+// how a rotation lost between the exchange and the write to disk becomes
+// visible. Returns "none" when there is no refresh token to name.
+func (t *Token) Fingerprint() string {
+	if t == nil || t.RefreshToken == "" {
+		return "none"
+	}
+	return FingerprintSecret(t.RefreshToken)
+}
+
+func FingerprintSecret(secret string) string {
+	if secret == "" {
+		return "none"
+	}
+	sum := sha256.Sum256([]byte(secret))
+	return hex.EncodeToString(sum[:6])
 }

@@ -8,9 +8,11 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"charm.land/x/nerdfont"
 	"github.com/charmbracelet/crush/internal/agent/hyper"
 	"github.com/charmbracelet/crush/internal/home"
 	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/charmbracelet/crush/internal/usage"
 	"github.com/charmbracelet/x/ansi"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -40,7 +42,7 @@ func PrettyPathWithBranch(t *styles.Styles, path, branch string, width int) stri
 func PrettyPathInline(t *styles.Styles, path, branch string, width int) string {
 	formatted := home.Short(path)
 	if branch != "" {
-		combined := branch + " " + formatted
+		combined := branch + " • " + formatted
 		formatted = ansi.Truncate(combined, width, "…")
 	}
 	return t.Sidebar.WorkingDir.Width(width).Render(formatted)
@@ -64,7 +66,7 @@ type ModelContextInfo struct {
 
 // ModelInfo renders model information including name, provider, reasoning
 // settings, and optional context usage/cost.
-func ModelInfo(t *styles.Styles, modelName, providerName, reasoningInfo string, context *ModelContextInfo, width int, hyperCredits *int) string {
+func ModelInfo(t *styles.Styles, modelName, providerName, reasoningInfo string, context *ModelContextInfo, width int, hyperCredits *int, usageMeters []usage.Meter) string {
 	modelIcon := t.ModelInfo.Icon.Render(styles.ModelIcon)
 	modelName = t.ModelInfo.Name.Render(modelName)
 
@@ -109,6 +111,15 @@ func ModelInfo(t *styles.Styles, modelName, providerName, reasoningInfo string, 
 		parts = append(parts, "", hcInfo)
 	}
 
+	// One line per limit the model in use draws from, spelled out with the
+	// refill time, since the sidebar has the room the header does not.
+	for _, meter := range usageMeters {
+		info := t.ModelInfo.HypercreditIcon.Render(styles.HypercreditIcon)
+		info += " "
+		info += t.ModelInfo.HypercreditText.Render(meter.Summary())
+		parts = append(parts, "", info)
+	}
+
 	return lipgloss.NewStyle().Width(width).Render(
 		lipgloss.JoinVertical(lipgloss.Left, parts...),
 	)
@@ -149,7 +160,7 @@ func formatTokensAndCost(t *styles.Styles, tokens, contextWindow int64, cost flo
 	formattedPercentage := t.ModelInfo.TokenPercentage.Render(percentageText)
 	formattedTokens = fmt.Sprintf("%s %s", formattedPercentage, formattedTokens)
 	if percentage > 80 {
-		formattedTokens = fmt.Sprintf("%s %s", styles.LSPWarningIcon, formattedTokens)
+		formattedTokens = fmt.Sprintf("%s%s", nerdfont.Glyph(styles.LSPWarningIcon, "W "), formattedTokens)
 	}
 
 	return fmt.Sprintf("%s %s", formattedTokens, formattedCost)

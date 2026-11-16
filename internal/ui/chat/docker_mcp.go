@@ -1,13 +1,14 @@
 package chat
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
+	"github.com/bytedance/sonic"
+	"github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/stringext"
@@ -39,11 +40,11 @@ func (d *DockerMCPToolRenderContext) RenderTool(sty *styles.Styles, width int, o
 	cappedWidth := cappedMessageWidth(width)
 
 	var params map[string]any
-	if err := json.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
 		params = make(map[string]any)
 	}
 
-	tool := strings.TrimPrefix(opts.ToolCall.Name, "mcp_"+config.DockerMCPName+"_")
+	tool := strings.TrimPrefix(opts.ToolCall.Name, tools.MCPToolPrefix(config.DockerMCPName))
 
 	mainParam := opts.ToolCall.Input
 	extraArgs := map[string]string{}
@@ -58,7 +59,7 @@ func (d *DockerMCPToolRenderContext) RenderTool(sty *styles.Styles, width int, o
 			if k == "query" {
 				continue
 			}
-			data, _ := json.Marshal(v)
+			data, _ := sonic.Marshal(v)
 			extraArgs[k] = string(data)
 		}
 	case "mcp-add":
@@ -71,7 +72,7 @@ func (d *DockerMCPToolRenderContext) RenderTool(sty *styles.Styles, width int, o
 			if k == "name" {
 				continue
 			}
-			data, _ := json.Marshal(v)
+			data, _ := sonic.Marshal(v)
 			extraArgs[k] = string(data)
 		}
 	case "mcp-remove":
@@ -84,7 +85,7 @@ func (d *DockerMCPToolRenderContext) RenderTool(sty *styles.Styles, width int, o
 			if k == "name" {
 				continue
 			}
-			data, _ := json.Marshal(v)
+			data, _ := sonic.Marshal(v)
 			extraArgs[k] = string(data)
 		}
 	case "mcp-exec":
@@ -168,7 +169,7 @@ func (d *DockerMCPToolRenderContext) renderMCPServers(sty *styles.Styles, opts *
 	}
 
 	var result FindMCPResponse
-	if err := json.Unmarshal([]byte(opts.Result.Content), &result); err != nil {
+	if err := sonic.Unmarshal([]byte(opts.Result.Content), &result); err != nil {
 		return toolOutputPlainContent(sty, opts.Result.Content, width-toolBodyLeftPaddingTotal, opts.ExpandedContent)
 	}
 
@@ -279,5 +280,5 @@ func (d *DockerMCPToolRenderContext) makeCompactHeader(sty *styles.Styles, tool 
 
 // IsDockerMCPTool returns true if the tool name is a Docker MCP tool.
 func IsDockerMCPTool(name string) bool {
-	return strings.HasPrefix(name, "mcp_"+config.DockerMCPName+"_")
+	return strings.HasPrefix(name, tools.MCPToolPrefix(config.DockerMCPName))
 }

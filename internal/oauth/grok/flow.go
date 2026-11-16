@@ -37,15 +37,15 @@ const (
 // Unlike OpenAI, xAI does not allow-list fixed callback ports, so the
 // listener binds an OS-assigned port and the redirect URI carries it.
 type BrowserFlow struct {
-	authURL     string
+	listener    net.Listener
+	server      *http.Server
+	result      chan *http.Request
 	pkce        PKCE
+	authURL     string
 	state       string
 	nonce       string
 	redirectURI string
 	startURL    string
-	listener    net.Listener
-	server      *http.Server
-	result      chan *http.Request
 }
 
 // StartBrowserFlow opens the loopback callback listener and returns the

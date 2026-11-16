@@ -1,7 +1,7 @@
 package tools
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -10,21 +10,44 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/stretchr/testify/require"
 )
+
+// newLogFilePath returns a crush.log path in a fresh temporary directory.
+// At cleanup, before TempDir removes the directory, it deletes the file
+// and fails the test if it cannot. Windows refuses to delete a file while
+// any handle to it is open, so a handle the fixture or the tool left open
+// fails here on the first attempt. TempDir's own cleanup retries for two
+// seconds and only fails if no GC finalizes the leaked file in that
+// window, which made such a leak an intermittent CI failure.
+//
+// @joestump-agent 10/07/2026 - Added after TestCrushLogs_EmptyFile's
+// discarded os.Create handle failed TempDir cleanup on windows-latest.
+func newLogFilePath(t *testing.T) string {
+	t.Helper()
+	logFile := filepath.Join(t.TempDir(), "crush.log")
+	t.Cleanup(func() {
+		err := os.Remove(logFile)
+		if errors.Is(err, os.ErrNotExist) {
+			return
+		}
+		require.NoError(t, err, "crush.log is still open at cleanup")
+	})
+	return logFile
+}
 
 // createTestLogFile creates a temporary log file with the given entries.
 func createTestLogFile(t *testing.T, entries []map[string]any) string {
 	t.Helper()
-	tempDir := t.TempDir()
-	logFile := filepath.Join(tempDir, "crush.log")
+	logFile := newLogFilePath(t)
 
 	file, err := os.Create(logFile)
 	require.NoError(t, err)
 	defer file.Close()
 
 	for _, entry := range entries {
-		line, err := json.Marshal(entry)
+		line, err := sonic.Marshal(entry)
 		require.NoError(t, err)
 		_, err = file.WriteString(string(line) + "\n")
 		require.NoError(t, err)
@@ -129,10 +152,8 @@ func TestCrushLogs_MissingFile(t *testing.T) {
 
 func TestCrushLogs_EmptyFile(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
-	logFile := filepath.Join(tempDir, "crush.log")
-	_, err := os.Create(logFile)
-	require.NoError(t, err)
+	logFile := newLogFilePath(t)
+	require.NoError(t, os.WriteFile(logFile, nil, 0o644))
 
 	result := runCrushLogs(logFile, CrushLogsParams{Lines: 50})
 	require.Contains(t, result, "Log file is empty")
@@ -140,21 +161,20 @@ func TestCrushLogs_EmptyFile(t *testing.T) {
 
 func TestCrushLogs_MalformedLines(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
-	logFile := filepath.Join(tempDir, "crush.log")
+	logFile := newLogFilePath(t)
 
 	file, err := os.Create(logFile)
 	require.NoError(t, err)
 
 	// Write some valid and some invalid lines.
 	validEntry := makeLogEntry("INFO", "Valid entry", "app.go", 1, nil)
-	line, _ := json.Marshal(validEntry)
+	line, _ := sonic.Marshal(validEntry)
 	file.WriteString(string(line) + "\n")
 	file.WriteString("this is not json\n")
 	file.WriteString(`{"incomplete": "json` + "\n")
 
 	validEntry2 := makeLogEntry("INFO", "Another valid entry", "app.go", 2, nil)
-	line2, _ := json.Marshal(validEntry2)
+	line2, _ := sonic.Marshal(validEntry2)
 	file.WriteString(string(line2) + "\n")
 
 	file.Close()
@@ -300,15 +320,14 @@ func TestCrushLogs_ReservedFields(t *testing.T) {
 
 func TestCrushLogs_OversizedLines(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
-	logFile := filepath.Join(tempDir, "crush.log")
+	logFile := newLogFilePath(t)
 
 	file, err := os.Create(logFile)
 	require.NoError(t, err)
 
 	// Create a valid entry first.
 	validEntry := makeLogEntry("INFO", "Valid entry", "app.go", 1, nil)
-	line, _ := json.Marshal(validEntry)
+	line, _ := sonic.Marshal(validEntry)
 	file.WriteString(string(line) + "\n")
 
 	// Create an oversized line (more than 1 MB).
@@ -320,12 +339,12 @@ func TestCrushLogs_OversizedLines(t *testing.T) {
 		"source": map[string]any{"file": "big.go", "line": 1},
 		"data":   bigValue,
 	}
-	bigLine, _ := json.Marshal(bigEntry)
+	bigLine, _ := sonic.Marshal(bigEntry)
 	file.WriteString(string(bigLine) + "\n")
 
 	// Create another valid entry.
 	validEntry2 := makeLogEntry("INFO", "Second valid entry", "app.go", 2, nil)
-	line2, _ := json.Marshal(validEntry2)
+	line2, _ := sonic.Marshal(validEntry2)
 	file.WriteString(string(line2) + "\n")
 
 	file.Close()
@@ -342,8 +361,7 @@ func TestCrushLogs_OversizedLines(t *testing.T) {
 
 func TestCrushLogs_PartialTrailingLine(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
-	logFile := filepath.Join(tempDir, "crush.log")
+	logFile := newLogFilePath(t)
 
 	file, err := os.Create(logFile)
 	require.NoError(t, err)
@@ -351,7 +369,7 @@ func TestCrushLogs_PartialTrailingLine(t *testing.T) {
 	// Create valid entries.
 	for i := range 5 {
 		entry := makeLogEntry("INFO", fmt.Sprintf("Entry %d", i), "app.go", i, nil)
-		line, _ := json.Marshal(entry)
+		line, _ := sonic.Marshal(entry)
 		file.WriteString(string(line) + "\n")
 	}
 

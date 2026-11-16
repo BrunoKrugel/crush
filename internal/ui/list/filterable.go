@@ -21,8 +21,8 @@ type MatchSettable interface {
 // via a settable query.
 type FilterableList struct {
 	*List
-	items []FilterableItem
 	query string
+	items []FilterableItem
 }
 
 // NewFilterableList creates a new filterable list.
@@ -44,6 +44,13 @@ func (f *FilterableList) SetItems(items ...FilterableItem) {
 		fitems[i] = item
 	}
 	f.List.SetItems(fitems...)
+}
+
+// Items returns every item in the list, unfiltered. Callers that
+// mutate items in place (rather than replacing them) use this to
+// reach rows a filter currently hides.
+func (f *FilterableList) Items() []FilterableItem {
+	return f.items
 }
 
 // AppendItems appends items to the list and updates the filtered items.
@@ -85,12 +92,6 @@ func (f FilterableItemsSource) Len() int {
 // String returns the string representation of the item at index i.
 func (f FilterableItemsSource) String(i int) string {
 	return f[i].Filter()
-}
-
-// Items returns every item of the list, including the ones the current
-// query filters out.
-func (f *FilterableList) Items() []FilterableItem {
-	return f.items
 }
 
 // FilteredItems returns the visible items after filtering.

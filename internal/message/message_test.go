@@ -54,8 +54,8 @@ func newTestService(t *testing.T, opts ...ServiceOption) (Service, string) {
 // eventCollector consumes broker events into a slice in a goroutine
 // and exposes thread-safe Snapshot / Reset helpers for assertions.
 type eventCollector struct {
-	mu     sync.Mutex
 	events []pubsub.Event[Message]
+	mu     sync.Mutex
 }
 
 func collect(ctx context.Context, sub <-chan pubsub.Event[Message]) *eventCollector {
@@ -121,7 +121,7 @@ func TestUpdate_DebouncesTextDeltas(t *testing.T) {
 	collector.dropCreated(t)
 
 	// Push 5 deltas inside a single debounce window.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		msg.AppendContent("a")
 		require.NoError(t, svc.Update(t.Context(), msg))
 	}
@@ -482,7 +482,7 @@ func TestUpdate_ZeroDebounceFlushesEveryUpdate(t *testing.T) {
 	msg, err := svc.Create(t.Context(), sessionID, CreateMessageParams{Role: Assistant})
 	require.NoError(t, err)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		msg.AppendContent("x")
 		require.NoError(t, svc.Update(t.Context(), msg))
 		got, err := svc.Get(t.Context(), msg.ID)
@@ -628,8 +628,8 @@ func TestUpdate_StructuralFlushUsesMustDeliver(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		mut  func(*Message)
+		name string
 	}{
 		{
 			name: "tool call add",

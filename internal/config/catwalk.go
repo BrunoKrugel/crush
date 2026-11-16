@@ -18,14 +18,14 @@ type catwalkClient interface {
 var _ syncer[[]catwalk.Provider] = (*catwalkSync)(nil)
 
 type catwalkSync struct {
-	once       sync.Once
-	result     []catwalk.Provider
 	err        error
-	cache      cache[[]catwalk.Provider]
 	client     catwalkClient
-	autoupdate bool
+	cache      cache[[]catwalk.Provider]
+	result     []catwalk.Provider
+	once       sync.Once
 	init       atomic.Bool
 	updated    atomic.Bool
+	autoupdate bool
 }
 
 func (s *catwalkSync) Init(client catwalkClient, path string, autoupdate bool) {

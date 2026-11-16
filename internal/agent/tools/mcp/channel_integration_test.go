@@ -2,11 +2,11 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -108,7 +108,7 @@ func TestChannelEndToEnd(t *testing.T) {
 
 	// Push a real channel notification server -> client through the transport.
 	serverConn := <-inject.connCh
-	params, err := json.Marshal(channelParams{
+	params, err := sonic.Marshal(channelParams{
 		Content: "build failed",
 		Meta:    map[string]string{"severity": "high"},
 	})

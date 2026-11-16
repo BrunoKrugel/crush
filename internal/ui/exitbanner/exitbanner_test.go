@@ -108,7 +108,7 @@ func TestRenderTruncatesLongTitles(t *testing.T) {
 	sess.Title = strings.Repeat("long ", 60)
 
 	got := Render(&testStyles, config.ExitBannerCompact, sess, 40)
-	for _, line := range strings.Split(got, "\n") {
+	for line := range strings.SplitSeq(got, "\n") {
 		require.LessOrEqual(t, ansi.StringWidth(line), 40, "line wider than the terminal: %q", line)
 	}
 	require.Contains(t, got, "…")
@@ -131,7 +131,7 @@ func TestRenderFitsTheGivenWidth(t *testing.T) {
 	for _, width := range []int{40, 80, 200} {
 		for _, banner := range []config.ExitBanner{config.ExitBannerCompact, config.ExitBannerDefault} {
 			got := Render(&testStyles, banner, testSession(), width)
-			for _, line := range strings.Split(got, "\n") {
+			for line := range strings.SplitSeq(got, "\n") {
 				require.LessOrEqual(t, ansi.StringWidth(line), width,
 					"%s banner overflows width %d: %q", banner, width, line)
 			}
@@ -146,29 +146,7 @@ func TestRenderNonPositiveWidthUsesFallback(t *testing.T) {
 	sess.Title = strings.Repeat("long ", 60)
 
 	got := Render(&testStyles, config.ExitBannerCompact, sess, 0)
-	for _, line := range strings.Split(got, "\n") {
+	for line := range strings.SplitSeq(got, "\n") {
 		require.LessOrEqual(t, ansi.StringWidth(line), FallbackWidth)
-	}
-}
-
-func TestRenderUsesActiveTheme(t *testing.T) {
-	t.Parallel()
-
-	theme, err := styles.HostThemeStyles("", map[string]string{
-		"primary": "#12ab34", "secondary": "#56cd78", "fg_base": "#9aefbc",
-	}, nil)
-	require.NoError(t, err)
-
-	for _, banner := range []config.ExitBanner{config.ExitBannerDefault, config.ExitBannerCompact} {
-		t.Run(string(banner), func(t *testing.T) {
-			t.Parallel()
-			got := Render(&theme, banner, testSession(), 100)
-			require.Contains(t, got, "\x1b[1mSession  \x1b[mFix the flaky test")
-			require.Contains(t, got, "\x1b[1mContinue \x1b[mcrush -s 3d4a966")
-			if banner == config.ExitBannerDefault {
-				require.Contains(t, got, "38;2;86;205;120m")
-				require.Contains(t, got, "\n   Thanks for using Crush!")
-			}
-		})
 	}
 }

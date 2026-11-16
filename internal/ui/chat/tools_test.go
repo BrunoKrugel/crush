@@ -12,9 +12,9 @@ func TestPartialJSONFields(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
+		want  map[string]any
 		name  string
 		input string
-		want  map[string]any
 	}{
 		{name: "empty", input: "", want: map[string]any{}},
 		{name: "object open only", input: "{", want: map[string]any{}},

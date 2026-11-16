@@ -30,42 +30,22 @@ type DiagnosticCounts struct {
 }
 
 type Client struct {
-	client *powernap.Client
-	name   string
-	debug  bool
-
-	// Working directory this LSP is scoped to.
-	cwd string
-
-	// File types this LSP server handles (e.g., .go, .rs, .py)
-	fileTypes []string
-
-	// Configuration for this LSP client
-	config config.LSPConfig
-
-	// Long-lived context for the client's lifetime, independent of any
-	// request-scoped context. Used for restart and other operations that
-	// must survive beyond the initial tool call that created the client.
-	ctx       context.Context
-	cancelCtx context.CancelFunc
-	resolver  config.VariableResolver
-
-	// Diagnostic change callback
+	ctx                  context.Context
+	resolver             config.VariableResolver
+	serverState          atomic.Value
+	openFiles            *csync.Map[string, *OpenFileInfo]
+	client               *powernap.Client
+	cancelCtx            context.CancelFunc
 	onDiagnosticsChanged func(name string, count int)
-
-	// Diagnostic cache
-	diagnostics *csync.VersionedMap[protocol.DocumentURI, []protocol.Diagnostic]
-
-	// Cached diagnostic counts to avoid map copy on every UI render.
-	diagCountsCache   DiagnosticCounts
-	diagCountsVersion uint64
-	diagCountsMu      sync.Mutex
-
-	// Files are currently opened by the LSP
-	openFiles *csync.Map[string, *OpenFileInfo]
-
-	// Server state
-	serverState atomic.Value
+	diagnostics          *csync.VersionedMap[protocol.DocumentURI, []protocol.Diagnostic]
+	name                 string
+	cwd                  string
+	fileTypes            []string
+	config               config.LSPConfig
+	diagCountsCache      DiagnosticCounts
+	diagCountsVersion    uint64
+	diagCountsMu         sync.Mutex
+	debug                bool
 }
 
 // New creates a new LSP client using the powernap implementation.
@@ -156,6 +136,16 @@ func (c *Client) GetOffsetEncoding() powernap.OffsetEncoding {
 	return c.client.GetOffsetEncoding()
 }
 
+// SupportsDocumentSymbols reports document symbol support.
+func (c *Client) SupportsDocumentSymbols() bool {
+	provider := c.client.GetCapabilities().DocumentSymbolProvider
+	if provider == nil || provider.Value == nil {
+		return false
+	}
+	enabled, ok := provider.Value.(bool)
+	return !ok || enabled
+}
+
 // Close closes all open files in the client, then shuts down gracefully.
 // If shutdown takes longer than closeTimeout, it falls back to Kill().
 func (c *Client) Close(ctx context.Context) error {
@@ -243,6 +233,14 @@ func (c *Client) registerHandlers() {
 	})
 }
 
+// resetDiagnosticsState drops all cached diagnostics and the count
+// cache. Called when the server instance changes (Restart).
+func (c *Client) resetDiagnosticsState() {
+	c.diagnostics = csync.NewVersionedMap[protocol.DocumentURI, []protocol.Diagnostic]()
+	c.diagCountsCache = DiagnosticCounts{}
+	c.diagCountsVersion = 0
+}
+
 // Restart closes the current LSP client and creates a new one with the same configuration.
 func (c *Client) Restart() error {
 	var openFiles []string
@@ -264,8 +262,11 @@ func (c *Client) Restart() error {
 
 	c.SetServerState(StateStopped)
 
-	c.diagCountsCache = DiagnosticCounts{}
-	c.diagCountsVersion = 0
+	// The old server instance is gone; its diagnostics are invalid and the
+	// new one only republishes for the files it is told about. Keep the
+	// count cache in sync with the map or the sidebar freezes at the last
+	// count of the dead instance.
+	c.resetDiagnosticsState()
 
 	if err := c.createPowernapClient(); err != nil {
 		return err
@@ -381,8 +382,8 @@ func (c *Client) WaitForServerReady(ctx context.Context) error {
 
 // OpenFileInfo contains information about an open file
 type OpenFileInfo struct {
-	Version int32
 	URI     protocol.DocumentURI
+	Version int32
 }
 
 // HandlesFile checks if this LSP client handles the given file based on its

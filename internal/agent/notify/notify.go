@@ -6,6 +6,16 @@ package notify
 // Type identifies the kind of agent notification.
 type Type string
 
+// FinishState distinguishes a turn handoff from an idle session.
+// The zero value denotes a legacy event with unknown scope and outcome.
+type FinishState string
+
+const (
+	FinishContinuing       FinishState = "continuing"
+	FinishIdleSuccess      FinishState = "idle_success"
+	FinishIdleUnsuccessful FinishState = "idle_unsuccessful"
+)
+
 const (
 	// TypeAgentFinished indicates the agent has completed its turn.
 	TypeAgentFinished Type = "agent_finished"
@@ -25,6 +35,15 @@ const (
 	// finished. Message carries the error text when it failed, empty on
 	// success.
 	TypeAWSSSOAuthResult Type = "aws_sso_auth_result"
+	// TypeSummarizing indicates the agent is compacting a session: writing a
+	// checkpoint and dropping the transcript it replaces. Published again
+	// with Done set when the session resumes, whether the compaction
+	// succeeded, failed, or was canceled.
+	TypeSummarizing Type = "summarize"
+	// TypeGoal reports a goal-mode outcome: the goal was met, its turn
+	// budget ran out, or it was abandoned. Message carries the
+	// human-readable outcome.
+	TypeGoal Type = "goal"
 )
 
 // Notification represents a domain event published by the agent.
@@ -32,6 +51,7 @@ type Notification struct {
 	SessionID    string
 	SessionTitle string
 	Type         Type
+	FinishState  FinishState
 	ProviderID   string
 	// RunID, when non-empty, is the caller-supplied correlator
 	// (proto.AgentMessage.RunID) for the run that produced this
@@ -47,6 +67,15 @@ type Notification struct {
 	// AWSSOURL carries the SSO verification URL for TypeAWSSSOAuth once it
 	// appears in the refresh command's output.
 	AWSSOURL string
+	// Progress carries a human-readable status for TypeSummarizing: what is
+	// about to happen as it starts, and the outcome once Done is set. It is
+	// deliberately not Message, which crosses the wire as an error and would
+	// make a successful compaction look like a failed run to non-interactive
+	// clients.
+	Progress string
+	// Done marks the closing half of a TypeSummarizing pair. Ignored by
+	// other notification types.
+	Done bool
 }
 
 // RunComplete is the authoritative end-of-run signal for a session.

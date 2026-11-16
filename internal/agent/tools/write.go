@@ -65,6 +65,11 @@ func NewWriteTool(
 
 			filePath := filepathext.SmartJoin(workingDir, params.FilePath)
 
+			filePath, err := ContainPath(ctx, filePath)
+			if err != nil {
+				return fantasy.NewTextErrorResponse(err.Error()), nil
+			}
+
 			fileInfo, err := os.Stat(filePath)
 			if err == nil {
 				if fileInfo.IsDir() {
@@ -89,9 +94,16 @@ func NewWriteTool(
 			oldContent := ""
 			if fileInfo != nil && !fileInfo.IsDir() {
 				oldBytes, readErr := os.ReadFile(filePath)
-				if readErr == nil {
-					oldContent = string(oldBytes)
+				if readErr != nil {
+					// The file exists but cannot be read, so we have no idea what we are
+					// about to overwrite. Carrying on with an empty oldContent would show
+					// the user a whole-file "add" in the permission preview and record an
+					// empty previous version in the file history, both of which are wrong
+					// in a way nothing downstream can detect. The earlier same-content
+					// check above handles its read error properly; this one did not.
+					return fantasy.NewTextErrorResponse(fmt.Sprintf("Failed to read existing file %s: %s", filePath, readErr)), nil
 				}
+				oldContent = string(oldBytes)
 			}
 
 			diff, additions, removals := diff.GenerateDiff(

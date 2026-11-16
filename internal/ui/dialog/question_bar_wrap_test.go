@@ -35,11 +35,11 @@ func TestChoiceBarSurvivesWrapping(t *testing.T) {
 	}
 
 	for _, tc := range []struct {
-		name  string
 		setUp func(d *SingleChoice)
+		name  string
 	}{
-		{"keyboard", func(d *SingleChoice) { d.mouseActive = false; d.cursorIdx = 0 }},
-		{"hover", func(d *SingleChoice) { d.mouseActive = true; d.hoveredChoice = 0 }},
+		{name: "keyboard", setUp: func(d *SingleChoice) { d.mouseActive = false; d.cursorIdx = 0 }},
+		{name: "hover", setUp: func(d *SingleChoice) { d.mouseActive = true; d.hoveredChoice = 0 }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

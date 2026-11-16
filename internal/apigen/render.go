@@ -1,11 +1,13 @@
 package apigen
 
 import (
-	_ "embed"
-	"encoding/json"
 	"html/template"
 	"io"
 	"sort"
+
+	"github.com/bytedance/sonic"
+
+	_ "embed"
 )
 
 // RenderDocs writes a plain, self-contained HTML documentation page for
@@ -30,11 +32,11 @@ type endpointView struct {
 	Path        string
 	Summary     string
 	Description string
-	Params      []Param
 	Request     string
 	Response    string
-	Status      int
+	Params      []Param
 	Errors      []int
+	Status      int
 	SSE         bool
 }
 
@@ -81,7 +83,7 @@ func newDocsModel(info Info, base string, endpoints []Endpoint) docsModel {
 }
 
 func schemaJSON(s *Schema) string {
-	data, err := json.MarshalIndent(s, "", "  ")
+	data, err := sonic.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return ""
 	}

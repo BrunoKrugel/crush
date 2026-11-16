@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/itchyny/gojq"
 	"mvdan.cc/sh/v3/interp"
 )
@@ -104,7 +105,7 @@ func handleJQ(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 				return interp.ExitStatus(2)
 			}
 			var val any
-			if err := json.Unmarshal([]byte(args[i+2]), &val); err != nil {
+			if err := sonic.Unmarshal([]byte(args[i+2]), &val); err != nil {
 				fmt.Fprintf(stderr, "jq: invalid JSON for --argjson %s: %s\n", args[i+1], err)
 				return interp.ExitStatus(2)
 			}
@@ -335,7 +336,7 @@ func writeValue(w io.Writer, v any, raw, compact, join bool) error {
 	if compact {
 		bs, err = gojq.Marshal(v)
 	} else {
-		bs, err = json.MarshalIndent(v, "", "  ")
+		bs, err = sonic.MarshalIndent(v, "", "  ")
 	}
 	if err != nil {
 		return err

@@ -22,8 +22,8 @@ func TestNormalizeSpace(t *testing.T) {
 		{name: "trims trailing newlines", input: "foo\n\n", expected: "foo"},
 		{
 			name:     "preserves first line indentation",
-			input:    "\t\t\tresp, _ := json.Marshal()\n\t\t\t\t_ = resp\n",
-			expected: "            resp, _ := json.Marshal()\n                _ = resp",
+			input:    "\t\t\tresp, _ := sonic.Marshal()\n\t\t\t\t_ = resp\n",
+			expected: "            resp, _ := sonic.Marshal()\n                _ = resp",
 		},
 		{
 			name:     "preserves first line spaces",

@@ -10,18 +10,18 @@ import (
 // reflection. It supports the subset of JSON Schema used by the docs
 // page and the OpenAPI document.
 type Schema struct {
+	Properties           map[string]*Schema `json:"properties,omitempty"`
+	Items                *Schema            `json:"items,omitempty"`
+	AdditionalProperties *Schema            `json:"additionalProperties,omitempty"`
 	Type                 string             `json:"type,omitempty"`
 	Format               string             `json:"format,omitempty"`
 	Description          string             `json:"description,omitempty"`
-	Properties           map[string]*Schema `json:"properties,omitempty"`
 	Required             []string           `json:"required,omitempty"`
-	Items                *Schema            `json:"items,omitempty"`
-	AdditionalProperties *Schema            `json:"additionalProperties,omitempty"`
 }
 
 var (
-	timeType  = reflect.TypeOf(time.Time{})
-	errorType = reflect.TypeOf((*error)(nil)).Elem()
+	timeType  = reflect.TypeFor[time.Time]()
+	errorType = reflect.TypeFor[error]()
 )
 
 // SchemaOf derives a [Schema] from the type of v, honoring encoding/json
@@ -95,8 +95,7 @@ func structSchema(t reflect.Type, pkg string, expanding map[reflect.Type]bool) *
 	defer delete(expanding, t)
 
 	s := &Schema{Type: "object"}
-	for i := range t.NumField() {
-		f := t.Field(i)
+	for f := range t.Fields() {
 		tag := f.Tag.Get("json")
 		if tag == "-" {
 			continue

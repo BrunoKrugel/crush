@@ -2,6 +2,7 @@ package completions
 
 import (
 	"slices"
+	"strings"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/crush/internal/ui/list"
@@ -23,20 +24,75 @@ type ResourceCompletionValue struct {
 	MIMEType string
 }
 
+// AgentCompletionValue represents an agent offered by the "@" popup
+// alongside files (#313): a live dispatched agent, whose Detail is the
+// composed "role · status · current todo" tail, or a dispatch agent
+// definition, whose Detail opens with "definition · ". Handle is the
+// bare handle or definition id (no "@"). Only live agents route a
+// submit — finished handles never linger in the popup, which keeps the
+// not-continuable rule honest — while a definition names the agent the
+// coder should dispatch.
+type AgentCompletionValue struct {
+	Handle string
+	Detail string
+}
+
+// SkillCompletionValue represents an agent skill completion value. The
+// fields mirror the SKILL.md frontmatter: Description is shown after the
+// name in the popup and folded into the item's filter text, so a skill is
+// findable by what it does and not only by what it is called.
+type SkillCompletionValue struct {
+	Name        string
+	Description string
+	Path        string
+}
+
+// PromptCompletionValue represents an MCP prompt offered by the "/" popup
+// alongside skills.
+//
+// Name is the server-qualified "server:prompt" form. Prompt names are only
+// unique within a server, so the qualifier is the name as far as the editor
+// is concerned — two servers may both expose "review".
+type PromptCompletionValue struct {
+	Name        string
+	Description string
+	// MCPName and PromptID are the unqualified halves, for the call that
+	// resolves the prompt.
+	MCPName  string
+	PromptID string
+	// Arguments the prompt declares, in the order the server listed them.
+	Arguments []PromptArgument
+}
+
+// PromptArgument mirrors the argument metadata an MCP prompt declares.
+type PromptArgument struct {
+	ID          string
+	Title       string
+	Description string
+	Required    bool
+}
+
+// IsTemplate reports whether the completion's URI is an unexpanded RFC 6570
+// URI template (it still contains a "{expression}") rather than a concrete,
+// readable resource URI. Templates come from resources/templates/list and
+// cannot be read until their placeholders are filled in.
+func (r ResourceCompletionValue) IsTemplate() bool {
+	return strings.Contains(r.URI, "{")
+}
+
 // CompletionItem represents an item in the completions list.
 type CompletionItem struct {
-	*list.Versioned
-
-	text    string
-	value   any
-	match   fuzzy.Match
-	focused bool
-	cache   map[int]string
-
-	// Styles
 	normalStyle  lipgloss.Style
 	focusedStyle lipgloss.Style
 	matchStyle   lipgloss.Style
+	value        any
+	*list.Versioned
+	cache       map[int]string
+	text        string
+	sortKey     string
+	match       fuzzy.Match
+	detailStart int
+	focused     bool
 }
 
 // NewCompletionItem creates a new completion item.
@@ -45,10 +101,25 @@ func NewCompletionItem(text string, value any, normalStyle, focusedStyle, matchS
 		Versioned:    list.NewVersioned(),
 		text:         text,
 		value:        value,
+		detailStart:  -1,
+		sortKey:      text,
 		normalStyle:  normalStyle,
 		focusedStyle: focusedStyle,
 		matchStyle:   matchStyle,
 	}
+}
+
+// withDetail marks everything from byte offset start onwards as secondary
+// detail text and ranks the item on sortKey instead of its full text.
+func (c *CompletionItem) withDetail(start int, sortKey string) *CompletionItem {
+	c.detailStart = start
+	c.sortKey = sortKey
+	return c
+}
+
+// SortKey returns the string the name-priority tiering ranks on.
+func (c *CompletionItem) SortKey() string {
+	return c.sortKey
 }
 
 // Finished implements list.Item. Completion items render purely from
@@ -107,15 +178,6 @@ func (c *CompletionItem) SetFocused(focused bool) {
 	c.Bump()
 }
 
-// setStyles replaces the item's styles and drops its cached renders.
-func (c *CompletionItem) setStyles(normalStyle, focusedStyle, matchStyle lipgloss.Style) {
-	c.normalStyle = normalStyle
-	c.focusedStyle = focusedStyle
-	c.matchStyle = matchStyle
-	c.cache = nil
-	c.Bump()
-}
-
 // Render implements [list.Item].
 func (c *CompletionItem) Render(width int) string {
 	return renderItem(
@@ -123,6 +185,7 @@ func (c *CompletionItem) Render(width int) string {
 		c.focusedStyle,
 		c.matchStyle,
 		c.text,
+		c.detailStart,
 		c.focused,
 		width,
 		c.cache,
@@ -133,6 +196,7 @@ func (c *CompletionItem) Render(width int) string {
 func renderItem(
 	normalStyle, focusedStyle, matchStyle lipgloss.Style,
 	text string,
+	detailStart int,
 	focused bool,
 	width int,
 	cache map[int]string,
@@ -153,21 +217,27 @@ func renderItem(
 		text = ansi.Truncate(text, innerWidth, "…")
 	}
 
-	// Select base style. The match highlight inherits the row background;
-	// on the focused row it must also inherit the focused foreground.
-	// Otherwise a theme whose foreground matches the focused background
-	// (e.g. a monochrome green palette) renders matched text invisibly.
+	// Select base style.
 	style := normalStyle
 	matchStyle = matchStyle.Background(style.GetBackground())
 	if focused {
 		style = focusedStyle
-		matchStyle = matchStyle.
-			Background(style.GetBackground()).
-			Foreground(style.GetForeground())
+		matchStyle = matchStyle.Background(style.GetBackground())
 	}
 
 	// Render full-width text with background.
 	content := style.Padding(0, 1).Width(width).Render(text)
+
+	// Dim the trailing detail (a skill's description) so the name still
+	// leads the row. Applied before the match ranges so a fuzzy hit inside
+	// the description still reads as a match.
+	if detailStart >= 0 {
+		start, _ := bytePosToVisibleCharPos(text, [2]int{detailStart, detailStart})
+		if start+1 < width {
+			detailStyle := style.Faint(true)
+			content = lipgloss.StyleRanges(content, lipgloss.NewRange(start+1, width, detailStyle))
+		}
+	}
 
 	// Apply match highlighting using StyleRanges.
 	if len(match.MatchedIndexes) > 0 {

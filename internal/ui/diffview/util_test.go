@@ -7,15 +7,15 @@ import (
 func TestPad(t *testing.T) {
 	tests := []struct {
 		input    any
-		width    int
 		expected string
+		width    int
 	}{
-		{7, 2, " 7"},
-		{7, 3, "  7"},
-		{"a", 2, " a"},
-		{"a", 3, "  a"},
-		{"…", 2, " …"},
-		{"…", 3, "  …"},
+		{input: 7, width: 2, expected: " 7"},
+		{input: 7, width: 3, expected: "  7"},
+		{input: "a", width: 2, expected: " a"},
+		{input: "a", width: 3, expected: "  a"},
+		{input: "…", width: 2, expected: " …"},
+		{input: "…", width: 3, expected: "  …"},
 	}
 
 	for _, tt := range tests {

@@ -24,8 +24,8 @@ type lmstudioModelsResponse struct {
 type lmstudioModelEntry struct {
 	Key              string               `json:"key"`
 	DisplayName      string               `json:"display_name"`
-	MaxContextLength int64                `json:"max_context_length"`
 	LoadedInstances  []lmstudioInstance   `json:"loaded_instances"`
+	MaxContextLength int64                `json:"max_context_length"`
 	Capabilities     lmstudioCapabilities `json:"capabilities"`
 }
 

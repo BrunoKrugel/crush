@@ -57,6 +57,7 @@ func discoveryJobs(c *Config, known map[string]bool) []discoveryJob {
 				ID:           cmp.Or(pc.ID, id),
 				BaseURL:      pc.BaseURL,
 				APIKey:       pc.APIKey,
+				APIType:      string(cmp.Or(pc.Type, catwalk.TypeCompletions)),
 				ExtraHeaders: pc.ExtraHeaders,
 			},
 			providerType: string(cmp.Or(pc.Type, catwalk.TypeCompletions)),
@@ -134,7 +135,7 @@ func (s *ConfigStore) probeAndCache(ctx context.Context, jobs []discoveryJob, re
 			if len(models) == 0 {
 				return
 			}
-			if enricher := discover.GetEnricher(job.providerType); enricher != nil {
+			if enricher := discover.GetEnricher(job.id, job.providerType); enricher != nil {
 				models, _ = enricher.EnrichModels(ctx, job.cfg, resolver, models)
 			}
 			slog.Info("Discovered models for provider", "provider", job.id, "count", len(models))

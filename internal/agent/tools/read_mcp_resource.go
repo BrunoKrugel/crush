@@ -27,6 +27,27 @@ type ReadMCPResourcePermissionsParams struct {
 
 const ReadMCPResourceToolName = "read_mcp_resource"
 
+// splitMCPResourceContents flattens resource contents into model-facing text
+// parts, skipping nil and empty entries.
+func splitMCPResourceContents(contents []*mcp.ResourceContents) []string {
+	var textParts []string
+	for _, content := range contents {
+		if content == nil {
+			continue
+		}
+		text := content.Text
+		if text == "" && len(content.Blob) > 0 {
+			text = string(content.Blob)
+		}
+		if text == "" {
+			slog.Debug("MCP resource content missing text/blob", "uri", content.URI)
+			continue
+		}
+		textParts = append(textParts, text)
+	}
+	return textParts
+}
+
 //go:embed read_mcp_resource.md
 var readMCPResourceDescription string
 
@@ -77,21 +98,7 @@ func NewReadMCPResourceTool(cfg *config.ConfigStore, permissions permission.Serv
 				return fantasy.NewTextResponse(""), nil
 			}
 
-			var textParts []string
-			for _, content := range contents {
-				if content == nil {
-					continue
-				}
-				if content.Text != "" {
-					textParts = append(textParts, content.Text)
-					continue
-				}
-				if len(content.Blob) > 0 {
-					textParts = append(textParts, string(content.Blob))
-					continue
-				}
-				slog.Debug("MCP resource content missing text/blob", "uri", content.URI)
-			}
+			textParts := splitMCPResourceContents(contents)
 
 			if len(textParts) == 0 {
 				return fantasy.NewTextResponse(""), nil
