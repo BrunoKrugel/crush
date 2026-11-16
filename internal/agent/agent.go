@@ -199,6 +199,7 @@ type SessionAgent interface {
 	CancelAll()
 	HasActiveTurn(sessionID string) bool
 	HasPendingWork(sessionID string) bool
+	IsSessionBusy(sessionID string) bool
 	IsBusy() bool
 	QueuedPrompts(sessionID string) int
 	QueuedPromptsList(sessionID string) []string
@@ -231,7 +232,7 @@ type activeCancel struct {
 }
 
 type sessionAgent struct {
-	models             func() ModelSet
+	models func() ModelSet
 	// ledger supplies the rendered memory checkpoint (fork-only feature;
 	// nil when unused). render.go treats nil as "no checkpoint".
 	ledger ledger.Service
@@ -1171,7 +1172,6 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 			if !toolResult.IsError && toolResult.Name != "" {
 				completedToolCalls.Set(toolResult.Name, struct{}{})
 			}
-			toolResult.FinishedAtMs = time.Now().UnixMilli()
 			// Use parent ctx instead of genCtx to ensure the message is created
 			// even if the request is canceled mid-stream
 			_, createMsgErr := a.messages.Create(ctx, currentAssistant.SessionID, message.CreateMessageParams{
@@ -1302,10 +1302,6 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 		linkStyle := lipgloss.NewStyle().Foreground(tone.Guac).Underline(true)
 		if isCancelErr {
 			currentAssistant.AddFinish(message.FinishReasonCanceled, "User canceled request", "")
-		} else if errors.Is(err, errRefused) {
-			// Every retry was refused; keep the refusal banner rather than
-			// reporting a generic provider error.
-			currentAssistant.AddFinish(message.FinishReasonContentFilter, "", "")
 		} else if errors.As(err, &requestTimedOutErr) {
 			// Checked before the provider branches so a deadline our own
 			// request timeout imposed is never reported as a provider error.
@@ -1503,13 +1499,14 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 // Summarize compacts the session on the user's request. It returns
 // ErrCompactionBlocked when a PreCompact hook blocks it.
 func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fantasy.ProviderOptions, onAuthRefresh func(context.Context, *fantasy.ProviderError) error) error {
-	if a.HasPendingWork(sessionID) {
-		return ErrSessionBusy
-	}
 	return a.summarize(ctx, sessionID, compactTriggerManual, opts, onAuthRefresh)
 }
 
 func (a *sessionAgent) summarize(ctx context.Context, sessionID, trigger string, opts fantasy.ProviderOptions, onAuthRefresh func(context.Context, *fantasy.ProviderError) error) error {
+	if a.HasPendingWork(sessionID) {
+		return ErrSessionBusy
+	}
+
 	largeModel := a.models().Large
 	systemPromptPrefix := a.systemPromptPrefix.Get()
 
@@ -2341,9 +2338,6 @@ func (a *sessionAgent) CancelAll() {
 		for key := range a.activeRequests.Seq2() {
 			a.Cancel(key) // key is sessionID
 		}
-		for key := range a.acceptedRuns.Seq2() {
-			a.Cancel(key)
-		}
 		for a.IsBusy() {
 			if time.Now().After(deadline) {
 				slog.Warn("Gave up waiting for agent runs to cancel; their final state may not be recorded")
@@ -2357,7 +2351,6 @@ func (a *sessionAgent) CancelAll() {
 	}
 }
 
-// IsBusy reports whether any session has an active or accepted run.
 func (a *sessionAgent) IsBusy() bool {
 	for ac := range a.activeRequests.Seq() {
 		if ac != nil {
@@ -2380,6 +2373,12 @@ func (a *sessionAgent) HasPendingWork(sessionID string) bool {
 	}
 	accepted, _ := a.acceptedRuns.Get(sessionID)
 	return accepted > 0
+}
+
+// IsSessionBusy reports whether anything is working on sessionID, including
+// accepted runs that have not started yet.
+func (a *sessionAgent) IsSessionBusy(sessionID string) bool {
+	return a.HasPendingWork(sessionID)
 }
 
 func (a *sessionAgent) QueuedPrompts(sessionID string) int {

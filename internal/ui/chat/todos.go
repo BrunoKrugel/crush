@@ -40,7 +40,7 @@ type TodosToolRenderContext struct{}
 // RenderTool implements the [ToolRenderer] interface.
 func (t *TodosToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *ToolRenderOpts) string {
 	cappedWidth := cappedMessageWidth(width)
-	if opts.IsStreamingInput() {
+	if opts.IsPending() {
 		return pendingTool(sty, "To-Do", opts.Anim, opts.Compact)
 	}
 

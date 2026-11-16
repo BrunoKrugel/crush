@@ -35,7 +35,7 @@ type GlobToolRenderContext struct{}
 // RenderTool implements the [ToolRenderer] interface.
 func (g *GlobToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *ToolRenderOpts) string {
 	cappedWidth := cappedMessageWidth(width)
-	if opts.IsStreamingInput() {
+	if opts.IsPending() {
 		return pendingTool(sty, "Glob", opts.Anim, opts.Compact)
 	}
 
@@ -108,7 +108,7 @@ func (g *GrepToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *
 	cappedWidth := cappedMessageWidth(width)
 	var params tools.GrepParams
 	if err := sonic.Unmarshal([]byte(opts.ToolCall.Input), &params); err != nil {
-		if !opts.IsStreamingInput() {
+		if !opts.IsPending() {
 			return toolErrorContent(sty, &message.ToolResult{Content: "Invalid parameters"}, cappedWidth)
 		}
 		// While the tool call input is still streaming it is incomplete
@@ -131,7 +131,7 @@ func (g *GrepToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *
 		toolParams = append(toolParams, "literal", "true")
 	}
 
-	if opts.IsStreamingInput() {
+	if opts.IsPending() {
 		header := toolHeader(sty, opts.Status, "Grep", cappedWidth, opts, toolParams...)
 		var animView string
 		if opts.Anim != nil {
@@ -185,7 +185,7 @@ type LSToolRenderContext struct{}
 // RenderTool implements the [ToolRenderer] interface.
 func (l *LSToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *ToolRenderOpts) string {
 	cappedWidth := cappedMessageWidth(width)
-	if opts.IsStreamingInput() {
+	if opts.IsPending() {
 		return pendingTool(sty, "List", opts.Anim, opts.Compact)
 	}
 
@@ -245,7 +245,7 @@ type SourcegraphToolRenderContext struct{}
 // RenderTool implements the [ToolRenderer] interface.
 func (s *SourcegraphToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *ToolRenderOpts) string {
 	cappedWidth := cappedMessageWidth(width)
-	if opts.IsStreamingInput() {
+	if opts.IsPending() {
 		return pendingTool(sty, "Sourcegraph", opts.Anim, opts.Compact)
 	}
 

@@ -139,8 +139,8 @@ func settleToolCalls(ctx context.Context, messages message.Service, assistant *m
 }
 
 // repairInterruptedToolCalls settles calls a dead process left without a
-// reply and returns msgs with the repair applied. The caller must have
-// checked that nothing is running the session.
+// reply and returns msgs with the repair applied. The caller must hold the
+// session so that no run can still answer them.
 func repairInterruptedToolCalls(ctx context.Context, messages message.Service, msgs []message.Message) ([]message.Message, error) {
 	resolved := make(map[string]struct{})
 	for _, msg := range msgs {

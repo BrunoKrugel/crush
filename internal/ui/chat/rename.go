@@ -31,7 +31,7 @@ type RenameToolRenderContext struct{}
 // RenderTool implements the [ToolRenderer] interface.
 func (r *RenameToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *ToolRenderOpts) string {
 	cappedWidth := cappedMessageWidth(width)
-	if opts.IsStreamingInput() {
+	if opts.IsPending() {
 		return pendingTool(sty, "Rename Symbol", opts.Anim, opts.Compact)
 	}
 

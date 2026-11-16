@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/ui/styles"
@@ -43,26 +42,6 @@ func TestBashToolMessageItem_CommandAlwaysExpanded(t *testing.T) {
 		require.Contains(t, out, "echo two")
 		require.Contains(t, out, "echo three")
 	}
-}
-
-// Sub-second runs are noise, so the bash header only shows longer ones.
-func TestBashToolMessageItem_TookHidesSubSecond(t *testing.T) {
-	t.Parallel()
-
-	sty := styles.CharmtonePantera()
-	tc := message.ToolCall{ID: "bash-took", Name: "bash", Input: `{"command":"ls"}`, Finished: true}
-	render := func(elapsed time.Duration) string {
-		ctx := &BashToolRenderContext{}
-		return ansi.Strip(ctx.RenderTool(&sty, 120, &ToolRenderOpts{
-			ToolCall: tc,
-			Result:   &message.ToolResult{ToolCallID: "bash-took", Content: "out"},
-			Status:   ToolStatusSuccess,
-			Elapsed:  elapsed,
-		}))
-	}
-
-	require.NotContains(t, render(900*time.Millisecond), "took")
-	require.Contains(t, render(3*time.Second), "took=3s")
 }
 
 // TestBashToolMessageItem_LongCommandNotTruncated verifies that a
