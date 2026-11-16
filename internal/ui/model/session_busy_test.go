@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/lsp"
 	"github.com/charmbracelet/crush/internal/message"
+	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/scheduler"
 	"github.com/charmbracelet/crush/internal/session"
@@ -97,6 +98,18 @@ func (w *countingWorkspace) PermissionSkipRequests() bool { w.permCalls++; retur
 func (w *countingWorkspace) PermissionSetSkipRequests(skip bool) {
 	w.permSetCalls++
 	w.yolo = skip
+}
+
+func (w *countingWorkspace) PermissionMode() permission.PermissionMode {
+	if w.yolo {
+		return permission.PermissionModeYolo
+	}
+	return permission.PermissionModeNormal
+}
+
+func (w *countingWorkspace) PermissionSetMode(mode permission.PermissionMode) {
+	w.permSetCalls++
+	w.yolo = mode == permission.PermissionModeYolo
 }
 
 func (w *countingWorkspace) PermissionAutoMode() bool { return w.auto }

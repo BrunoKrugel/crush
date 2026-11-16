@@ -31,6 +31,7 @@ type Status struct {
 	inputMode uiInputMode
 	yolo      bool
 	auto      bool
+	sysadmin  bool
 }
 
 // NewStatus creates a new status bar and help model.
@@ -66,21 +67,26 @@ func (s *Status) ClearInfoMsg(seq uint64) {
 }
 
 // SetMode sets the input mode and permission-mode state used for the mode
-// badge. Yolo wins over auto when both are set.
-func (s *Status) SetMode(mode uiInputMode, yolo, auto bool) {
+// badge. Plan wins over sysadmin, which wins over yolo and auto.
+func (s *Status) SetMode(mode uiInputMode, yolo, auto, sysadmin bool) {
 	s.inputMode = mode
 	s.yolo = yolo
 	s.auto = auto
+	s.sysadmin = sysadmin
 }
 
 // modeBadge renders the badge for the current mode, or an empty string in
 // the default coding mode.
 func (s *Status) modeBadge() string {
 	t := s.com.Styles
-	// Mirror the editor prompt precedence: planning wins over YOLO, which
-	// can be carried into plan mode. AUTO shows only when yolo is off.
+	// Mirror the editor prompt precedence: planning wins over the
+	// permission modes, which can be carried into plan mode. AUTO shows
+	// only when no stronger permissive mode is active.
 	if s.inputMode == uiInputModePlan {
 		return t.Status.ModeBadgePlan.String()
+	}
+	if s.sysadmin {
+		return t.Status.ModeBadgeSysadmin.String()
 	}
 	if s.yolo {
 		return t.Status.ModeBadgeYolo.String()
@@ -159,6 +165,10 @@ func (s *Status) Draw(scr uv.Screen, area uv.Rectangle) {
 	case util.InfoTypeAuto:
 		indStyle = s.com.Styles.Status.ModeBannerAutoBadge
 		msgStyle = s.com.Styles.Status.ModeBannerAuto
+		indInset = badgeLeftInset
+	case util.InfoTypeSysadmin:
+		indStyle = s.com.Styles.Status.ModeBannerSysadminBadge
+		msgStyle = s.com.Styles.Status.ModeBannerSysadmin
 		indInset = badgeLeftInset
 	case util.InfoTypeError:
 		indStyle = s.com.Styles.Status.ErrorIndicator

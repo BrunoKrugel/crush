@@ -1430,6 +1430,13 @@ func (w *ClientWorkspace) translateEvent(ev any) tea.Msg {
 		w.ws.PermissionMode = e.Payload.Mode
 		w.mu.Unlock()
 		return nil
+	case pubsub.Event[proto.PermissionAutoModeEvent]:
+		// Same for native auto mode: mirror the server's state so the
+		// auto badge stays honest across clients.
+		w.mu.Lock()
+		w.ws.PermissionAuto = e.Payload.Auto
+		w.mu.Unlock()
+		return nil
 	default:
 		slog.Warn("Unknown event type in translateEvent", "type", fmt.Sprintf("%T", ev))
 		return nil

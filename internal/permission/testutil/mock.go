@@ -37,6 +37,8 @@ func (m *MockPermissionService) SkipRequests() bool {
 
 func (m *MockPermissionService) SetPermissionMode(mode permission.PermissionMode) {}
 
+func (m *MockPermissionService) SetPermissionHooks(hooks permission.PermissionHooks) {}
+
 func (m *MockPermissionService) PermissionMode() permission.PermissionMode {
 	return permission.PermissionModeNormal
 }

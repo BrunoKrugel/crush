@@ -3,10 +3,12 @@ package workspace
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/charmbracelet/crush/internal/compaction"
+	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/scheduler"
 	"github.com/charmbracelet/crush/internal/snapshot"
-	"time"
 
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/message"
@@ -83,6 +85,7 @@ func (w *AppWorkspace) AgentTask(sessionID string) (AgentTask, bool) { return Ag
 func (w *AppWorkspace) AgentTaskByHandle(sessionID, handle string) (AgentTask, bool) {
 	return AgentTask{}, false
 }
+
 func (w *AppWorkspace) SendAgentMessage(ctx context.Context, sessionID, handle, text string, attachments []message.Attachment) error {
 	return nil
 }
@@ -90,9 +93,11 @@ func (w *AppWorkspace) CancelAgentTask(ctx context.Context, ref string) error { 
 
 func (w *ClientWorkspace) ListAgentTasks(sessionID string) []AgentTask  { return nil }
 func (w *ClientWorkspace) AgentTask(sessionID string) (AgentTask, bool) { return AgentTask{}, false }
+
 func (w *ClientWorkspace) AgentTaskByHandle(sessionID, handle string) (AgentTask, bool) {
 	return AgentTask{}, false
 }
+
 func (w *ClientWorkspace) SendAgentMessage(ctx context.Context, sessionID, handle, text string, attachments []message.Attachment) error {
 	return nil
 }
@@ -100,13 +105,17 @@ func (w *ClientWorkspace) CancelAgentTask(ctx context.Context, ref string) error
 func (w *ClientWorkspace) ForkSession(ctx context.Context, sessionID, messageID, title string, worktree bool) (session.Session, error) {
 	return session.Session{}, fmt.Errorf("unavailable without the fork session feature")
 }
+
 func (w *AppWorkspace) ForkSession(ctx context.Context, sessionID, messageID, title string, worktree bool) (session.Session, error) {
 	return session.Session{}, fmt.Errorf("unavailable without the fork session feature")
 }
+
 func (w *ClientWorkspace) AgentStartGoal(ctx context.Context, sessionID, text string, budget int) error {
 	return nil
 }
+
 func (w *ClientWorkspace) AgentCancelGoal(ctx context.Context, sessionID string) error { return nil }
+
 func (w *AppWorkspace) AgentStartGoal(ctx context.Context, sessionID, text string, budget int) error {
 	return nil
 }
@@ -118,35 +127,47 @@ func (w *AppWorkspace) LoadDiagnostics() []config.LoadDiagnostic    { return nil
 func (w *ClientWorkspace) ListSnapshots(ctx context.Context, sessionID string) ([]snapshot.SnapshotInfo, error) {
 	return nil, nil
 }
+
 func (w *AppWorkspace) ListSnapshots(ctx context.Context, sessionID string) ([]snapshot.SnapshotInfo, error) {
 	return nil, nil
 }
+
 func (w *ClientWorkspace) RestoreSnapshot(ctx context.Context, sessionID, commitHash string) error {
 	return nil
 }
+
 func (w *AppWorkspace) RestoreSnapshot(ctx context.Context, sessionID, commitHash string) error {
 	return nil
 }
+
 func (w *ClientWorkspace) DiffSnapshot(ctx context.Context, sessionID, commitHash string) (string, error) {
 	return "", nil
 }
+
 func (w *AppWorkspace) DiffSnapshot(ctx context.Context, sessionID, commitHash string) (string, error) {
 	return "", nil
 }
-func (w *AppWorkspace) MCPSetLazy(ctx context.Context, name string, lazy bool) error    { return nil }
+
+func (w *AppWorkspace) MCPSetLazy(ctx context.Context, name string, lazy bool) error { return nil }
+
 func (w *ClientWorkspace) MCPSetLazy(ctx context.Context, name string, lazy bool) error { return nil }
+
 func (w *ClientWorkspace) SetMCPLazy(workspaceID, serverID, enabled string, lazy bool) error {
 	return nil
 }
+
 func (w *AppWorkspace) MCPReconnect(ctx context.Context, name string) error {
 	return nil
 }
+
 func (w *ClientWorkspace) MCPReconnect(ctx context.Context, name string) error {
 	return nil
 }
+
 func (w *AppWorkspace) CallMCPTool(ctx context.Context, name, toolName string, args map[string]any) (MCPToolCallResult, error) {
 	return MCPToolCallResult{}, nil
 }
+
 func (w *ClientWorkspace) CallMCPTool(ctx context.Context, name, toolName string, args map[string]any) (MCPToolCallResult, error) {
 	return MCPToolCallResult{}, nil
 }
@@ -154,38 +175,102 @@ func (w *AppWorkspace) ReloadSkills() error                                     
 func (w *ClientWorkspace) ReloadSkills() error                                   { return nil }
 func (w *AppWorkspace) ReloadModelDiscovery(ctx context.Context) (int, error)    { return 0, nil }
 func (w *ClientWorkspace) ReloadModelDiscovery(ctx context.Context) (int, error) { return 0, nil }
-func (w *AppWorkspace) PermissionSkipRequests() bool                             { return false }
-func (w *ClientWorkspace) PermissionSkipRequests() bool                          { return false }
-func (w *AppWorkspace) PermissionAutoMode() bool                                 { return false }
-func (w *ClientWorkspace) PermissionAutoMode() bool                              { return false }
-func (w *AppWorkspace) AgentListCronTasks(sessionID string) []scheduler.Task     { return nil }
-func (w *ClientWorkspace) AgentListCronTasks(sessionID string) []scheduler.Task  { return nil }
+
+// PermissionSkipRequests reports whether the workspace runs without
+// prompting: the yolo and sysadmin permission modes both skip requests.
+// It mirrors PermissionMode so the UI's Shift+Tab cycle and YOLO toggle
+// stay consistent with the enforcement the backend actually applies.
+func (w *AppWorkspace) PermissionSkipRequests() bool {
+	return w.app.Permissions.PermissionMode() != permission.PermissionModeNormal
+}
+
+func (w *ClientWorkspace) PermissionSkipRequests() bool {
+	return w.PermissionMode() != permission.PermissionModeNormal
+}
+
+// PermissionSetSkipRequests turns prompt skipping on or off. Turning it on
+// preserves a sysadmin rung (a sysadmin session that toggles YOLO off and
+// back on stays sysadmin); turning it off drops to normal so the editor
+// prompt and the badge stop claiming a permissive mode.
+func (w *AppWorkspace) PermissionSetSkipRequests(skip bool) {
+	if !skip {
+		w.PermissionSetMode(permission.PermissionModeNormal)
+		return
+	}
+	if w.app.Permissions.PermissionMode() != permission.PermissionModeSysadmin {
+		w.PermissionSetMode(permission.PermissionModeYolo)
+	}
+}
+
+func (w *ClientWorkspace) PermissionSetSkipRequests(skip bool) {
+	if !skip {
+		w.PermissionSetMode(permission.PermissionModeNormal)
+		return
+	}
+	if w.PermissionMode() != permission.PermissionModeSysadmin {
+		w.PermissionSetMode(permission.PermissionModeYolo)
+	}
+}
+
+// PermissionAutoMode reports whether the native auto-mode classifier is
+// running. Without an auto_mode config block there is no classifier to
+// toggle, so it reports off and ignores writes.
+func (w *AppWorkspace) PermissionAutoMode() bool {
+	toggler := w.app.AutoModeToggler()
+	return toggler != nil && toggler.AutoModeEnabled()
+}
+
+// PermissionSetAutoMode toggles the native auto mode and publishes the
+// change so subscribed clients mirror the state.
+func (w *AppWorkspace) PermissionSetAutoMode(auto bool) {
+	w.app.SetAutoMode(auto)
+}
+
+// PermissionAutoMode reports whether the native auto-mode classifier is
+// running. The client mirrors the server's state via SSE; without an
+// auto_mode config block on the server there is no classifier, so it
+// reports off.
+func (w *ClientWorkspace) PermissionAutoMode() bool {
+	return w.cached().PermissionAuto
+}
+
+// PermissionSetAutoMode toggles the server's native auto mode. The write
+// is fire-and-forget like the other client permission writes: the SSE
+// event carries the authoritative state back to every client.
+func (w *ClientWorkspace) PermissionSetAutoMode(auto bool) {
+	_ = w.client.SetPermissionAutoMode(context.Background(), w.workspaceID(), auto)
+}
+
+func (w *AppWorkspace) AgentListCronTasks(sessionID string) []scheduler.Task    { return nil }
+func (w *ClientWorkspace) AgentListCronTasks(sessionID string) []scheduler.Task { return nil }
 func (w *AppWorkspace) ListAllChildSessions(ctx context.Context) ([]session.Session, error) {
 	return nil, nil
 }
+
 func (w *ClientWorkspace) ListAllChildSessions(ctx context.Context) ([]session.Session, error) {
 	return nil, nil
 }
+
 func (w *AppWorkspace) AgentSummarizePreview(ctx context.Context, sessionID, instructions string) (compaction.Preview, error) {
 	return compaction.Preview{}, nil
 }
+
 func (w *ClientWorkspace) AgentSummarizePreview(ctx context.Context, sessionID, instructions string) (compaction.Preview, error) {
 	return compaction.Preview{}, nil
 }
+
 func (w *AppWorkspace) AgentConfirmSummarize(ctx context.Context, sessionID string, preview compaction.Preview) error {
 	return nil
 }
+
 func (w *ClientWorkspace) AgentConfirmSummarize(ctx context.Context, sessionID string, preview compaction.Preview) error {
 	return nil
 }
+
 func (w *AppWorkspace) AgentDiscardSummarize(ctx context.Context, sessionID, checkpointID string) error {
 	return nil
 }
+
 func (w *ClientWorkspace) AgentDiscardSummarize(ctx context.Context, sessionID, checkpointID string) error {
 	return nil
 }
-
-func (w *AppWorkspace) PermissionSetSkipRequests(skip bool)    {}
-func (w *AppWorkspace) PermissionSetAutoMode(auto bool)        {}
-func (w *ClientWorkspace) PermissionSetSkipRequests(skip bool) {}
-func (w *ClientWorkspace) PermissionSetAutoMode(auto bool)     {}

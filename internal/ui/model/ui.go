@@ -405,7 +405,7 @@ type UI struct {
 	notifyWindowFocused      bool
 	isTransparent            bool
 	probedSessionBusy        bool
-	cycleYolo                bool
+	permMode                 permission.PermissionMode
 	isCanceling              bool
 	bangMode                 bool
 	bangWasEmpty             bool
@@ -505,13 +505,21 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 		ui.userThemeSelected = common.ThemeNameFromConfig(cfg) != ""
 	}
 
-	// Seed the yolo cache once at construction; afterwards it is kept
-	// fresh by write-through toggles and off-thread refreshes so Update
-	// and View never probe the workspace synchronously.
+	// Seed the yolo and permission-mode caches once at construction;
+	// afterwards they are kept fresh by write-through toggles and
+	// off-thread refreshes so Update and View never probe the workspace
+	// synchronously.
 	yolo := com.Workspace.PermissionSkipRequests()
 	auto := com.Workspace.PermissionAutoMode()
 	ui.yoloCache.set(yolo)
 	ui.autoCache.set(auto)
+	ui.permMode = com.Workspace.PermissionMode()
+	if yolo && ui.permMode == permission.PermissionModeNormal {
+		// A workspace that reports skip without a mode (task-agent
+		// workspaces always report off, real ones report a mode) reads as
+		// plain YOLO so the first frame's prompt matches the skip flag.
+		ui.permMode = permission.PermissionModeYolo
+	}
 
 	// Seed the memoized agent ready/model state the same way so the first
 	// frame renders the model info; the busy probe keeps it fresh
@@ -4442,7 +4450,7 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 
 	// Add status and help layer
 	m.status.SetHideHelp(isOnboarding)
-	m.status.SetMode(m.mode, m.yoloModeCached(), m.autoModeCached())
+	m.status.SetMode(m.mode, m.yoloModeCached(), m.autoModeCached(), m.permMode == permission.PermissionModeSysadmin)
 	m.status.Draw(scr, layout.status)
 
 	// Draw completions popup if open
@@ -5424,8 +5432,9 @@ func editorFileMsg(path string) tea.Msg {
 }
 
 // setEditorPrompt configures the textarea prompt function based on whether
-// plan, yolo, auto, or bang mode is enabled. Yolo wins over auto so the
-// warning icon tracks the more permissive flag.
+// plan, yolo, auto, sysadmin, or bang mode is enabled. Plan wins over the
+// permissive modes, and sysadmin over yolo, so the icon tracks the more
+// permissive state.
 func (m *UI) setEditorPrompt(yolo, auto bool) {
 	if m.bangMode {
 		m.textarea.SetPromptFunc(4, m.bangPromptFunc)
@@ -5433,6 +5442,10 @@ func (m *UI) setEditorPrompt(yolo, auto bool) {
 	}
 	if m.mode == uiInputModePlan {
 		m.textarea.SetPromptFunc(4, m.planPromptFunc)
+		return
+	}
+	if m.permMode == permission.PermissionModeSysadmin {
+		m.textarea.SetPromptFunc(4, m.sysadminPromptFunc)
 		return
 	}
 	if yolo {
@@ -5494,6 +5507,22 @@ func (m *UI) yoloPromptFunc(info textarea.PromptInfo) string {
 	return t.Editor.PromptYoloDotsBlurred.Render()
 }
 
+// sysadminPromptFunc returns the sysadmin mode editor prompt style with a
+// red icon and red dots: every command runs unprompted here.
+func (m *UI) sysadminPromptFunc(info textarea.PromptInfo) string {
+	t := m.com.Styles
+	if info.LineNumber == 0 {
+		if info.Focused {
+			return t.Editor.PromptSysadminIconFocused.Render()
+		}
+		return t.Editor.PromptSysadminIconBlurred.Render()
+	}
+	if info.Focused {
+		return t.Editor.PromptSysadminDotsFocused.Render()
+	}
+	return t.Editor.PromptSysadminDotsBlurred.Render()
+}
+
 // autoPromptFunc returns the auto mode editor prompt style. The badge uses
 // the info token so it stays distinct from the yolo warning icon.
 func (m *UI) autoPromptFunc(info textarea.PromptInfo) string {
@@ -5538,26 +5567,40 @@ func (m *UI) bangPromptFunc(info textarea.PromptInfo) string {
 	return t.Editor.PromptBangDotsBlurred.Render()
 }
 
+// toggleInputMode advances the Shift+Tab cycle by one position. The cycle
+// is a ring of four positions read straight off the current state —
+// code -> plan -> YOLO -> sysadmin -> code. Nothing is remembered between
+// presses, so the next position is always the one the badge implies,
+// whether the permission mode came from this cycle or from Ctrl+Y.
 func (m *UI) toggleInputMode() tea.Cmd {
 	if m.isAgentBusy() || m.modeSwitching {
 		return util.ReportWarn("Agent is busy, please wait before switching input mode...")
 	}
 	if m.mode == uiInputModePlan {
-		// Second step of the Shift+Tab cycle: plan -> YOLO. Enabling YOLO
-		// here is the only case where the cycle may disable it again.
-		if !m.com.Workspace.PermissionSkipRequests() {
-			m.toggleYoloMode()
-			m.cycleYolo = true
+		// Second step of the Shift+Tab cycle: plan -> YOLO coding. A
+		// permissive mode carried into plan keeps its rung rather than
+		// being knocked down to plain YOLO.
+		if m.permMode == permission.PermissionModeNormal {
+			m.writePermissionMode(true, false)
 		}
 		return m.setInputMode(uiInputModeCode)
 	}
-	// Only the cycle may turn YOLO back off: YOLO the user enabled himself
-	// (Ctrl+Y, the command palette) survives entering plan mode.
-	if m.com.Workspace.PermissionSkipRequests() && m.cycleYolo {
-		m.toggleYoloMode()
+	switch m.permMode {
+	case permission.PermissionModeYolo:
+		// Third step: YOLO -> sysadmin. The banner spells out what was
+		// just given up, since this is the most permissive state the
+		// program has and it is now one keystroke away.
+		m.setSysadminMode()
+		return util.CmdHandler(util.InfoMsg{Type: util.InfoTypeSysadmin, Msg: sysadminModeBannerMsg})
+	case permission.PermissionModeSysadmin:
+		// Fourth step: sysadmin -> normal, closing the cycle. AUTO stays
+		// as the user last left it; the cycle only owns the skip rung.
+		m.writePermissionMode(false, m.autoModeCached())
 		return util.ReportInfo("input mode: code")
+	default:
+		// First step: normal (or AUTO) code mode -> plan.
+		return m.setInputMode(uiInputModePlan)
 	}
-	return m.setInputMode(uiInputModePlan)
 }
 
 // switchPlanToYolo handles activating YOLO while in plan mode: YOLO is a
@@ -5569,21 +5612,36 @@ func (m *UI) switchPlanToYolo() tea.Cmd {
 	if m.isAgentBusy() || m.modeSwitching {
 		return util.ReportWarn("Agent is busy, please wait before switching input mode...")
 	}
-	if !m.com.Workspace.PermissionSkipRequests() {
-		m.toggleYoloMode()
+	// Idempotent by design: a sysadmin session carried into plan mode keeps
+	// its mode rather than being knocked down to plain YOLO.
+	if m.permMode == permission.PermissionModeNormal {
+		m.writePermissionMode(true, false)
 	}
-	// Explicit activation pins YOLO: the Shift+Tab cycle must not disable
-	// it on the next pass.
-	m.cycleYolo = false
 	return m.setInputMode(uiInputModeCode)
 }
 
 // Mode banner copy shown in the status bar after switching modes.
 const (
-	planModeBannerMsg = "Plan with Crush before generating any code."
-	yoloModeBannerMsg = "System level commands stay blocked. The rest run unprompted."
-	autoModeBannerMsg = "A classifier decides each tool permission. Denials still ask you."
+	planModeBannerMsg     = "Plan with Crush before generating any code."
+	yoloModeBannerMsg     = "System level commands stay blocked. The rest run unprompted."
+	autoModeBannerMsg     = "A classifier decides each tool permission. Denials still ask you."
+	sysadminModeBannerMsg = "All commands are unblocked. Use wisely."
 )
+
+// setSysadminMode enables sysadmin mode: every request runs unprompted.
+// It writes the mode through the workspace, mirrors it into the skip
+// cache (sysadmin skips prompts like YOLO), and refreshes the editor
+// prompt so the badge tracks the state the backend now enforces.
+func (m *UI) setSysadminMode() {
+	m.com.Workspace.PermissionSetMode(permission.PermissionModeSysadmin)
+	m.permMode = permission.PermissionModeSysadmin
+	m.yoloCache.set(true)
+	// Supersede any in-flight busy/permission probe: its result carries
+	// the old generation and would otherwise overwrite the values we just
+	// wrote.
+	m.busyFetchGen++
+	m.setEditorPrompt(true, m.autoModeCached())
+}
 
 func (m *UI) setInputMode(target uiInputMode) tea.Cmd {
 	agentID := config.AgentPlan
@@ -5630,6 +5688,8 @@ func (m *UI) applyModeSwitch(msg modeSwitchedMsg) []tea.Cmd {
 	switch {
 	case msg.mode == uiInputModePlan:
 		cmds = append(cmds, util.CmdHandler(util.InfoMsg{Type: util.InfoTypePlan, Msg: planModeBannerMsg}))
+	case m.permMode == permission.PermissionModeSysadmin:
+		cmds = append(cmds, util.CmdHandler(util.InfoMsg{Type: util.InfoTypeSysadmin, Msg: sysadminModeBannerMsg}))
 	case msg.yolo:
 		cmds = append(cmds, util.CmdHandler(util.InfoMsg{Type: util.InfoTypeYolo, Msg: yoloModeBannerMsg}))
 	default:

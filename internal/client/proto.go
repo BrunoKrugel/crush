@@ -291,6 +291,12 @@ func (c *Client) SubscribeEvents(ctx context.Context, id string) (<-chan any, er
 				if !sendEvent(ctx, events, e) {
 					return
 				}
+			case pubsub.PayloadTypePermissionAutoChanged:
+				var e pubsub.Event[proto.PermissionAutoModeEvent]
+				_ = json.Unmarshal(p.Payload, &e)
+				if !sendEvent(ctx, events, e) {
+					return
+				}
 			default:
 				slog.Warn("Unknown event type", "type", p.Type)
 				continue
@@ -867,6 +873,20 @@ func (c *Client) SetPermissionMode(ctx context.Context, id string, mode proto.Wo
 	defer rsp.Body.Close()
 	if rsp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to set permission mode: status code %d", rsp.StatusCode)
+	}
+	return nil
+}
+
+// SetPermissionAutoMode toggles the workspace's native auto-mode
+// classifier on the server.
+func (c *Client) SetPermissionAutoMode(ctx context.Context, id string, auto bool) error {
+	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/permissions/auto", id), nil, jsonBody(proto.PermissionSetAutoModeRequest{Auto: auto}), http.Header{"Content-Type": []string{"application/json"}})
+	if err != nil {
+		return fmt.Errorf("failed to set auto mode: %w", err)
+	}
+	defer rsp.Body.Close()
+	if rsp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to set auto mode: status code %d", rsp.StatusCode)
 	}
 	return nil
 }

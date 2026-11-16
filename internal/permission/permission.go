@@ -147,6 +147,11 @@ type Service interface {
 	InheritAutoApproval(parentSessionID, childSessionID string)
 	SetPermissionMode(mode PermissionMode)
 	PermissionMode() PermissionMode
+	// SetPermissionHooks installs pre-permission hooks. Passing nil
+	// clears them. It exists on the interface so hosts (the app) can
+	// wire native auto mode and shell permission hooks after
+	// construction; hooks run before every prompt.
+	SetPermissionHooks(hooks PermissionHooks)
 	SubscribeNotifications(ctx context.Context) <-chan pubsub.Event[PermissionNotification]
 	SubscribeModeChanges(ctx context.Context) <-chan pubsub.Event[ModeChangedEvent]
 }
@@ -175,6 +180,10 @@ type PermissionKey struct {
 type pendingRequest struct {
 	req    PermissionRequest
 	respCh chan bool
+	// escalated records that the pre-permission hooks deferred this
+	// request to the prompt, so a human grant resets auto mode's
+	// consecutive-denial counter.
+	escalated bool
 }
 
 type permissionService struct {
@@ -189,6 +198,7 @@ type permissionService struct {
 	autoApproveSessionsMu sync.RWMutex
 	allowedTools          []string
 	observer              PromptObserver
+	hooks                 PermissionHooks
 	mode                  PermissionMode
 	modeMu                sync.RWMutex
 
@@ -229,6 +239,15 @@ func (s *permissionService) resolve(permission PermissionRequest, granted, denie
 
 	if onResolve != nil {
 		onResolve(req)
+	}
+
+	// A human grant on a request the pre-permission hooks escalated
+	// restores auto mode's trust: the consecutive-denial counter resets
+	// so the classifier keeps running instead of staying paused.
+	if granted && pending.escalated {
+		if observer, ok := s.hooks.(AutoModeGrantObserver); ok {
+			observer.OnAutoModeGrant(req.SessionID)
+		}
 	}
 
 	s.notificationBroker.Publish(pubsub.CreatedEvent, PermissionNotification{
@@ -365,12 +384,38 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 		return true, nil
 	}
 
+	// Pre-permission hooks (shell permission hooks and the native auto
+	// mode) run while the request mutex is held: a hook evaluation is
+	// the prompt path, and two concurrent requests must not both prompt
+	// or race on activeRequest. An allow or deny short-circuits the
+	// prompt; deferring marks the request escalated so a human grant
+	// restores auto mode's trust.
+	if s.hooks != nil {
+		result := s.hooks.PrePermission(ctx, permission)
+		switch result.Decision {
+		case HookDecisionAllow:
+			s.notificationBroker.Publish(pubsub.CreatedEvent, PermissionNotification{
+				SessionID:  opts.SessionID,
+				ToolCallID: opts.ToolCallID,
+				Granted:    true,
+			})
+			return true, nil
+		case HookDecisionDeny:
+			s.notificationBroker.Publish(pubsub.CreatedEvent, PermissionNotification{
+				SessionID:  opts.SessionID,
+				ToolCallID: opts.ToolCallID,
+				Denied:     true,
+			})
+			return false, nil
+		}
+	}
+
 	s.activeRequestMu.Lock()
 	s.activeRequest = &permission
 	s.activeRequestMu.Unlock()
 
 	respCh := make(chan bool, 1)
-	s.pendingRequests.Set(permission.ID, pendingRequest{req: permission, respCh: respCh})
+	s.pendingRequests.Set(permission.ID, pendingRequest{req: permission, respCh: respCh, escalated: s.hooks != nil})
 	defer s.pendingRequests.Del(permission.ID)
 
 	// Publish the request
@@ -464,6 +509,12 @@ func (s *permissionService) SetPermissionMode(mode PermissionMode) {
 	s.mode = mode
 	s.modeMu.Unlock()
 	s.modeBroker.Publish(pubsub.UpdatedEvent, ModeChangedEvent{Mode: mode})
+}
+
+// SetPermissionHooks installs (or clears) the pre-permission hooks.
+// Requests already waiting on a prompt keep their in-flight evaluation.
+func (s *permissionService) SetPermissionHooks(hooks PermissionHooks) {
+	s.hooks = hooks
 }
 
 func (s *permissionService) SubscribeModeChanges(ctx context.Context) <-chan pubsub.Event[ModeChangedEvent] {

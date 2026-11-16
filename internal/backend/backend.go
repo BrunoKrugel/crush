@@ -18,10 +18,10 @@ import (
 	"time"
 
 	"github.com/charmbracelet/crush/internal/app"
-	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/db"
+	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/proto"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/skills"
@@ -38,6 +38,7 @@ var (
 	ErrAgentBusy               = errors.New("agent is busy with a run")
 	ErrPathRequired            = errors.New("path is required")
 	ErrInvalidPermissionAction = errors.New("invalid permission action")
+	ErrAutoModeNotConfigured   = errors.New("auto mode is not configured")
 	ErrUnknownCommand          = errors.New("unknown command")
 	ErrInvalidClientID         = errors.New("invalid client_id")
 	ErrClientNotAttached       = errors.New("client not attached")
@@ -1240,6 +1241,7 @@ func workspaceToProto(ws *Workspace) proto.Workspace {
 		ID:             ws.ID,
 		Path:           ws.Path,
 		PermissionMode: proto.PermissionModeToProto(ws.Permissions.PermissionMode()),
+		PermissionAuto: ws.AutoModeToggler() != nil && ws.AutoModeToggler().AutoModeEnabled(),
 		Channels:       ws.Cfg.Overrides().EnabledChannels,
 		DataDir:        cfg.Options.DataDirectory,
 		Debug:          cfg.Options.Debug,

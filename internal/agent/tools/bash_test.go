@@ -54,6 +54,8 @@ func (m *mockBashPermissionService) SubscribeNotifications(ctx context.Context) 
 
 func (m *mockBashPermissionService) SetPermissionMode(mode permission.PermissionMode) {}
 
+func (m *mockBashPermissionService) SetPermissionHooks(permission.PermissionHooks) {}
+
 func (m *mockBashPermissionService) PermissionMode() permission.PermissionMode {
 	return permission.PermissionModeNormal
 }
@@ -143,6 +145,8 @@ func (m *recordingPermissionService) SubscribeNotifications(ctx context.Context)
 }
 
 func (m *recordingPermissionService) SetPermissionMode(mode permission.PermissionMode) { m.mode = mode }
+
+func (m *recordingPermissionService) SetPermissionHooks(permission.PermissionHooks) {}
 
 func (m *recordingPermissionService) PermissionMode() permission.PermissionMode { return m.mode }
 

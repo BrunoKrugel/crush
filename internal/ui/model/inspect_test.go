@@ -28,6 +28,7 @@ import (
 	"github.com/charmbracelet/crush/internal/history"
 	"github.com/charmbracelet/crush/internal/lsp"
 	"github.com/charmbracelet/crush/internal/message"
+	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/scheduler"
 	"github.com/charmbracelet/crush/internal/session"
@@ -131,13 +132,17 @@ func (w *inspectWorkspace) AgentIsReady() bool { return true }
 
 // MCPGetStates satisfies the session-load MCP refresh upstream schedules
 // (requestMCPRefresh); inspect tests have no MCP servers.
-func (w *inspectWorkspace) MCPGetStates() map[string]mcp.ClientInfo          { return nil }
-func (w *inspectWorkspace) AgentIsBusy() bool                                { return false }
-func (w *inspectWorkspace) AgentIsSessionBusy(string) bool                   { return false }
-func (w *inspectWorkspace) AgentReadyErr() error                             { return nil }
-func (w *inspectWorkspace) PermissionSkipRequests() bool                     { return false }
-func (w *inspectWorkspace) PermissionAutoMode() bool                         { return false }
-func (w *inspectWorkspace) PermissionSetAutoMode(bool)                       {}
+func (w *inspectWorkspace) MCPGetStates() map[string]mcp.ClientInfo { return nil }
+func (w *inspectWorkspace) AgentIsBusy() bool                       { return false }
+func (w *inspectWorkspace) AgentIsSessionBusy(string) bool          { return false }
+func (w *inspectWorkspace) AgentReadyErr() error                    { return nil }
+func (w *inspectWorkspace) PermissionSkipRequests() bool            { return false }
+func (w *inspectWorkspace) PermissionAutoMode() bool                { return false }
+func (w *inspectWorkspace) PermissionSetAutoMode(bool)              {}
+func (w *inspectWorkspace) PermissionMode() permission.PermissionMode {
+	return permission.PermissionModeNormal
+}
+func (w *inspectWorkspace) PermissionSetMode(permission.PermissionMode)      {}
 func (w *inspectWorkspace) AgentModel() workspace.AgentModel                 { return workspace.AgentModel{} }
 func (w *inspectWorkspace) AgentQueuedPrompts(string) int                    { return 0 }
 func (w *inspectWorkspace) AgentQueuedPromptsList(string) []string           { return nil }

@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/message"
+	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/ui/attachments"
 	"github.com/charmbracelet/crush/internal/ui/chat"
@@ -276,7 +277,7 @@ type testWorkspace struct {
 	discardCalls      []string
 	updateCalls       int
 	agentBusy         bool
-	yolo              bool
+	permMode          permission.PermissionMode
 	auto              bool
 	agentReady        bool
 }
@@ -299,9 +300,27 @@ func (w *testWorkspace) UpdateAgentModel(context.Context) error {
 	return nil
 }
 
-func (w *testWorkspace) PermissionSkipRequests() bool { return w.yolo }
+func (w *testWorkspace) PermissionMode() permission.PermissionMode {
+	return w.permMode
+}
 
-func (w *testWorkspace) PermissionSetSkipRequests(skip bool) { w.yolo = skip }
+func (w *testWorkspace) PermissionSetMode(mode permission.PermissionMode) {
+	w.permMode = mode
+}
+
+func (w *testWorkspace) PermissionSkipRequests() bool {
+	return w.permMode != permission.PermissionModeNormal
+}
+
+func (w *testWorkspace) PermissionSetSkipRequests(skip bool) {
+	if !skip {
+		w.permMode = permission.PermissionModeNormal
+		return
+	}
+	if w.permMode != permission.PermissionModeSysadmin {
+		w.permMode = permission.PermissionModeYolo
+	}
+}
 
 func (w *testWorkspace) PermissionAutoMode() bool { return w.auto }
 
@@ -347,18 +366,41 @@ func TestToggleInputMode(t *testing.T) {
 	ui.mode = uiInputModeCode
 	for _, want := range []struct {
 		mode    uiInputMode
-		yolo    bool
+		perm    permission.PermissionMode
 		updates int
 	}{
-		{uiInputModePlan, false, 1},
-		{uiInputModeCode, true, 2},
-		{uiInputModeCode, false, 2},
+		{uiInputModePlan, permission.PermissionModeNormal, 1},
+		{uiInputModeCode, permission.PermissionModeYolo, 2},
+		{uiInputModeCode, permission.PermissionModeSysadmin, 2},
+		{uiInputModeCode, permission.PermissionModeNormal, 2},
 	} {
 		applyModeSwitchMsg(ui, ui.toggleInputMode())
 		require.Equal(t, want.mode, ui.mode)
-		require.Equal(t, want.yolo, ws.yolo)
+		require.Equal(t, want.perm, ws.permMode)
 		require.Equal(t, want.updates, ws.updateCalls)
 	}
+}
+
+func TestToggleInputModeSysadminLegsReportBanners(t *testing.T) {
+	t.Parallel()
+	u, ws := newPlanUI(t, "sess-1")
+	u.mode = uiInputModeCode
+	ws.permMode = permission.PermissionModeYolo
+	u.permMode = permission.PermissionModeYolo
+
+	msg := u.toggleInputMode()()
+	info, ok := msg.(util.InfoMsg)
+	require.True(t, ok, "the YOLO -> sysadmin step reports its banner directly")
+	require.Equal(t, util.InfoTypeSysadmin, info.Type)
+	require.Equal(t, permission.PermissionModeSysadmin, ws.permMode)
+	require.Equal(t, uiInputModeCode, u.mode)
+
+	msg = u.toggleInputMode()()
+	info, ok = msg.(util.InfoMsg)
+	require.True(t, ok)
+	require.Equal(t, util.InfoTypeInfo, info.Type)
+	require.Contains(t, info.Msg, "code")
+	require.Equal(t, permission.PermissionModeNormal, ws.permMode, "the sysadmin step closes the cycle back at normal")
 }
 
 func newPlanUI(t *testing.T, sessionID string) (*UI, *testWorkspace) {
@@ -873,11 +915,15 @@ func TestPlanHandoffExplicitPermissionMode(t *testing.T) {
 	t.Parallel()
 	for _, yolo := range []bool{false, true} {
 		u, ws := newPlanUI(t, "sess-1")
-		ws.yolo = !yolo
+		if yolo {
+			ws.permMode = permission.PermissionModeNormal
+		} else {
+			ws.permMode = permission.PermissionModeYolo
+		}
 		u.openPlanHandoff()
 		inline := u.activeInline.(*dialog.PlanHandoffInline)
 		cmd := inline.OnConfirm(yolo)
-		require.Equal(t, yolo, ws.yolo)
+		require.Equal(t, yolo, ws.PermissionSkipRequests())
 		require.Empty(t, ws.runPrompts, "wait for the coder model to finish switching")
 		switched := cmd().(modeSwitchedMsg)
 		require.NoError(t, switched.err)
@@ -916,23 +962,23 @@ func TestToggleInputModePreservesExistingYOLOOnEntry(t *testing.T) {
 	t.Parallel()
 	u, ws := newPlanUI(t, "sess-1")
 	u.mode = uiInputModeCode
-	ws.yolo = true
+	ws.permMode = permission.PermissionModeYolo
 	applyModeSwitchMsg(u, u.toggleInputMode())
 	require.Equal(t, uiInputModePlan, u.mode)
-	require.True(t, ws.yolo)
+	require.True(t, ws.PermissionSkipRequests())
 }
 
 func TestSwitchPlanToYolo(t *testing.T) {
 	t.Parallel()
 	for _, carriedYolo := range []bool{false, true} {
 		u, ws := newPlanUI(t, "sess-1")
-		ws.yolo = carriedYolo
-		u.cycleYolo = carriedYolo
+		if carriedYolo {
+			ws.permMode = permission.PermissionModeYolo
+		}
 
 		applyModeSwitchMsg(u, u.switchPlanToYolo())
 		require.Equal(t, uiInputModeCode, u.mode, "activating YOLO leaves plan mode")
-		require.True(t, ws.yolo, "YOLO ends up enabled regardless of the carried state")
-		require.False(t, u.cycleYolo, "explicit activation must not be undone by the Shift+Tab cycle")
+		require.True(t, ws.PermissionSkipRequests(), "YOLO ends up enabled regardless of the carried state")
 		require.Equal(t, config.AgentCoder, ws.setMainCalledWith)
 	}
 }

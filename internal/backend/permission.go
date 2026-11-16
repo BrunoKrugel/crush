@@ -57,3 +57,18 @@ func (b *Backend) SetPermissionMode(workspaceID string, mode permission.Permissi
 	ws.Permissions.SetPermissionMode(mode)
 	return nil
 }
+
+// SetPermissionAutoMode toggles the workspace's native auto-mode
+// classifier. It reports an error when auto mode is not configured on
+// the server; the toggle itself publishes its change event.
+func (b *Backend) SetPermissionAutoMode(workspaceID string, auto bool) error {
+	ws, err := b.GetWorkspace(workspaceID)
+	if err != nil {
+		return err
+	}
+	if ws.AutoModeToggler() == nil {
+		return ErrAutoModeNotConfigured
+	}
+	ws.SetAutoMode(auto)
+	return nil
+}

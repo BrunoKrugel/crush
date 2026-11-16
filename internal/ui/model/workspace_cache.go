@@ -34,6 +34,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/charmbracelet/crush/internal/agent/notify"
+	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/workspace"
 )
 
@@ -94,6 +95,7 @@ type busyStateMsg struct {
 	agentBusy   bool
 	yolo        bool
 	auto        bool
+	permMode    permission.PermissionMode
 	sessionBusy bool
 }
 
@@ -178,6 +180,7 @@ func (m *UI) dispatchBusyRefresh() tea.Cmd {
 		}
 		st.yolo = ws.PermissionSkipRequests()
 		st.auto = ws.PermissionAutoMode()
+		st.permMode = ws.PermissionMode()
 		return st
 	}
 }
@@ -211,9 +214,20 @@ func (m *UI) applyBusyState(msg busyStateMsg) []tea.Cmd {
 	prevBusy := m.isCurrentSessionBusy()
 	prevYolo := m.yoloModeCached()
 	prevAuto := m.autoModeCached()
+	prevPerm := m.permMode
 	m.agentBusyCache.set(msg.agentBusy)
 	m.sessionBusyCache.setForSession(msg.sessionBusy, msg.forSession)
 	m.yoloCache.set(msg.yolo)
+	// The permission mode is authoritative from the workspace: another
+	// client or the server itself may have moved it. Keep the local
+	// selection for auto only (it is a UI-local concern), and mirror
+	// everything else.
+	m.permMode = msg.permMode
+	if msg.yolo && m.permMode == permission.PermissionModeNormal {
+		// A disagreeing probe (the skip write landed but the mode read
+		// raced it): trust the skip flag, the mode write follows it.
+		m.permMode = permission.PermissionModeYolo
+	}
 	// Auto is selected locally by ctrl+y. A probe that reports the
 	// opposite arrived before that write, or from a workspace that could
 	// not persist it. Applying it clears the badge the key just painted,
@@ -223,10 +237,10 @@ func (m *UI) applyBusyState(msg busyStateMsg) []tea.Cmd {
 	}
 	m.agentReady = msg.ready
 	m.agentModel = msg.model
-	if prevYolo != msg.yolo || prevAuto != m.autoModeCached() {
-		// A remote/async toggle changed yolo mode: update the editor
-		// prompt function so the prompt icon/style tracks the new mode.
-		// Auto uses the local selection, not a disagreeing probe.
+	if prevYolo != msg.yolo || prevAuto != m.autoModeCached() || prevPerm != m.permMode {
+		// A remote/async toggle changed the permission mode: update the
+		// editor prompt function so the prompt icon/style tracks the new
+		// mode. Auto uses the local selection, not a disagreeing probe.
 		m.setEditorPrompt(msg.yolo, m.autoModeCached())
 	}
 
@@ -400,6 +414,17 @@ func (m *UI) writePermissionMode(yolo, auto bool) {
 	m.com.Workspace.PermissionSetAutoMode(auto)
 	m.yoloCache.set(yolo)
 	m.autoCache.set(auto)
+	// The skip write preserves a sysadmin rung (PermissionSetSkipRequests
+	// only demotes to normal when skip turns off), so mirror the mode the
+	// workspace now enforces.
+	switch {
+	case yolo && m.permMode == permission.PermissionModeSysadmin:
+		// A sysadmin rung survives a skip write that turns skipping on.
+	case yolo:
+		m.permMode = permission.PermissionModeYolo
+	default:
+		m.permMode = permission.PermissionModeNormal
+	}
 	// Supersede any in-flight busy/permission probe: its result carries the
 	// old generation and would otherwise overwrite the values we just wrote.
 	// Bump the generation (rather than invalidateBusyCaches, which would
@@ -407,9 +432,6 @@ func (m *UI) writePermissionMode(yolo, auto bool) {
 	// re-dispatches the stale probe.
 	m.busyFetchGen++
 	m.setEditorPrompt(yolo, auto)
-	// Any explicit toggle hands YOLO ownership back to the user; the
-	// Shift+Tab cycle re-claims it right after its own call.
-	m.cycleYolo = false
 }
 
 // yoloModeCached reports the memoized permission-skip ("yolo") mode. Toggles

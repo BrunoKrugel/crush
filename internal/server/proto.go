@@ -795,6 +795,25 @@ func (c *controllerV1) handlePostWorkspacePermissionsMode(w http.ResponseWriter,
 	w.WriteHeader(http.StatusOK)
 }
 
+// handlePostWorkspacePermissionsAutoMode toggles the native auto-mode
+// classifier for a workspace.
+func (c *controllerV1) handlePostWorkspacePermissionsAutoMode(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	var req proto.PermissionSetAutoModeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		c.server.logError(r, "Failed to decode request", "error", err)
+		jsonError(w, http.StatusBadRequest, "failed to decode request")
+		return
+	}
+
+	if err := c.backend.SetPermissionAutoMode(id, req.Auto); err != nil {
+		c.handleError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
 // handleError maps backend errors to HTTP status codes and writes the
 // JSON error response.
 //

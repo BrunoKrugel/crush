@@ -30,12 +30,15 @@ type Workspace struct {
 	ID             string                  `json:"id"`
 	Path           string                  `json:"path"`
 	PermissionMode WorkspacePermissionMode `json:"permission_mode,omitempty"`
-	Debug          bool                    `json:"debug,omitempty"`
-	DataDir        string                  `json:"data_dir,omitempty"`
-	Version        string                  `json:"version,omitempty"`
-	ClientID       string                  `json:"client_id,omitempty"`
-	Config         *config.Config          `json:"config,omitempty"`
-	Env            []string                `json:"env,omitempty"`
+	// PermissionAuto reports whether the native auto-mode classifier is
+	// running on the server, so clients seed their auto badge from it.
+	PermissionAuto bool           `json:"permission_auto,omitempty"`
+	Debug          bool           `json:"debug,omitempty"`
+	DataDir        string         `json:"data_dir,omitempty"`
+	Version        string         `json:"version,omitempty"`
+	ClientID       string         `json:"client_id,omitempty"`
+	Config         *config.Config `json:"config,omitempty"`
+	Env            []string       `json:"env,omitempty"`
 	// Channels lists the MCP servers opted in as channels for this workspace
 	// (from the --channels flag).
 	Channels []string `json:"channels,omitempty"`
@@ -398,6 +401,18 @@ type PermissionSetModeRequest struct {
 // permission mode changes.
 type PermissionModeEvent struct {
 	Mode WorkspacePermissionMode `json:"mode"`
+}
+
+// PermissionSetAutoModeRequest represents a request to toggle the native
+// auto-mode classifier for a workspace.
+type PermissionSetAutoModeRequest struct {
+	Auto bool `json:"auto"`
+}
+
+// PermissionAutoModeEvent is the SSE payload published whenever the
+// server-side native auto mode toggles.
+type PermissionAutoModeEvent struct {
+	Auto bool `json:"auto"`
 }
 
 // LSPEventType represents the type of LSP event.

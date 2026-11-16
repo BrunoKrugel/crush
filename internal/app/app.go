@@ -21,6 +21,7 @@ import (
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
+	"github.com/charmbracelet/crush/internal/automode"
 	"github.com/charmbracelet/crush/internal/clipboard"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/db"
@@ -29,8 +30,8 @@ import (
 	"github.com/charmbracelet/crush/internal/format"
 	"github.com/charmbracelet/crush/internal/herdr"
 	"github.com/charmbracelet/crush/internal/history"
-	"github.com/charmbracelet/crush/internal/hooks"
 	"github.com/charmbracelet/crush/internal/honcho"
+	"github.com/charmbracelet/crush/internal/hooks"
 	"github.com/charmbracelet/crush/internal/log"
 	"github.com/charmbracelet/crush/internal/lsp"
 	"github.com/charmbracelet/crush/internal/message"
@@ -99,6 +100,11 @@ type App struct {
 	// store on each event so reloads need no extra wiring.
 	hookRunner *hooks.Runner
 
+	// autoMode is the native auto-mode classifier when auto mode is
+	// enabled in config. Nil otherwise: every toggle and hook then
+	// defers to the normal prompt path.
+	autoMode *automode.AutoMode
+
 	// currentSessionID is the session the user is working in, reported
 	// by the TUI and the non-interactive runner, for SessionEnd.
 	currentSessionID atomic.Value
@@ -134,7 +140,17 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 		permSvc.SetPermissionMode(permission.PermissionMode(store.Overrides().PermissionMode))
 	}
 
-	app := &App{
+	var app *App
+	autoMode := newAutoMode(cfg, func(ctx context.Context, sessionID string) string {
+		// app is assigned right below; the closure only runs once the
+		// agent layer starts producing permission requests.
+		if app == nil {
+			return ""
+		}
+		return app.autoModeTranscript(ctx, sessionID)
+	})
+
+	app = &App{
 		Sessions:    sessions,
 		Messages:    messages,
 		History:     files,
@@ -147,6 +163,7 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 
 		globalCtx:  ctx,
 		hookRunner: hookRunner,
+		autoMode:   autoMode,
 
 		config: store,
 
@@ -156,6 +173,10 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore, skillsMgr
 		agentNotifications: pubsub.NewBroker[notify.Notification](),
 		runCompletions:     pubsub.NewBroker[notify.RunComplete](),
 	}
+	// Pre-permission hooks (shell policy, then the native auto mode) run
+	// before every prompt; install them once the transcript provider the
+	// hooks share exists.
+	permSvc.SetPermissionHooks(app.permissionPreHooks())
 
 	app.setupEvents()
 
@@ -949,6 +970,9 @@ func (app *App) initCoderAgent(ctx context.Context, interactive bool) error {
 		slog.Error("Failed to create coder agent", "err", err)
 		return err
 	}
+	// The classifier model resolver needs the coordinator's provider
+	// machinery, so it attaches only now.
+	app.attachAutoModeResolver()
 	return nil
 }
 

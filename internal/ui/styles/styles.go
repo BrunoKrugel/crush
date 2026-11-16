@@ -316,6 +316,10 @@ type Styles struct {
 		PromptAutoIconBlurred     lipgloss.Style
 		PromptAutoDotsFocused     lipgloss.Style
 		PromptAutoDotsBlurred     lipgloss.Style
+		PromptSysadminIconFocused lipgloss.Style
+		PromptSysadminIconBlurred lipgloss.Style
+		PromptSysadminDotsFocused lipgloss.Style
+		PromptSysadminDotsBlurred lipgloss.Style
 		PromptBangIconFocused     lipgloss.Style
 		PromptNormalIconFocused   lipgloss.Style
 		TokenSkill                lipgloss.Style
@@ -379,26 +383,29 @@ type Styles struct {
 	}
 	Diff   diffview.Style
 	Status struct {
-		Help                lipgloss.Style
-		ModeBadgePlan       lipgloss.Style
-		ModeBadgeYolo       lipgloss.Style
-		ModeBadgeAuto       lipgloss.Style
-		ModeBannerPlan      lipgloss.Style
-		ModeBannerPlanBadge lipgloss.Style
-		ModeBannerYolo      lipgloss.Style
-		ModeBannerYoloBadge lipgloss.Style
-		ModeBannerAuto      lipgloss.Style
-		ModeBannerAutoBadge lipgloss.Style
-		ErrorIndicator      lipgloss.Style
-		WarnIndicator       lipgloss.Style
-		InfoIndicator       lipgloss.Style
-		UpdateIndicator     lipgloss.Style
-		SuccessIndicator    lipgloss.Style
-		ErrorMessage        lipgloss.Style
-		WarnMessage         lipgloss.Style
-		InfoMessage         lipgloss.Style
-		UpdateMessage       lipgloss.Style
-		SuccessMessage      lipgloss.Style
+		Help                    lipgloss.Style
+		ModeBadgePlan           lipgloss.Style
+		ModeBadgeYolo           lipgloss.Style
+		ModeBadgeAuto           lipgloss.Style
+		ModeBadgeSysadmin       lipgloss.Style
+		ModeBannerPlan          lipgloss.Style
+		ModeBannerPlanBadge     lipgloss.Style
+		ModeBannerYolo          lipgloss.Style
+		ModeBannerYoloBadge     lipgloss.Style
+		ModeBannerAuto          lipgloss.Style
+		ModeBannerAutoBadge     lipgloss.Style
+		ModeBannerSysadmin      lipgloss.Style
+		ModeBannerSysadminBadge lipgloss.Style
+		ErrorIndicator          lipgloss.Style
+		WarnIndicator           lipgloss.Style
+		InfoIndicator           lipgloss.Style
+		UpdateIndicator         lipgloss.Style
+		SuccessIndicator        lipgloss.Style
+		ErrorMessage            lipgloss.Style
+		WarnMessage             lipgloss.Style
+		InfoMessage             lipgloss.Style
+		UpdateMessage           lipgloss.Style
+		SuccessMessage          lipgloss.Style
 	}
 	Pills struct {
 		Base               lipgloss.Style

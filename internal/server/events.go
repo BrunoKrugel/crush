@@ -94,6 +94,13 @@ func wrapEvent(ev any) *pubsub.Payload {
 				Mode: proto.PermissionModeToProto(e.Payload.Mode),
 			},
 		})
+	case pubsub.Event[app.PermissionAutoChangedEvent]:
+		return envelope(pubsub.PayloadTypePermissionAutoChanged, pubsub.Event[proto.PermissionAutoModeEvent]{
+			Type: e.Type,
+			Payload: proto.PermissionAutoModeEvent{
+				Auto: e.Payload.Enabled,
+			},
+		})
 	case pubsub.Event[question.Request]:
 		slog.Info("Wrapping question batch event for SSE", "id", e.Payload.ID, "questions", len(e.Payload.Questions))
 		return envelope(pubsub.PayloadTypeQuestionRequest, pubsub.Event[proto.QuestionRequest]{

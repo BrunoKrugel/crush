@@ -1268,6 +1268,25 @@ func (c *coordinator) buildModelFromSelection(ctx context.Context, modelCfg conf
 	}, nil
 }
 
+// AutoModeClassifierModel builds the auto-mode classifier's language
+// model from the live config. It re-reads config on every call so
+// config reloads apply, and returns (nil, nil) when no classifier is
+// configured — the caller then runs rules-only classification. A
+// classifier configured only with a standalone BaseURL is not resolved
+// here; rules-only mode covers that case until a direct endpoint builder
+// lands on the coordinator.
+func (c *coordinator) AutoModeClassifierModel(ctx context.Context) (fantasy.LanguageModel, error) {
+	modelCfg, ok := c.cfg.Config().AutoModeClassifierModel()
+	if !ok {
+		return nil, nil
+	}
+	model, err := c.buildModelFromSelection(ctx, modelCfg, true)
+	if err != nil {
+		return nil, err
+	}
+	return model.Model, nil
+}
+
 // hyperAPIKey resolves the Hyper API key from the live config, so an
 // OAuth token refreshed after the models were built is picked up by the
 // next credits fetch.

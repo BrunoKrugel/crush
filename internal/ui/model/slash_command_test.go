@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/crush/internal/ui/textarea"
 
 	"github.com/charmbracelet/crush/internal/config"
+	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/ui/attachments"
 	"github.com/charmbracelet/crush/internal/ui/common"
@@ -57,6 +58,12 @@ func (w *slashCommandWorkspace) PermissionSkipRequests() bool { return false }
 func (w *slashCommandWorkspace) PermissionAutoMode() bool { return false }
 
 func (w *slashCommandWorkspace) PermissionSetAutoMode(bool) {}
+
+func (w *slashCommandWorkspace) PermissionMode() permission.PermissionMode {
+	return permission.PermissionModeNormal
+}
+
+func (w *slashCommandWorkspace) PermissionSetMode(permission.PermissionMode) {}
 
 func (w *slashCommandWorkspace) CreateSession(context.Context, string) (session.Session, error) {
 	return session.Session{}, nil
