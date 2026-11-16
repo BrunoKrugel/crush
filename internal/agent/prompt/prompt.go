@@ -30,6 +30,7 @@ type Prompt struct {
 	workingDir string
 	canWrite   bool
 	toolNames  []string
+	scheduling bool
 
 	// skillOverrides fetches the repository-scoped skill toggle state at
 	// Build time: which skills the repository disabled and which it
@@ -38,6 +39,8 @@ type Prompt struct {
 }
 
 type PromptDat struct {
+	Time               string
+	Scheduling         bool
 	Provider           string
 	Model              string
 	Config             config.Config
@@ -281,8 +284,10 @@ func (p *Prompt) promptData(ctx context.Context, provider, model string, store *
 		IsGitRepo:     isGit,
 		Platform:      platform,
 		Date:          p.now().Format("1/2/2006"),
+		Time:          p.now().Format("15:04:05"),
 		AvailSkillXML: availSkillXML,
 		CanWrite:      p.canWrite,
+		Scheduling:    p.scheduling,
 		ToolNames:     p.toolNames,
 	}
 	if isGit {
@@ -358,4 +363,13 @@ func getGitRecentCommits(ctx context.Context, sh *shell.Shell) (string, error) {
 
 func (p *Prompt) Name() string {
 	return p.name
+}
+
+// prompt without registering the cron tools — the agent package's own tests
+// among them — leave it off, so the model is never pointed at a tool it does
+// not have.
+func WithScheduling() Option {
+	return func(p *Prompt) {
+		p.scheduling = true
+	}
 }

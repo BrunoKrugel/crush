@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/lsp"
 	"github.com/charmbracelet/crush/internal/permission"
+	"github.com/charmbracelet/crush/internal/semantic"
 	"github.com/charmbracelet/crush/internal/skills"
 )
 
@@ -29,17 +30,18 @@ func NewCrushInfoTool(
 	allSkills []*skills.Skill,
 	activeSkills []*skills.Skill,
 	skillTracker *skills.Tracker,
+	semanticStore ...*semantic.Store,
 ) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		CrushInfoToolName,
 		crushInfoDescription,
 		func(ctx context.Context, _ CrushInfoParams, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-			return fantasy.NewTextResponse(buildCrushInfo(cfg, lspManager, allSkills, activeSkills, skillTracker)), nil
+			return fantasy.NewTextResponse(buildCrushInfo(cfg, lspManager, allSkills, activeSkills, skillTracker, semanticStore...)), nil
 		},
 	)
 }
 
-func buildCrushInfo(cfg *config.ConfigStore, lspManager *lsp.Manager, allSkills []*skills.Skill, activeSkills []*skills.Skill, skillTracker *skills.Tracker) string {
+func buildCrushInfo(cfg *config.ConfigStore, lspManager *lsp.Manager, allSkills []*skills.Skill, activeSkills []*skills.Skill, skillTracker *skills.Tracker, semanticStore ...*semantic.Store) string {
 	var b strings.Builder
 
 	writeConfigFiles(&b, cfg)
@@ -49,6 +51,9 @@ func buildCrushInfo(cfg *config.ConfigStore, lspManager *lsp.Manager, allSkills 
 	writeLSP(&b, lspManager, cfg)
 	writeMCP(&b, mcp.GetStates(), cfg)
 	writeSkills(&b, allSkills, activeSkills, skillTracker, cfg)
+	if len(semanticStore) > 0 {
+		writeSemanticIndex(&b, cfg, semanticStore[0])
+	}
 	writeHooks(&b, cfg)
 	writePermissions(&b, cfg)
 	writeDisabledTools(&b, cfg)
@@ -206,6 +211,28 @@ func writeLSP(b *strings.Builder, lspManager *lsp.Manager, cfg *config.ConfigSto
 			b.WriteString("\n")
 		}
 	}
+}
+
+// writeSemanticIndex reports semantic-search state alongside LSP and MCP:
+// the configured embedding model, and how many chunks the index holds.
+// It prints nothing when semantic search is not configured.
+func writeSemanticIndex(b *strings.Builder, cfg *config.ConfigStore, store *semantic.Store) {
+	e, ok := cfg.Config().ResolvedEmbeddings()
+	if !ok {
+		return
+	}
+	b.WriteString("[semantic_index]\n")
+	fmt.Fprintf(b, "model = %s (dim %d)\n", e.Model, e.Dimension)
+	if store == nil {
+		b.WriteString("store = unavailable (initialisation failed)\n")
+	} else {
+		if count, err := store.ChunkCount(context.Background()); err == nil {
+			fmt.Fprintf(b, "chunks = %d\n", count)
+		} else {
+			fmt.Fprintf(b, "chunks = unknown (%v)\n", err)
+		}
+	}
+	b.WriteString("\n")
 }
 
 func writeMCP(b *strings.Builder, states map[string]mcp.ClientInfo, cfg *config.ConfigStore) {

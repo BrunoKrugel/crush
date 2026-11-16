@@ -28,7 +28,7 @@ func TestDownloadTool_HookApprovalSkipsPrompt(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	workingDir := t.TempDir()
-	perms := permission.NewPermissionService(workingDir, false, nil)
+	perms := permission.NewPermissionService(workingDir, nil, nil)
 	tool := NewDownloadTool(perms, workingDir, srv.Client())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -64,7 +64,7 @@ func TestDownloadTool_WithoutApprovalTimesOut(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	workingDir := t.TempDir()
-	perms := permission.NewPermissionService(workingDir, false, nil)
+	perms := permission.NewPermissionService(workingDir, nil, nil)
 	tool := NewDownloadTool(perms, workingDir, srv.Client())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
