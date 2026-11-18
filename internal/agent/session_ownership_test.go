@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"charm.land/fantasy"
 	"github.com/charmbracelet/crush/internal/agent/notify"
@@ -60,6 +61,24 @@ func subscribeRunCompletions(t *testing.T, agent *sessionAgent) <-chan pubsub.Ev
 	t.Cleanup(broker.Shutdown)
 	agent.runComplete = broker
 	return broker.Subscribe(t.Context())
+}
+
+// recvRunCompletions reads n RunComplete events from ch, failing the test
+// if they do not all arrive within a short timeout. The broker's subscriber
+// channel is unbuffered, so tests must not assert on its length.
+func recvRunCompletions(t *testing.T, ch <-chan pubsub.Event[notify.RunComplete], n int) []notify.RunComplete {
+	t.Helper()
+	out := make([]notify.RunComplete, 0, n)
+	for range n {
+		select {
+		case ev := <-ch:
+			out = append(out, ev.Payload)
+		case <-time.After(2 * time.Second):
+			require.FailNow(t, "timed out waiting for RunComplete event",
+				"received %d of %d events", len(out), n)
+		}
+	}
+	return out
 }
 
 func observeNotifications(t *testing.T, agent *sessionAgent, observe func(notify.Notification)) {
@@ -270,12 +289,11 @@ func TestRun_CancelAtQueueHandoff(t *testing.T) {
 			require.False(t, lastBusy, "the final lifecycle notification must observe idle")
 			require.False(t, sa.IsSessionBusy(sess.ID))
 			require.Zero(t, sa.QueuedPrompts(sess.ID))
-			require.Len(t, events, 2, "both requests must retain their completion")
+			completions := recvRunCompletions(t, events, 2)
 			completed := make(map[string]notify.RunComplete)
-			for range 2 {
-				event := <-events
-				require.NotContains(t, completed, event.Payload.RunID)
-				completed[event.Payload.RunID] = event.Payload
+			for _, event := range completions {
+				require.NotContains(t, completed, event.RunID)
+				completed[event.RunID] = event
 			}
 			require.Equal(t, summarize, completed["A"].Cancelled)
 			require.True(t, completed["B"].Cancelled, "B has not delivered its terminal event when cancellation arrives")
@@ -321,10 +339,9 @@ func TestRun_CanceledHandoffPersistenceFailureIsReported(t *testing.T) {
 			require.Equal(t, 1, calls)
 			require.False(t, sa.IsSessionBusy(sess.ID))
 			require.Zero(t, sa.QueuedPrompts(sess.ID))
-			require.Len(t, events, 2)
+			completions := recvRunCompletions(t, events, 2)
 			completed := make(map[string]notify.RunComplete)
-			for range 2 {
-				complete := (<-events).Payload
+			for _, complete := range completions {
 				require.NotContains(t, completed, complete.RunID)
 				completed[complete.RunID] = complete
 			}
@@ -691,8 +708,8 @@ func TestSummarize_QueuedTurnToolsReceiveSession(t *testing.T) {
 	updated, err := env.sessions.Get(t.Context(), sess.ID)
 	require.NoError(t, err)
 	require.Equal(t, []session.Todo{{Content: "Verify handoff", Status: session.TodoStatusPending, ActiveForm: "Verifying handoff"}}, updated.Todos)
-	require.Len(t, events, 1)
-	complete := (<-events).Payload
+	completions := recvRunCompletions(t, events, 1)
+	complete := completions[0]
 	require.Equal(t, "B", complete.RunID)
 	require.Empty(t, complete.Error)
 	require.False(t, complete.Cancelled)

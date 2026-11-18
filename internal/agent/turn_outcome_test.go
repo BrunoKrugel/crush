@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"charm.land/fantasy"
 	"github.com/charmbracelet/crush/internal/agent/notify"
@@ -42,8 +43,8 @@ func TestRun_PostCancelAcceptedTurnRetainsSummarySequence(t *testing.T) {
 	require.NotNil(t, result)
 	require.Equal(t, fantasy.ResponseContent{fantasy.TextContent{Text: "B resumed"}}, result.Response.Content)
 	require.Equal(t, 3, calls)
-	require.Len(t, events, 1)
-	complete := (<-events).Payload
+	completions := recvRunCompletions(t, events, 1)
+	complete := completions[0]
 	require.Equal(t, "B", complete.RunID)
 	require.False(t, complete.Cancelled)
 	require.Empty(t, complete.Error)
@@ -54,8 +55,8 @@ func TestRun_PostCancelAcceptedTurnRetainsSummarySequence(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, result)
 	require.Equal(t, 3, calls, "P must not stream")
-	require.Len(t, events, 1)
-	complete = (<-events).Payload
+	completions = recvRunCompletions(t, events, 1)
+	complete = completions[0]
 	require.Equal(t, "P", complete.RunID)
 	require.True(t, complete.Cancelled)
 	require.False(t, sa.IsSessionBusy(sess.ID))
@@ -136,14 +137,18 @@ func TestRun_IndependentTurnOutcomes(t *testing.T) {
 							require.Empty(t, initialEvents[0].Error)
 							require.Equal(t, wantText, initialEvents[0].Text)
 						}
-						require.Len(t, queuedEvents, 1)
-						queued := (<-queuedEvents).Payload
+						queuedCompletions := recvRunCompletions(t, queuedEvents, 1)
+						queued := queuedCompletions[0]
 						require.Equal(t, ids[1], queued.RunID)
 						var queuedErrors []notify.Notification
-						for len(notificationEvents) > 0 {
-							n := (<-notificationEvents).Payload
-							if n.Type == notify.TypeAgentError {
-								queuedErrors = append(queuedErrors, n)
+						for drained := false; !drained; {
+							select {
+							case ev := <-notificationEvents:
+								if ev.Payload.Type == notify.TypeAgentError {
+									queuedErrors = append(queuedErrors, ev.Payload)
+								}
+							case <-time.After(50 * time.Millisecond):
+								drained = true
 							}
 						}
 						if failQueued {
@@ -303,10 +308,9 @@ func TestRun_QueuedFailureDoesNotStrandContinuation(t *testing.T) {
 			require.Len(t, initial, 1)
 			require.Equal(t, wantText, initial[0].Text)
 			require.Empty(t, initial[0].Error)
-			require.Len(t, events, 2)
+			completions := recvRunCompletions(t, events, 2)
 			completed := make(map[string]notify.RunComplete)
-			for range 2 {
-				event := (<-events).Payload
+			for _, event := range completions {
 				require.NotContains(t, completed, event.RunID)
 				completed[event.RunID] = event
 			}
@@ -335,8 +339,8 @@ func TestSummarize_DoesNotReturnQueuedFailure(t *testing.T) {
 		return (&finishStreamModel{text: "summary"}).Stream(ctx, call)
 	}
 	require.NoError(t, sa.Summarize(t.Context(), sess.ID, fantasy.ProviderOptions{}, nil))
-	require.Len(t, events, 1)
-	complete := (<-events).Payload
+	completions := recvRunCompletions(t, events, 1)
+	complete := completions[0]
 	require.Equal(t, "B", complete.RunID)
 	require.Contains(t, complete.Error, failure.Error())
 	saved, err := env.sessions.Get(t.Context(), sess.ID)
@@ -475,10 +479,9 @@ func TestRun_NestedContinuationCancellationAgreesWithCompletion(t *testing.T) {
 				if successor {
 					wantDetached++
 				}
-				require.Len(t, events, wantDetached)
+				detached := recvRunCompletions(t, events, wantDetached)
 				seen := make(map[string]notify.RunComplete, wantDetached)
-				for range wantDetached {
-					complete := (<-events).Payload
+				for _, complete := range detached {
 					require.NotContains(t, seen, complete.RunID)
 					seen[complete.RunID] = complete
 				}
@@ -551,12 +554,12 @@ func TestRun_FinishedAutomaticSummaryDoesNotInheritQueuedCancellation(t *testing
 			require.Equal(t, 3, calls)
 			require.False(t, sa.IsSessionBusy(sess.ID))
 			require.Zero(t, sa.QueuedPrompts(sess.ID))
-			require.Len(t, events, 2)
+			completions := recvRunCompletions(t, events, 2)
 			completed := make(map[string]notify.RunComplete)
 			for _, runID := range []string{"B", "A"} {
-				complete := (<-events).Payload
-				require.Equal(t, runID, complete.RunID, "summary drain publication order must not change")
-				completed[complete.RunID] = complete
+				require.Equal(t, runID, completions[0].RunID, "summary drain publication order must not change")
+				completed[completions[0].RunID] = completions[0]
+				completions = completions[1:]
 			}
 			require.True(t, completed["B"].Cancelled)
 			if needsContinuation {

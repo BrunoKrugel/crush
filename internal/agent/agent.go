@@ -147,6 +147,15 @@ type SessionAgentCall struct {
 	// paths treat as covered by any present mark, preserving the
 	// pre-sequence behavior.
 	acceptSeq uint64
+	// continuation marks a call the auto-summarize path re-queued to
+	// resume the same logical turn after compaction. The queue handoff
+	// returns a continuation's outcome to the original caller instead of
+	// the handing-off turn's own result.
+	continuation bool
+	// contToken identifies the continuation for outcome handback: the
+	// re-queuing turn stamps a token on both itself and the queued copy
+	// so only that turn consumes the stashed outcome.
+	contToken uint64
 	// OnAuthRefresh, when non-nil, is called by fantasy when a stream
 	// fails with an authentication error (HTTP 401). The callback should
 	// refresh credentials and return nil on success, in which case
@@ -278,6 +287,14 @@ type sessionAgent struct {
 	// BeginAccepted increments it; only AcceptedRun.Close decrements
 	// it.
 	acceptedRuns *csync.Map[string, int]
+	// contOutcome stashes the outcome of a summary continuation so the
+	// turn that re-queued it can return that outcome to its own caller
+	// even when independent queued turns ran in between. Guarded by
+	// contMu; keyed by session (the handoff chain per session is
+	// serialized).
+	contMu       sync.Mutex
+	contOutcome  map[string]contReturn
+	contTokenGen atomic.Uint64
 	// cancelMark records, per session, a high-water accept sequence: an
 	// accepted handle is canceled by it iff the handle's sequence is at
 	// or below the mark. Cancel raises the mark to the latest sequence
@@ -350,7 +367,36 @@ func NewSessionAgent(
 		dispatchMu:           csync.NewMap[string, *sync.Mutex](),
 		acceptedRuns:         csync.NewMap[string, int](),
 		cancelMark:           csync.NewMap[string, uint64](),
+		contOutcome:          make(map[string]contReturn),
 	}
+}
+
+// contReturn is a summary continuation's outcome, stashed so an ancestor
+// queue-handoff turn can return it to the original caller.
+type contReturn struct {
+	result *fantasy.AgentResult
+	err    error
+	token  uint64
+}
+
+// stashContOutcome records a continuation's outcome for sessionID.
+func (a *sessionAgent) stashContOutcome(sessionID string, out contReturn) {
+	a.contMu.Lock()
+	defer a.contMu.Unlock()
+	a.contOutcome[sessionID] = out
+}
+
+// takeContOutcome consumes the stashed continuation outcome for sessionID
+// that matches token.
+func (a *sessionAgent) takeContOutcome(sessionID string, token uint64) (contReturn, bool) {
+	a.contMu.Lock()
+	defer a.contMu.Unlock()
+	out, ok := a.contOutcome[sessionID]
+	if ok && out.token == token {
+		delete(a.contOutcome, sessionID)
+		return out, true
+	}
+	return contReturn{}, false
 }
 
 // AcceptedRun owns exactly one accept reservation taken by
@@ -1341,7 +1387,13 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 				"Something went wrong while handling your message. Please try again.",
 				completedToolCalls.Copy())
 		}
-		return nil, err
+		// The turn failed, but prompts queued behind it must still run.
+		// Record the failure and fall through to the queue handoff below;
+		// when nothing is queued it hands this turn's error straight back.
+		result, retErr = nil, err
+		if queued, _ := a.messageQueue.Get(call.SessionID); len(queued) == 0 {
+			return nil, err
+		}
 	}
 
 	// A turn cut short for compaction with tool calls still pending is
@@ -1363,6 +1415,8 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 			call.Prompt = fmt.Sprintf("The previous session was interrupted because it got too long, the initial user request was: `%s`", call.Prompt)
 			// The rewritten prompt is a new message, not the report.
 			call.Report = nil
+			call.continuation = true
+			call.contToken = a.contTokenGen.Add(1)
 			a.messageQueue.Set(call.SessionID, append(existing, call))
 			continued = true
 		}
@@ -1447,6 +1501,12 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 			a.cancelMark.Del(call.SessionID)
 		}
 		mu.Unlock()
+		if call.continuation {
+			// This run is a summary continuation: its outcome belongs to
+			// the turn that re-queued it, which is suspended further up
+			// the handoff chain. Stash it for that turn to pick up.
+			a.stashContOutcome(call.SessionID, contReturn{result: result, err: err, token: call.contToken})
+		}
 		return result, err
 	}
 	// There are queued messages, restart the loop. Suppress the outer
@@ -1454,25 +1514,15 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 	// (named-return clobbering through the return below) against this
 	// turn's MessageID/Text and publish a mixed, racing event.
 	skipRunComplete = true
-	// Decide whether this turn still owes its own terminal RunComplete.
-	// Each submitted prompt with a RunID has its own lifecycle, so a turn
-	// that is finished and handing off to a *different* queued prompt must
-	// publish its own RunComplete here — leaving it to the recursive turn
+	// A summary continuation re-queue is the same logical turn: its own
+	// terminal RunComplete covers this turn, so this turn must not
+	// double-emit and its outcome belongs to this turn's caller. An
+	// independent queued prompt has its own lifecycle, so this turn
+	// publishes its own RunComplete here — leaving it to the queued turn
 	// (which carries a different RunID) would hang a caller waiting on
-	// this turn's RunID. The exception is the summarize-continuation path,
-	// which re-queues this same call (same RunID) to resume after a
-	// summary; in that case the eventual terminal turn for this RunID
-	// publishes, so publishing now would double-emit.
-	outerOwesRunComplete := call.RunID != ""
-	if outerOwesRunComplete {
-		for _, q := range queuedMessages {
-			if q.RunID == call.RunID {
-				outerOwesRunComplete = false
-				break
-			}
-		}
-	}
+	// this turn's RunID.
 	firstQueuedMessage := queuedMessages[0]
+	isContinuation := continued && firstQueuedMessage.continuation
 	a.messageQueue.Set(call.SessionID, queuedMessages[1:])
 	// Reserve a fresh accept for the dequeued prompt before dropping the
 	// lock so acceptedRuns > 0 across the handoff into the recursive
@@ -1482,18 +1532,59 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 	// the recursive Run's accepted path observes as cancel-on-entry.
 	firstQueuedMessage.Accepted = a.BeginAccepted(call.SessionID)
 	mu.Unlock()
-	if outerOwesRunComplete {
-		complete := notify.RunComplete{SessionID: call.SessionID, RunID: call.RunID}
-		if currentAssistant != nil {
-			complete.MessageID = currentAssistant.ID
-			complete.Text = currentAssistant.Content().String()
-		}
-		if ctx.Err() != nil {
-			complete.Cancelled = true
-		}
-		a.publishRunComplete(ctx, call, complete)
+	res, rerr := a.Run(ctx, firstQueuedMessage)
+	if isContinuation {
+		// The dequeued call is this same turn resuming after a summary
+		// (rewritten prompt). Its outcome is this turn's outcome; stash
+		// it so any intermediate turn between the summary and here that
+		// ran queued prompts first can also hand it back.
+		a.stashContOutcome(call.SessionID, contReturn{result: res, err: rerr, token: firstQueuedMessage.contToken})
+		return res, rerr
 	}
-	return a.Run(ctx, firstQueuedMessage)
+	// An independent queued prompt ran under this Run's dispatch handoff,
+	// but its outcome belongs to its own caller, not to this turn's. If
+	// that nested chain ended by running this turn's continuation, its
+	// outcome — not the intermediate turn's — is what this turn's caller
+	// is waiting for.
+	if call.contToken != 0 {
+		if out, ok := a.takeContOutcome(call.SessionID, call.contToken); ok {
+			return out.result, out.err
+		}
+		// This turn's continuation was dropped before it could run (e.g.
+		// ClearQueue while it sat queued): the suspended caller's turn was
+		// canceled, not completed.
+		return nil, context.Canceled
+	}
+	// This turn's terminal RunComplete: published only now, after the
+	// queued chain has settled, so a cancellation that landed during the
+	// handoff is reflected and the caller's completion callback is not
+	// invoked while its turn is still suspended.
+	complete := notify.RunComplete{SessionID: call.SessionID, RunID: call.RunID}
+	if currentAssistant != nil {
+		complete.MessageID = currentAssistant.ID
+		complete.Text = currentAssistant.Content().String()
+	}
+	if retErr != nil {
+		complete.Error = retErr.Error()
+		complete.Cancelled = errors.Is(retErr, context.Canceled)
+	}
+	if ctx.Err() != nil {
+		complete.Cancelled = true
+	}
+	a.publishRunComplete(ctx, call, complete)
+	if rerr != nil && !errors.Is(rerr, context.Canceled) && !firstQueuedMessage.NonInteractive && a.notify != nil {
+		// The queued turn's original caller is not waiting on it (it was
+		// queued behind a busy session and Run returned nil), so surface
+		// its failure as an error notification instead.
+		a.notify.Publish(pubsub.CreatedEvent, notify.Notification{
+			SessionID:    firstQueuedMessage.SessionID,
+			SessionTitle: currentSession.Title,
+			Type:         notify.TypeAgentError,
+			RunID:        firstQueuedMessage.RunID,
+			Message:      rerr.Error(),
+		})
+	}
+	return result, retErr
 }
 
 // Summarize compacts the session on the user's request. It returns
@@ -1654,10 +1745,27 @@ func (a *sessionAgent) summarize(ctx context.Context, sessionID, trigger string,
 	}
 	a.hooks.Run(ctx, hooks.Event{Name: hooks.EventPostCompact, SessionID: sessionID, Trigger: trigger})
 
+	// Flush buffered message updates while the compaction still holds the
+	// session's busy state: subscribers that submit follow-up prompts from
+	// the flushed events must see the session as busy and queue behind the
+	// summary instead of racing it as a concurrent active turn.
+	if flushErr := a.messages.FlushAll(ctx); flushErr != nil {
+		slog.Error("Failed to flush pending message updates after summarize", "error", flushErr)
+	}
+
 	// Release the active request before processing queued messages so that
 	// Run() does not see the session as busy.
 	a.activeRequests.Del(sessionID)
 	cancel()
+
+	// An auto-summarize leaves the queue to the Run handoff: it re-queues
+	// its own continuation after this returns, and the handoff must run
+	// the queued prompts with that continuation already in place so each
+	// sees the full pending order. A manual Summarize has no continuation
+	// coming, so it drains the queue itself.
+	if trigger == compactTriggerAuto {
+		return nil
+	}
 
 	// Process any messages that were queued while summarizing.
 	queuedMessages, ok := a.messageQueue.Get(sessionID)
@@ -1667,7 +1775,20 @@ func (a *sessionAgent) summarize(ctx context.Context, sessionID, trigger string,
 	firstQueuedMessage := queuedMessages[0]
 	a.messageQueue.Set(sessionID, queuedMessages[1:])
 	_, qErr := a.Run(ctx, firstQueuedMessage)
-	return qErr
+	if qErr != nil && !errors.Is(qErr, context.Canceled) && a.notify != nil {
+		// The queued turn's original caller is not waiting on it (it was
+		// queued behind the compaction and this caller sees only the
+		// summarize outcome), so surface its failure as an error
+		// notification instead of failing the compaction.
+		a.notify.Publish(pubsub.CreatedEvent, notify.Notification{
+			SessionID:    firstQueuedMessage.SessionID,
+			SessionTitle: currentSession.Title,
+			Type:         notify.TypeAgentError,
+			RunID:        firstQueuedMessage.RunID,
+			Message:      qErr.Error(),
+		})
+	}
+	return nil
 }
 
 func (a *sessionAgent) getCacheControlOptions() fantasy.ProviderOptions {

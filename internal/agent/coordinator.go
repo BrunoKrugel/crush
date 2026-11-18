@@ -46,6 +46,7 @@ import (
 	"github.com/charmbracelet/crush/internal/question"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/skills"
+	"github.com/charmbracelet/crush/internal/utils"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
 
@@ -235,6 +236,25 @@ type CoordinatorOptions struct {
 	Skills      *skills.Manager
 	HookRunner  *hooks.Runner
 	Interactive bool
+}
+
+// isOpenCodeProvider reports whether providerID is an OpenCode backend
+// (Go or Zen) whose WAF strictly validates routing headers.
+func isOpenCodeProvider(providerID string) bool {
+	return providerID == string(catwalk.InferenceProviderOpenCodeZen)
+}
+
+// wrapOpenCodeHTTPClient installs per-request OpenCode WAF header injection
+// (User-Agent, x-opencode-client/project/session/request) on client. A nil
+// client yields a fresh one; a non-nil client (e.g. the debug logger) keeps
+// its behavior with injection applied outermost so logged requests show the
+// final headers.
+func wrapOpenCodeHTTPClient(client *http.Client) *http.Client {
+	if client == nil {
+		return &http.Client{Transport: utils.NewOpenCodeTransport(nil)}
+	}
+	client.Transport = utils.NewOpenCodeTransport(client.Transport)
+	return client
 }
 
 func NewCoordinator(ctx context.Context, opts CoordinatorOptions) (Coordinator, error) {
@@ -460,6 +480,11 @@ func (c *coordinator) run(ctx context.Context, accept *AcceptedRun, report *mess
 	// same correlator.
 	runID := RunIDFromContext(ctx)
 	channel := ChannelFromContext(ctx)
+
+	// Tag the run context with the Crush conversation ID so the OpenCode
+	// HTTP transport resolves a stable per-conversation x-opencode-session
+	// (KV-cache affinity) while minting a fresh x-opencode-request per call.
+	ctx = utils.WithCrushSessionID(ctx, sessionID)
 	c.syncSessionChannel(ctx, sessionID, channel)
 	run := func() (*fantasy.AgentResult, error) {
 		return agent.Run(ctx, SessionAgentCall{
@@ -1319,9 +1344,18 @@ func (c *coordinator) buildAnthropicProvider(baseURL, apiKey string, headers map
 		opts = append(opts, anthropic.WithBaseURL(baseURL))
 	}
 
+	var openCodeHTTPClient *http.Client
 	if c.cfg.Config().Options.Debug {
-		httpClient := log.NewHTTPClient()
-		opts = append(opts, anthropic.WithHTTPClient(httpClient))
+		openCodeHTTPClient = log.NewHTTPClient()
+	}
+	if isOpenCodeProvider(providerID) {
+		// OpenCode Anthropic-messages models (MiniMax/Qwen on Zen/Go):
+		// per-request WAF headers via transport since static provider
+		// headers cannot express a fresh ID per LLM call.
+		openCodeHTTPClient = wrapOpenCodeHTTPClient(openCodeHTTPClient)
+	}
+	if openCodeHTTPClient != nil {
+		opts = append(opts, anthropic.WithHTTPClient(openCodeHTTPClient))
 	}
 	return anthropic.New(opts...)
 }
@@ -1446,6 +1480,14 @@ func (c *coordinator) buildOpenaiCompatProvider(baseURL, apiKey string, headers 
 	if httpClient == nil && c.cfg.Config().Options.Debug {
 		httpClient = log.NewHTTPClient()
 	}
+
+	if isOpenCodeProvider(providerID) {
+		// Per-request WAF headers (fresh x-opencode-request per LLM call,
+		// stable x-opencode-session per conversation) via transport since
+		// static provider headers cannot express per-call IDs.
+		httpClient = wrapOpenCodeHTTPClient(httpClient)
+	}
+
 	if httpClient != nil {
 		opts = append(opts, openaicompat.WithHTTPClient(httpClient))
 	}
@@ -1559,6 +1601,26 @@ func (c *coordinator) buildProvider(providerCfg config.ProviderConfig, model con
 	headers := maps.Clone(providerCfg.ExtraHeaders)
 	if headers == nil {
 		headers = make(map[string]string)
+	}
+
+	// OpenCode WAF routing headers. The vendor strictly validates presence,
+	// format, and behavior; missing/malformed values yield 403 Forbidden.
+	// Static values go here; per-request session/request IDs are injected
+	// by the OpenCode HTTP transport (see wrapOpenCodeHTTPClient), which
+	// also enforces the exact User-Agent/client fingerprint at the HTTP
+	// layer where SDK defaults cannot clobber it. Explicit user overrides
+	// via extra_headers are respected (session/request fall through to the
+	// transport: session kept when set, request always regenerated).
+	if isOpenCodeProvider(providerCfg.ID) {
+		if _, ok := headers["User-Agent"]; !ok {
+			headers["User-Agent"] = utils.OpenCodeUserAgent
+		}
+		if _, ok := headers["x-opencode-client"]; !ok {
+			headers["x-opencode-client"] = utils.OpenCodeClient
+		}
+		if _, ok := headers["x-opencode-project"]; !ok {
+			headers["x-opencode-project"] = utils.GetProjectID()
+		}
 	}
 
 	// handle special headers for anthropic
@@ -1756,6 +1818,7 @@ func (c *coordinator) QueuedPromptsList(sessionID string) []string {
 }
 
 func (c *coordinator) Summarize(ctx context.Context, sessionID string) error {
+	ctx = utils.WithCrushSessionID(ctx, sessionID)
 	agent := c.currentAgent()
 	providerCfg, ok := c.cfg.Config().Providers.Get(agent.Model().ModelCfg.Provider)
 	if !ok {
@@ -1775,6 +1838,7 @@ func (c *coordinator) Summarize(ctx context.Context, sessionID string) error {
 
 // GenerateTitle generates a session title using the current agent.
 func (c *coordinator) GenerateTitle(ctx context.Context, sessionID, prompt string) {
+	ctx = utils.WithCrushSessionID(ctx, sessionID)
 	agent := c.currentAgent()
 	if agent == nil {
 		return

@@ -117,8 +117,8 @@ func TestRun_SubmissionDuringPreparationCompletionIsNotStranded(t *testing.T) {
 	}
 	require.False(t, sa.IsSessionBusy(sess.ID))
 	require.Zero(t, sa.QueuedPrompts(sess.ID), "C must not remain queued without an owner")
-	require.Len(t, events, 1, "C must complete without another submission")
-	complete := (<-events).Payload
+	completions := recvRunCompletions(t, events, 1)
+	complete := completions[0]
 	require.Equal(t, "C", complete.RunID)
 	require.Empty(t, complete.Error)
 	require.Equal(t, "done", complete.Text)
