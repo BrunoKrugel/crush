@@ -27,6 +27,12 @@ func TestRunCommandAllowsLegacyServer(t *testing.T) {
 		mu.Lock()
 		paths = append(paths, r.URL.Path)
 		mu.Unlock()
+		if r.URL.Path == "/v1/health" {
+			// A legacy server still answers the readiness probe; the
+			// run path only attaches when one is already running.
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		// Stop at workspace acquisition: reaching it proves an old server
 		// is not rejected for lacking the new capability advertisement.
 		http.Error(w, "workspace fixture", http.StatusBadRequest)
@@ -40,5 +46,5 @@ func TestRunCommandAllowsLegacyServer(t *testing.T) {
 	require.ErrorContains(t, runCmd.RunE(command, []string{"hello"}), "failed to create workspace")
 	mu.Lock()
 	defer mu.Unlock()
-	require.Equal(t, []string{"/v1/workspaces"}, paths, "no capability gate or workspace-wide permission fallback")
+	require.Equal(t, []string{"/v1/health", "/v1/workspaces"}, paths, "no capability gate or workspace-wide permission fallback")
 }

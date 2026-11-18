@@ -66,7 +66,6 @@ type ThemeSectionHeader struct {
 }
 
 func (h *ThemeSectionHeader) Filter() string { return "" }
-func (h *ThemeSectionHeader) Finished() bool { return true }
 func (h *ThemeSectionHeader) Render(width int) string {
 	return common.Section(h.t, " "+h.title+" ", width)
 }
@@ -80,7 +79,6 @@ type themeSpacer struct {
 }
 
 func (s *themeSpacer) Filter() string          { return "" }
-func (s *themeSpacer) Finished() bool          { return true }
 func (s *themeSpacer) Render(width int) string { return strings.Repeat("\n", s.height) }
 
 // ThemeItem represents a single theme entry in the picker.
@@ -97,12 +95,6 @@ type ThemeItem struct {
 	focused     bool
 	hideInfo    bool
 	mode        themesMode
-}
-
-// Finished implements list.Item. Theme items are render-stable outside
-// of explicit SetFocused / SetMatch calls.
-func (r *ThemeItem) Finished() bool {
-	return true
 }
 
 var (
@@ -213,8 +205,8 @@ func (th *Theme) RefreshStyles() {
 			it.cache = nil
 			it.Bump()
 		case *ThemeSectionHeader:
-			// Section headers are render-frozen in the list cache, so
-			// bump them to force a re-render with the new styles.
+			// Section headers are cached by the list, so bump them to
+			// force a re-render with the new styles.
 			it.Bump()
 		}
 	}

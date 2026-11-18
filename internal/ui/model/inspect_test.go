@@ -690,7 +690,7 @@ func TestInspectEscAlwaysLeaves(t *testing.T) {
 		m.keyenh = tea.KeyboardEnhancementsMsg{Flags: flags}
 		m.agentReady = true
 		m.agentBusyCache.val = true
-		m.promptQueue = promptQueue
+		m.promptQueue.SetFetched(make([]string, promptQueue))
 		addChild(ws, inspectChildID, inspectParentID, "Dispatched Agent", inspectChildMessages()...)
 		runInspectCmds(m, m.enterInspect(agentBlockRef{sessionID: inspectChildID}))
 		require.True(t, m.isInspecting())

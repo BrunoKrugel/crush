@@ -93,7 +93,7 @@ type SelectedModel struct {
 
 type ProviderConfig struct {
 	Gateway *oauth.GatewaySpec `json:"gateway,omitempty" jsonschema:"description=jq programs rewriting requests and responses to the provider wire format"`
-	Usage *oauth.UsageSpec `json:"usage,omitempty" jsonschema:"description=Endpoint that reports the quota remaining on this provider's plan"`
+	Usage   *oauth.UsageSpec   `json:"usage,omitempty" jsonschema:"description=Endpoint that reports the quota remaining on this provider's plan"`
 	// The provider's id.
 	ID string `json:"id,omitempty" jsonschema:"description=Unique identifier for the provider,example=openai"`
 	// The provider's name, used for display purposes.
@@ -332,7 +332,7 @@ type TUIOptions struct {
 	WorkingDirFormat string      `json:"working_dir_format,omitempty" jsonschema:"description=Format for the working directory shown in the header. Supported placeholders: {cwd} for the path, {user} for the current user, {host} for the hostname.,default={user}@{host}:{cwd},example={cwd},example={host}:{cwd}"`
 	CompactMode      bool        `json:"compact_mode,omitempty" jsonschema:"description=Enable compact mode for the TUI interface,default=false"`
 	DiffMode         string      `json:"diff_mode,omitempty" jsonschema:"description=Diff mode for the TUI interface,enum=unified,enum=split"`
-	ActiveTheme      string      `json:"active_theme,omitempty" jsonschema:"description=Name of the currently active theme,default=charmtone-panther,example=charmtone-panther,example=gruvbox-dark,example=keanu"`
+	ActiveTheme      string      `json:"active_theme,omitempty" jsonschema:"description=Name of the currently active theme,default=charmtone-panther,example=charmtone-panther,example=gruvbox-dark,example=rose-pine,example=keanu"`
 	Completions      Completions `json:"completions,omitzero" jsonschema:"description=Completions UI options"`
 	Transparent      *bool       `json:"transparent,omitempty" jsonschema:"description=Enable transparent background for the TUI interface,default=false"`
 	Scrollbar        string      `json:"scrollbar,omitempty" jsonschema:"description=Chat scrollbar visibility,enum=default,enum=always,enum=never,default=default"`
@@ -464,15 +464,16 @@ func (Attribution) JSONSchemaExtend(schema *jsonschema.Schema) {
 }
 
 type Options struct {
-	TodoEnforcement *TodoEnforcementConfig `json:"todo_enforcement,omitempty" jsonschema:"description=Proactive todo enforcement defaults"`
-	ContextPaths         []string    `json:"context_paths,omitempty" jsonschema:"description=Paths to files containing context information for the AI,example=.cursorrules,example=CRUSH.md"`
-	GlobalContextPaths   []string    `json:"global_context_paths,omitempty" jsonschema:"description=Paths to files containing global context information for the AI,default=~/.config/crush/CRUSH.md,default=~/.config/AGENTS.md"`
-	SkillsPaths          []string    `json:"skills_paths,omitempty" jsonschema:"description=Paths to directories containing Agent Skills (folders with SKILL.md files),example=~/.config/crush/skills,example=./skills"`
-	TUI                  *TUIOptions `json:"tui,omitempty" jsonschema:"description=Terminal user interface options"`
-	LazyMCP              *bool       `json:"lazy_mcp,omitempty" jsonschema:"description=Keep MCP tools out of the model context until the agent loads them with mcp_search. Individual servers override it with mcp.<name>.lazy,default=true"`
-	Debug                bool        `json:"debug,omitempty" jsonschema:"description=Enable debug logging,default=false"`
-	DebugLSP             bool        `json:"debug_lsp,omitempty" jsonschema:"description=Enable debug logging for LSP servers,default=false"`
-	DisableAutoSummarize bool        `json:"disable_auto_summarize,omitempty" jsonschema:"description=Disable automatic conversation summarization,default=false"`
+	Dispatch             *DispatchOptions       `json:"dispatch,omitempty" jsonschema:"description=Dispatched agent options"`
+	TodoEnforcement      *TodoEnforcementConfig `json:"todo_enforcement,omitempty" jsonschema:"description=Proactive todo enforcement defaults"`
+	ContextPaths         []string               `json:"context_paths,omitempty" jsonschema:"description=Paths to files containing context information for the AI,example=.cursorrules,example=CRUSH.md"`
+	GlobalContextPaths   []string               `json:"global_context_paths,omitempty" jsonschema:"description=Paths to files containing global context information for the AI,default=~/.config/crush/CRUSH.md,default=~/.config/AGENTS.md"`
+	SkillsPaths          []string               `json:"skills_paths,omitempty" jsonschema:"description=Paths to directories containing Agent Skills (folders with SKILL.md files),example=~/.config/crush/skills,example=./skills"`
+	TUI                  *TUIOptions            `json:"tui,omitempty" jsonschema:"description=Terminal user interface options"`
+	LazyMCP              *bool                  `json:"lazy_mcp,omitempty" jsonschema:"description=Keep MCP tools out of the model context until the agent loads them with mcp_search. Individual servers override it with mcp.<name>.lazy,default=true"`
+	Debug                bool                   `json:"debug,omitempty" jsonschema:"description=Enable debug logging,default=false"`
+	DebugLSP             bool                   `json:"debug_lsp,omitempty" jsonschema:"description=Enable debug logging for LSP servers,default=false"`
+	DisableAutoSummarize bool                   `json:"disable_auto_summarize,omitempty" jsonschema:"description=Disable automatic conversation summarization,default=false"`
 	// DataDirectory is where Crush keeps per-project state such as
 	// the SQLite database and workspace overrides. Relative paths are
 	// resolved against the working directory; absolute paths are used
@@ -792,7 +793,7 @@ func (l LSPConfig) ResolvedEnv(r VariableResolver) (map[string]string, error) {
 }
 
 type Agent struct {
-	Prompt *string `json:"prompt,omitempty" jsonschema:"description=Agent system prompt override"`
+	Prompt      string `json:"-"`
 	ID          string `json:"id,omitempty"`
 	Name        string `json:"name,omitempty"`
 	Description string `json:"description,omitempty"`
@@ -1181,42 +1182,131 @@ func filterSlice(data []string, mask []string, include bool) []string {
 	return filtered
 }
 
-func (c *Config) SetupAgents() {
-	allowedTools := resolveAllowedTools(allToolNames(), c.Options.DisabledTools)
-
-	agents := map[string]Agent{
-		AgentCoder: {
-			ID:           AgentCoder,
-			Name:         "Coder",
-			Description:  "An agent that helps with executing coding tasks.",
-			Model:        SelectedModelTypeLarge,
-			ContextPaths: c.Options.ContextPaths,
-			AllowedTools: allowedTools,
-		},
-
-		AgentTask: {
-			ID:           AgentTask,
-			Name:         "Task",
-			Description:  "An agent that helps with searching for context and finding implementation details.",
-			Model:        SelectedModelTypeLarge,
-			ContextPaths: c.Options.ContextPaths,
-			AllowedTools: resolveTaskTools(allowedTools),
-			// NO MCPs or LSPs by default
-			AllowedMCP: map[string][]string{},
-		},
-
-		AgentPlan: {
-			ID:           AgentPlan,
-			Name:         "Plan",
-			Description:  "An agent that performs deep analysis and prepares implementation plans without modifying files.",
-			Model:        SelectedModelTypeLarge,
-			ContextPaths: c.Options.ContextPaths,
-			AllowedTools: resolvePlanTools(allowedTools),
-			// NO MCPs or LSPs by default
-			AllowedMCP: map[string][]string{},
-		},
+// SetupAgents resolves the agent map from the built-in definitions plus
+// the user's agents block (#333). It stays error-free: validation runs
+// in ValidateAgents and ValidateAgentModelRefs at load and reload time,
+// so a bad definition never reaches this point. What it returns are the
+// load diagnostics (#560): the problems that do not fail the load but
+// change how a definition behaves, in a stable order. The ConfigStore
+// keeps them for the command to show once the logger exists.
+func (c *Config) SetupAgents() []LoadDiagnostic {
+	agents := make(map[string]Agent, len(c.AgentDefinitions)+4)
+	var diags []LoadDiagnostic
+	for id, def := range effectiveAgentDefinitions(c.AgentDefinitions) {
+		agent, agentDiags := c.agentFromDefinition(id, def)
+		agents[id] = agent
+		diags = append(diags, agentDiags...)
 	}
 	c.Agents = agents
+	sortLoadDiagnostics(diags)
+	return diags
+}
+
+// agentFromDefinition resolves one definition into the Agent the
+// coordinator reads, plus the diagnostics resolving it raised.
+// Effective tools are expand(allow) minus expand(deny) minus the user's
+// disabled_tools, so a definition can narrow but never widen user
+// policy.
+func (c *Config) agentFromDefinition(id string, def AgentDefinition) (Agent, []LoadDiagnostic) {
+	diags := unhonoredFieldDiagnostics(id, def)
+
+	// The alias's kill knobs are dispatch-only (#402): on any other role
+	// they are dropped here and warned about, not a load error. The
+	// new-style Kill block takes the hard error instead.
+	enforcementDef := def
+	if alias := def.TodoEnforcement; alias != nil && definitionRole(id, def) != AgentRoleDispatch {
+		trimmed := *alias
+		trimmed.KillAfterNudges = nil
+		trimmed.StallWindow = nil
+		trimmed.HardTimeout = nil
+		trimmed.InactivityTimeout = nil
+		enforcementDef.TodoEnforcement = &trimmed
+	}
+
+	// Only an omitted allow list inherits every tool: an explicit empty
+	// allow grants nothing, matching expand(allow) minus expand(deny).
+	allow := definitionToolset(def)
+	allowedTools := resolveAllowedTools(allow, c.Options.DisabledTools)
+
+	var mcpAllow []string
+	if def.MCP != nil {
+		mcpAllow = def.MCP.Allow
+	}
+
+	var unusable string
+	if orString(def.Runtime, AgentRuntimeBuiltin) == AgentRuntimeA2A {
+		unusable = externalDefinitionProblem("agents."+id, def)
+		if diag, ok := unusableExternalDiagnostic(id, unusable); ok {
+			diags = append(diags, diag)
+		}
+	}
+
+	modelType := SelectedModelTypeLarge
+	var modelRef *AgentModelRef
+	if def.Model != nil {
+		modelType = def.Model.Type
+		modelRef = def.Model.Ref
+	}
+
+	return Agent{
+		ID:              id,
+		Name:            orString(def.Name, id),
+		Description:     orString(def.Description, ""),
+		Disabled:        def.Disabled != nil && *def.Disabled,
+		Model:           modelType,
+		AllowedTools:    allowedTools,
+		AllowedMCP:      expandMCPAllow(mcpAllow),
+		ContextPaths:    def.ContextPaths,
+		TodoEnforcement: todoEnforcementFromDefinition(enforcementDef),
+		Role:            definitionRole(id, def),
+		Runtime:         orString(def.Runtime, AgentRuntimeBuiltin),
+		Prompt:          orString(def.Prompt, ""),
+		PromptAppend:    orString(def.PromptAppend, ""),
+		ModelRef:        modelRef,
+		Skills:          def.Skills,
+		Workspace:       definitionWorkspace(def),
+		Card:            orString(def.Card, ""),
+		Auth:            def.Auth,
+		Transport:       def.Transport,
+		Unusable:        unusable,
+	}, diags
+}
+
+// definitionWorkspace resolves a definition's workspace: a runtime a2a
+// agent always runs with none (#434), whatever it set, since an
+// external agent never touches the local disk; any other definition
+// keeps its own value.
+func definitionWorkspace(def AgentDefinition) string {
+	if orString(def.Runtime, AgentRuntimeBuiltin) == AgentRuntimeA2A {
+		return AgentWorkspaceNone
+	}
+	return orString(def.Workspace, "")
+}
+
+// todoEnforcementFromDefinition maps a definition's todos and kill
+// blocks, or the legacy todo_enforcement alias, onto the resolved
+// TodoEnforcementConfig; nil when neither set anything. Validation has
+// already rejected a definition that sets the alias together with
+// either block, so at most one source feeds the mapping (#402).
+func todoEnforcementFromDefinition(def AgentDefinition) *TodoEnforcementConfig {
+	if def.TodoEnforcement != nil {
+		return def.TodoEnforcement
+	}
+	if def.Todos == nil && def.Kill == nil {
+		return nil
+	}
+	cfg := &TodoEnforcementConfig{}
+	if def.Todos != nil {
+		cfg.Enabled = def.Todos.Nudge
+		cfg.NudgeThreshold = def.Todos.NudgeAfterToolCalls
+		cfg.HardGate = def.Todos.HardGate
+	}
+	if def.Kill != nil {
+		cfg.KillAfterNudges = def.Kill.AfterIgnoredNudges
+		cfg.StallWindow = def.Kill.Stall
+		cfg.HardTimeout = def.Kill.Timeout
+	}
+	return cfg
 }
 
 func (c *ProviderConfig) TestConnection(resolver VariableResolver) error {
@@ -1729,6 +1819,121 @@ type DispatchOptions struct {
 	// that is not disabled; anything else is a load error. Empty
 	// resolves to DefaultDispatchAgent.
 	DefaultAgent string `json:"default_agent,omitempty" jsonschema:"description=Agent id dispatch_agent runs when the call names no agent; must be an enabled dispatch agent,default=worker"`
+}
+
+// GetDispatchMaxConcurrent returns the resolved dispatch concurrency cap
+// (#390): the configured max_concurrent, or DefaultDispatchMaxConcurrent
+// when unset. The nil receiver and the unset field both mean the default,
+// so callers can ask without unwrapping either.
+func (o *Options) GetDispatchMaxConcurrent() int {
+	if o == nil || o.Dispatch == nil || o.Dispatch.MaxConcurrent == nil {
+		return DefaultDispatchMaxConcurrent
+	}
+	return *o.Dispatch.MaxConcurrent
+}
+
+// GetDispatchDefaultAgent returns the resolved default dispatch agent
+// id (#433): the configured default_agent, or DefaultDispatchAgent when
+// unset. The nil receiver and the empty field both mean the default, so
+// callers can ask without unwrapping either.
+func (o *Options) GetDispatchDefaultAgent() string {
+	if o == nil || o.Dispatch == nil || o.Dispatch.DefaultAgent == "" {
+		return DefaultDispatchAgent
+	}
+	return o.Dispatch.DefaultAgent
+}
+
+// Validate checks the dispatch concurrency cap: a positive value
+// configures it, and a value below 1 is a load error, not a setting —
+// a cap of 0 would refuse every dispatch. The path names the block in
+// the config file, so the error points at the offending key.
+func (d *DispatchOptions) Validate(path string) error {
+	if d == nil {
+		return nil
+	}
+	if d.MaxConcurrent != nil && *d.MaxConcurrent < 1 {
+		return fmt.Errorf("%s.max_concurrent: must be at least 1 (got %d)", path, *d.MaxConcurrent)
+	}
+	return nil
+}
+
+// ValidateDispatchDefaultAgent checks options.dispatch.default_agent
+// against the resolved agents (#433): the id must exist and be a dispatch
+// agent, so a dispatch that names no agent never fails at dispatch time
+// on a bad default. An explicitly named disabled id is an error; the
+// implicit default resolving to a disabled worker is not — that is the
+// opt-out, and the dispatch tools simply go away with it. An external
+// agent that cannot be dispatched is an error too (#560): a default
+// every dispatch would refuse is a misconfiguration, not a warning. It
+// runs after SetupAgents, at load and reload time, and names the config
+// path in every error.
+func (c *Config) ValidateDispatchDefaultAgent() error {
+	const path = "options.dispatch.default_agent"
+	explicit := c.Options != nil && c.Options.Dispatch != nil && c.Options.Dispatch.DefaultAgent != ""
+	id := c.Options.GetDispatchDefaultAgent()
+	agent, ok := c.Agents[id]
+	if !ok {
+		return fmt.Errorf("%s: unknown agent %q", path, id)
+	}
+	if agent.Role != AgentRoleDispatch {
+		return fmt.Errorf("%s: agent %q is a %q agent, not a dispatch agent", path, id, agent.Role)
+	}
+	if agent.Disabled && explicit {
+		return fmt.Errorf("%s: agent %q is disabled", path, id)
+	}
+	if agent.Unusable != "" {
+		return fmt.Errorf("%s: agent %q cannot be dispatched: %s", path, id, agent.Unusable)
+	}
+	return nil
+}
+
+// definitionToolset resolves a definition's own tool palette: allow
+// expanded (an omitted list inherits every tool), minus deny — before
+// the user's disabled_tools. Policy is not a definition error (#433),
+// so the load-time sanity check reads this set, not the policy-filtered
+// AllowedTools the resolved Agent carries.
+func definitionToolset(def AgentDefinition) []string {
+	var toolsSpec AgentTools
+	if def.Tools != nil {
+		toolsSpec = *def.Tools
+	}
+	allow := allToolNames()
+	if toolsSpec.Allow != nil {
+		allow = expandToolRefs(toolsSpec.Allow)
+	}
+	if deny := expandToolRefs(toolsSpec.Deny); len(deny) > 0 {
+		allow = slices.DeleteFunc(allow, func(name string) bool {
+			return slices.Contains(deny, name)
+		})
+	}
+	return allow
+}
+
+// ValidateAgentToolsets runs the load-time sanity checks (#433): an
+// enabled coder, plan, or dispatch agent whose definition resolves to no
+// tools fails the load instead of quietly producing an agent that can do
+// nothing. The user's disabled_tools and permissions deny are policy,
+// not definition errors — they keep their runtime behavior, including
+// the #376 refusal. A disabled agent always loads: it is the opt-out.
+// It runs after SetupAgents, at load and reload time, and names the
+// config path in every error.
+func (c *Config) ValidateAgentToolsets() error {
+	effective := effectiveAgentDefinitions(c.AgentDefinitions)
+	for _, id := range slices.Sorted(maps.Keys(effective)) {
+		switch definitionRole(id, effective[id]) {
+		case AgentRoleMain, AgentRoleDispatch:
+		default:
+			continue
+		}
+		if agent, ok := c.Agents[id]; !ok || agent.Disabled {
+			continue
+		}
+		if len(definitionToolset(effective[id])) > 0 {
+			continue
+		}
+		return fmt.Errorf("agents.%s: enabled agent resolves to no tools", id)
+	}
+	return nil
 }
 
 // ResolveTodoEnforcement layers the per-agent config over over the global

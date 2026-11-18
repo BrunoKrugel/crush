@@ -11,8 +11,8 @@ import (
 	"sync"
 
 	"github.com/charmbracelet/crush/internal/db"
-	"github.com/charmbracelet/crush/internal/goal"
 	"github.com/charmbracelet/crush/internal/event"
+	"github.com/charmbracelet/crush/internal/goal"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/google/uuid"
 	"github.com/zeebo/xxh3"
@@ -50,24 +50,24 @@ func HasIncompleteTodos(todos []Todo) bool {
 }
 
 type Session struct {
-	ID               string
-	ParentSessionID  string
-	Title            string
-	MessageCount     int64
-	PromptTokens     int64
-	CompletionTokens int64
-	EstimatedUsage   bool
-	SummaryMessageID string
-	Cost             float64
-	Todos            []Todo
-	Channel          string
-	CreatedAt        int64
-	UpdatedAt        int64
+	ID                   string
+	ParentSessionID      string
+	Title                string
+	MessageCount         int64
+	PromptTokens         int64
+	CompletionTokens     int64
+	EstimatedUsage       bool
+	SummaryMessageID     string
+	Cost                 float64
+	Todos                []Todo
+	Channel              string
+	CreatedAt            int64
+	UpdatedAt            int64
 	ForkedFromSessionID  string
 	ForkedFromSnapshotID string
 	ForkedFromMessageID  string
 	SummaryCutMessageID  string
-	Goal             *goal.Goal
+	Goal                 *goal.Goal
 }
 
 type Service interface {
@@ -78,6 +78,16 @@ type Service interface {
 	Get(ctx context.Context, id string) (Session, error)
 	GetLast(ctx context.Context) (Session, error)
 	List(ctx context.Context) ([]Session, error)
+	// ListChildren returns the sessions whose ParentSessionID is the
+	// given session, oldest first (creation order) — the inverse of List's
+	// parent-only filter (#314). Includes every child kind (task
+	// sessions and title sessions); callers filter by kind.
+	ListChildren(ctx context.Context, parentID string) ([]Session, error)
+	// ListAllChildren returns every child session of every parent in
+	// one grouped query (#408), grouped by parent and oldest-created
+	// first. Includes every child kind; callers filter by kind.
+	// Never contains a top-level session.
+	ListAllChildren(ctx context.Context) ([]Session, error)
 	Save(ctx context.Context, session Session) (Session, error)
 	SetChannel(ctx context.Context, sessionID, channel string) (Session, error)
 	UpdateTitleAndUsage(ctx context.Context, sessionID, title string, promptTokens, completionTokens int64, cost float64) error
@@ -298,6 +308,42 @@ func (s *service) List(ctx context.Context) ([]Session, error) {
 	return sessions, nil
 }
 
+// ListChildren returns the sessions whose ParentSessionID is the given
+// session, oldest first (creation order) — the inverse of List's
+// parent-only filter (#314). Includes every child kind (task sessions and
+// title sessions); callers filter by kind.
+func (s *service) ListChildren(ctx context.Context, parentID string) ([]Session, error) {
+	dbSessions, err := s.q.ListChildSessions(ctx, sql.NullString{
+		String: parentID,
+		Valid:  parentID != "",
+	})
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]Session, len(dbSessions))
+	for i, dbSession := range dbSessions {
+		sessions[i] = s.fromDBItem(dbSession)
+		s.applyEstimatedUsageState(&sessions[i])
+	}
+	return sessions, nil
+}
+
+// ListAllChildren lists every child session of every parent in one grouped
+// query (#408) instead of one query per parent. Never contains a top-level
+// session.
+func (s *service) ListAllChildren(ctx context.Context) ([]Session, error) {
+	dbSessions, err := s.q.ListAllChildSessions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]Session, len(dbSessions))
+	for i, dbSession := range dbSessions {
+		sessions[i] = s.fromDBItem(dbSession)
+		s.applyEstimatedUsageState(&sessions[i])
+	}
+	return sessions, nil
+}
+
 // publishSessionUpdate re-fetches a session and publishes an UpdatedEvent so
 // that UI subscribers reflect title or usage changes.
 func (s *service) publishSessionUpdate(ctx context.Context, sessionID string) {
@@ -337,18 +383,21 @@ func (s *service) fromDBItem(item db.Session) Session {
 		slog.Error("Failed to unmarshal todos", "session_id", item.ID, "error", err)
 	}
 	return Session{
-		ID:               item.ID,
-		ParentSessionID:  item.ParentSessionID.String,
-		Title:            item.Title,
-		MessageCount:     item.MessageCount,
-		PromptTokens:     item.PromptTokens,
-		CompletionTokens: item.CompletionTokens,
-		SummaryMessageID: item.SummaryMessageID.String,
-		Cost:             item.Cost,
-		Todos:            todos,
-		Channel:          item.Channel.String,
-		CreatedAt:        item.CreatedAt,
-		UpdatedAt:        item.UpdatedAt,
+		ID:                   item.ID,
+		ParentSessionID:      item.ParentSessionID.String,
+		Title:                item.Title,
+		MessageCount:         item.MessageCount,
+		PromptTokens:         item.PromptTokens,
+		CompletionTokens:     item.CompletionTokens,
+		SummaryMessageID:     item.SummaryMessageID.String,
+		Cost:                 item.Cost,
+		Todos:                todos,
+		Channel:              item.Channel.String,
+		CreatedAt:            item.CreatedAt,
+		UpdatedAt:            item.UpdatedAt,
+		ForkedFromSessionID:  item.ForkedFromSessionID.String,
+		ForkedFromSnapshotID: item.ForkedFromSnapshotID.String,
+		ForkedFromMessageID:  item.ForkedFromMessageID.String,
 	}
 }
 

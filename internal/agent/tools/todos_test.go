@@ -47,6 +47,14 @@ func (m *mockSessionService) List(ctx context.Context) ([]session.Session, error
 	return nil, nil
 }
 
+func (m *mockSessionService) ListChildren(context.Context, string) ([]session.Session, error) {
+	return nil, nil
+}
+
+func (m *mockSessionService) ListAllChildren(context.Context) ([]session.Session, error) {
+	return nil, nil
+}
+
 func (m *mockSessionService) Save(ctx context.Context, s session.Session) (session.Session, error) {
 	m.sessions[s.ID] = s
 	return s, nil

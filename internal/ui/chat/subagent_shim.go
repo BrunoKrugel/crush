@@ -53,6 +53,7 @@ func dispatchRunModel(opts *ToolRenderOpts) string {
 func SubagentReportTitle(sty *styles.Styles, label string) string {
 	return sty.Tool.NameNormal.Render("Subagent Report") + " " + subagentTarget(sty, label)
 }
+
 func subagentTarget(sty *styles.Styles, label string) string {
 	return sty.Tool.MCPArrow.String() + " " + RenderSubagentName(sty, label)
 }

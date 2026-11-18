@@ -266,10 +266,12 @@ func (m *UI) drawSidebar(scr uv.Screen, area uv.Rectangle) {
 	skillsCount := len(m.skillStatusItems())
 	agentsCount := len(m.agentStatusItems())
 	channelsCount := len(m.channelStatusItems())
+	subAgentsCount := len(m.subAgentStatuses())
 
 	// The always-on sections render even when empty (a "None"
-	// placeholder); the opt-in ones (Agents, the dispatch roster per
-	// #434, and Channels) hide entirely when they have nothing to list.
+	// placeholder); the opt-in ones (Subagents, Agents, the dispatch
+	// roster per #434, and Channels) hide entirely when they have
+	// nothing to list.
 	sections := []sidebarSection{
 		{count: filesCount, render: func(maxItems int) string {
 			return m.filesInfo(m.com.Workspace.WorkingDir(), contentWidth, maxItems, true)
@@ -277,6 +279,9 @@ func (m *UI) drawSidebar(scr uv.Screen, area uv.Rectangle) {
 		{count: lspsCount, render: func(maxItems int) string { return m.lspInfo(contentWidth, maxItems, true) }},
 		{count: mcpsCount, render: func(maxItems int) string { return m.mcpInfo(contentWidth, maxItems, true) }},
 		{count: skillsCount, render: func(maxItems int) string { return m.skillsInfo(contentWidth, maxItems, true) }},
+		{count: subAgentsCount, optional: true, render: func(maxItems int) string {
+			return m.subAgentsInfo(m.subAgentStatuses(), contentWidth, maxItems, true)
+		}},
 		{count: agentsCount, optional: true, render: func(maxItems int) string { return m.agentsInfo(contentWidth, maxItems, true) }},
 		{count: channelsCount, optional: true, render: func(maxItems int) string { return m.channelsInfo(contentWidth, maxItems, true) }},
 	}

@@ -28,6 +28,7 @@ package model
 import (
 	"context"
 	"errors"
+	"runtime"
 	"slices"
 	"time"
 
@@ -109,6 +110,8 @@ type promptQueueMsg struct {
 // agentRunSubmittedMsg reports whether AgentRun accepted a prompt. A
 // rejected prompt gets no RunComplete, so err must end its turn.
 type agentRunSubmittedMsg struct {
+	// pendingID is the optimistic queue entry for the prompt, or zero.
+	pendingID uint64
 	err       error
 	sessionID string
 	gen       uint64
@@ -162,6 +165,10 @@ func (m *UI) dispatchBusyRefresh() tea.Cmd {
 		return nil
 	}
 	m.busyFetchInFlight = true
+	if pc, file, line, ok := runtime.Caller(1); ok {
+		println("DISPATCH from", file, line)
+		_ = pc
+	}
 	ws := m.com.Workspace
 	sessionID := m.currentSessionID()
 	gen := m.busyFetchGen
@@ -282,14 +289,14 @@ func (m *UI) dispatchPromptQueueRefresh() tea.Cmd {
 		return nil
 	}
 	if !m.hasSession() {
-		m.promptQueueItems = nil
 		m.promptQueueCheckedAt = time.Now()
 		// Bump the generation so any in-flight fetch scoped to the
 		// now-departed session is discarded rather than repopulating the
 		// queue.
 		m.invalidatePromptQueue()
-		if m.promptQueue != 0 {
-			m.promptQueue = 0
+		prev := m.promptQueue.Shown()
+		m.promptQueue.Reset()
+		if prev != 0 {
 			m.updateLayoutAndSize()
 		}
 		return nil
@@ -322,10 +329,10 @@ func (m *UI) applyPromptQueue(msg promptQueueMsg) []tea.Cmd {
 		return nil
 	}
 	m.promptQueueCheckedAt = time.Now()
-	itemsChanged := !slices.Equal(m.promptQueueItems, msg.prompts)
-	countChanged := len(msg.prompts) != m.promptQueue
-	m.promptQueueItems = msg.prompts
-	m.promptQueue = len(msg.prompts)
+	prevItems := m.promptQueue.Items()
+	m.promptQueue.SetFetched(msg.prompts)
+	itemsChanged := !slices.Equal(prevItems, m.promptQueue.Items())
+	countChanged := len(prevItems) != m.promptQueue.Shown()
 	if countChanged {
 		m.updateLayoutAndSize()
 	} else if itemsChanged {
@@ -385,8 +392,8 @@ const (
 // by Shift+Tab so that cycle stays a yolo toggle. Returns the new mode.
 // Enabling yolo clears auto mode; disabling yolo leaves auto mode alone.
 func (m *UI) toggleYoloMode() bool {
-	yolo := !m.yoloModeCached()
-	m.writePermissionMode(yolo, m.autoModeCached() && !yolo)
+	yolo := !m.yoloForToggle()
+	m.writePermissionMode(yolo, m.autoForToggle() && !yolo)
 	return yolo
 }
 
@@ -396,9 +403,9 @@ func (m *UI) toggleYoloMode() bool {
 func (m *UI) cyclePermissionMode() permissionMode {
 	var next permissionMode
 	switch {
-	case !m.autoModeCached() && !m.yoloModeCached():
+	case !m.autoForToggle() && !m.yoloForToggle():
 		next = permissionModeAuto
-	case m.autoModeCached():
+	case m.autoForToggle():
 		next = permissionModeYolo
 	default:
 		next = permissionModeNormal
@@ -436,15 +443,35 @@ func (m *UI) writePermissionMode(yolo, auto bool) {
 
 // yoloModeCached reports the memoized permission-skip ("yolo") mode. Toggles
 // write through the cache; the Update-tail backstop keeps it bounded-stale
-// otherwise.
+// otherwise. Read paths never probe the workspace.
 func (m *UI) yoloModeCached() bool {
 	return m.yoloCache.val
 }
 
 // autoModeCached reports the memoized native auto-mode flag. The ctrl+y
 // cycle writes through the cache; the Update-tail backstop keeps it
-// bounded-stale otherwise.
+// bounded-stale otherwise. Read paths never probe the workspace.
 func (m *UI) autoModeCached() bool {
+	return m.autoCache.val
+}
+
+// yoloForToggle reports the memoized yolo flag for a toggle or cycle step,
+// probing the workspace once when the cache is cold (New seeds it at
+// construction, so this only covers UIs built outside New) and stamping
+// fresh so the same toggle never re-probes.
+func (m *UI) yoloForToggle() bool {
+	if !m.yoloCache.fresh(busyCacheTTL) {
+		m.yoloCache.set(m.com.Workspace.PermissionSkipRequests())
+	}
+	return m.yoloCache.val
+}
+
+// autoForToggle is autoModeCached with the same cold-cache probe as
+// yoloForToggle.
+func (m *UI) autoForToggle() bool {
+	if !m.autoCache.fresh(busyCacheTTL) {
+		m.autoCache.set(m.com.Workspace.PermissionAutoMode())
+	}
 	return m.autoCache.val
 }
 

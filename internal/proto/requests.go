@@ -138,6 +138,13 @@ type MCPNameRequest struct {
 
 // MCPSetServerDisabledRequest toggles a repository-scoped MCP server
 // override for the workspace's Toggle MCPs dialog.
+// MCPCallToolRequest represents a request to call a tool on an MCP server.
+type MCPCallToolRequest struct {
+	Args     map[string]any `json:"args"`
+	Name     string         `json:"name"`
+	ToolName string         `json:"tool_name"`
+}
+
 type MCPSetServerDisabledRequest struct {
 	Name     string `json:"name"`
 	Disabled bool   `json:"disabled"`

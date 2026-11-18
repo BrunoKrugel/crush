@@ -11,7 +11,9 @@ import (
 // Snapshot surfaces rely on the workspace interface; fork UI helpers keep
 // them inert in this build.
 
-func (m *UI) fakeListSnapshots(ctx context.Context, sessionID string) ([]string, error) { return nil, nil }
+func (m *UI) fakeListSnapshots(ctx context.Context, sessionID string) ([]string, error) {
+	return nil, nil
+}
 
 type fakeSnapshot struct{ hash string }
 

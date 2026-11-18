@@ -20,6 +20,7 @@ import (
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/proto"
+	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/skills"
 	"github.com/stretchr/testify/require"
@@ -78,6 +79,62 @@ type completedDispatch struct {
 	err    error
 	runID  string
 	marked bool
+}
+
+// The broker hands events to subscribers through an unbuffered channel, so
+// len(ch) is always 0 even while events are pending: publishers park them in
+// the subscription queue and the pump blocks on the out channel until a
+// reader arrives. These helpers receive events with a bounded wait instead.
+
+// collectAgentErrors reads agent-error notifications until it has want of
+// them, skipping other notification types, then keeps reading for a short
+// window so a duplicate error surfaces in the caller's length check.
+func collectAgentErrors(t *testing.T, ch <-chan pubsub.Event[notify.Notification], want int) []notify.Notification {
+	t.Helper()
+	var errs []notify.Notification
+	for len(errs) < want {
+		select {
+		case ev := <-ch:
+			if ev.Payload.Type == notify.TypeAgentError {
+				errs = append(errs, ev.Payload)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("timed out: got %d agent-error notifications, want %d", len(errs), want)
+		}
+	}
+	for {
+		select {
+		case ev := <-ch:
+			if ev.Payload.Type == notify.TypeAgentError {
+				errs = append(errs, ev.Payload)
+			}
+		case <-time.After(50 * time.Millisecond):
+			return errs
+		}
+	}
+}
+
+// collectCompletions reads want RunComplete events, then keeps reading for a
+// short window so unexpected duplicates surface in the caller's length check.
+func collectCompletions(t *testing.T, ch <-chan pubsub.Event[notify.RunComplete], want int) []notify.RunComplete {
+	t.Helper()
+	got := make([]notify.RunComplete, 0, want)
+	for len(got) < want {
+		select {
+		case ev := <-ch:
+			got = append(got, ev.Payload)
+		case <-time.After(5 * time.Second):
+			t.Fatalf("timed out: got %d run completions, want %d", len(got), want)
+		}
+	}
+	for {
+		select {
+		case ev := <-ch:
+			got = append(got, ev.Payload)
+		case <-time.After(50 * time.Millisecond):
+			return got
+		}
+	}
 }
 
 // Observe the real coordinator's completion marker without changing its
@@ -235,27 +292,16 @@ func TestSendMessage_PreparationFailureCompletion(t *testing.T) {
 					}
 				}
 				ws.runWG.Wait()
-				var reported []notify.Notification
-				for len(notifications) > 0 {
-					n := (<-notifications).Payload
-					if n.Type == notify.TypeAgentError {
-						reported = append(reported, n)
-					}
-				}
+				reported := collectAgentErrors(t, notifications, 1)
 				require.Len(t, reported, 1)
 				require.Equal(t, "failing", reported[0].RunID)
 				require.Contains(t, reported[0].Message, failure.Error())
 
-				// All publishers have returned. Read buffered events without
-				// sleeps, counting duplicates rather than overwriting by RunID.
-				var got []notify.RunComplete
-				for len(completions) > 0 {
-					got = append(got, (<-completions).Payload)
-				}
 				wantCount := 1
 				if promoted {
 					wantCount = 2
 				}
+				got := collectCompletions(t, completions, wantCount)
 				require.Len(t, got, wantCount)
 				for _, complete := range got {
 					require.Equal(t, sess.ID, complete.SessionID)

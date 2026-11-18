@@ -252,7 +252,7 @@ type UI struct {
 	mcpCheckedAt         time.Time
 	lastClickTime        time.Time
 	promptQueueCheckedAt time.Time
-	hostTheme            *hostThemeState
+	hostTheme            hostThemeState
 	activeInline         dialog.InlineEditor
 	notifyBackend        notification.Backend
 	lspDiagnostics       map[string]lsp.DiagnosticCounts
@@ -378,48 +378,52 @@ type UI struct {
 	submissionGen            uint64
 	pendingSubmissions       int
 	lastUserMessageTime      int64
-	promptQueue              int
-	wheelRemainder           float64
-	lastCompletionStart      int
-	inspectRingPos           int
-	completionsTrigger       completions.Trigger
-	scrollOnlyUpdate         bool
-	modeSwitching            bool
-	frameDirty               bool
-	frameSkipPut             bool
-	forceCompactMode         bool
-	isCompact                bool
-	detailsOpen              bool
-	pillsExpanded            bool
-	pillsAutoExpanded        bool
-	turnStopPending          bool
-	frameGCArmed             bool
-	mode                     uiInputMode
-	promptQueueInFlight      bool
-	state                    uiState
-	focus                    uiFocusState
-	userThemeSelected        bool
-	busyFetchInFlight        bool
-	agentReady               bool
-	mouseEnabled             bool
-	notifyWindowFocused      bool
-	isTransparent            bool
-	probedSessionBusy        bool
-	permMode                 permission.PermissionMode
-	isCanceling              bool
-	bangMode                 bool
-	bangWasEmpty             bool
-	mcpRefreshQueued         bool
-	mcpFetchInFlight         bool
-	todoIsSpinning           bool
-	sendProgressBar          bool
-	progressBarEnabled       bool
-	lspRefreshQueued         bool
-	lspFetchInFlight         bool
-	completionsOpen          bool
-	continueLastSession      bool
-	onboarding               struct{ yesInitializeSelected bool }
-	inspectFollow            bool
+	// promptQueue is what the queue pill shows. Its server side is
+	// event-driven with a TTL backstop, fetched off-thread by
+	// dispatchPromptQueueRefresh (see workspace_cache.go).
+	promptQueue         promptQueue
+	wheelRemainder      float64
+	lastCompletionStart int
+	inspectRingPos      int
+	completionsTrigger  completions.Trigger
+	scrollOnlyUpdate    bool
+	modeSwitching       bool
+	frameDirty          bool
+	frameSkipPut        bool
+	forceCompactMode    bool
+	isCompact           bool
+	detailsOpen         bool
+	pillsExpanded       bool
+	pillsAutoExpanded   bool
+	focusedPillSection  pillSection
+	turnStopPending     bool
+	frameGCArmed        bool
+	mode                uiInputMode
+	promptQueueInFlight bool
+	state               uiState
+	focus               uiFocusState
+	userThemeSelected   bool
+	busyFetchInFlight   bool
+	agentReady          bool
+	mouseEnabled        bool
+	notifyWindowFocused bool
+	isTransparent       bool
+	probedSessionBusy   bool
+	permMode            permission.PermissionMode
+	isCanceling         bool
+	bangMode            bool
+	bangWasEmpty        bool
+	mcpRefreshQueued    bool
+	mcpFetchInFlight    bool
+	todoIsSpinning      bool
+	sendProgressBar     bool
+	progressBarEnabled  bool
+	lspRefreshQueued    bool
+	lspFetchInFlight    bool
+	completionsOpen     bool
+	continueLastSession bool
+	onboarding          struct{ yesInitializeSelected bool }
+	inspectFollow       bool
 }
 
 // New creates a new instance of the [UI] model.
@@ -874,6 +878,8 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 	case agentRunSubmittedMsg:
+		// The fetch below shows the prompt if it was queued.
+		m.promptQueue.Settle(msg.pendingID)
 		cmds = append(cmds, m.submissionFinished(msg.sessionID, msg.gen, msg.err, false))
 		if msg.err != nil {
 			// The run never started, so no terminal event is coming to
@@ -991,8 +997,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// session instead of a stale one.
 		m.invalidateBusyCaches()
 		m.invalidatePromptQueue()
-		m.promptQueue = 0
-		m.promptQueueItems = nil
+		m.promptQueue.Reset()
 		m.promptQueueCheckedAt = time.Time{}
 		m.cronTasks = nil
 		if cmd := m.dispatchBusyRefresh(); cmd != nil {
@@ -1758,6 +1763,23 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}))
 	case workspace.ConnectionEvent:
 		cmds = append(cmds, m.handleConnectionEvent(msg)...)
+	case workspace.HostThemeEvent:
+		if cmd := m.handleHostThemeEvent(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	case hostThemeStylesMsg:
+		if cmd := m.handleHostThemeStyles(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	case transparencyToggledMsg:
+		// The user's choice wins over a host theme's override.
+		m.isTransparent = msg.transparent
+		m.hostTheme.transparent = false
+		status := "disabled"
+		if msg.transparent {
+			status = "enabled"
+		}
+		cmds = append(cmds, util.ReportInfo("Transparent background "+status))
 	case util.ClearStatusMsg:
 		m.status.ClearInfoMsg(msg.Seq)
 	case completions.CompletionItemsLoadedMsg:
@@ -2729,24 +2751,18 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		}))
 		m.dialog.CloseDialog(dialog.CommandsID)
 	case dialog.ActionToggleTransparentBackground:
+		// Flip what is on screen, which a host theme may have overridden,
+		// rather than the config value.
+		newValue := !m.isTransparent
+		ws := m.com.Workspace
 		cmds = append(cmds, func() tea.Msg {
-			cfg := m.com.Config()
-			if cfg == nil {
+			if ws.Config() == nil {
 				return util.ReportError(errors.New("configuration not found"))()
 			}
-
-			isTransparent := cfg.Options != nil && cfg.Options.TUI.Transparent != nil && *cfg.Options.TUI.Transparent
-			newValue := !isTransparent
-			if err := m.com.Workspace.SetConfigField(config.ScopeGlobal, "options.tui.transparent", newValue); err != nil {
+			if err := ws.SetConfigField(config.ScopeGlobal, "options.tui.transparent", newValue); err != nil {
 				return util.ReportError(err)()
 			}
-			m.isTransparent = newValue
-
-			status := "disabled"
-			if newValue {
-				status = "enabled"
-			}
-			return util.NewInfoMsg("Transparent background " + status)
+			return transparencyToggledMsg{transparent: newValue}
 		})
 		m.dialog.CloseDialog(dialog.CommandsID)
 	case dialog.ActionSwitchTheme:
@@ -2766,19 +2782,14 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		}
 		m.applyTheme(newStyles)
 		m.preThemeStyles = nil
+		m.userAppliedTheme()
 		cmds = append(cmds, util.ReportInfo("Theme switched to "+themeName))
 		m.userThemeSelected = true
 		m.dialog.CloseDialog(dialog.ThemeID)
 	case dialog.ActionPreviewTheme:
-		newStyles, err := styles.LoadTheme(msg.Theme)
-		if err != nil {
-			break
+		if newStyles, err := styles.LoadTheme(msg.Theme); err == nil {
+			m.previewTheme(newStyles)
 		}
-		if m.preThemeStyles == nil {
-			saved := m.com.Styles.Clone()
-			m.preThemeStyles = &saved
-		}
-		m.previewTheme(newStyles)
 	case dialog.ActionRevertThemePreview:
 		if m.preThemeStyles != nil {
 			m.applyTheme(*m.preThemeStyles)
@@ -2786,15 +2797,9 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		}
 		m.dialog.CloseDialog(dialog.ThemeID)
 	case dialog.ActionPreviewThemePalette:
-		newStyles, err := styles.LoadPaletteTheme(msg.Base, msg.Palette)
-		if err != nil {
-			break
+		if newStyles, err := styles.LoadPaletteTheme(msg.Base, msg.Palette); err == nil {
+			m.previewTheme(newStyles)
 		}
-		if m.preThemeStyles == nil {
-			saved := m.com.Styles.Clone()
-			m.preThemeStyles = &saved
-		}
-		m.previewTheme(newStyles)
 	case dialog.ActionSaveThemePalette:
 		// The theme is stored under its own name; Base only identifies the
 		// built-in palette its colors are derived from.
@@ -2833,6 +2838,7 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 			}
 			m.applyTheme(newStyles)
 			m.preThemeStyles = nil
+			m.userAppliedTheme()
 		}
 		cmds = append(cmds, util.ReportInfo("Theme saved"))
 		m.dialog.CloseDialog(dialog.ThemeEditorID)
@@ -2861,6 +2867,10 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		if strings.EqualFold(common.ThemeNameFromConfig(m.com.Config()), msg.Name) {
 			if newStyles, err := styles.LoadTheme(msg.Name); err == nil {
 				m.applyTheme(newStyles)
+				// A preview snapshot holds the styles from before the
+				// revert; esc must not bring them back.
+				m.preThemeStyles = nil
+				m.userAppliedTheme()
 			}
 		}
 		cmds = append(cmds, util.ReportInfo("Reverted "+msg.Name+" to its built-in colors"))
@@ -2943,6 +2953,7 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 			}
 			m.applyTheme(newStyles)
 			m.preThemeStyles = nil
+			m.userAppliedTheme()
 		}
 		cmds = append(cmds, util.ReportInfo("Deleted theme "+msg.Name))
 		m.dialog.CloseDialog(dialog.ThemeID)
@@ -4636,7 +4647,7 @@ func (m *UI) ShortHelp() []key.Binding {
 			cancelBinding := k.Chat.Cancel
 			if m.isCanceling {
 				cancelBinding.SetHelp("esc", "press again to cancel")
-			} else if m.promptQueue > 0 {
+			} else if m.promptQueue.ServerQueued() {
 				cancelBinding.SetHelp("esc", "clear queue")
 			}
 			binds = append(binds, cancelBinding)
@@ -4773,7 +4784,7 @@ func (m *UI) FullHelp() [][]key.Binding {
 			cancelBinding := k.Chat.Cancel
 			if m.isCanceling {
 				cancelBinding.SetHelp("esc", "press again to cancel")
-			} else if m.promptQueue > 0 {
+			} else if m.promptQueue.ServerQueued() {
 				cancelBinding.SetHelp("esc", "clear queue")
 			}
 			binds = append(binds, []key.Binding{cancelBinding})
@@ -6552,7 +6563,10 @@ func (m *UI) applyThemeForProvider(providerID string) {
 		return
 	}
 	m.themeKey = key
-	m.applyTheme(styles.ThemeForProvider(providerID))
+	if m.hostTheme.active {
+		return
+	}
+	m.applyTheme(styles.ThemeForKey(key))
 }
 
 // applyTheme replaces the active styles with the given theme, drops the
@@ -6562,19 +6576,17 @@ func (m *UI) applyTheme(s styles.Styles) {
 	*m.com.Styles = s
 	common.InvalidateStyleCaches()
 	m.refreshStyles()
-	m.chat.InvalidateRenderCaches()
+	m.chat.Restyle()
 }
 
-// previewTheme applies the given styles for live preview inside an open
-// theme dialog. The whole interface updates, but only the chat messages
-// currently on screen re-render; the rest of the transcript keeps its
-// cached output so browsing themes stays fast in large sessions. Off-screen
-// messages follow along when the theme is actually applied.
+// previewTheme shows a theme from an open theme dialog, saving the theme in
+// effect beforehand so closing the dialog can restore it.
 func (m *UI) previewTheme(s styles.Styles) {
-	*m.com.Styles = s
-	common.InvalidateStyleCaches()
-	m.refreshStyles()
-	m.chat.InvalidateVisibleRenderCaches()
+	if m.preThemeStyles == nil {
+		saved := m.com.Styles.Clone()
+		m.preThemeStyles = &saved
+	}
+	m.applyTheme(s)
 }
 
 // refreshStyles pushes the current *m.com.Styles into every subcomponent
@@ -6597,10 +6609,9 @@ func (m *UI) refreshStyles() {
 	m.attachments.Renderer().SetStyles(t.Attachments)
 	m.todoSpinner.Style = t.Pills.TodoSpinner
 	m.status.help.Styles = t.Help
-	if d := m.dialog.Dialog(dialog.ThemeID); d != nil {
-		if td, ok := d.(*dialog.Theme); ok {
-			td.RefreshStyles()
-		}
+	m.dialog.RefreshStyles()
+	if r, ok := m.activeInline.(dialog.StyleRefresher); ok {
+		r.RefreshStyles()
 	}
 }
 
@@ -6752,6 +6763,14 @@ func (m *UI) sendMessageInternal(content string, hidden bool, attachments ...mes
 	m.sessionBusyCache.setForSession(true, sessionID)
 	m.busyFetchGen++
 	m.invalidatePromptQueue()
+	// A prompt sent behind a busy turn shows in the queue pill right away
+	// rather than once the agent has built its run and enqueued it. Hidden
+	// prompts never show, matching the server's list.
+	var pendingID uint64
+	if queued && !hidden {
+		pendingID = m.promptQueue.Add(content)
+		m.updateLayoutAndSize()
+	}
 	cmds = append(cmds, func() tea.Msg {
 		// AgentRun is fire-and-forget: it returns once the prompt has
 		// been accepted (HTTP 202) or synchronously with a validation
@@ -6768,7 +6787,7 @@ func (m *UI) sendMessageInternal(content string, hidden bool, attachments ...mes
 		if errors.Is(err, context.Canceled) {
 			err = nil
 		}
-		return agentRunSubmittedMsg{sessionID: sessionID, err: err}
+		return agentRunSubmittedMsg{sessionID: sessionID, pendingID: pendingID, err: err}
 	})
 	return tea.Batch(cmds...)
 }
@@ -6974,12 +6993,11 @@ func (m *UI) cancelAgent() tea.Cmd {
 		return m.dispatchBusyRefresh()
 	}
 
-	// Queued prompts pending: esc clears the queue. Decide from the cached
-	// count (event-driven) instead of a synchronous workspace probe.
-	if m.promptQueue > 0 {
+	// Queued prompts pending: esc clears the queue, decided from the cached
+	// queue rather than a synchronous workspace probe.
+	if m.promptQueue.ServerQueued() {
 		m.com.Workspace.AgentClearQueue(m.session.ID)
-		m.promptQueue = 0
-		m.promptQueueItems = nil
+		m.promptQueue.ClearServer()
 		m.promptQueueCheckedAt = time.Now()
 		// Bump the queue generation so a fetch started before this clear
 		// cannot land and repopulate the pill we just emptied.
@@ -7118,10 +7136,10 @@ func (m *UI) openCommandsDialog() tea.Cmd {
 		sessionID = m.session.ID
 	}
 	hasTodos := hasSession && hasIncompleteTodos(m.session.Todos)
-	hasQueue := m.promptQueue > 0
+	hasQueue := m.promptQueue.Shown() > 0
 	hasCron := len(m.cronTasks) > 0
 
-	commands, err := dialog.NewCommands(m.com, sessionID, hasSession, hasTodos, hasQueue, hasCron, m.customCommands, m.mcpPrompts)
+	commands, err := dialog.NewCommands(m.com, sessionID, hasSession, hasTodos, hasQueue, hasCron, m.isTransparent, m.customCommands, m.mcpPrompts)
 	if err != nil {
 		return util.ReportError(err)
 	}
@@ -7299,10 +7317,10 @@ func (m *UI) openBatchFormDialog(batch question.Request) bool {
 
 	form := dialog.NewQuestionForm(m.com.Styles, batch)
 	form.OnAnswer = func(responses []question.Answer) {
-		m.com.Workspace.QuestionAnswer(responses)
+		m.com.Workspace.QuestionAnswer(batch.ID, responses)
 	}
 	form.OnCancel = func() {
-		m.com.Workspace.QuestionCancel()
+		m.com.Workspace.QuestionCancel(batch.ID)
 	}
 	m.activeInline = form
 	m.textarea.Blur()
@@ -7720,8 +7738,7 @@ func (m *UI) newSession() tea.Cmd {
 	m.chat.ClearMessages()
 	m.pillsExpanded = false
 	m.pillsAutoExpanded = false
-	m.promptQueue = 0
-	m.promptQueueItems = nil
+	m.promptQueue.Reset()
 	m.promptQueueCheckedAt = time.Now()
 	m.invalidateBusyCaches()
 	m.invalidatePromptQueue()

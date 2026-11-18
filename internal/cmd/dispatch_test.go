@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charmbracelet/crush/internal/dispatch"
@@ -120,16 +121,33 @@ func addDispatchFixture(t *testing.T, repo, wtDir, name, disposition, handle str
 	return branch
 }
 
+// setDispatchFlags points the dispatch subcommands at repo and dataDir by
+// setting the root command's persistent flags directly: cobra only merges
+// inherited persistent flags into a subcommand during Execute, and the
+// tests call RunE directly, so the shared flag set is also added to each
+// subcommand's local set.
+func setDispatchFlags(t *testing.T, repo, dataDir string) {
+	t.Helper()
+	require.NoError(t, rootCmd.PersistentFlags().Set("cwd", repo))
+	require.NoError(t, rootCmd.PersistentFlags().Set("data-dir", dataDir))
+	for _, c := range []*cobra.Command{dispatchListCmd, dispatchPruneCmd} {
+		c.Flags().AddFlagSet(rootCmd.PersistentFlags())
+	}
+	t.Cleanup(func() {
+		_ = rootCmd.PersistentFlags().Set("cwd", "")
+		_ = rootCmd.PersistentFlags().Set("data-dir", "")
+	})
+}
+
 // runDispatchList runs `crush dispatch list` with the given flag
 // values, resetting the --json flag afterwards.
 func runDispatchList(t *testing.T, repo, dataDir string, json bool) string {
 	t.Helper()
 	dispatchListCmd.SetContext(context.Background())
 	require.NoError(t, dispatchListCmd.Flags().Set("json", map[bool]string{true: "true", false: "false"}[json]))
-	require.NoError(t, dispatchListCmd.ParseFlags([]string{"--cwd", repo, "--data-dir", dataDir}))
+	setDispatchFlags(t, repo, dataDir)
 	t.Cleanup(func() {
 		_ = dispatchListCmd.Flags().Set("json", "false")
-		_ = dispatchListCmd.ParseFlags([]string{"--cwd", "", "--data-dir", ""})
 	})
 
 	var b strings.Builder
@@ -154,13 +172,12 @@ func runDispatchPrune(t *testing.T, repo, dataDir string, allDead, force, dryRun
 	set("force", force)
 	set("dry-run", dryRun)
 	set("dismissed", dismissed)
-	require.NoError(t, dispatchPruneCmd.ParseFlags([]string{"--cwd", repo, "--data-dir", dataDir}))
+	setDispatchFlags(t, repo, dataDir)
 	t.Cleanup(func() {
 		set("all-dead", false)
 		set("force", false)
 		set("dry-run", false)
 		set("dismissed", true)
-		_ = dispatchPruneCmd.ParseFlags([]string{"--cwd", "", "--data-dir", ""})
 	})
 
 	var b strings.Builder
@@ -330,11 +347,10 @@ func TestDispatchCommandsOutsideGitRepo(t *testing.T) {
 	dataDir := filepath.Join(t.TempDir(), "data")
 
 	require.NoError(t, dispatchListCmd.Flags().Set("json", "false"))
-	require.NoError(t, dispatchListCmd.ParseFlags([]string{"--cwd", notRepo, "--data-dir", dataDir}))
+	setDispatchFlags(t, notRepo, dataDir)
 	err := dispatchListCmd.RunE(dispatchListCmd, nil)
 	require.ErrorContains(t, err, "not a git repository")
 
-	require.NoError(t, dispatchPruneCmd.ParseFlags([]string{"--cwd", notRepo, "--data-dir", dataDir}))
 	err = dispatchPruneCmd.RunE(dispatchPruneCmd, nil)
 	require.ErrorContains(t, err, "not a git repository")
 }

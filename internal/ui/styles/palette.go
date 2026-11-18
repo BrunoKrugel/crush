@@ -61,6 +61,7 @@ func PaletteFields() []PaletteField {
 		{Name: "on_primary", Get: func(p Palette) string { return p.OnPrimary }, Set: func(p *Palette, v string) { p.OnPrimary = v }},
 		{Name: "separator", Get: func(p Palette) string { return p.Separator }, Set: func(p *Palette, v string) { p.Separator = v }},
 		{Name: "destructive", Get: func(p Palette) string { return p.Destructive }, Set: func(p *Palette, v string) { p.Destructive = v }},
+		{Name: "destructive_subtle", Get: func(p Palette) string { return p.DestructiveSubtle }, Set: func(p *Palette, v string) { p.DestructiveSubtle = v }},
 		{Name: "error", Get: func(p Palette) string { return p.Error }, Set: func(p *Palette, v string) { p.Error = v }},
 		{Name: "warning", Get: func(p Palette) string { return p.Warning }, Set: func(p *Palette, v string) { p.Warning = v }},
 		{Name: "warning_subtle", Get: func(p Palette) string { return p.WarningSubtle }, Set: func(p *Palette, v string) { p.WarningSubtle = v }},
@@ -127,6 +128,7 @@ type Palette struct {
 	Separator string `json:"separator,omitempty"`
 
 	Destructive       string `json:"destructive,omitempty"`
+	DestructiveSubtle string `json:"destructive_subtle,omitempty"`
 	Error             string `json:"error,omitempty"`
 	Warning           string `json:"warning,omitempty"`
 	WarningSubtle     string `json:"warning_subtle,omitempty"`
@@ -199,6 +201,7 @@ func PaletteFromOpts(o quickStyleOpts) Palette {
 		Separator: colorToHex(o.separator),
 
 		Destructive:       colorToHex(o.destructive),
+		DestructiveSubtle: colorToHex(o.destructiveSubtle),
 		Error:             colorToHex(o.error),
 		Warning:           colorToHex(o.warning),
 		WarningSubtle:     colorToHex(o.warningSubtle),
@@ -270,6 +273,7 @@ func (p Palette) ToQuickStyleOpts(base quickStyleOpts) quickStyleOpts {
 		separator: resolveColor(p.Separator, base.separator),
 
 		destructive:       resolveColor(p.Destructive, base.destructive),
+		destructiveSubtle: resolveColor(p.DestructiveSubtle, base.destructiveSubtle),
 		error:             resolveColor(p.Error, base.error),
 		warning:           resolveColor(p.Warning, base.warning),
 		warningSubtle:     resolveColor(p.WarningSubtle, base.warningSubtle),
@@ -509,16 +513,17 @@ func LoadPaletteTheme(baseName string, palette Palette) (Styles, error) {
 	if err != nil {
 		return Styles{}, err
 	}
-	s := quickStyle(palette.ToQuickStyleOpts(base.ToQuickStyleOpts(rootOpts)))
+	opts := palette.ToQuickStyleOpts(base.ToQuickStyleOpts(rootOpts))
+	s := quickStyle(opts)
 	// Root theme overrides hardcode built-in colors (e.g. the Charmtone
 	// syntax palette) that only make sense for the untouched built-in.
 	// Only apply them when the theme is unmodified, so user themes (e.g.
 	// light themes) get fully token-driven styles.
 	pure := palette.IsEmpty() && base == PaletteFromOpts(rootOpts)
-	if pure {
-		if override, ok := builtinThemeOverrides[root]; ok {
-			s = override(s)
-		}
+	if !pure {
+		s = legibleBadges(s, opts)
+	} else if override, ok := builtinThemeOverrides[root]; ok {
+		s = override(s)
 	}
 	return s, nil
 }

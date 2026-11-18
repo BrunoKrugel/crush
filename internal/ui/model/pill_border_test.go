@@ -54,7 +54,7 @@ func TestQueuePillAlwaysHasBorder(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			u := newTestUI()
 			u.session = &session.Session{ID: "s1", Todos: tc.todos}
-			u.promptQueue = tc.queue
+			u.promptQueue.SetFetched(make([]string, tc.queue))
 			u.pillsExpanded = tc.expanded
 			u.updateLayoutAndSize()
 			u.renderPills()
@@ -77,8 +77,7 @@ func TestExpandedPillsShowEverySection(t *testing.T) {
 	u.session = &session.Session{ID: "s1", Todos: []session.Todo{
 		{Content: "write the todo", Status: session.TodoStatusPending},
 	}}
-	u.promptQueue = 1
-	u.promptQueueItems = []string{"queued prompt"}
+	u.promptQueue.SetFetched([]string{"queued prompt"})
 	u.cronTasks = []scheduler.Task{{
 		ID:        "abc12345",
 		Prompt:    "scheduled prompt",
@@ -103,7 +102,7 @@ func TestPillsAreaHeightSumsExpandedSections(t *testing.T) {
 		{Content: "a", Status: session.TodoStatusPending},
 		{Content: "b", Status: session.TodoStatusPending},
 	}}
-	u.promptQueue = 3
+	u.promptQueue.SetFetched(make([]string, 3))
 	u.cronTasks = []scheduler.Task{
 		{ID: "t1", NextRunAt: time.Now()},
 		{ID: "t2", NextRunAt: time.Now()},

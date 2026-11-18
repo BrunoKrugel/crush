@@ -181,6 +181,13 @@ type MultiEditResponseMetadata struct {
 	EditsApplied int    `json:"edits_applied"`
 }
 
+// ReplaceSymbolToolName is the name of the lsp_replace_symbol tool.
+const ReplaceSymbolToolName = tools.ReplaceSymbolToolName
+
+// ReplaceSymbolPermissionsParams represents the permission parameters for the
+// lsp_replace_symbol tool.
+type ReplaceSymbolPermissionsParams = tools.ReplaceSymbolPermissionsParams
+
 const SourcegraphToolName = "sourcegraph"
 
 // SourcegraphParams represents the parameters for the sourcegraph tool.
@@ -232,10 +239,3 @@ type WriteResponseMetadata struct {
 	Additions int    `json:"additions"`
 	Removals  int    `json:"removals"`
 }
-
-// ReplaceSymbolToolName is the name of the LSP replace-symbol tool.
-const ReplaceSymbolToolName = tools.ReplaceSymbolToolName
-
-// ReplaceSymbolPermissionsParams represents the permission parameters for
-// the LSP replace-symbol tool.
-type ReplaceSymbolPermissionsParams = tools.ReplaceSymbolPermissionsParams

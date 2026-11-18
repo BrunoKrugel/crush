@@ -299,6 +299,12 @@ type QuestionResponse struct {
 	Notes       map[string]string `json:"notes,omitempty"`
 }
 
+// QuestionCancel is the wire format for cancelling a batch question,
+// sent from client to server via REST.
+type QuestionCancel struct {
+	BatchRequestID string `json:"batch_request_id"`
+}
+
 // QuestionAnswerResponse is the server's response to a
 // question batch answer call.
 type QuestionAnswerResponse struct {
@@ -402,6 +408,19 @@ type PermissionSetModeRequest struct {
 // permission mode changes.
 type PermissionModeEvent struct {
 	Mode WorkspacePermissionMode `json:"mode"`
+}
+
+// PermissionAutoRequest represents a request to enable or disable native
+// auto mode. Auto mode and skip (yolo) are independent.
+type PermissionAutoRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+// ReloadModelDiscoveryResponse is the response for re-running model
+// discovery. Added reports how many models were newly discovered across all
+// providers.
+type ReloadModelDiscoveryResponse struct {
+	Added int `json:"added"`
 }
 
 // PermissionSetAutoModeRequest represents a request to toggle the native

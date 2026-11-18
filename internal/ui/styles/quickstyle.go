@@ -223,6 +223,13 @@ func wcagLuminance(c color.Color) float64 {
 func quickStyle(o quickStyleOpts) Styles {
 	o.deriveDiffColors()
 
+	// destructive_subtle is optional: only Charmtone names a softer hue, and
+	// a theme that leaves it unset should still get a banner body instead of
+	// a nil fill that renders as an empty line.
+	if o.destructiveSubtle == nil {
+		o.destructiveSubtle = o.destructive
+	}
+
 	var (
 		base   = lipgloss.NewStyle().Foreground(o.fgBase)
 		muted  = lipgloss.NewStyle().Foreground(o.fgMoreSubtle)
@@ -855,7 +862,7 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Tool.AgentPrompt = muted
 
 	// Agentic fetch styles
-	s.Tool.AgenticFetchPromptTag = base.Bold(true).Padding(0, 1).MarginLeft(2).Background(o.success).Foreground(o.separator)
+	s.Tool.AgenticFetchPromptTag = base.Bold(true).Padding(0, 1).MarginLeft(2).Background(o.success).Foreground(badgeInk(o.success, o.separator, o.fgBase))
 
 	// Todo styles
 	s.Tool.TodoRatio = base.Foreground(o.infoMostSubtle)
@@ -913,7 +920,7 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Button.Focused = lipgloss.NewStyle().Foreground(o.onPrimary).Background(o.button)
 	s.Button.Blurred = lipgloss.NewStyle().Foreground(o.fgBase).Background(o.buttonSubtle)
 	s.Button.Inactive = lipgloss.NewStyle().Foreground(o.fgBase).Background(o.buttonInactive)
-	s.Button.Hovered = lipgloss.NewStyle().Foreground(o.onPrimary).Background(o.buttonHovered)
+	s.Button.Hovered = lipgloss.NewStyle().Foreground(badgeInk(o.buttonHovered, o.onPrimary, o.fgBase)).Background(o.buttonHovered)
 	s.Button.Negative = lipgloss.NewStyle().Foreground(o.onPrimary).Background(o.error)
 
 	// Editor
@@ -928,7 +935,7 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Editor.PromptPlanIconBlurred = s.Editor.PromptPlanIconFocused.Foreground(o.bgBase).Background(o.fgMoreSubtle)
 	s.Editor.PromptPlanDotsFocused = lipgloss.NewStyle().MarginRight(1).Foreground(o.primary).SetString(":::")
 	s.Editor.PromptPlanDotsBlurred = s.Editor.PromptPlanDotsFocused.Foreground(o.fgMoreSubtle)
-	s.Editor.PromptYoloIconFocused = lipgloss.NewStyle().MarginRight(1).Foreground(o.bgBase).Background(o.busy).Bold(true).SetString(" ! ")
+	s.Editor.PromptYoloIconFocused = lipgloss.NewStyle().MarginRight(1).Foreground(badgeInk(o.busy, o.bgBase, o.fgBase)).Background(o.busy).Bold(true).SetString(" ! ")
 	s.Editor.PromptYoloIconBlurred = s.Editor.PromptYoloIconFocused.Foreground(o.bgBase).Background(o.fgMoreSubtle)
 	s.Editor.PromptYoloDotsFocused = lipgloss.NewStyle().MarginRight(1).Foreground(o.warningSubtle).SetString(":::")
 	s.Editor.PromptYoloDotsBlurred = s.Editor.PromptYoloDotsFocused.Foreground(o.fgMoreSubtle)
@@ -1280,13 +1287,13 @@ func quickStyle(o quickStyleOpts) Styles {
 
 	s.Status.Help = lipgloss.NewStyle().Padding(0, 1)
 	s.Status.ModeBadgePlan = lipgloss.NewStyle().Foreground(o.fgBase).Background(o.primary).Padding(0, 1).Bold(true).SetString("PLAN MODE")
-	s.Status.ModeBadgeYolo = lipgloss.NewStyle().Foreground(o.bgBase).Background(o.busy).Padding(0, 1).Bold(true).SetString("YOLO MODE")
+	s.Status.ModeBadgeYolo = lipgloss.NewStyle().Foreground(badgeInk(o.busy, o.bgBase, o.fgBase)).Background(o.busy).Padding(0, 1).Bold(true).SetString("YOLO MODE")
 	s.Status.ModeBadgeAuto = lipgloss.NewStyle().Foreground(o.onPrimary).Background(o.info).Padding(0, 1).Bold(true).SetString("AUTO")
-	s.Status.ModeBadgeSysadmin = lipgloss.NewStyle().Foreground(o.bgBase).Background(o.destructive).Padding(0, 1).Bold(true).SetString("SYSADMIN MODE")
+	s.Status.ModeBadgeSysadmin = lipgloss.NewStyle().Foreground(badgeInk(o.destructive, o.bgBase, o.fgBase)).Background(o.destructive).Padding(0, 1).Bold(true).SetString("SYSADMIN MODE")
 	s.Status.ModeBannerPlanBadge = s.Status.ModeBadgePlan
 	s.Status.ModeBannerPlan = lipgloss.NewStyle().Foreground(o.fgBase).Background(o.planMoreSubtle).Padding(0, 1)
 	s.Status.ModeBannerYoloBadge = s.Status.ModeBadgeYolo
-	s.Status.ModeBannerYolo = lipgloss.NewStyle().Foreground(o.bgBase).Background(o.yolo).Padding(0, 1)
+	s.Status.ModeBannerYolo = lipgloss.NewStyle().Foreground(badgeInk(o.yolo, o.bgBase, o.fgBase)).Background(o.yolo).Padding(0, 1)
 	s.Status.ModeBannerAutoBadge = s.Status.ModeBadgeAuto
 	s.Status.ModeBannerAuto = lipgloss.NewStyle().Foreground(o.fgBase).Background(o.infoMoreSubtle).Padding(0, 1)
 	s.Status.ModeBannerSysadminBadge = s.Status.ModeBadgeSysadmin
@@ -1297,15 +1304,15 @@ func quickStyle(o quickStyleOpts) Styles {
 		sysadminFill = o.destructive
 	}
 	s.Status.ModeBannerSysadmin = lipgloss.NewStyle().Foreground(badgeInk(sysadminFill, o.bgBase, o.fgBase)).Background(sysadminFill).Padding(0, 1)
-	s.Status.SuccessIndicator = base.Foreground(o.bgLessVisible).Background(o.success).Padding(0, 1).Bold(true).SetString("OKAY!")
+	s.Status.SuccessIndicator = base.Foreground(badgeInk(o.success, o.bgLessVisible, o.fgBase)).Background(o.success).Padding(0, 1).Bold(true).SetString("OKAY!")
 	s.Status.InfoIndicator = s.Status.SuccessIndicator
 	s.Status.UpdateIndicator = s.Status.SuccessIndicator.SetString("HEY!")
-	s.Status.WarnIndicator = s.Status.SuccessIndicator.Foreground(o.bgMostVisible).Background(o.warning).SetString("WARNING")
-	s.Status.ErrorIndicator = s.Status.SuccessIndicator.Foreground(o.bgBase).Background(o.destructive).SetString("ERROR")
-	s.Status.SuccessMessage = base.Foreground(o.bgLessVisible).Background(o.successMostSubtle).Padding(0, 1)
+	s.Status.WarnIndicator = s.Status.SuccessIndicator.Foreground(badgeInk(o.warning, o.bgMostVisible, o.fgBase)).Background(o.warning).SetString("WARNING")
+	s.Status.ErrorIndicator = s.Status.SuccessIndicator.Foreground(badgeInk(o.destructive, o.bgBase, o.fgBase)).Background(o.destructive).SetString("ERROR")
+	s.Status.SuccessMessage = base.Foreground(badgeInk(o.successMostSubtle, o.bgLessVisible, o.fgBase)).Background(o.successMostSubtle).Padding(0, 1)
 	s.Status.InfoMessage = s.Status.SuccessMessage
 	s.Status.UpdateMessage = s.Status.SuccessMessage
-	s.Status.WarnMessage = s.Status.SuccessMessage.Foreground(o.bgMostVisible).Background(o.warningSubtle)
+	s.Status.WarnMessage = s.Status.SuccessMessage.Foreground(badgeInk(o.warningSubtle, o.bgMostVisible, o.fgBase)).Background(o.warningSubtle)
 	s.Status.ErrorMessage = s.Status.SuccessMessage.Foreground(o.onPrimary).Background(o.error)
 
 	// Completions styles
@@ -1315,7 +1322,7 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Completions.Agent = base.Foreground(o.secondary).Bold(true)
 
 	// Attachments styles
-	attachmentIconStyle := base.Foreground(o.bgLessVisible).Background(o.success).Padding(0, 1)
+	attachmentIconStyle := base.Foreground(badgeInk(o.success, o.bgLessVisible, o.fgBase)).Background(o.success).Padding(0, 1)
 	s.Attachments.Image = attachmentIconStyle.SetString(ImageIcon)
 	s.Attachments.Text = attachmentIconStyle.SetString(TextIcon)
 	s.Attachments.Skill = attachmentIconStyle.SetString(SkillIcon)

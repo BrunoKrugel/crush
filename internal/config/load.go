@@ -26,6 +26,7 @@ import (
 	"github.com/charmbracelet/crush/internal/env"
 	"github.com/charmbracelet/crush/internal/filepathext"
 	"github.com/charmbracelet/crush/internal/fsext"
+	"github.com/charmbracelet/crush/internal/gateway"
 	"github.com/charmbracelet/crush/internal/home"
 	"github.com/charmbracelet/crush/internal/shellconfig"
 	powernapConfig "github.com/charmbracelet/x/powernap/pkg/config"
@@ -289,7 +290,13 @@ func Load(ctx context.Context, workingDir, dataDir string, debug bool) (*ConfigS
 		return nil, fmt.Errorf("invalid hook configuration: %w", err)
 	}
 
-	if !isInsideWorktree() {
+	// Validate the agent definitions structurally after all merging, so
+	// a bad agents block fails the load the same way a bad hook does.
+	if err := cfg.ValidateAgents(workingDir); err != nil {
+		return nil, fmt.Errorf("invalid agent definitions: %w", err)
+	}
+
+	if !isInsideWorktree(workingDir) {
 		const depth = 2
 		const items = 100
 		slog.Warn("No git repository detected in working directory, will limit file walk operations", "depth", depth, "items", items)
@@ -342,7 +349,7 @@ func Load(ctx context.Context, workingDir, dataDir string, debug bool) (*ConfigS
 
 	env := env.New()
 	// Configure providers
-	valueResolver := NewShellVariableResolver(env)
+	valueResolver := NewShellVariableResolver(env, WithWorkingDir(workingDir))
 	store.resolver = valueResolver
 
 	// Hold writeMu during initial load to prevent configureProviders
@@ -388,7 +395,23 @@ func Load(ctx context.Context, workingDir, dataDir string, debug bool) (*ConfigS
 			return nil, fmt.Errorf("failed to update preferred small model: %w", err)
 		}
 	}
+	// Model pins are validated once the catalog is known, just before
+	// the agents are resolved from their definitions.
+	if err := store.Config().ValidateAgentModelRefs(); err != nil {
+		return nil, fmt.Errorf("invalid agent definitions: %w", err)
+	}
 	store.SetupAgents()
+
+	// The default dispatch agent names a resolved agent (#433): checked
+	// once the agents exist, so an unknown, non-dispatch, or disabled
+	// id fails the load like a bad agent definition does. An enabled
+	// agent that resolves to no tools fails here too.
+	if err := store.Config().ValidateDispatchDefaultAgent(); err != nil {
+		return nil, fmt.Errorf("invalid dispatch configuration: %w", err)
+	}
+	if err := store.Config().ValidateAgentToolsets(); err != nil {
+		return nil, fmt.Errorf("invalid agent definitions: %w", err)
+	}
 
 	// Capture initial staleness snapshot. Track every discovered config path,
 	// not just the ones that loaded, so a config file created after startup
@@ -639,8 +662,17 @@ func (c *Config) configureProviders(ctx context.Context, store *ConfigStore, env
 			c.Providers.Del(id)
 			continue
 		}
+		if providerConfig.UsesOAuth() && !providerConfig.Auth.Usable() {
+			slog.Warn(
+				"Skipping custom provider whose OAuth configuration names no authorization server",
+				"provider", id,
+				"hint", "set auth.issuer, or auth.token_url together with auth.authorize_url or auth.device_auth_url",
+			)
+			c.Providers.Del(id)
+			continue
+		}
 		apiKey, err := resolver.ResolveValue(providerConfig.APIKey)
-		if apiKey == "" || err != nil {
+		if (apiKey == "" || err != nil) && !providerConfig.UsesOAuth() {
 			slog.Warn("Provider is missing API key, this might be OK for local providers", "provider", id)
 		}
 		baseURL, err := resolver.ResolveValue(providerConfig.BaseURL)
@@ -672,6 +704,75 @@ func (c *Config) configureProviders(ctx context.Context, store *ConfigStore, env
 				continue
 			}
 			providerConfig.ExtraHeaders[k] = resolved
+		}
+
+		// OAuth endpoints and credentials are expanded the same way
+		// api_key and base_url are, so a plugin can carry $VAR references
+		// instead of baked-in secrets.
+		if auth := providerConfig.Auth; auth != nil {
+			for _, field := range []*string{
+				&auth.Issuer,
+				&auth.ClientID,
+				&auth.ClientSecret,
+				&auth.AuthorizeURL,
+				&auth.TokenURL,
+				&auth.DeviceAuthURL,
+				&auth.RedirectURI,
+			} {
+				if *field == "" {
+					continue
+				}
+				resolved, err := resolver.ResolveValue(*field)
+				if err != nil {
+					return fmt.Errorf("resolving provider %s OAuth value: %w", id, err)
+				}
+				*field = resolved
+			}
+			for _, values := range []map[string]string{auth.ExtraParams, auth.TokenHeaders} {
+				for k, v := range values {
+					resolved, err := resolver.ResolveValue(v)
+					if err != nil {
+						return fmt.Errorf("resolving provider %s OAuth value %q: %w", id, k, err)
+					}
+					values[k] = resolved
+				}
+			}
+		}
+
+		// The gateway programs must compile: a plugin author typo in jq is
+		// a load error naming the provider, not a failed request later.
+		if providerConfig.Gateway != nil {
+			if providerConfig.Gateway.Usable() {
+				if _, err := gateway.New(providerConfig.Gateway, "", nil); err != nil {
+					return fmt.Errorf("invalid gateway adapter for provider %s: %w", id, err)
+				}
+			} else {
+				slog.Warn("Skipping provider gateway adapter with incomplete programs",
+					"provider", id,
+					"hint", "a gateway needs both a request and a response jq program")
+				providerConfig.Gateway = nil
+			}
+		}
+
+		// The quota endpoint is expanded the same way, then checked: a usage
+		// block without a URL is a mistake in the plugin, not a reason to
+		// drop the provider itself.
+		if usage := providerConfig.Usage; usage != nil {
+			for _, field := range []*string{&usage.URL, &usage.Body} {
+				if *field == "" {
+					continue
+				}
+				resolved, err := resolver.ResolveValue(*field)
+				if err != nil {
+					return fmt.Errorf("resolving provider %s usage value: %w", id, err)
+				}
+				*field = resolved
+			}
+			if usage.URL == "" {
+				slog.Warn("Skipping provider usage report with no endpoint", "provider", id,
+					"hint", "set usage.url to the endpoint that reports remaining quota")
+				providerConfig.Usage = nil
+			}
 		}
 
 		c.Providers.Set(id, providerConfig)
@@ -1089,7 +1190,85 @@ func lookupConfigs(cwd string) []string {
 	// reverse order so last config has more priority
 	slices.Reverse(foundConfigs)
 
-	return append(configPaths, foundConfigs...)
+	// Plugin scripts load after the global config, so a project plugin can
+	// override the user's global config.
+	return append(append(configPaths, lookupPlugins(cwd)...), foundConfigs...)
+}
+
+// pluginDirName is the directory, under both the global config directory and
+// the working directory's .crush folder, whose scripts run as plugins.
+const pluginDirName = "plugins"
+
+// lookupPlugins returns plugin scripts in load order: global first, then the
+// working directory's, each directory in name order. A plugin is a Bash
+// script that uses the same config builtins as a crushrc, which is how a
+// provider gets added without a Crush release.
+//
+// ponytail: only the working directory's .crush/plugins is scanned, not
+// every level up to the project boundary. Scripts one directory deep are
+// included, because that is where `crush plugin install` puts a repository,
+// but nothing deeper is. Extend the walk if plugins start nesting.
+func lookupPlugins(cwd string) []string {
+	dirs := []string{
+		filepath.Join(filepath.Dir(GlobalConfig()), pluginDirName),
+		filepath.Join(cwd, "."+appName, pluginDirName),
+	}
+	var paths []string
+	for _, dir := range dirs {
+		paths = append(paths, pluginScripts(dir)...)
+	}
+	return paths
+}
+
+// pluginScripts lists the runnable scripts in a plugin directory, sorted by
+// name so load order is stable across platforms. Both the directory's own
+// scripts and those of its immediate subdirectories are returned, so an
+// installed plugin repository loads as a group. A missing directory simply
+// contributes nothing.
+func pluginScripts(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var found []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") {
+			// Hidden entries are lock files and editor droppings, not
+			// plugins.
+			continue
+		}
+		if entry.IsDir() {
+			// One level only: a subdirectory is an installed repository, and
+			// anything nested inside it is that repository's own business.
+			found = append(found, topLevelScripts(filepath.Join(dir, name))...)
+			continue
+		}
+		if !strings.HasSuffix(name, ".sh") {
+			continue
+		}
+		found = append(found, filepath.Join(dir, name))
+	}
+	slices.Sort(found)
+	return found
+}
+
+// topLevelScripts lists the runnable scripts directly inside one plugin
+// repository directory.
+func topLevelScripts(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var found []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || strings.HasPrefix(name, ".") || !strings.HasSuffix(name, ".sh") {
+			continue
+		}
+		found = append(found, filepath.Join(dir, name))
+	}
+	return found
 }
 
 func loadFromConfigPaths(ctx context.Context, configPaths []string) (*Config, []string, error) {
@@ -1189,7 +1368,7 @@ func loadFromBytes(configs [][]byte) (*Config, error) {
 		return &Config{}, nil
 	}
 
-	data, err := jsons.Merge(configs)
+	data, err := jsons.Merge(bindAgentAuthToCard(configs))
 	if err != nil {
 		return nil, err
 	}
@@ -1202,6 +1381,41 @@ func loadFromBytes(configs [][]byte) (*Config, error) {
 		return nil, err
 	}
 	return &config, nil
+}
+
+// bindAgentAuthToCard ties an agent's auth to the config layer that set
+// its card (#434). The layers merge key by key, so a project config that
+// repoints agents.<id>.card would otherwise inherit the global
+// agents.<id>.auth and send that token to the project's origin. A layer
+// that sets a card therefore drops the auth every earlier layer gave the
+// agent, whole: only its own auth, if any, and later layers' apply. To
+// keep a credential, the layer that moves the card sets it again.
+// configs is ordered lowest precedence first and is not modified.
+func bindAgentAuthToCard(configs [][]byte) [][]byte {
+	out := slices.Clone(configs)
+	for i, layer := range out {
+		agents := gjson.GetBytes(layer, "agents")
+		if !agents.IsObject() {
+			continue
+		}
+		agents.ForEach(func(id, def gjson.Result) bool {
+			card := def.Get("card")
+			if !card.Exists() || card.Type == gjson.Null {
+				return true
+			}
+			path := "agents." + gjson.Escape(id.String()) + ".auth"
+			for j := range i {
+				if !gjson.GetBytes(out[j], path).Exists() {
+					continue
+				}
+				if stripped, err := sjson.DeleteBytes(out[j], path); err == nil {
+					out[j] = stripped
+				}
+			}
+			return true
+		})
+	}
+	return out
 }
 
 func hasAWSCredentials(env env.Env) bool {
@@ -1342,11 +1556,12 @@ func shellConfigSibling(jsonPath string) string {
 	return filepath.Join(filepath.Dir(jsonPath), appName+"rc")
 }
 
-// isShellConfig reports whether a config path is a shell config (crushrc or
-// the hidden .crushrc), as opposed to a JSON config.
+// isShellConfig reports whether a config path is a shell config (a
+// crushrc, the hidden .crushrc, or a plugin script), as opposed to a JSON
+// config.
 func isShellConfig(path string) bool {
 	base := filepath.Base(path)
-	return base == appName+"rc" || base == "."+appName+"rc"
+	return base == appName+"rc" || base == "."+appName+"rc" || strings.HasSuffix(base, ".sh")
 }
 
 // GlobalCacheDir returns the path to the global cache directory for the
@@ -1412,12 +1627,17 @@ func assignIfNil[T any](ptr **T, val T) {
 	}
 }
 
-func isInsideWorktree() bool {
-	bts, err := exec.CommandContext(
+// isInsideWorktree reports whether dir is inside a git working tree. It
+// checks dir rather than the process working directory, which a server
+// shares across every workspace it hosts.
+func isInsideWorktree(dir string) bool {
+	cmd := exec.CommandContext(
 		context.Background(),
 		"git", "rev-parse",
 		"--is-inside-work-tree",
-	).CombinedOutput()
+	)
+	cmd.Dir = dir
+	bts, err := cmd.CombinedOutput()
 	return err == nil && strings.TrimSpace(string(bts)) == "true"
 }
 

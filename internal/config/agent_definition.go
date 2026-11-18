@@ -309,14 +309,21 @@ func IsBuiltinAgentID(id string) bool {
 // planToolNames is the plan agent's tool list, the literal behind
 // resolvePlanTools.
 func planToolNames() []string {
+	// Order matters: the plan prompt advertises tools in list order, and
+	// the fork's master tool list puts the subagent pair and the LSP
+	// lookups before the search tools.
 	return []string{
 		"agent",
+		"agent_dispatch",
+		"agent_send",
+		"agent_status",
+		"agent_stop",
+		"lsp_symbols",
+		"lsp_definition",
+		"lsp_call_hierarchy",
 		"glob",
 		"grep",
 		"ls",
-		"lsp_call_hierarchy",
-		"lsp_definition",
-		"lsp_symbols",
 		"question",
 		"sourcegraph",
 		"view",
@@ -344,7 +351,23 @@ func expandToolRefs(refs []string) []string {
 			out = append(out, ref)
 		}
 	}
-	return slices.Compact(slices.Sorted(slices.Values(out)))
+	return dedupeKeepOrder(out)
+}
+
+// dedupeKeepOrder drops repeated entries while keeping the first
+// occurrence's position, so an explicit allow list keeps the order the
+// prompt and permission prompts advertise.
+func dedupeKeepOrder(in []string) []string {
+	seen := make(map[string]struct{}, len(in))
+	out := in[:0]
+	for _, s := range in {
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
 }
 
 // expandMCPAllow turns a definition's mcp.allow list into the resolved

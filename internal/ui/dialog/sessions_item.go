@@ -56,13 +56,6 @@ type SessionItem struct {
 	child        bool
 }
 
-// Finished implements list.Item. Session items are render-stable
-// outside of explicit SetFocused / SetMatch calls, both of which
-// bump Version() and therefore invalidate the F6 frozen entry.
-func (s *SessionItem) Finished() bool {
-	return true
-}
-
 var _ ListItem = &SessionItem{}
 
 // Filter returns the filterable value of the session.

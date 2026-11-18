@@ -41,6 +41,58 @@ const numClients = 8
 // about is observable strictly within ensureServer.
 const clientTimeout = 15 * time.Second
 
+// repoRootFromTest walks up from this test file's directory to find
+// the repo root (the directory containing go.mod). Walking up by a
+// fixed count is fragile across reorganisations.
+func repoRootFromTest(t *testing.T) string {
+	t.Helper()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	dir := cwd
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("could not find go.mod walking up from %s", cwd)
+		}
+		dir = parent
+	}
+}
+
+// buildCrushBinary builds the crush binary once at the start of the
+// test and returns the absolute path. Subsequent t.Cleanup removes
+// the built artefact.
+func buildCrushBinary(t *testing.T, repoRoot string) string {
+	t.Helper()
+
+	binDir, err := os.MkdirTemp("", "crush-race-bin-")
+	if err != nil {
+		t.Fatalf("mkdtemp bin: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(binDir) })
+
+	binPath := filepath.Join(binDir, "crush")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "go", "build", "-o", binPath, ".")
+	cmd.Dir = repoRoot
+	// Match the project's standard build flags. CGO_ENABLED=0 keeps
+	// the binary statically linked and avoids surprising the test on
+	// hosts without a C toolchain.
+	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("go build crush: %v\n%s", err, out)
+	}
+	return binPath
+}
+
 func TestClientServerSpawnRace(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping client/server spawn race test in -short mode")

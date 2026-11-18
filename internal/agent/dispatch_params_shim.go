@@ -1,10 +1,10 @@
 package agent
 
 const (
-	CancelDispatchToolName   = "cancel_dispatch"
-	MessageAgentToolName     = "message_agent"
-	ApplyDispatchToolName    = "apply_dispatch"
-	DismissDispatchToolName  = "dismiss_dispatch"
+	CancelDispatchToolName  = "cancel_dispatch"
+	MessageAgentToolName    = "message_agent"
+	ApplyDispatchToolName   = "apply_dispatch"
+	DismissDispatchToolName = "dismiss_dispatch"
 )
 
 // DispatchAgentToolName names the sub-agent dispatch tool the fork UI

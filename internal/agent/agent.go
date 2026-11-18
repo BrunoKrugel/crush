@@ -786,6 +786,17 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 		genCtx         context.Context
 		cancel         context.CancelFunc
 		userMsgCreated bool
+		// prepFailed records that the turn failed during preparation,
+		// before any streaming step ran. The deferred RunComplete emit
+		// below skips a prep failure on a directly-dispatched turn: the
+		// dispatcher that owns the run — e.g. backend.runAgent — already
+		// received the error and carries the TypeAgentError notification
+		// plus the must-deliver terminal fallback, so publishing here
+		// would transfer ownership a second time. Everything else keeps
+		// the default publish because nobody else will emit the terminal
+		// event: nested turns (queued prompts, subagents) and summary
+		// continuations run without a dispatcher watching them.
+		prepFailed bool
 	)
 
 	// Serialize the dispatch decision (cancel-on-entry | queued | active)
@@ -912,7 +923,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 		if flushErr := a.messages.FlushAll(flushCtx); flushErr != nil {
 			slog.Error("Failed to flush pending message updates after run", "error", flushErr)
 		}
-		if skipRunComplete {
+		if skipRunComplete || (prepFailed && call.OnComplete != nil && !call.continuation) {
 			return
 		}
 		complete := notify.RunComplete{SessionID: call.SessionID, RunID: call.RunID}
@@ -972,16 +983,20 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 	sessionLock := sync.Mutex{}
 	currentSession, err := a.sessions.Get(ctx, call.SessionID)
 	if err != nil {
+		prepFailed = true
 		return nil, fmt.Errorf("failed to get session: %w", err)
 	}
 
 	msgs, err := a.getSessionMessages(ctx, currentSession)
 	if err != nil {
+		prepFailed = true
 		return nil, fmt.Errorf("failed to get session messages: %w", err)
 	}
 	// Generate title from the first real (non-shell) user prompt in the
 	// background; Run must not wait on it. CancelAll drains it instead.
-	if !hasUserTextMessage(msgs) {
+	// Task sessions skip titles: their names come from the dispatch, and a
+	// generated one would race the tool's own label.
+	if currentSession.ParentSessionID == "" && !hasUserTextMessage(msgs) {
 		titleCtx := context.WithoutCancel(ctx)
 		a.titles.begin()
 		go func() {
@@ -995,6 +1010,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 	modelContext := hostContextPrompt(call.HostContext) + notesPrompt(a.takeNotes(call.SessionID))
 	_, err = a.createUserMessage(ctx, call, modelContext)
 	if err != nil {
+		prepFailed = true
 		return nil, err
 	}
 	userMsgCreated = true
@@ -1218,6 +1234,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 			if !toolResult.IsError && toolResult.Name != "" {
 				completedToolCalls.Set(toolResult.Name, struct{}{})
 			}
+			toolResult.FinishedAtMs = time.Now().UnixMilli()
 			// Use parent ctx instead of genCtx to ensure the message is created
 			// even if the request is canceled mid-stream
 			_, createMsgErr := a.messages.Create(ctx, currentAssistant.SessionID, message.CreateMessageParams{
@@ -1408,8 +1425,15 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 			// Uncompacted, the next step would only hit the limit
 			// again, so the turn ends here.
 			slog.Info("PreCompact hook blocked compaction", "session_id", call.SessionID)
-		case summarizeErr != nil:
+		case summarizeErr != nil && !errors.Is(summarizeErr, context.Canceled):
 			return nil, summarizeErr
+		case summarizeErr != nil:
+			// The summary was canceled (e.g. a cancel that landed during
+			// its own bookkeeping). That cancellation is this turn's
+			// outcome, but queued work must not be stranded: fall through
+			// to the handoff below, which runs surviving queued calls
+			// under a fresh owner instead of dropping them.
+			result, err, retErr = nil, summarizeErr, summarizeErr
 		case len(currentAssistant.ToolCalls()) > 0:
 			existing, _ := a.messageQueue.Get(call.SessionID)
 			call.Prompt = fmt.Sprintf("The previous session was interrupted because it got too long, the initial user request was: `%s`", call.Prompt)
@@ -1623,6 +1647,22 @@ func (a *sessionAgent) summarize(ctx context.Context, sessionID, trigger string,
 	genCtx, cancel := context.WithCancel(ctx)
 	ac := &activeCancel{cancel: cancel}
 	a.activeRequests.Set(sessionID, ac)
+	// The terminal agent notification is deferred before the owner cleanup
+	// so it runs after it: observers must never see a completion for a
+	// session that still reports busy. Registered here so every exit path
+	// (success, cancel, failure) reports a finish state.
+	finishState := notify.FinishIdleUnsuccessful
+	defer func() {
+		if a.notify == nil {
+			return
+		}
+		a.notify.Publish(pubsub.CreatedEvent, notify.Notification{
+			SessionID:    sessionID,
+			SessionTitle: currentSession.Title,
+			Type:         notify.TypeAgentFinished,
+			FinishState:  finishState,
+		})
+	}()
 	defer a.activeRequests.CompareAndDelete(sessionID, ac)
 	defer cancel()
 	defer func() {
@@ -1688,8 +1728,13 @@ func (a *sessionAgent) summarize(ctx context.Context, sessionID, trigger string,
 		isCancelErr := errors.Is(err, context.Canceled)
 		if isCancelErr {
 			// User cancelled summarize we need to remove the summary message.
-			deleteErr := a.messages.Delete(ctx, summaryMessage.ID)
-			return deleteErr
+			if deleteErr := a.messages.Delete(ctx, summaryMessage.ID); deleteErr != nil {
+				return deleteErr
+			}
+			// The cancellation is the caller's outcome: a suspended turn
+			// (or the auto-summary's caller) must not read a completed
+			// compaction behind stopped work.
+			return err
 		}
 		// Mark the summary message as finished with an error so the UI
 		// stops spinning.
@@ -1745,6 +1790,10 @@ func (a *sessionAgent) summarize(ctx context.Context, sessionID, trigger string,
 	}
 	a.hooks.Run(ctx, hooks.Event{Name: hooks.EventPostCompact, SessionID: sessionID, Trigger: trigger})
 
+	// The compaction landed: the terminal finish state is success. The
+	// queued prompt below is its own turn with its own outcome.
+	finishState = notify.FinishIdleSuccess
+
 	// Flush buffered message updates while the compaction still holds the
 	// session's busy state: subscribers that submit follow-up prompts from
 	// the flushed events must see the session as busy and queue behind the
@@ -1752,6 +1801,13 @@ func (a *sessionAgent) summarize(ctx context.Context, sessionID, trigger string,
 	if flushErr := a.messages.FlushAll(ctx); flushErr != nil {
 		slog.Error("Failed to flush pending message updates after summarize", "error", flushErr)
 	}
+
+	// A cancel that landed during the compaction's own bookkeeping (the
+	// save above is the classic window) canceled this compaction's
+	// context: that cancellation is the summary's outcome even though
+	// the summary landed. The queued drain below still runs. Read before
+	// the local cancel below: that one is ours, not a user cancellation.
+	canceledErr := genCtx.Err()
 
 	// Release the active request before processing queued messages so that
 	// Run() does not see the session as busy.
@@ -1764,13 +1820,13 @@ func (a *sessionAgent) summarize(ctx context.Context, sessionID, trigger string,
 	// sees the full pending order. A manual Summarize has no continuation
 	// coming, so it drains the queue itself.
 	if trigger == compactTriggerAuto {
-		return nil
+		return canceledErr
 	}
 
 	// Process any messages that were queued while summarizing.
 	queuedMessages, ok := a.messageQueue.Get(sessionID)
 	if !ok || len(queuedMessages) == 0 {
-		return nil
+		return canceledErr
 	}
 	firstQueuedMessage := queuedMessages[0]
 	a.messageQueue.Set(sessionID, queuedMessages[1:])
@@ -1788,7 +1844,7 @@ func (a *sessionAgent) summarize(ctx context.Context, sessionID, trigger string,
 			Message:      qErr.Error(),
 		})
 	}
-	return nil
+	return canceledErr
 }
 
 func (a *sessionAgent) getCacheControlOptions() fantasy.ProviderOptions {
@@ -2510,14 +2566,19 @@ func (a *sessionAgent) QueuedPrompts(sessionID string) int {
 	return len(l)
 }
 
+// QueuedPromptsList returns the queued prompts a user sees. Hidden
+// continuations are left out, as they are in the transcript, though
+// QueuedPrompts still counts them.
 func (a *sessionAgent) QueuedPromptsList(sessionID string) []string {
 	l, ok := a.messageQueue.Get(sessionID)
 	if !ok {
 		return nil
 	}
-	prompts := make([]string, len(l))
-	for i, call := range l {
-		prompts[i] = call.Prompt
+	prompts := make([]string, 0, len(l))
+	for _, call := range l {
+		if !call.HiddenUserMessage {
+			prompts = append(prompts, call.Prompt)
+		}
 	}
 	return prompts
 }

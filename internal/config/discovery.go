@@ -119,6 +119,41 @@ func (s *ConfigStore) RefreshDiscoveredModels(ctx context.Context) (bool, error)
 	return true, s.ReloadFromDisk(ctx)
 }
 
+// ReloadModelDiscovery re-probes every provider whose models came from the
+// discovery cache, and reloads the config when any of them changed. It
+// reports how many models were newly discovered across all providers.
+// Meant for the reload-discovery endpoint: the load-time pass is
+// deadline-bounded, so this lets a running session pick up models that
+// appeared after startup.
+func (s *ConfigStore) ReloadModelDiscovery(ctx context.Context) (int, error) {
+	s.writeMu.RLock()
+	jobs := s.cachedDiscovery
+	resolver := s.resolver
+	s.writeMu.RUnlock()
+
+	if len(jobs) == 0 {
+		return 0, nil
+	}
+
+	before := make(map[string][]catwalk.Model, len(jobs))
+	for _, job := range jobs {
+		before[job.id], _ = s.cachedModels(job)
+	}
+	added := 0
+	changed := false
+	for id, fresh := range s.probeAndCache(ctx, jobs, resolver) {
+		added += max(0, len(fresh)-len(before[id]))
+		changed = changed || !reflect.DeepEqual(before[id], fresh)
+	}
+	if !changed {
+		return added, nil
+	}
+	if err := s.ReloadFromDisk(ctx); err != nil {
+		return added, err
+	}
+	return added, nil
+}
+
 // probeAndCache discovers models for jobs concurrently and caches every
 // non-empty result. Failures are logged and left out of the returned map.
 func (s *ConfigStore) probeAndCache(ctx context.Context, jobs []discoveryJob, resolver VariableResolver) map[string][]catwalk.Model {

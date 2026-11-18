@@ -32,7 +32,7 @@ func newCommandsMouseDialog(t *testing.T, custom []commands.CustomCommand) *Comm
 		Workspace: &commandsMouseWorkspace{cfg: &config.Config{}},
 		Styles:    &sty,
 	}
-	d, err := NewCommands(com, "", false, false, false, false, custom, nil)
+	d, err := NewCommands(com, "", false, false, false, false, false, custom, nil)
 	require.NoError(t, err)
 	return d
 }

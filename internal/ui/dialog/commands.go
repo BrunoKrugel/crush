@@ -89,7 +89,10 @@ type Commands struct {
 	tabHeights   map[int]int
 	tabHeightsOK bool
 
-	hasCron                bool
+	hasCron bool
+	// transparent is whether the background color is off on screen,
+	// which the toggle flips; it may come from a host theme override.
+	transparent            bool
 	hasTodos               bool
 	hasSession             bool
 	dockerMCPCheckInFlight bool
@@ -100,7 +103,7 @@ type Commands struct {
 var _ Dialog = (*Commands)(nil)
 
 // NewCommands creates a new commands dialog.
-func NewCommands(com *common.Common, sessionID string, hasSession, hasTodos, hasQueue, hasCron bool, customCommands []commands.CustomCommand, mcpPrompts []commands.MCPPrompt) (*Commands, error) {
+func NewCommands(com *common.Common, sessionID string, hasSession, hasTodos, hasQueue, hasCron, transparent bool, customCommands []commands.CustomCommand, mcpPrompts []commands.MCPPrompt) (*Commands, error) {
 	c := &Commands{
 		com:            com,
 		selected:       SystemCommands,
@@ -109,6 +112,7 @@ func NewCommands(com *common.Common, sessionID string, hasSession, hasTodos, has
 		hasTodos:       hasTodos,
 		hasQueue:       hasQueue,
 		hasCron:        hasCron,
+		transparent:    transparent,
 		customCommands: customCommands,
 		mcpPrompts:     mcpPrompts,
 	}
@@ -794,9 +798,10 @@ func (c *Commands) defaultCommandGroups() []CommandGroup {
 	notificationLabel := "Notification Style"
 	settings = append(settings, NewCommandItem(t, "select_notifications", notificationLabel, "", ActionOpenDialog{DialogID: NotificationsID}))
 
-	// Add transparent background toggle.
+	// Add transparent background toggle. The label follows what is on
+	// screen, which the toggle flips.
 	transparentLabel := "Disable Background Color"
-	if cfg != nil && cfg.Options != nil && cfg.Options.TUI.IsTransparent() {
+	if c.transparent {
 		transparentLabel = "Enable Background Color"
 	}
 	settings = append(settings, NewCommandItem(t, "toggle_transparent", transparentLabel, "", ActionToggleTransparentBackground{}))

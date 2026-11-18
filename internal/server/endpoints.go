@@ -12,7 +12,9 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 	return []apigen.Endpoint{
 		apigen.Get("/v1/health").
 			Summary("Health check").
+			Description("Answers 503 once the server has committed to shutting down.").
 			Tags("system").
+			Fails(503).
 			Handle(c.handleGetHealth),
 
 		apigen.Get("/v1/version").
@@ -159,7 +161,10 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 				"question prompts are scoped to the session the client currently "+
 				"views (see POST current-session): they are only delivered to clients "+
 				"viewing the session that raised them, and clients viewing no session "+
-				"receive none. All other events are workspace-wide.").
+				"receive none. All other events are workspace-wide. A client that "+
+				"falls so far behind that events are dropped for it has its stream "+
+				"closed; it should reconnect, re-report its current session, which "+
+				"re-delivers pending prompts, and re-read the state it shows.").
 			Tags("workspaces").
 			PathParam("id", "Workspace ID").
 			RequiredQueryParam("client_id", "Client ID (UUID)").
@@ -183,6 +188,42 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Responds(proto.Session{}).
 			Fails(400, 404, 500).
 			Handle(c.handlePostWorkspaceSessions),
+
+		apigen.Post("/v1/workspaces/{id}/sessions/{sid}/fork").
+			Summary("Fork session").
+			Description("Branches a conversation from a message: a new session "+
+				"continues the source session up to the given message, with the "+
+				"filesystem state restored from the snapshot at that point. "+
+				"The source session is left untouched.").
+			Tags("sessions").
+			PathParam("id", "Workspace ID").
+			PathParam("sid", "Session ID").
+			Accepts(proto.ForkRequest{}).
+			Responds(proto.Session{}).
+			Fails(400, 404, 500).
+			Handle(c.handlePostWorkspaceSessionFork),
+
+		apigen.Get("/v1/workspaces/{id}/sessions/{sid}/children").
+			Summary("List child sessions").
+			Description("Lists the sessions whose parent is the given session, "+
+				"oldest first (creation order): the sub-agent task sessions (#314).").
+			Tags("sessions").
+			PathParam("id", "Workspace ID").
+			PathParam("sid", "Session ID").
+			Responds([]proto.Session{}).
+			Fails(404, 500).
+			Handle(c.handleGetWorkspaceSessionChildren),
+
+		apigen.Get("/v1/workspaces/{id}/child-sessions").
+			Summary("List all child sessions").
+			Description("Lists every child session of every session in the workspace in "+
+				"one query, grouped by parent and oldest-created first (#408). "+
+				"Includes every child kind; callers filter.").
+			Tags("sessions").
+			PathParam("id", "Workspace ID").
+			Responds([]proto.Session{}).
+			Fails(404, 500).
+			Handle(c.handleGetWorkspaceChildSessions),
 
 		apigen.Get("/v1/workspaces/{id}/sessions/{sid}").
 			Summary("Get session").
@@ -310,6 +351,14 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Fails(400, 404, 500).
 			Handle(c.handlePostWorkspacePermissionsMode),
 
+		apigen.Get("/v1/workspaces/{id}/permissions/auto").
+			Summary("Get auto mode status").
+			Tags("permissions").
+			PathParam("id", "Workspace ID").
+			Responds(proto.PermissionAutoRequest{}).
+			Fails(404, 500).
+			Handle(c.handleGetWorkspacePermissionsAuto),
+
 		apigen.Post("/v1/workspaces/{id}/permissions/auto").
 			Summary("Toggle native auto mode").
 			Tags("permissions").
@@ -327,6 +376,18 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Fails(400, 404, 500).
 			Handle(c.handlePostWorkspacePermissionsGrant),
 
+		apigen.Post("/v1/workspaces/{id}/sessions/{sid}/auto-approve").
+			Summary("Auto-approve a session's permissions").
+			Description("Grants every permission request the session raises from "+
+				"now on without prompting, as `crush run` does for its own session. "+
+				"Other sessions keep prompting. The approval lasts while the "+
+				"workspace is hosted.").
+			Tags("permissions").
+			PathParam("id", "Workspace ID").
+			PathParam("sid", "Session ID").
+			Fails(404, 500).
+			Handle(c.handlePostWorkspaceSessionAutoApprove),
+
 		apigen.Post("/v1/workspaces/{id}/questions/answer").
 			Summary("Answer question batch").
 			Tags("questions").
@@ -338,8 +399,12 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 
 		apigen.Post("/v1/workspaces/{id}/questions/cancel").
 			Summary("Cancel question batch").
+			Description("Cancels the batch the body names. Without a body "+
+				"it cancels the only pending batch, and nothing when "+
+				"several are pending.").
 			Tags("questions").
 			PathParam("id", "Workspace ID").
+			Accepts(proto.QuestionCancel{}).
 			Responds(proto.QuestionAnswerResponse{}).
 			Fails(400, 404, 500).
 			Handle(c.handlePostWorkspaceQuestionsCancel),
@@ -602,6 +667,23 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Fails(404, 500).
 			Handle(c.handleGetWorkspaceSkills),
 
+		apigen.Post("/v1/workspaces/{id}/config/reload-discovery").
+			Summary("Reload model discovery").
+			Description("Re-probes custom providers whose models were not discovered at "+
+				"startup, where the load-time pass is deadline-bounded.").
+			Tags("config").
+			PathParam("id", "Workspace ID").
+			Responds(proto.ReloadModelDiscoveryResponse{}).
+			Fails(404, 500).
+			Handle(c.handlePostWorkspaceConfigReloadDiscovery),
+
+		apigen.Post("/v1/workspaces/{id}/skills/reload").
+			Summary("Reload skills").
+			Tags("skills").
+			PathParam("id", "Workspace ID").
+			Fails(404, 500).
+			Handle(c.handlePostWorkspaceSkillsReload),
+
 		apigen.Post("/v1/workspaces/{id}/skills/read").
 			Summary("Read skill content").
 			Tags("skills").
@@ -626,6 +708,22 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Accepts(proto.MCPReadResourceRequest{}).
 			Fails(400, 404, 500).
 			Handle(c.handlePostWorkspaceMCPReadResource),
+
+		apigen.Post("/v1/workspaces/{id}/mcp/call-tool").
+			Summary("Call an MCP tool").
+			Tags("mcp").
+			PathParam("id", "Workspace ID").
+			Accepts(proto.MCPCallToolRequest{}).
+			Fails(400, 403, 404, 500).
+			Handle(c.handlePostWorkspaceMCPCallTool),
+
+		apigen.Post("/v1/workspaces/{id}/mcp/reconnect").
+			Summary("Reconnect an MCP server").
+			Tags("mcp").
+			PathParam("id", "Workspace ID").
+			Accepts(proto.MCPNameRequest{}).
+			Fails(400, 404, 500).
+			Handle(c.handlePostWorkspaceMCPReconnect),
 
 		apigen.Get("/v1/workspaces/{id}/mcp/prompts").
 			Summary("Get MCP prompts").

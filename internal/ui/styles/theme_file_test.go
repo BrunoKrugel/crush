@@ -14,10 +14,11 @@ func TestThemeFile_SaveAndLoad_RoundTrip(t *testing.T) {
 	path := filepath.Join(dir, "my-theme.json")
 
 	tf := &ThemeFile{
-		Base:    "charmtone-panther",
-		Primary: "#ff0000",
-		BgBase:  "#1a1a2e",
-		FgBase:  "#ffffff",
+		Base:              "charmtone-panther",
+		Primary:           "#ff0000",
+		BgBase:            "#1a1a2e",
+		FgBase:            "#ffffff",
+		DestructiveSubtle: "#fabd2f",
 	}
 
 	require.NoError(t, SaveThemeFile(path, tf))
@@ -28,6 +29,7 @@ func TestThemeFile_SaveAndLoad_RoundTrip(t *testing.T) {
 	require.Equal(t, tf.Primary, loaded.Primary)
 	require.Equal(t, tf.BgBase, loaded.BgBase)
 	require.Equal(t, tf.FgBase, loaded.FgBase)
+	require.Equal(t, tf.DestructiveSubtle, loaded.DestructiveSubtle)
 	require.Empty(t, loaded.Secondary)
 }
 
@@ -264,6 +266,7 @@ func TestThemeFile_AllPaletteFieldsRoundTrip(t *testing.T) {
 		ButtonSubtle:      "#504945",
 		ButtonInactive:    "#665c54",
 		ButtonHovered:     "#928374",
+		DestructiveSubtle: "#fb4934",
 	}
 
 	require.NoError(t, SaveThemeFile(path, tf))

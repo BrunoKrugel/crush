@@ -37,6 +37,9 @@ const subAgentIdleRetention = 5 * time.Minute
 // out. Nothing repaints on a timer once every subagent is done, so a row
 // retires on the next render rather than exactly on the deadline.
 func (m *UI) subAgentStatuses() []chat.DispatchStatus {
+	if m.chat == nil {
+		return nil
+	}
 	var statuses []chat.DispatchStatus
 	for i := range m.chat.Len() {
 		item, ok := m.chat.MessageItemAt(i).(*chat.AgentToolMessageItem)

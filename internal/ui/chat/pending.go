@@ -87,9 +87,6 @@ func (p *PendingAssistantItem) ID() string { return PendingAssistantID }
 // FilterValue implements list.Item.
 func (p *PendingAssistantItem) FilterValue() string { return "" }
 
-// Finished implements list.Item. Never finished; it is removed instead.
-func (p *PendingAssistantItem) Finished() bool { return false }
-
 // Spinning implements [Animatable].
 func (p *PendingAssistantItem) Spinning() bool { return true }
 
@@ -105,6 +102,17 @@ func (p *PendingAssistantItem) Advance() bool {
 
 // RawRender implements list.RawRenderable.
 func (p *PendingAssistantItem) RawRender(int) string { return p.anim.Render() }
+
+// restyleAnim implements [animRestyler]. It mirrors
+// [AssistantMessageItem.restyleAnim], which takes the spinner over.
+func (p *PendingAssistantItem) restyleAnim() {
+	p.anim.SetColors(
+		p.sty.WorkingLabelColor,
+		p.sty.WorkingGradFromColor,
+		p.sty.WorkingGradToColor,
+		p.sty.WorkingTimerColor,
+	)
+}
 
 // Render implements list.Item.
 func (p *PendingAssistantItem) Render(width int) string {

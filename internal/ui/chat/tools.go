@@ -382,17 +382,7 @@ func (t *baseToolMessageItem) RawRender(width int) string {
 	content, height, ok := t.getCachedRender(toolItemWidth)
 	// if we are spinning or there is no cache rerender
 	if !ok || t.isSpinning() {
-		content = t.toolRenderer.RenderTool(t.sty, toolItemWidth, &ToolRenderOpts{
-			ToolCall:        t.toolCall,
-			Result:          t.result,
-			Anim:            t.anim,
-			ExpandedContent: t.expandedContent,
-			Compact:         t.isCompact,
-			IsSpinning:      t.isSpinning(),
-			Status:          t.computeStatus(),
-			Elapsed:         t.elapsed(),
-			LiveOutput:      t.liveOutput,
-		})
+		content = t.renderTool(toolItemWidth)
 
 		// Prepend hook indicator if hooks ran for this tool call.
 		if t.result != nil {
@@ -411,6 +401,31 @@ func (t *baseToolMessageItem) RawRender(width int) string {
 	t.hyperlinks = parseHyperlinkSpans(content)
 
 	return t.renderHighlighted(content, toolItemWidth, height)
+}
+
+// renderTool renders the call with its tool's renderer, except a call that
+// failed before any input was written: its renderer would only say the
+// input is invalid, so it gets its name and the real error instead.
+func (t *baseToolMessageItem) renderTool(width int) string {
+	if t.result != nil && t.result.IsError && strings.TrimSpace(t.toolCall.Input) == "" {
+		width = cappedMessageWidth(width)
+		header := toolHeader(t.sty, t.computeStatus(), prettifyToolName(t.toolCall.Name), width, nil)
+		if t.isCompact {
+			return header
+		}
+		return joinToolParts(header, toolErrorContent(t.sty, t.result, width))
+	}
+	return t.toolRenderer.RenderTool(t.sty, width, &ToolRenderOpts{
+		ToolCall:        t.toolCall,
+		Result:          t.result,
+		Anim:            t.anim,
+		ExpandedContent: t.expandedContent,
+		Compact:         t.isCompact,
+		IsSpinning:      t.isSpinning(),
+		Status:          t.computeStatus(),
+		Elapsed:         t.elapsed(),
+		LiveOutput:      t.liveOutput,
+	})
 }
 
 // Render renders the tool message item at the given width.
@@ -555,21 +570,6 @@ func (t *baseToolMessageItem) ToggleExpanded() bool {
 	t.clearCache()
 	t.Bump()
 	return t.expandedContent
-}
-
-// Finished implements list.Item. A tool call is freezable once the
-// tool call itself is marked finished AND a result has been recorded
-// (or it has been canceled). Tools that override the spinning logic
-// via spinningFunc would short-circuit live ticks; we still gate
-// freezing on isSpinning to keep the contract conservative.
-func (t *baseToolMessageItem) Finished() bool {
-	if t.isSpinning() {
-		return false
-	}
-	if t.status == ToolStatusCanceled {
-		return true
-	}
-	return t.toolCall.Finished && t.result != nil
 }
 
 // HandleMouseClick implements MouseClickable.

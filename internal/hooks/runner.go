@@ -65,7 +65,7 @@ func NewRunner(source Source, cwd, projectDir string) *Runner {
 // it matches the event's tool name. Execution failures are logged and
 // treated as "no opinion", so the result is always usable.
 func (r *Runner) Run(ctx context.Context, ev Event) AggregateResult {
-	if r == nil {
+	if r == nil || r.source == nil {
 		return AggregateResult{}
 	}
 	hooks := r.matchingHooks(ev)

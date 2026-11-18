@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"golang.org/x/oauth2"
 
@@ -18,6 +20,7 @@ import (
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/env"
 	"github.com/charmbracelet/crush/internal/oauth"
+	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
@@ -318,6 +321,27 @@ func TestCreateTransport_StdioResolution(t *testing.T) {
 		require.Equal(t, []string{"forgejo-mcp", "--token", "$MCP_MISSING"}, ct.Command.Args)
 		require.Contains(t, ct.Command.Env, "TOKEN=$(vault read -f token)")
 	})
+}
+
+// TestCreateTransport_StdioStartsInWorkingDir guards that a stdio MCP
+// server starts in the workspace directory, not the server process's cwd.
+func TestCreateTransport_StdioStartsInWorkingDir(t *testing.T) {
+	isolated := t.TempDir()
+	t.Setenv("HOME", isolated)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolated, ".config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(isolated, ".local", "share"))
+	t.Setenv("CRUSH_DISABLE_PROVIDER_AUTO_UPDATE", "1")
+
+	workingDir := t.TempDir()
+	cfg, err := config.Init(t.Context(), workingDir, t.TempDir(), false)
+	require.NoError(t, err)
+
+	m := config.MCPConfig{Type: config.MCPStdio, Command: "sh", Args: []string{"server.sh"}}
+	tr, _, err := createTransport(t.Context(), cfg, "test", m, shellResolverWithPath(t, nil))
+	require.NoError(t, err)
+	ct, ok := tr.(*mcp.CommandTransport)
+	require.True(t, ok, "expected CommandTransport, got %T", tr)
+	require.Equal(t, workingDir, ct.Command.Dir)
 }
 
 // TestCreateTransport_HeadersResolution pins that a single failing
@@ -740,6 +764,10 @@ func TestMCPConfigEqualExhaustive(t *testing.T) {
 		// (sendChannelReply looks it up per turn), so a change takes effect
 		// without rebuilding the session.
 		"ChannelReply": true,
+		// Laziness is resolved live on every tool-catalog / exposure pass
+		// (isLazyServer reads the per-server flag each time), so flipping it
+		// takes effect immediately without restarting the server.
+		"Lazy": true,
 	}
 
 	typ := reflect.TypeFor[config.MCPConfig]()
@@ -977,5 +1005,40 @@ func TestIsOAuthInitErrTokenEndpointRejections(t *testing.T) {
 			t.Parallel()
 			require.Equal(t, tc.want, isOAuthInitErr(tc.err))
 		})
+	}
+}
+
+// TestClose_LastReferenceClosesSessions guards that one workspace's
+// teardown leaves MCP sessions open while another still holds a reference,
+// and that Close never shuts the event broker down.
+func TestClose_LastReferenceClosesSessions(t *testing.T) {
+	const name = "close-refcount"
+	t.Cleanup(func() { sessions.Del(name) })
+
+	sess, sessCtx := liveSession(t, "do_thing")
+	sessions.Set(name, sess)
+	events := SubscribeEvents(t.Context())
+
+	Acquire()
+	Acquire()
+
+	require.NoError(t, Close(t.Context()))
+	require.NoError(t, sessCtx.Err(), "Close must leave the sessions open while another reference is held")
+
+	require.NoError(t, Close(t.Context()))
+	require.ErrorIs(t, sessCtx.Err(), context.Canceled, "the last Close must close the sessions")
+
+	broker.Publish(pubsub.UpdatedEvent, Event{Type: EventStateChanged, Name: name})
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		case ev, ok := <-events:
+			require.True(t, ok, "Close must not shut the event broker down")
+			if ev.Payload.Name == name {
+				return
+			}
+		case <-timeout:
+			t.Fatal("timed out waiting for an event published after Close")
+		}
 	}
 }

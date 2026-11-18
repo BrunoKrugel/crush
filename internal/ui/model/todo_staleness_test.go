@@ -23,7 +23,6 @@ func TestSessionEventUpdatesTodoPill(t *testing.T) {
 		{Content: "step three", Status: session.TodoStatusPending},
 		{Content: "step four", Status: session.TodoStatusPending},
 	}}
-	u.promptQueue = 0
 	u.pillsExpanded = true
 	u.updateLayoutAndSize()
 	u.renderPills()
